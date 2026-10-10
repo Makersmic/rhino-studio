@@ -2,7 +2,7 @@
 
 One interface for every Rhino Multi Motion System process: import a model, pick a toolhead, prepare, preview, send and monitor. "Rhino Studio" is a working title; the name and logo live in `src/brand/brand.ts`.
 
-Status: **Phase 1** (style guide and app shell). Nothing in this version talks to the machine. It cannot move the Rhino or switch on a tool.
+Status: **Phase 2a** (read-only machine connection). The app shows live status from Klipper, the mounted toolhead, and the files on the Pi. It can't move the Rhino, heat anything, run a macro or start a job. The one thing it can send is the emergency stop.
 
 ## Run it on your PC
 
@@ -15,6 +15,28 @@ npm run dev
 
 Open the address it prints (http://localhost:5173). Because `dev` runs with `--host`, the "Network" address also works from a phone or tablet on the same Wi-Fi.
 
+### Connect it to the Rhino
+
+The dev server forwards Moonraker's paths to the Pi, so nothing on the Pi needs changing:
+
+```bash
+MOONRAKER=http://mainsailos.local npm run dev        # the default
+MOONRAKER=http://192.168.1.50 npm run dev            # or the Pi's IP
+```
+
+On Windows PowerShell: `$env:MOONRAKER="http://192.168.1.50"; npm run dev`.
+
+The checks to run on the machine are in [docs/testing.md](docs/testing.md).
+
+### Work without the machine
+
+```bash
+npm run mock                                      # pretend Moonraker on port 7125
+MOONRAKER=http://localhost:7125 npm run dev       # in a second terminal
+```
+
+`MOCK_SCENARIO=restart`, `swap` or `custom` changes what the mock reports. It prints every request the app makes.
+
 Other commands:
 
 | Command | What it does |
@@ -23,6 +45,8 @@ Other commands:
 | `npm run build` | Type-checks, then builds static files into `dist/` |
 | `npm run preview` | Serves the `dist/` build locally |
 | `npm run icons` | Exports every icon to `design/icons/` as standalone SVG files |
+| `npm test` | Runs the unit tests (tool state, G-code headers, the read-only client) |
+| `npm run mock` | Starts the pretend Moonraker |
 
 The built `dist/` folder is plain static files and works from any folder, so later it can be served by the nginx that already serves Mainsail on the Pi. Deployment to the Pi comes with Phase 2.
 
@@ -34,12 +58,14 @@ src/
   icons/        toolhead emblems and interface icons (source of truth)
   styles/       tokens.css (every colour, size, font) and base.css
   toolheads/    look of each toolhead: accent, icon, summary
-  stores/       machine state (Pinia), theme preference
+  moonraker/    websocket client, tool-state rules, G-code header reader (+ tests)
+  stores/       machine state, connection settings, theme
   components/   shell (top bar, rail, E-stop) and shared parts
   views/        one file per screen
   router.ts     screens and their URLs
 design/icons/   exported SVGs for the README, videos and the Portal
-scripts/        icon export
+scripts/        icon export, mock Moonraker
+docs/           testing on the machine
 ```
 
 ## Decisions so far
@@ -65,7 +91,9 @@ Open **Style** in the app for the live guide. The direction is a workshop instru
 
 ## Safety model
 
-- The mounted toolhead comes only from Klipper (`printer["gcode_macro SWAP_TOOL"].current_tool`). The UI never sets it, guesses it, or keeps it after a disconnect.
+- The mounted toolhead comes only from Klipper (`printer["gcode_macro SWAP_TOOL"].current_tool`). The UI never sets it, guesses it, or keeps it after a disconnect or Klipper restart.
+- After a restart, `current_tool` is 0 until RESTORE_TOOL is answered. The slot in `save_variables` is shown as "last saved", never as mounted.
+- In Phase 2a the Moonraker client only sends methods on a read-only allowlist (`READ_ONLY_METHODS` in `src/moonraker/client.ts`), plus the emergency stop. Anything else is refused before it leaves the browser, and a unit test checks it.
 - Anything that moves the machine or powers the laser or spindle will ask for confirmation. The E-stop never asks.
 - The on-screen E-stop depends on the browser, network, Pi and Moonraker. It does not replace a physical E-stop or power switch.
 - Generated jobs call the existing macros (START_JOB, SWAP_TOOL, END_PRINT) instead of raw tool-change or power G-code.

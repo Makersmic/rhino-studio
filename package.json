@@ -1,7 +1,7 @@
 {
   "name": "rhino-studio",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "One interface for every Rhino Multi Motion System process: prepare, preview, send, monitor.",
   "license": "GPL-3.0-or-later",
   "type": "module",
@@ -10,7 +10,9 @@
     "build": "vue-tsc --noEmit && vite build",
     "preview": "vite preview --host",
     "typecheck": "vue-tsc --noEmit",
-    "icons": "node scripts/export-icons.ts"
+    "icons": "node scripts/export-icons.ts",
+    "test": "vitest run",
+    "mock": "node scripts/mock-moonraker.ts"
   },
   "dependencies": {
     "@fontsource-variable/archivo": "^5.3.0",
@@ -21,9 +23,12 @@
   },
   "devDependencies": {
     "@types/node": "^26.6.5",
+    "@types/ws": "^8.18.2",
     "@vitejs/plugin-vue": "^6.0.9",
     "typescript": "^5.9.3",
     "vite": "^6.4.4",
-    "vue-tsc": "^3.3.12"
+    "vitest": "^3.2.7",
+    "vue-tsc": "^3.3.12",
+    "ws": "^8.22.0"
   }
 }

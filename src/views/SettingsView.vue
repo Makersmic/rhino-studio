@@ -1,9 +1,25 @@
 <script setup lang="ts">
 import RsPanel from '@/components/RsPanel.vue'
+import { ref } from 'vue'
+import RsButton from '@/components/RsButton.vue'
 import { useThemeStore, type ThemePref } from '@/stores/theme'
+import { useSettingsStore, normalizeAddress } from '@/stores/settings'
+import { useMachineStore } from '@/stores/machine'
 import { brand } from '@/brand/brand'
 
 const theme = useThemeStore()
+const settings = useSettingsStore()
+const machine = useMachineStore()
+const address = ref(settings.moonrakerUrl)
+const saved = ref(false)
+
+function save() {
+  settings.moonrakerUrl = normalizeAddress(address.value)
+  address.value = settings.moonrakerUrl
+  machine.connect(settings.moonrakerUrl)
+  saved.value = true
+  setTimeout(() => (saved.value = false), 3000)
+}
 const options: { value: ThemePref; label: string }[] = [
   { value: 'system', label: 'Match device' },
   { value: 'dark', label: 'Dark' },
@@ -30,11 +46,21 @@ const options: { value: ThemePref; label: string }[] = [
       </RsPanel>
 
       <RsPanel title="Machine" index="02">
-        <label class="field">
-          <span>Moonraker address</span>
-          <input type="text" placeholder="http://rhino.local" disabled />
-        </label>
-        <p class="muted small">Editable in Phase 2.</p>
+        <form class="stack" @submit.prevent="save">
+          <label class="field">
+            <span>Moonraker address</span>
+            <input v-model="address" type="text" placeholder="Leave blank to use this app's address" autocomplete="off" spellcheck="false" />
+          </label>
+          <p class="muted small">Leave blank when the app is served from the Pi or run with <code>npm run dev</code> (set <code>MOONRAKER=</code> for the dev server instead). Fill it in, for example <code>http://192.168.1.50</code>, only if the app is hosted elsewhere; Moonraker then needs this app's address in <code>cors_domains</code>.</p>
+          <label class="check">
+            <input v-model="settings.autoConnect" type="checkbox" />
+            Connect when the app opens
+          </label>
+          <div class="row">
+            <RsButton type="submit">Save and reconnect</RsButton>
+            <span v-if="saved" class="muted small" role="status">Saved</span>
+          </div>
+        </form>
       </RsPanel>
 
       <RsPanel title="About" index="03">
@@ -52,6 +78,10 @@ const options: { value: ThemePref; label: string }[] = [
 .seg input:focus-visible + span { box-shadow: var(--rs-focus); }
 .field { display: flex; flex-direction: column; gap: var(--rs-space-1); font-size: var(--rs-text-sm); margin-bottom: var(--rs-space-2); }
 .field input { height: 42px; padding: 0 var(--rs-space-4); border-radius: var(--rs-radius-pill); border: 1.5px solid var(--rs-line-strong); background: transparent; }
-.field input:disabled { opacity: 0.5; }
+.field input:focus-visible { border-color: var(--rs-text-strong); }
 .small { font-size: var(--rs-text-sm); }
+.stack { display: flex; flex-direction: column; gap: var(--rs-space-3); }
+.check { display: flex; align-items: center; gap: var(--rs-space-2); cursor: pointer; }
+.check input { width: 18px; height: 18px; accent-color: var(--rs-text-strong); }
+.row { display: flex; align-items: center; gap: var(--rs-space-3); }
 </style>

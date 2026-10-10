@@ -1,35 +1,57 @@
 <script setup lang="ts">
 /**
- * Software emergency stop.
+ * Software emergency stop: Klipper M112 through Moonraker.
  *
- * Phase 1: disabled, because there is no machine connection to send it on.
- * Phase 2 wires it to Moonraker's printer.emergency_stop (Klipper M112),
- * with no confirmation dialog: an E-stop must act on the first press.
+ * - Acts on the first press. No confirmation: an E-stop must never ask.
+ * - Enabled whenever the app is trying to reach a machine. If the websocket
+ *   is down it falls back to Moonraker's HTTP endpoint.
+ * - After an E-stop Klipper is shut down. Restart it from Mainsail
+ *   (FIRMWARE_RESTART); Phase 2a doesn't send restarts.
  *
  * This button is a convenience, not a safety device. It depends on the
  * browser, Wi-Fi, the Pi and Moonraker all working. Keep a physical E-stop
  * or power switch within reach of the machine.
  */
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useMachineStore } from '@/stores/machine'
 
 const machine = useMachineStore()
-const ready = computed(() => machine.connection === 'online')
+const ready = computed(() => machine.connection !== 'offline')
+const result = ref<'idle' | 'sent' | 'failed'>('idle')
+const error = ref('')
+
+async function stop() {
+  try {
+    await machine.emergencyStop()
+    result.value = 'sent'
+  } catch (e) {
+    result.value = 'failed'
+    error.value = (e as Error).message
+  }
+  setTimeout(() => (result.value = 'idle'), 6000)
+}
 </script>
 
 <template>
-  <button
-    type="button"
-    class="estop"
-    :disabled="!ready"
-    :title="ready ? 'Emergency stop (Klipper M112)' : 'Emergency stop needs a machine connection'"
-  >
-    <span class="cap" aria-hidden="true" />
-    <span class="label">Stop</span>
-  </button>
+  <div class="wrap">
+    <button
+      type="button"
+      class="estop"
+      :disabled="!ready"
+      :title="ready ? 'Emergency stop (Klipper M112). Acts immediately.' : 'Emergency stop needs a machine connection'"
+      @click="stop"
+    >
+      <span class="cap" aria-hidden="true" />
+      <span class="label">Stop</span>
+    </button>
+    <span v-if="result !== 'idle'" class="result" :class="result" role="status">
+      {{ result === 'sent' ? 'Stop sent' : `Stop failed: ${error}. Use the machine's switch.` }}
+    </span>
+  </div>
 </template>
 
 <style scoped>
+.wrap { position: relative; }
 .estop {
   display: inline-flex;
   align-items: center;
@@ -45,6 +67,7 @@ const ready = computed(() => machine.connection === 'online')
   cursor: pointer;
 }
 .estop:hover:not(:disabled) { background: var(--rs-danger-strong); }
+.estop:active:not(:disabled) { transform: translateY(1px); }
 /* Mushroom-head stop button: a ring around a solid cap */
 .cap {
   width: 32px;
@@ -59,5 +82,17 @@ const ready = computed(() => machine.connection === 'online')
   color: var(--rs-text-muted);
   box-shadow: inset 0 0 0 1.5px var(--rs-line-strong);
 }
+.result {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  white-space: nowrap;
+  padding: 6px 12px;
+  border-radius: var(--rs-radius-pill);
+  font-size: var(--rs-text-sm);
+  font-weight: var(--rs-weight-medium);
+}
+.result.sent { background: var(--rs-paper); color: var(--rs-paper-ink); }
+.result.failed { background: var(--rs-danger); color: var(--rs-on-danger); }
 @media (max-width: 560px) { .label { display: none; } .estop { padding: 0 6px; } }
 </style>

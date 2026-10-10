@@ -3,13 +3,19 @@ import { watchEffect } from 'vue'
 import { useRoute } from 'vue-router'
 import AppTopBar from '@/components/AppTopBar.vue'
 import AppRail from '@/components/AppRail.vue'
+import AppAlerts from '@/components/AppAlerts.vue'
 import { useMachineStore } from '@/stores/machine'
 import { useThemeStore } from '@/stores/theme'
+import { useSettingsStore } from '@/stores/settings'
 import { brand } from '@/brand/brand'
 
 const machine = useMachineStore()
 useThemeStore() // applies the saved theme on startup
 const route = useRoute()
+const settings = useSettingsStore()
+
+// Connecting only reads status; nothing in Phase 2a can move the machine.
+if (settings.autoConnect) machine.connect(settings.moonrakerUrl)
 
 // The whole app follows the mounted toolhead's accent, but only when Klipper
 // has verified which tool is on. Otherwise it stays neutral steel.
@@ -30,6 +36,7 @@ watchEffect(() => {
   <div class="body">
     <AppRail />
     <main id="main" tabindex="-1">
+      <AppAlerts />
       <RouterView />
     </main>
   </div>

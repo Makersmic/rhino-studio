@@ -4,12 +4,15 @@
  * number bottom-left, optional detail on the right. When there's no live
  * value it shows an em dash, never a placeholder number.
  */
-defineProps<{ label: string; value?: string | null; unit?: string; detail?: string }>()
+defineProps<{ label: string; value?: string | null; unit?: string; detail?: string; note?: string }>()
 </script>
 
 <template>
   <div class="readout">
-    <span class="label">{{ label }}</span>
+    <div class="head">
+      <span class="label">{{ label }}</span>
+      <span v-if="note" class="note">{{ note }}</span>
+    </div>
     <div class="row">
       <span class="value">{{ value ?? '—' }}<span v-if="unit && value != null" class="unit">{{ unit }}</span></span>
       <span v-if="detail" class="detail">{{ detail }}</span>
@@ -30,7 +33,9 @@ defineProps<{ label: string; value?: string | null; unit?: string; detail?: stri
   background: var(--rs-paper);
   color: var(--rs-paper-ink);
 }
+.head { display: flex; justify-content: space-between; align-items: baseline; gap: var(--rs-space-3); }
 .label { font-weight: var(--rs-weight-medium); }
+.note { font-size: var(--rs-text-sm); color: var(--rs-paper-muted); white-space: nowrap; }
 .row { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--rs-space-3); }
 .value {
   font-size: var(--rs-text-2xl);
@@ -39,5 +44,5 @@ defineProps<{ label: string; value?: string | null; unit?: string; detail?: stri
   line-height: 0.9;
 }
 .unit { font-size: 0.5em; margin-left: 2px; letter-spacing: 0; }
-.detail { font-size: var(--rs-text-sm); color: var(--rs-paper-muted); text-align: right; }
+.detail { font-size: var(--rs-text-sm); color: var(--rs-paper-muted); text-align: right; white-space: pre-line; }
 </style>

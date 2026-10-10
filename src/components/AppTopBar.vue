@@ -10,10 +10,22 @@ const machine = useMachineStore()
 
 const connection = computed(() => {
   switch (machine.connection) {
-    case 'online': return { tone: 'ok' as const, text: 'Connected' }
+    case 'online':
+      return machine.klippy === 'ready'
+        ? { tone: 'ok' as const, text: 'Connected' }
+        : { tone: machine.klippy === 'shutdown' || machine.klippy === 'error' ? ('danger' as const) : ('warn' as const), text: `Klipper ${machine.klippy}` }
     case 'connecting': return { tone: 'warn' as const, text: 'Connecting' }
-    case 'error': return { tone: 'danger' as const, text: 'Connection lost' }
+    case 'error': return { tone: 'danger' as const, text: "Can't reach machine" }
     default: return { tone: 'neutral' as const, text: 'Not connected' }
+  }
+})
+
+const caption = computed(() => {
+  switch (machine.toolState.kind) {
+    case 'mounted': return 'mounted'
+    case 'swapping': return 'swapping'
+    case 'none-confirmed': return 'not confirmed'
+    default: return 'not verified'
   }
 })
 </script>
@@ -24,18 +36,18 @@ const connection = computed(() => {
       <BrandMark />
     </RouterLink>
 
-    <div class="mounted" aria-live="polite">
+    <RouterLink to="/device" class="mounted" aria-live="polite" :title="machine.toolStateText">
       <ToolheadBadge
         :look="machine.mountedLook"
         :slot="machine.mountedSlot"
         :verified="machine.mountedVerified"
         size="sm"
       />
-      <span class="caption">{{ machine.mountedVerified ? 'mounted' : 'not verified' }}</span>
-    </div>
+      <span class="caption">{{ caption }}</span>
+    </RouterLink>
 
     <div class="right">
-      <StatusChip :tone="connection.tone">{{ connection.text }}</StatusChip>
+      <StatusChip :tone="connection.tone" :title="machine.connectionDetail ?? undefined">{{ connection.text }}</StatusChip>
       <EStopButton />
     </div>
   </header>
@@ -69,7 +81,9 @@ const connection = computed(() => {
   border-radius: var(--rs-radius-pill);
   border: 1.5px solid var(--rs-line);
   min-width: 0;
+  text-decoration: none;
 }
+.mounted:hover { border-color: var(--rs-line-strong); }
 .caption { font-size: var(--rs-text-xs); color: var(--rs-text-muted); }
 .right { margin-left: auto; display: flex; align-items: center; gap: var(--rs-space-3); }
 @media (max-width: 720px) {

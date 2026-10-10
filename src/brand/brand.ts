@@ -16,7 +16,7 @@ export const brand = {
   /** Shown in the footer of the style guide and about panel. */
   maker: 'Makersmic',
   repoUrl: 'https://github.com/Makersmic',
-  version: '0.1.0',
+  version: '0.2.0',
 } as const
 
 /**

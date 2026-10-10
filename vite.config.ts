@@ -1,15 +1,57 @@
-import { defineConfig } from 'vite'
+import { defineConfig } from 'vitest/config'
+import type { ProxyOptions } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { fileURLToPath, URL } from 'node:url'
 
-// base: './' makes the built app work from any folder (e.g. served by the Pi's
-// nginx under /studio/) without rebuilding. The router uses hash history for
-// the same reason: no server rewrite rules are needed.
+/**
+ * During development the app runs on your PC (localhost:5173) but Moonraker
+ * runs on the Pi. Browsers block that kind of cross-site connection unless
+ * moonraker.conf lists your PC in cors_domains. Instead of changing the Pi,
+ * the dev server forwards Moonraker's paths to the Pi itself, so to the
+ * browser everything looks like one site.
+ *
+ * Point it at your machine with the MOONRAKER environment variable:
+ *   MOONRAKER=http://192.168.1.50 npm run dev
+ * Default: http://mainsailos.local (Mainsail's nginx forwards to Moonraker).
+ *
+ * For the mock Moonraker (no machine needed): npm run mock, then
+ *   MOONRAKER=http://localhost:7125 npm run dev
+ */
+const target = process.env.MOONRAKER ?? 'http://mainsailos.local'
+
+// Moonraker accepts a websocket only when the Origin header matches its host
+// (or cors_domains). Rewrite Origin to the target so the forwarded request
+// looks like it came from Mainsail's own site.
+const originFix: ProxyOptions = {
+  target,
+  changeOrigin: true,
+  configure(proxy) {
+    proxy.on('proxyReq', (req) => req.setHeader('origin', target))
+    proxy.on('proxyReqWs', (req) => req.setHeader('origin', target))
+  },
+}
+
+// base: './' makes the built app work from any folder (e.g. served by the
+// Pi's nginx under /studio/) without rebuilding. The router uses hash history
+// for the same reason: no server rewrite rules are needed.
 export default defineConfig({
   base: './',
   plugins: [vue()],
   resolve: {
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
   },
-  server: { port: 5173 },
+  server: {
+    port: 5173,
+    proxy: {
+      '/websocket': { ...originFix, ws: true },
+      '/server': originFix,
+      '/printer': originFix,
+      '/machine': originFix,
+      '/access': originFix,
+    },
+  },
+  test: {
+    environment: 'node',
+    include: ['src/**/*.test.ts'],
+  },
 })
