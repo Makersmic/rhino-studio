@@ -1,0 +1,100 @@
+/* Global element styles. Component styles live in their .vue files. */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--rs-bg);
+  color: var(--rs-text);
+  font-family: var(--rs-font-ui);
+  font-size: var(--rs-text-md);
+  font-weight: var(--rs-weight-body);
+  line-height: 1.5;
+  /* Numbers line up in readouts and tables */
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3 {
+  color: var(--rs-text-strong);
+  font-weight: var(--rs-weight-medium);
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+  margin: 0;
+}
+h1 { font-size: var(--rs-text-xl); font-weight: var(--rs-weight-body); letter-spacing: -0.025em; }
+h2 { font-size: var(--rs-text-lg); }
+h3 { font-size: var(--rs-text-md); }
+
+p { margin: 0; max-width: 72ch; }
+
+a { color: inherit; text-underline-offset: 3px; }
+
+code,
+pre,
+kbd {
+  font-family: var(--rs-font-code);
+  font-size: 0.88em;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+:focus-visible {
+  outline: none;
+  box-shadow: var(--rs-focus);
+}
+
+.visually-hidden {
+  position: absolute !important;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
+
+/* View layout shared by every page */
+.view {
+  display: flex;
+  flex-direction: column;
+  gap: var(--rs-space-5);
+  padding: var(--rs-space-6) var(--rs-space-6) var(--rs-space-7);
+  max-width: 1320px;
+}
+.view-head { display: flex; flex-direction: column; gap: var(--rs-space-2); padding: 0 var(--rs-space-1); }
+.view-head p { color: var(--rs-text-muted); }
+.grid {
+  display: grid;
+  gap: var(--rs-gap);
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+}
+.muted { color: var(--rs-text-muted); }
+@media (max-width: 720px) {
+  .view { padding: var(--rs-space-4) var(--rs-space-3) 104px; }
+}

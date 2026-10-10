@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="256" height="256" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" style="color:#141413">
+<title>User-added toolhead</title>
+<style>
+  *{vector-effect:non-scaling-stroke;stroke-width:2.5px}
+  .k{stroke-width:5px}
+  .f{fill:currentColor;stroke:none}
+  .c{stroke-dasharray:2 3;opacity:.55}
+</style>
+<rect width="64" height="64" rx="16" fill="#c9b28a" stroke="none"/>
+<g transform="translate(8 8)"><path class="c" d="M8 32l16-9.2 16 9.2"/>
+      <path d="M24 5.5l16 9.2-16 9.2-16-9.2z"/>
+      <path d="M8 14.7v18.4L24 42.3l16-9.2V14.7M24 23.9v18.4"/>
+      <path class="k" d="M41.5 2v9M37 6.5h9"/></g>
+</svg>

@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" style="color:#141413">
+<title>Toolhead not verified</title>
+<style>
+  *{vector-effect:non-scaling-stroke;stroke-width:1.5px}
+  .k{stroke-width:3px}
+  .f{fill:currentColor;stroke:none}
+  .c{stroke-dasharray:2 3;opacity:.55}
+</style>
+<circle cx="24" cy="24" r="18" stroke-dasharray="3.5 4.5"/>
+      <path d="M19 19.2a5.2 5.2 0 1 1 7.8 4.5c-1.7 1-2.8 2.1-2.8 4.1"/>
+      <circle class="f" cx="24" cy="33.2" r="1.7"/>
+</svg>

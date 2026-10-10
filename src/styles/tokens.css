@@ -1,0 +1,163 @@
+/*
+ * Rhino Studio design tokens.
+ *
+ * Direction: a workshop instrument panel. A black frame, solid colour blocks
+ * with large rounded corners, cream "paper" tiles carrying big light numerals
+ * (think Braun dials and retro control panels), pill-shaped controls, and
+ * thin geometric line art.
+ *
+ * Every colour, size and font in the app comes from a variable here.
+ * Components never use raw hex values.
+ *
+ * Naming: --rs-* = Rhino Studio. --th-* = toolhead accents.
+ *
+ * Colour rules
+ * - Each toolhead owns one accent from the retro palette. Every tool also has
+ *   a unique emblem, so colour is never the only cue.
+ * - Red is reserved for danger and the E-stop. HotJoe's signal orange is the
+ *   closest tool colour, so danger controls also differ in shape and wording
+ *   ("Stop", "Cancel job"), never relying on hue alone.
+ * - --rs-active is the accent of the toolhead Klipper says is mounted. The
+ *   app shell sets it at runtime; when the mounted tool is unknown it is
+ *   neutral and the shell shows a hatched "unverified" bar.
+ */
+
+:root {
+  /* Type: one family (Archivo, with a width axis) plus a mono for code */
+  --rs-font-ui: 'Archivo Variable', system-ui, sans-serif;
+  --rs-font-code: 'JetBrains Mono', ui-monospace, monospace;
+
+  /* Type scale */
+  --rs-text-xs: 0.75rem;    /* 12px  index numbers, captions */
+  --rs-text-sm: 0.875rem;   /* 14px  secondary text */
+  --rs-text-md: 0.9375rem;  /* 15px  body */
+  --rs-text-lg: 1.25rem;    /* 20px  tile names, panel titles */
+  --rs-text-xl: 2rem;       /* 32px  view titles */
+  --rs-text-2xl: 3.5rem;    /* 56px  readouts */
+  --rs-text-3xl: 5rem;      /* 80px  hero readouts */
+
+  /* Weights. Big numbers go light, labels go medium. */
+  --rs-weight-light: 300;
+  --rs-weight-body: 420;
+  --rs-weight-medium: 540;
+  --rs-weight-bold: 680;
+
+  /* Spacing: 4px base */
+  --rs-space-1: 4px;
+  --rs-space-2: 8px;
+  --rs-space-3: 12px;
+  --rs-space-4: 16px;
+  --rs-space-5: 24px;
+  --rs-space-6: 32px;
+  --rs-space-7: 48px;
+
+  /* Shape. Radius follows hierarchy: chips < panels < colour tiles. */
+  --rs-radius-sm: 6px;     /* inputs, small marks */
+  --rs-radius-md: 12px;    /* inner cards */
+  --rs-radius-lg: 18px;    /* panels */
+  --rs-radius-xl: 24px;    /* colour tiles */
+  --rs-radius-pill: 999px; /* buttons, chips */
+
+  /* Layout */
+  --rs-topbar-h: 64px;
+  --rs-rail-w: 92px;
+  --rs-gap: 10px;          /* the thin black gap between blocks */
+  --rs-focus: 0 0 0 2px var(--rs-bg), 0 0 0 4px var(--rs-focus-ring);
+
+  /* Motion */
+  --rs-ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --rs-dur: 160ms;
+
+  /* Toolhead accents, from the retro palette. Same in both themes.
+     --th-ink is the text/line colour used on top of any accent. */
+  --th-blockone: #8aa2cf;   /* slate blue    - main FDM print head */
+  --th-switchfly: #5fa39a;  /* sea teal      - dual filament path */
+  --th-lightsaber: #b9a6e6; /* lilac         - diode laser */
+  --th-hotjoe: #f3701e;     /* signal orange - CNC spindle */
+  --th-dragknife: #bcc58f;  /* sage          - drag knife (cutting mat) */
+  --th-custom: #c9b28a;     /* tan           - user-added tools, slot 6+ */
+  --th-unknown: #8f8b82;    /* warm grey     - mounted tool not verified */
+  --th-ink: #141413;
+}
+
+/* Dark theme (default): black frame, charcoal panels, cream paper tiles */
+:root,
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --rs-bg: #0f0f0e;
+  --rs-surface: #1c1c1a;
+  --rs-surface-2: #272724;
+  --rs-line: #33332f;
+  --rs-line-strong: #4b4a44;
+  --rs-text: #d8d1c1;
+  --rs-text-strong: #f1ebdc;
+  --rs-text-muted: #9a9487;
+  --rs-focus-ring: #f1ebdc;
+
+  /* "Paper" tiles: the cream instrument faces */
+  --rs-paper: #e8dfcb;
+  --rs-paper-ink: #151514;
+  --rs-paper-muted: #6d675b;
+  --rs-paper-line: #cbc0a8;
+
+  --rs-ok: #8fc27a;
+  --rs-warn: #e9b44c;
+  --rs-danger: #e5322b;
+  --rs-danger-strong: #ff4a3f;
+  --rs-on-danger: #ffffff;
+
+  --rs-hatch: rgb(241 235 220 / 0.1);
+}
+
+/* Light theme: cream frame, the paper tiles flip to charcoal */
+:root[data-theme='light'] {
+  color-scheme: light;
+  --rs-bg: #e6dfcf;
+  --rs-surface: #f3eee3;
+  --rs-surface-2: #fbf8f1;
+  --rs-line: #d4cab5;
+  --rs-line-strong: #b6ab94;
+  --rs-text: #2a2925;
+  --rs-text-strong: #141413;
+  --rs-text-muted: #6b665c;
+  --rs-focus-ring: #141413;
+
+  --rs-paper: #1f1f1d;
+  --rs-paper-ink: #f1ebdc;
+  --rs-paper-muted: #a39d8f;
+  --rs-paper-line: #3a3935;
+
+  --rs-ok: #3f7d34;
+  --rs-warn: #9a6a00;
+  --rs-danger: #d0281f;
+  --rs-danger-strong: #b11d16;
+  --rs-on-danger: #ffffff;
+
+  --rs-hatch: rgb(20 20 19 / 0.1);
+}
+
+/* "System" theme: follow the OS when the user hasn't picked one */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme='dark']):not([data-theme='light']) {
+    color-scheme: light;
+    --rs-bg: #e6dfcf;
+    --rs-surface: #f3eee3;
+    --rs-surface-2: #fbf8f1;
+    --rs-line: #d4cab5;
+    --rs-line-strong: #b6ab94;
+    --rs-text: #2a2925;
+    --rs-text-strong: #141413;
+    --rs-text-muted: #6b665c;
+    --rs-focus-ring: #141413;
+    --rs-paper: #1f1f1d;
+    --rs-paper-ink: #f1ebdc;
+    --rs-paper-muted: #a39d8f;
+    --rs-paper-line: #3a3935;
+    --rs-ok: #3f7d34;
+    --rs-warn: #9a6a00;
+    --rs-danger: #d0281f;
+    --rs-danger-strong: #b11d16;
+    --rs-on-danger: #ffffff;
+    --rs-hatch: rgb(20 20 19 / 0.1);
+  }
+}

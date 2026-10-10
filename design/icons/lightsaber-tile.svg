@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="256" height="256" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" style="color:#141413">
+<title>LightSaber diode laser</title>
+<style>
+  *{vector-effect:non-scaling-stroke;stroke-width:2.5px}
+  .k{stroke-width:5px}
+  .f{fill:currentColor;stroke:none}
+  .c{stroke-dasharray:2 3;opacity:.55}
+</style>
+<rect width="64" height="64" rx="16" fill="#b9a6e6" stroke="none"/>
+<g transform="translate(8 8)"><ellipse class="c" cx="24" cy="40.5" rx="15" ry="4.6"/>
+      <path d="M17 3v5M21 3v5M25 3v5M29 3v5M31 3v5"/>
+      <rect x="13" y="8" width="22" height="15" rx="2.5"/>
+      <rect x="20" y="23" width="8" height="4" rx="1"/>
+      <path d="M21 27l3 13.5 3-13.5"/>
+      <ellipse cx="24" cy="40.5" rx="8" ry="2.4"/>
+      <circle class="f" cx="24" cy="40.5" r="1.5"/></g>
+</svg>
