@@ -13,6 +13,7 @@ import MotionPanel from '@/control/MotionPanel.vue'
 import HeatPanel from '@/control/HeatPanel.vue'
 import JobPanel from '@/control/JobPanel.vue'
 import ConsolePanel from '@/control/ConsolePanel.vue'
+import MacroPanel from '@/control/MacroPanel.vue'
 import CareTaskCard from '@/maintenance/CareTaskCard.vue'
 import { careText } from '@/maintenance/summary'
 import { useMachineStore } from '@/stores/machine'
@@ -92,6 +93,7 @@ const careNow = computed(() => {
             </template>
           </div>
         </RsPanel>
+        <MacroPanel />
       </div>
     </div>
 

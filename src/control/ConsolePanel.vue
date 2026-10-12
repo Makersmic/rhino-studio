@@ -1,15 +1,14 @@
 <script setup lang="ts">
 /**
- * Console with macro buttons beside it.
- * Typed commands and buttons go through the same safety check: moves, tool
- * power, tool-state changes, restarts and internal macros ask first.
+ * G-code console: Klipper's output and a command line.
+ * Typed commands go through the safety check: moves, tool power, tool-state
+ * changes, restarts and internal macros ask first.
  */
 import { computed, nextTick, ref, watch } from 'vue'
 import RsPanel from '@/components/RsPanel.vue'
 import RsButton from '@/components/RsButton.vue'
 import { useControlStore } from '@/stores/control'
 import { useMachineStore } from '@/stores/machine'
-import { macroGroups } from './macroGroups'
 
 const control = useControlStore()
 const machine = useMachineStore()
@@ -20,13 +19,6 @@ let histPos = -1
 const logEl = ref<HTMLElement | null>(null)
 const stick = ref(true)
 
-const groups = computed(() =>
-  macroGroups(new Set(control.macros.keys()), {
-    toolType: machine.toolState.kind === 'mounted' ? machine.toolState.type : null,
-    toolName: machine.mountedName,
-    needsRestore: machine.toolState.kind === 'none-confirmed' && !!machine.toolState.lastSavedSlot,
-  }),
-)
 const suggestions = computed(() => [...control.help.keys()].sort())
 
 async function submit() {
@@ -57,34 +49,11 @@ watch(
   },
 )
 
-const runMacro = (name: string, label: string) => control.send(name, { label })
 const fmtTime = (t: number) => new Date(t * 1000).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
 </script>
 
 <template>
-  <RsPanel title="Console and macros" index="05">
-    <div class="wrap">
-      <aside class="macros" aria-label="Macros">
-        <section v-for="g in groups" :key="g.title" class="group">
-          <h3>{{ g.title }}</h3>
-          <div class="buttons" :class="{ dense: g.title === 'Other macros' }">
-            <button
-              v-for="b in g.buttons"
-              :key="b.name"
-              type="button"
-              class="macro"
-              :class="{ suggested: b.suggested }"
-              :disabled="!machine.klippyReady"
-              :title="control.macros.get(b.name) || b.name"
-              @click="runMacro(b.name, b.label)"
-            >
-              {{ b.label }}
-            </button>
-          </div>
-        </section>
-        <p v-if="!groups.length" class="muted small">Macros appear when Klipper is connected.</p>
-      </aside>
-
+  <RsPanel title="Console" index="06">
       <div class="console">
         <div ref="logEl" class="log" role="log" aria-live="polite" @scroll="onScroll">
           <div v-for="l in control.lines" :key="l.id" class="line" :class="l.kind">
@@ -114,31 +83,10 @@ const fmtTime = (t: number) => new Date(t * 1000).toLocaleTimeString(undefined, 
           Moves, tool power, tool-state changes and restarts ask before they're sent. The ↑ key recalls earlier commands.
         </p>
       </div>
-    </div>
   </RsPanel>
 </template>
 
 <style scoped>
-.wrap { display: grid; grid-template-columns: minmax(220px, 300px) minmax(0, 1fr); gap: var(--rs-space-5); }
-.macros { display: flex; flex-direction: column; gap: var(--rs-space-4); max-height: 520px; overflow: auto; padding-right: 4px; }
-h3 { font-size: var(--rs-text-xs); font-weight: var(--rs-weight-medium); color: var(--rs-text-muted); margin-bottom: var(--rs-space-2); }
-.buttons { display: flex; flex-wrap: wrap; gap: 6px; }
-.macro {
-  min-height: 36px;
-  padding: 0 14px;
-  border-radius: var(--rs-radius-pill);
-  border: 1.5px solid var(--rs-line-strong);
-  background: transparent;
-  color: var(--rs-text-strong);
-  font-size: var(--rs-text-sm);
-  font-weight: var(--rs-weight-medium);
-  cursor: pointer;
-}
-.macro:hover:not(:disabled) { border-color: var(--rs-text-strong); }
-.macro.suggested { background: var(--rs-warn-fill); border-color: transparent; color: var(--th-ink); }
-.macro:disabled { opacity: 0.4; cursor: not-allowed; }
-.dense .macro { min-height: 30px; font-family: var(--rs-font-code); font-size: var(--rs-text-xs); font-weight: 400; }
-
 .console { display: flex; flex-direction: column; gap: var(--rs-space-2); min-width: 0; }
 .log {
   height: 420px;
@@ -162,5 +110,5 @@ h3 { font-size: var(--rs-text-xs); font-weight: var(--rs-weight-medium); color: 
 .input input:focus-visible { border-color: var(--rs-text-strong); }
 .note { font-size: var(--rs-text-xs); color: var(--rs-text-muted); }
 .small { font-size: var(--rs-text-sm); }
-@media (max-width: 900px) { .wrap { grid-template-columns: 1fr; } .macros { max-height: none; } .log { height: 300px; } }
+@media (max-width: 900px) { .log { height: 300px; } }
 </style>
