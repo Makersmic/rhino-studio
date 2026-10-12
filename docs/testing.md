@@ -63,7 +63,9 @@ Before you start: bed clear, nothing in the nozzle path, hand near the physical 
 | B12 | Start a BlockOne file with BlockOne mounted | Confirmation explains START_JOB; job runs; Pause, then Resume (asks), then Cancel (asks) work | Cancel doesn't switch the heaters off |
 | B13 | With LightSaber mounted, Start a laser file (config 1.4.1 on the Pi) | Studio runs LASER_JOB_SETUP FILE=…; its questions show in Studio; the laser only fires after the wizard's own steps | The laser fires before the wizard's start step |
 | B14 | E-stop from Studio, then Restart Klipper from the red alert | Shutdown, then a confirmation, then Klipper restarts and the tool shows "not confirmed" until RESTORE_TOOL | |
-| B15 | Pendant: open `#/pendant` on your phone on the same Wi-Fi, unlock, jog 1 mm, lock the phone screen, unlock the phone | Jogs work; after locking the phone screen, motion is locked again | Motion is still unlocked after the phone screen was off |
+| B15 | Pendant Jog screen on your phone (same Wi-Fi, `#/pendant`), 1 mm steps: tap X+ without Hold; then hold Hold and tap X+; then let go and tap X+ | Only the middle tap moves, 1 mm. The keys look greyed out until Hold is held | Anything moves without Hold held |
+| B15b | Hold Hold, then lock the phone screen or switch apps, come back | Keys are dead until you press Hold again | Keys are still live |
+| B15c | Hold Hold and press and keep a finger on a jog key | Exactly one step; nothing more while the finger stays down | It keeps moving |
 | B16 | Pendant: press Stop | Klipper shuts down | |
 
 Notes:

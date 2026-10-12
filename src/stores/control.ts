@@ -189,6 +189,16 @@ export const useControlStore = defineStore('control', () => {
   const now = ref(Date.now())
   setInterval(() => (now.value = Date.now()), 1000)
   const motionUnlocked = computed(() => unlockedUntil.value > now.value)
+
+  /**
+   * Two-hand control (phone pendant): true only while the enable button is
+   * physically held. Set by the pendant's pointer events, cleared on release,
+   * cancel, screen off, app switch, and every motion block.
+   */
+  const enableHeld = ref(false)
+  function setEnable(held: boolean) {
+    enableHeld.value = held && !motionBlock.value
+  }
   const unlockSecondsLeft = computed(() => Math.max(0, Math.ceil((unlockedUntil.value - now.value) / 1000)))
 
   /** Why jogging is unavailable, or null when it can be unlocked. */
@@ -207,6 +217,7 @@ export const useControlStore = defineStore('control', () => {
   }
   function lockMotion() {
     unlockedUntil.value = 0
+    enableHeld.value = false
   }
   // Relock when the screen turns off or you switch apps (phone pendant)
   if (typeof document !== 'undefined') document.addEventListener('visibilitychange', () => document.hidden && lockMotion())
@@ -215,7 +226,8 @@ export const useControlStore = defineStore('control', () => {
   watch(() => machine.mountedName, lockMotion)
 
   async function jog(axis: Axis, delta: number) {
-    if (!motionUnlocked.value || motionBlock.value) return
+    // Either the Control screen's unlock or the pendant's held enable button
+    if ((!motionUnlocked.value && !enableHeld.value) || motionBlock.value) return
     const j = jogScript(axis, delta, {
       position: machine.position.xyz,
       min: machine.limits.min,
@@ -226,7 +238,7 @@ export const useControlStore = defineStore('control', () => {
       log('error', `Jog ${axis}${delta > 0 ? '+' : ''}${delta}: ${j.error}`)
       return
     }
-    unlockedUntil.value = Date.now() + UNLOCK_MS // each jog keeps it unlocked
+    if (motionUnlocked.value) unlockedUntil.value = Date.now() + UNLOCK_MS // each jog keeps it unlocked
     // Unlocking was the confirmation for jogs
     const c = check(j.script, { jobActive: false })
     log('sent', `Jog ${axis} ${delta > 0 ? '+' : ''}${delta} mm`)
@@ -388,6 +400,8 @@ export const useControlStore = defineStore('control', () => {
     macros,
     jobActive,
     motionUnlocked,
+    enableHeld,
+    setEnable,
     unlockSecondsLeft,
     motionBlock,
     onResponse,

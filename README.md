@@ -7,7 +7,9 @@ Status: **Phase 2b** (machine control), on top of 2a (live status) and Care (mai
 ### What it can do
 
 - **Control** screen: jog (locked until you unlock it, relocks after 60 s idle), home, motors off, heater targets, the running job (pause, resume, cancel), the mounted toolhead with Swap and Confirm, and a console with your macros arranged beside it.
-- **Pendant mode** (Control → Pendant mode, or `#/pendant`): the phone as a jog pendant at the machine. Big jog buttons, work/machine position, set Z zero / work zero, and a Stop button that's always on screen.
+- **Pendant mode** (Control → Pendant mode, or `#/pendant`): the phone as a pendant at the machine, with Stop always on screen.
+  - **Jog** screen uses two-hand control: the jog keys stay greyed out unless the **Hold** button in the bottom corner is held. Hold with one thumb, tap with the other; one tap is one step. Letting go, a cancelled touch, the screen turning off or switching apps kills the keys at once. A left-handed option mirrors the layout. On a computer, hold Shift as the Hold button.
+  - **Status** screen: big work/machine position, Home, Set Z zero / Set work zero.
 - **Klipper prompts**: the Rhino wizards' questions (SWAP_TOOL, RESTORE_TOOL, the job setup wizards) pop up in Studio as well as Mainsail. A button runs only its own command.
 - **Files**: upload (button or drag and drop; never starts the file) and Start. Start checks the file's toolhead against the mounted one and blocks a mismatch (offering the swap). Print files start directly (their START_JOB checks again on the machine); laser, spindle, knife and added-tool files start through LASER_JOB_SETUP, CNC_JOB_SETUP, DRAGKNIFE_JOB_SETUP or TOOL_JOB_SETUP with `FILE=`, so the wizard's safety steps and the laser rail (config 1.4.1) aren't skipped.
 
