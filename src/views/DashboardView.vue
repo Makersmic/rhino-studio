@@ -248,7 +248,7 @@ const list = computed(() =>
 }
 .nocam a { color: var(--rs-overlay-text); }
 .scrim { position: absolute; left: 0; right: 0; z-index: -1; pointer-events: none; }
-.top-scrim { top: 0; height: 130px; background: var(--rs-overlay-scrim-top); }
+.top-scrim { top: 0; height: 200px; background: var(--rs-overlay-scrim-top); }
 .bottom-scrim { bottom: 0; height: 52%; background: var(--rs-overlay-scrim-bottom); }
 
 a { color: inherit; text-decoration: none; }
