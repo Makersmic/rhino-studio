@@ -8,26 +8,18 @@
  *
  * Each button goes through the same safety check as the console.
  */
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
 import RsPanel from '@/components/RsPanel.vue'
 import { useControlStore } from '@/stores/control'
 import { useMachineStore } from '@/stores/machine'
-import { hiddenForOtherTools, macroPanels, type MacroGroup } from './macroGroups'
+import type { MacroGroup } from './macroGroups'
+import { useToolMacros } from './useToolMacros'
 
 const props = defineProps<{ kind: 'tool' | 'shared' }>()
 
 const control = useControlStore()
 const machine = useMachineStore()
-
-// Macros for other tools are left out unless you ask for them (they'd be refused anyway)
-const showAll = ref(false)
-const toolType = computed(() => (machine.toolState.kind === 'mounted' ? machine.toolState.type : null))
-const toolName = computed(() => (machine.toolState.kind === 'mounted' ? machine.mountedName : null))
-const available = computed(() => new Set(control.macros.keys()))
-const panels = computed(() =>
-  macroPanels(available.value, { toolType: toolType.value, toolName: toolName.value, showAll: showAll.value }),
-)
-const hidden = computed(() => hiddenForOtherTools(available.value, toolType.value, toolName.value))
+const { showAll, toolName, panels, hidden } = useToolMacros()
 
 const groups = computed<MacroGroup[]>(() => {
   if (props.kind === 'shared') return panels.value.shared

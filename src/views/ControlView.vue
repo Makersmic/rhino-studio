@@ -35,7 +35,8 @@ import ConsolePanel from '@/control/ConsolePanel.vue'
          system ones (always the same), beside the console. -->
     <div class="grid-b">
       <div class="stack macros-col">
-        <MacroPanel kind="tool" />
+        <!-- On desktop the tool's macros run along the bottom of the status box instead -->
+        <MacroPanel kind="tool" class="tool-macro-panel" />
         <MacroPanel kind="shared" />
       </div>
       <ConsolePanel />
@@ -56,5 +57,6 @@ h1 { font-size: var(--rs-text-xl); }
 .stack { display: flex; flex-direction: column; gap: var(--rs-gap); min-width: 0; }
 .stack > :last-child { flex: 1; }
 .grid-b { display: grid; gap: var(--rs-gap); grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); align-items: stretch; }
+@media (min-width: 1181px) { .tool-macro-panel { display: none; } }
 @media (max-width: 1100px) { .grid-a, .grid-b { grid-template-columns: 1fr; } }
 </style>

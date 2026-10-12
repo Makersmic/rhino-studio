@@ -20,10 +20,12 @@ import { useMachineStore } from '@/stores/machine'
 import { useControlStore } from '@/stores/control'
 import { useMaintenanceStore } from '@/stores/maintenance'
 import { careText } from '@/maintenance/summary'
+import { useToolMacros } from './useToolMacros'
 
 const machine = useMachineStore()
 const control = useControlStore()
 const care = useMaintenanceStore()
+const toolMacros = useToolMacros()
 
 
 // Only a confirmed print head can heat the hotend; other tools show their
@@ -141,6 +143,39 @@ const jobLabel: Record<string, string> = { standby: 'Idle', printing: 'Running',
         <RouterLink v-else to="/files" class="sub start">Start a job from Files</RouterLink>
       </div>
     </div>
+
+    <!-- The mounted tool's macros along the bottom (desktop only; on smaller
+         screens they're in their own panel). Same safety check as the console. -->
+    <div class="tool-macros" :aria-label="toolMacros.toolName.value ? `Macros for ${toolMacros.toolName.value}` : 'Tool macros'" role="group">
+      <template v-if="toolMacros.toolName.value">
+        <button
+          v-for="b in toolMacros.panels.value.tool"
+          :key="b.name"
+          type="button"
+          class="tm"
+          :disabled="!toolMacros.ready.value"
+          :title="toolMacros.describe(b.name)"
+          @click="toolMacros.run(b.name, b.label)"
+        >
+          {{ b.label }}
+        </button>
+        <button
+          v-for="b in toolMacros.panels.value.toolMore"
+          :key="b.name"
+          type="button"
+          class="tm dense"
+          :disabled="!toolMacros.ready.value"
+          :title="toolMacros.describe(b.name)"
+          @click="toolMacros.run(b.name, b.name)"
+        >
+          {{ b.name }}
+        </button>
+        <button v-if="toolMacros.hidden.value" type="button" class="tm-more" @click="toolMacros.showAll.value = !toolMacros.showAll.value">
+          {{ toolMacros.showAll.value ? 'Hide' : 'Show' }} {{ toolMacros.hidden.value }} for other tools
+        </button>
+      </template>
+      <span v-else class="tm-none">Tool macros appear once Klipper confirms the mounted tool.</span>
+    </div>
   </section>
 </template>
 
@@ -220,7 +255,50 @@ const jobLabel: Record<string, string> = { standby: 'Idle', printing: 'Running',
 .bar { display: block; height: 5px; border-radius: 2px; background: var(--rs-dither-faint); box-shadow: inset 0 0 0 1px var(--rs-line); overflow: hidden; }
 .bar span { display: block; height: 100%; background: var(--rs-ink); }
 
+/* Tool macro row: spans the box under the readouts, buttons two thirds the
+   size of the macro panel's (38 -> 25px tall, 132 -> 88px wide), from the left. */
+.tool-macros {
+  grid-column: 1 / -1;
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 4px;
+  padding: 10px var(--rs-space-5) 12px;
+}
+.tool-macros::before { /* dotted rule, like the dividers between sections */
+  content: '';
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  top: 0;
+  height: 2px;
+  background: radial-gradient(var(--rs-dot-faint) 0.9px, transparent 1.1px) 0 50% / 5px 2px repeat-x;
+}
+.tm {
+  min-width: 88px;
+  height: 25px;
+  padding: 0 8px;
+  border-radius: var(--rs-radius-sm);
+  border: 1px solid var(--rs-line);
+  background: var(--rs-surface-2);
+  color: var(--rs-text-strong);
+  font-size: 11px;
+  font-weight: var(--rs-weight-medium);
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.tm:hover:not(:disabled) { background: var(--rs-ink); border-color: var(--rs-ink); color: var(--rs-on-ink); }
+.tm:disabled { opacity: 0.35; cursor: not-allowed; }
+.tm.dense { font-family: var(--rs-font-code); font-weight: 400; font-size: 10px; background: transparent; }
+.tm-more { margin-left: 6px; padding: 0; border: 0; background: none; color: var(--rs-text-muted); font-size: 11px; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.tm-more:hover { color: var(--rs-text-strong); }
+.tm-none { font-size: 11px; color: var(--rs-text-muted); line-height: 25px; }
+
 @media (max-width: 1180px) {
+  .tool-macros { display: none; } /* the tool macro panel takes over below the desktop layout */
   .strip { grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
   .tool { grid-column: 1 / -1; }
   .seg + .seg::before { display: none; }
