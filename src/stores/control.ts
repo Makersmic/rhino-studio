@@ -1,0 +1,409 @@
+/**
+ * Everything that sends commands to the machine, in one place:
+ * the console, macro buttons, prompt buttons, jogging, heaters and jobs.
+ *
+ * Every path goes through src/control/commands.ts (check -> confirm ->
+ * approve) or fromPrompt() for wizard buttons. Confirmations are shown by
+ * ConfirmDialog.vue, which this store drives.
+ */
+import { defineStore } from 'pinia'
+import { computed, ref, shallowRef, watch } from 'vue'
+import { approve, check, fromPrompt, heaterScript, jogScript, type Axis, type CheckedScript, type ScriptCheck } from '@/control/commands'
+import { PromptTracker, type Prompt, type PromptButton } from '@/control/prompts'
+import { checkStart, type StartCheck } from '@/control/jobs'
+import type { GcodeStoreEntry } from '@/moonraker/client'
+import { mergedToolMapping, mergedToolTypes } from '@/moonraker/toolState'
+import { useMachineStore } from './machine'
+
+export interface ConsoleLine {
+  id: number
+  time: number
+  kind: 'sent' | 'response' | 'error' | 'action' | 'note'
+  text: string
+}
+
+export interface ConfirmRequest {
+  title: string
+  body: string
+  /** Lines to show in mono, each with what it does */
+  lines?: { text: string; reason: string }[]
+  confirmLabel: string
+  tone: 'motion' | 'danger' | 'normal'
+  resolve: (ok: boolean) => void
+}
+
+const MAX_LINES = 400
+const UNLOCK_MS = 60_000
+
+export const useControlStore = defineStore('control', () => {
+  const machine = useMachineStore()
+
+  // ---- console ------------------------------------------------------------
+  const lines = ref<ConsoleLine[]>([])
+  let lineId = 0
+  function log(kind: ConsoleLine['kind'], text: string, time = Date.now() / 1000) {
+    lines.value.push({ id: lineId++, time, kind, text })
+    if (lines.value.length > MAX_LINES) lines.value.splice(0, lines.value.length - MAX_LINES)
+  }
+
+  // ---- prompts (Rhino wizards) ----------------------------------------------
+  const tracker = new PromptTracker()
+  const prompt = shallowRef<Prompt | null>(null)
+  const promptBusy = ref(false)
+
+  function onResponse(line: string, time?: number) {
+    const isAction = /^\s*(\/\/\s*)?action:/.test(line)
+    if (isAction) tracker.feed(line, time)
+    else log(line.startsWith('!!') ? 'error' : 'response', line.replace(/^\/\/\s?/, ''), time)
+    prompt.value = tracker.current()
+  }
+
+  function onStore(entries: GcodeStoreEntry[]) {
+    lines.value = []
+    for (const e of entries) {
+      if (e.type === 'command') log('sent', e.message, e.time)
+      else for (const l of e.message.split('\n')) onResponse(l, e.time)
+    }
+    log('note', 'Connected. Earlier lines are from Moonraker’s history.')
+  }
+
+  async function pressPromptButton(b: PromptButton) {
+    if (promptBusy.value) return
+    promptBusy.value = true
+    let script: CheckedScript
+    try {
+      script = fromPrompt(b.command)
+    } catch (e) {
+      log('error', (e as Error).message)
+      promptBusy.value = false
+      return
+    }
+    // The wizard decides what's next; close ours so a stale question can't be pressed twice
+    tracker.dismiss()
+    prompt.value = null
+    log('action', `${b.label}  →  ${b.command}`)
+    try {
+      await machine.runChecked(script)
+    } catch (e) {
+      log('error', (e as Error).message)
+    } finally {
+      promptBusy.value = false
+    }
+  }
+
+  // ---- confirmations ----------------------------------------------------------
+  const pendingConfirm = shallowRef<ConfirmRequest | null>(null)
+  function confirm(req: Omit<ConfirmRequest, 'resolve'>): Promise<boolean> {
+    pendingConfirm.value?.resolve(false)
+    return new Promise((resolve) => {
+      pendingConfirm.value = {
+        ...req,
+        resolve: (ok) => {
+          pendingConfirm.value = null
+          resolve(ok)
+        },
+      }
+    })
+  }
+
+  // ---- running commands -----------------------------------------------------
+  const running = ref<string | null>(null)
+  const jobActive = computed(() => machine.job.state === 'printing' || machine.job.state === 'paused')
+  const macros = ref<Map<string, string>>(new Map())
+
+  /** Klipper's commands with descriptions, for the console's suggestions */
+  const help = ref<Map<string, string>>(new Map())
+  function onHelp(h: Record<string, string>) {
+    help.value = new Map(Object.entries(h).map(([k, v]) => [k.toUpperCase(), v]))
+    for (const name of macros.value.keys()) if (help.value.has(name)) macros.value.set(name, help.value.get(name)!)
+  }
+  /** The gcode_macro objects Klipper has: the real list of macros */
+  function onObjects(objects: string[]) {
+    macros.value = new Map(
+      objects.filter((o) => o.startsWith('gcode_macro ')).map((o) => {
+        const name = o.slice('gcode_macro '.length).toUpperCase()
+        return [name, help.value.get(name) ?? '']
+      }),
+    )
+  }
+
+  const RISK_TITLE: Record<string, string> = {
+    motion: 'This moves the machine',
+    power: 'This powers a tool',
+    'tool-state': 'This changes the recorded toolhead',
+    restart: 'This restarts Klipper',
+    job: 'This starts or stops a job',
+    internal: 'This runs an internal macro',
+  }
+
+  /**
+   * Send a script: check it, ask if needed, then run it.
+   * label: what to show in the console instead of the raw script (buttons).
+   */
+  async function send(script: string, opts: { label?: string; confirmBody?: string } = {}): Promise<boolean> {
+    // Stops always go; a restart may go while Klipper is shut down (that's how you recover)
+    const recovery = /^\s*(FIRMWARE_RESTART|RESTART)\s*$/i.test(script) && machine.online
+    if (!machine.klippyReady && !recovery && !/^\s*(M112|EMERGENCY_STOP)\b/i.test(script)) {
+      log('error', 'Klipper is not ready')
+      return false
+    }
+    const c: ScriptCheck = check(script, { jobActive: jobActive.value, macros: new Set(macros.value.keys()) })
+    if (c.blocked) {
+      log('error', c.blocked)
+      return false
+    }
+    let confirmed = false
+    if (c.needsConfirm) {
+      const flagged = c.lines.filter((l) => l.risk !== 'none' && l.risk !== 'heat')
+      const worst = flagged.find((l) => l.risk === c.risk) ?? flagged[0]
+      confirmed = await confirm({
+        title: RISK_TITLE[worst?.risk ?? 'motion'] ?? 'Run this?',
+        body:
+          opts.confirmBody ??
+          (jobActive.value ? 'A job is running. ' : '') + 'Check the machine is clear and you are ready to stop it.',
+        lines: c.lines.map((l) => ({ text: l.line, reason: l.reason })),
+        confirmLabel: 'Run it',
+        tone: c.risk === 'tool-state' || c.risk === 'restart' || jobActive.value ? 'danger' : 'motion',
+      })
+      if (!confirmed) {
+        log('note', `Not sent: ${opts.label ?? c.script.split('\n')[0]}`)
+        return false
+      }
+    }
+    const approved = approve(c, confirmed)
+    log('sent', opts.label ?? c.script)
+    running.value = opts.label ?? c.lines[0]?.command ?? ''
+    try {
+      await machine.runChecked(approved)
+      return true
+    } catch (e) {
+      log('error', (e as Error).message)
+      return false
+    } finally {
+      running.value = null
+    }
+  }
+
+  // ---- motion lock ----------------------------------------------------------
+  const unlockedUntil = ref(0)
+  const now = ref(Date.now())
+  setInterval(() => (now.value = Date.now()), 1000)
+  const motionUnlocked = computed(() => unlockedUntil.value > now.value)
+  const unlockSecondsLeft = computed(() => Math.max(0, Math.ceil((unlockedUntil.value - now.value) / 1000)))
+
+  /** Why jogging is unavailable, or null when it can be unlocked. */
+  const motionBlock = computed(() => {
+    if (!machine.klippyReady) return 'Klipper is not ready'
+    if (jobActive.value) return 'A job is running'
+    if (machine.toolState.kind === 'swapping') return 'A tool swap is in progress'
+    if (!machine.mountedVerified) return 'Confirm the mounted toolhead first: tool lengths differ'
+    return null
+  })
+
+  function unlockMotion() {
+    if (motionBlock.value) return
+    unlockedUntil.value = Date.now() + UNLOCK_MS
+    now.value = Date.now()
+  }
+  function lockMotion() {
+    unlockedUntil.value = 0
+  }
+  // Relock when the screen turns off or you switch apps (phone pendant)
+  if (typeof document !== 'undefined') document.addEventListener('visibilitychange', () => document.hidden && lockMotion())
+  // Relock the moment anything changes underneath
+  watch(motionBlock, (b) => b && lockMotion())
+  watch(() => machine.mountedName, lockMotion)
+
+  async function jog(axis: Axis, delta: number) {
+    if (!motionUnlocked.value || motionBlock.value) return
+    const j = jogScript(axis, delta, {
+      position: machine.position.xyz,
+      min: machine.limits.min,
+      max: machine.limits.max,
+      homed: machine.position.homed,
+    })
+    if ('error' in j) {
+      log('error', `Jog ${axis}${delta > 0 ? '+' : ''}${delta}: ${j.error}`)
+      return
+    }
+    unlockedUntil.value = Date.now() + UNLOCK_MS // each jog keeps it unlocked
+    // Unlocking was the confirmation for jogs
+    const c = check(j.script, { jobActive: false })
+    log('sent', `Jog ${axis} ${delta > 0 ? '+' : ''}${delta} mm`)
+    try {
+      await machine.runChecked(approve(c, true))
+    } catch (e) {
+      log('error', (e as Error).message)
+    }
+  }
+
+  async function home(axes: 'all' | 'xy') {
+    const tool = machine.mountedName ?? 'no confirmed toolhead'
+    await send(axes === 'all' ? 'G28' : 'G28 X Y', {
+      label: axes === 'all' ? 'Home all' : 'Home X Y',
+      confirmBody:
+        axes === 'all'
+          ? `Homes X and Y, then Z if a print head is confirmed (your G28 rules; ${tool} mounted). Clear the bed and keep a hand near Stop.`
+          : 'Homes X and Y. Keep a hand near Stop.',
+    })
+  }
+
+  async function motorsOff() {
+    await send('M84', { label: 'Motors off', confirmBody: 'The motors lose holding power: the bed may drop under its own weight, and you will need to home again before jogging.' })
+  }
+
+  async function setHeater(heater: 'extruder' | 'heater_bed', target: number) {
+    const h = heaterScript(heater, target)
+    if ('error' in h) {
+      log('error', h.error)
+      return
+    }
+    await send(h.script, { label: `${heater === 'extruder' ? 'Hotend' : 'Bed'} ${target > 0 ? `to ${target}°` : 'off'}` })
+  }
+
+  // ---- jobs ---------------------------------------------------------------
+  function startCheck(path: string, fileTool: string | null | undefined): StartCheck {
+    const st = machine.status
+    const slots = new Map([...mergedToolMapping(st).entries()].map(([slot, name]) => [name, slot]))
+    return checkStart({
+      path,
+      fileTool,
+      toolState: machine.toolState,
+      jobState: machine.job.state,
+      klippyReady: machine.klippyReady,
+      toolTypes: mergedToolTypes(st),
+      toolSlots: slots,
+      macros: new Set(macros.value.keys()),
+    })
+  }
+
+  async function startJob(path: string, fileTool: string | null | undefined, careNote: string | null) {
+    const c = startCheck(path, fileTool)
+    if (!c.ok || !c.method) {
+      log('error', `Can't start ${path}: ${c.block}`)
+      return false
+    }
+    const how =
+      c.method.kind === 'print'
+        ? 'Moonraker starts the file. Its START_JOB line checks the toolhead again, homes and runs your start sequence.'
+        : `Runs ${c.method.macro} FILE=${path}: the Rhino wizard walks you through its safety checks, work zero and test, then starts the job. Its questions appear here and in Mainsail.`
+    const ok = await confirm({
+      title: `Start ${path.split('/').pop()}?`,
+      body: [how, ...c.warnings, careNote].filter(Boolean).join('\n\n'),
+      confirmLabel: c.method.kind === 'print' ? 'Start job' : `Start ${c.method.macro}`,
+      tone: 'motion',
+    })
+    if (!ok) {
+      log('note', `Not started: ${path}`)
+      return false
+    }
+    try {
+      if (c.method.kind === 'print') {
+        log('sent', `Start ${path}`)
+        await machine.startPrint(path)
+      } else {
+        const script = `${c.method.macro} FILE=${path}`
+        log('sent', script)
+        await machine.runChecked(approve(check(script, { jobActive: false }), true))
+      }
+      return true
+    } catch (e) {
+      log('error', (e as Error).message)
+      return false
+    }
+  }
+
+  async function swapTo(slot: number, name: string) {
+    return send(`SWAP_TOOL TOOL=${slot}`, {
+      label: `Swap to ${name}`,
+      confirmBody: `Runs SWAP_TOOL TOOL=${slot}: the machine cools down and lowers the bed, then asks you to fit ${name}. Follow its questions here or in Mainsail.`,
+    })
+  }
+
+  async function pauseJob() {
+    log('sent', 'Pause')
+    try {
+      await machine.pausePrint()
+    } catch (e) {
+      log('error', (e as Error).message)
+    }
+  }
+
+  async function resumeJob() {
+    const ok = await confirm({
+      title: 'Resume the job?',
+      body: 'The machine moves back to where it stopped and the tool powers back on.',
+      confirmLabel: 'Resume',
+      tone: 'motion',
+    })
+    if (!ok) return
+    log('sent', 'Resume')
+    try {
+      await machine.resumePrint()
+    } catch (e) {
+      log('error', (e as Error).message)
+    }
+  }
+
+  async function cancelJob() {
+    const ok = await confirm({
+      title: 'Cancel the job?',
+      body: 'Runs CANCEL_PRINT: the job stops and the Rhino switches the tool off. It cannot be resumed.',
+      confirmLabel: 'Cancel job',
+      tone: 'danger',
+    })
+    if (!ok) return
+    log('sent', 'Cancel job')
+    try {
+      await machine.cancelPrint()
+    } catch (e) {
+      log('error', (e as Error).message)
+    }
+  }
+
+  // A lost connection or Klipper restart ends any question on screen
+  watch(
+    () => machine.klippyReady,
+    (ready) => {
+      if (!ready) {
+        tracker.dismiss()
+        prompt.value = null
+        lockMotion()
+      }
+    },
+  )
+
+  return {
+    startJob,
+    swapTo,
+    pauseJob,
+    resumeJob,
+    cancelJob,
+    lines,
+    log,
+    prompt,
+    promptBusy,
+    pendingConfirm,
+    running,
+    macros,
+    jobActive,
+    motionUnlocked,
+    unlockSecondsLeft,
+    motionBlock,
+    onResponse,
+    onStore,
+    onHelp,
+    onObjects,
+    help,
+    pressPromptButton,
+    confirm,
+    send,
+    unlockMotion,
+    lockMotion,
+    jog,
+    home,
+    motorsOff,
+    setHeater,
+    startCheck,
+  }
+})

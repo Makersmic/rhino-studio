@@ -10,7 +10,7 @@ interface NavItem { to: string; label: string; icon: NavIconId }
 const main: NavItem[] = [
   { to: '/prepare', label: 'Prepare', icon: 'prepare' },
   { to: '/preview', label: 'Preview', icon: 'preview' },
-  { to: '/device', label: 'Device', icon: 'device' },
+  { to: '/control', label: 'Control', icon: 'control' },
   { to: '/toolheads', label: 'Toolheads', icon: 'toolheads' },
   { to: '/files', label: 'Files', icon: 'files' },
   { to: '/care', label: 'Care', icon: 'care' },

@@ -47,7 +47,10 @@ const status: Record<string, Record<string, unknown>> = {
   webhooks: { state: 'ready', state_message: 'Printer is ready' },
   print_stats: { state: 'standby', filename: '', message: '', print_duration: 0 },
   virtual_sdcard: { progress: 0, is_active: false },
-  toolhead: { position: [120.0, 85.5, 12.3, 0], homed_axes: 'xyz' },
+  toolhead: { position: [120.0, 85.5, 12.3, 0], homed_axes: 'xyz', axis_minimum: [0, 0, -5, 0], axis_maximum: [576, 406, 300, 0] },
+  gcode_move: { gcode_position: [120.0, 85.5, 12.3, 0], homing_origin: [0, 0, 0, 0], speed_factor: 1, absolute_coordinates: true },
+  pause_resume: { is_paused: false },
+  idle_timeout: { state: 'Idle' },
   extruder: { temperature: 24.1, target: 0 },
   heater_bed: { temperature: 23.6, target: 0 },
   'gcode_macro SWAP_TOOL': { current_tool: tool.current_tool, pending_tool: tool.pending_tool },
@@ -80,11 +83,229 @@ function emergencyStop(via: string) {
   notify('notify_status_update', [{ webhooks: status.webhooks }, Date.now() / 1000])
 }
 
+// ---- pretend Klipper: console, macros, prompts, jobs ---------------------
+const MACROS = [
+  'SWAP_TOOL', 'RESTORE_TOOL', 'CONFIRM_TOOL_INSTALL', 'SET_Z_ZERO', 'PREHEAT', 'LASER_JOB_SETUP', 'CNC_JOB_SETUP', 'DRAGKNIFE_JOB_SETUP',
+  'TOOL_JOB_SETUP', 'SET_WORK_ZERO', 'LASER_FOCUS_ALIGN', 'NOZZLE_HEIGHT_CALIBRATE', 'BACKUP_CFG', 'PM_STATUS', 'LEDMAX', 'LEDOFF',
+  'LIST_TOOLHEADS', 'CANCEL_PRINT', 'PAUSE', 'RESUME', 'G28', 'SWITCH_T0', 'ACTIVATE_LASER', 'SET_TOOL_POWER', 'BED_COOLDOWN',
+  '_LASER_START', '_LASER_ABORT', '_RESTORE_TOOL_CONFIRM', 'VARIABLES', 'CUSTOM_TOOLS',
+]
+const HELP: Record<string, string> = Object.fromEntries(MACROS.map((m) => [m, `Rhino macro ${m}`]))
+Object.assign(HELP, { G1: 'Move', M105: 'Report temperatures', SET_HEATER_TEMPERATURE: 'Set a heater target', FIRMWARE_RESTART: 'Restart firmware', STATUS: 'Report status' })
+
+const gcodeStore: { message: string; time: number; type: 'command' | 'response' }[] = [
+  { message: 'Klipper state: Ready', time: Date.now() / 1000 - 600, type: 'response' },
+]
+function respond(message: string) {
+  gcodeStore.push({ message, time: Date.now() / 1000, type: 'response' })
+  if (gcodeStore.length > 500) gcodeStore.shift()
+  notify('notify_gcode_response', [message])
+}
+function update(obj: string, fields: Record<string, unknown>) {
+  status[obj] = { ...status[obj], ...fields }
+  notify('notify_status_update', [{ [obj]: fields }, Date.now() / 1000])
+}
+const prompt = (lines: string[]) => lines.forEach((l) => respond(`// action:${l}`))
+let relative = false
+let jobFile = ''
+const name = (slot: number) => toolMapping[slot] ?? (custom.tool_mapping as Record<number, string>)[slot] ?? `slot ${slot}`
+const arg = (line: string, k: string) => new RegExp(`${k}=("?)([^\\s"]+)\\1`, 'i').exec(line)?.[2]
+
+function startJob(file: string) {
+  if (!(file in files)) throw new Error(`File not found: ${file}`)
+  jobFile = file
+  update('print_stats', { state: 'printing', filename: file, print_duration: 0 })
+  update('virtual_sdcard', { progress: 0, is_active: true })
+  respond(`File opened:${file}`)
+}
+
+function runLine(raw: string) {
+  const line = raw.replace(/;.*$/, '').trim()
+  if (!line) return
+  const cmd = (/^([GM]\d+(?:\.\d+)?)/i.exec(line)?.[1] ?? line.split(/\s+/)[0]!).toUpperCase()
+  const th = status.toolhead as { position: number[]; homed_axes: string; axis_minimum: number[]; axis_maximum: number[] }
+  const swap = status['gcode_macro SWAP_TOOL'] as { current_tool: number; pending_tool: number }
+  switch (cmd) {
+    case 'G28': {
+      const axes = /[XYZ]/i.test(line.slice(3)) ? line.slice(3).toLowerCase().replace(/[^xyz]/g, '') : 'xyz'
+      const homed = [...new Set((th.homed_axes + axes).split(''))].sort().join('')
+      const pos = [...th.position]
+      if (axes.includes('x')) pos[0] = 0
+      if (axes.includes('y')) pos[1] = 0
+      if (axes.includes('z')) pos[2] = 10
+      update('toolhead', { homed_axes: homed, position: pos })
+      update('gcode_move', { gcode_position: pos })
+      return
+    }
+    case 'G90': relative = false; return
+    case 'G91': relative = true; return
+    case 'SAVE_GCODE_STATE': return
+    case 'RESTORE_GCODE_STATE': relative = false; return
+    case 'G0':
+    case 'G1': {
+      const pos = [...th.position]
+      for (const [i, a] of ['X', 'Y', 'Z'].entries()) {
+        const v = new RegExp(`${a}(-?[\\d.]+)`, 'i').exec(line)?.[1]
+        if (v == null) continue
+        if (!th.homed_axes.includes(a.toLowerCase())) throw new Error('Must home axis first')
+        pos[i] = relative ? pos[i]! + Number(v) : Number(v)
+        if (pos[i]! < th.axis_minimum[i]! || pos[i]! > th.axis_maximum[i]!) throw new Error(`Move out of range: ${pos.slice(0, 3).join(' ')}`)
+      }
+      update('toolhead', { position: pos })
+      update('gcode_move', { gcode_position: pos })
+      return
+    }
+    case 'M84':
+      update('toolhead', { homed_axes: '' })
+      respond('// Motors off')
+      return
+    case 'SET_HEATER_TEMPERATURE': {
+      const h = arg(line, 'HEATER') === 'heater_bed' ? 'heater_bed' : 'extruder'
+      update(h, { target: Number(arg(line, 'TARGET') ?? 0) })
+      return
+    }
+    case 'M105':
+      respond(`ok T:${(status.extruder.temperature as number).toFixed(1)} /${status.extruder.target} B:${(status.heater_bed.temperature as number).toFixed(1)} /${status.heater_bed.target}`)
+      return
+    case 'RESPOND': {
+      const msg = /MSG="?([^"]*)"?/i.exec(line)?.[1] ?? ''
+      respond(/TYPE=command/i.test(line) ? `// ${msg}` : `echo: ${msg}`)
+      return
+    }
+    case 'SWAP_TOOL': {
+      if (status.print_stats.state === 'printing' || status.print_stats.state === 'paused')
+        throw new Error('CRITICAL SAFETY BLOCK: Tool swaps are strictly forbidden while a print job is active or paused!')
+      const t = arg(line, 'TOOL')
+      if (!t) {
+        prompt([
+          'prompt_begin Swap toolhead',
+          `prompt_text Installed now: slot ${swap.current_tool} (${name(swap.current_tool)})`,
+          'prompt_text Pick the toolhead to install. The machine cools down and lowers the bed first.',
+          ...Object.entries({ ...toolMapping, ...(custom.tool_mapping as object) }).map(([s, n]) => `prompt_button Slot ${s}: ${n}|SWAP_TOOL TOOL=${s}|info`),
+          'prompt_footer_button Cancel|action:prompt_end|error',
+          'prompt_show',
+        ])
+        return
+      }
+      update('gcode_macro SWAP_TOOL', { pending_tool: Number(t) })
+      update('extruder', { target: 0 })
+      update('toolhead', { position: [th.position[0], th.position[1], 150, 0] })
+      prompt([
+        'prompt_begin Fit the new toolhead',
+        `prompt_text 1. Unplug and remove ${name(swap.current_tool)} (slot ${swap.current_tool}).`,
+        `prompt_text 2. Fit ${name(Number(t))} and plug it in.`,
+        `prompt_button ${name(Number(t))} is fitted|CONFIRM_TOOL_INSTALL TOOL=${t}|primary`,
+        'prompt_footer_button Abort|ABORT_TOOL_SWAP|error',
+        'prompt_show',
+      ])
+      return
+    }
+    case 'CONFIRM_TOOL_INSTALL':
+    case '_RESTORE_TOOL_CONFIRM': {
+      const t = Number(arg(line, 'TOOL') ?? arg(line, 'SLOT'))
+      update('gcode_macro SWAP_TOOL', { current_tool: t, pending_tool: -1 })
+      update('save_variables', { variables: { current_tool: t } })
+      prompt(['prompt_end'])
+      respond(`// ${name(t)} confirmed in slot ${t}`)
+      return
+    }
+    case 'ABORT_TOOL_SWAP':
+      update('gcode_macro SWAP_TOOL', { pending_tool: -1 })
+      prompt(['prompt_end'])
+      return
+    case 'RESTORE_TOOL': {
+      const saved = (status.save_variables.variables as { current_tool: number }).current_tool
+      prompt([
+        'prompt_begin Klipper started - which toolhead is mounted?',
+        `prompt_text Last saved: ${name(saved)} (slot ${saved}). Check the machine before you answer.`,
+        `prompt_button ${name(saved)} is mounted|_RESTORE_TOOL_CONFIRM SLOT=${saved}|primary`,
+        'prompt_footer_button Not sure - swap instead|SWAP_TOOL',
+        'prompt_show',
+      ])
+      return
+    }
+    case 'LASER_JOB_SETUP':
+    case 'CNC_JOB_SETUP':
+    case 'DRAGKNIFE_JOB_SETUP':
+    case 'TOOL_JOB_SETUP': {
+      jobFile = arg(line, 'FILE') ?? ''
+      prompt([
+        `prompt_begin ${cmd === 'LASER_JOB_SETUP' ? 'Laser setup' : 'Job setup'}`,
+        `prompt_text File: ${jobFile || '(none)'}`,
+        'prompt_text Safety glasses on, enclosure closed, extraction running?',
+        'prompt_button_group_start',
+        'prompt_button Set Z zero|SET_Z_ZERO',
+        'prompt_button Start the job|_LASER_START|primary',
+        'prompt_button_group_end',
+        'prompt_footer_button Cancel setup|_LASER_ABORT|error',
+        'prompt_show',
+      ])
+      return
+    }
+    case '_LASER_START':
+      prompt(['prompt_end'])
+      startJob(jobFile)
+      return
+    case '_LASER_ABORT':
+      prompt(['prompt_end'])
+      respond('// Setup cancelled, tool off')
+      return
+    case 'SET_Z_ZERO':
+      respond('// SET_Z_ZERO: move the bed with the buttons, then SET (mock)')
+      return
+    case 'SET_WORK_ZERO':
+      update('gcode_move', { homing_origin: [...th.position] , gcode_position: [0, 0, 0, 0] })
+      respond('// Work zero set')
+      return
+    case 'FIRMWARE_RESTART':
+    case 'RESTART':
+      klippy = 'shutdown'
+      notify('notify_klippy_disconnected')
+      setTimeout(() => {
+        klippy = 'ready'
+        update('webhooks', { state: 'ready', state_message: 'Printer is ready' })
+        update('gcode_macro SWAP_TOOL', { current_tool: 0, pending_tool: -1 })
+        notify('notify_klippy_ready')
+      }, 1500)
+      return
+    default:
+      if (MACROS.includes(cmd) || cmd === 'STATUS' || cmd === 'M117' || cmd.startsWith('SET_')) {
+        respond(`// ${cmd} done (mock)`)
+        return
+      }
+      throw new Error(`Unknown command:"${cmd}"`)
+  }
+}
+
 function handle(method: string, params: Record<string, unknown> | undefined): unknown {
   switch (method) {
+    case 'printer.gcode.script': {
+      const script = String(params?.script ?? '')
+      gcodeStore.push({ message: script, time: Date.now() / 1000, type: 'command' })
+      console.log(`  GCODE ${script.replace(/\n/g, ' | ')}`)
+      if (klippy !== 'ready' && !/^\s*(FIRMWARE_RESTART|RESTART)\s*$/i.test(script)) throw new Error('Klipper is not ready')
+      for (const l of script.split('\n')) runLine(l)
+      return 'ok'
+    }
+    case 'server.gcode_store': return { gcode_store: gcodeStore.slice(-Number(params?.count ?? 100)) }
+    case 'printer.gcode.help': return HELP
+    case 'printer.print.start': startJob(String(params?.filename)); return 'ok'
+    case 'printer.print.pause':
+      update('print_stats', { state: 'paused' })
+      update('pause_resume', { is_paused: true })
+      return 'ok'
+    case 'printer.print.resume':
+      update('print_stats', { state: 'printing' })
+      update('pause_resume', { is_paused: false })
+      return 'ok'
+    case 'printer.print.cancel':
+      update('print_stats', { state: 'cancelled' })
+      update('virtual_sdcard', { is_active: false })
+      respond('// Job cancelled, tool off')
+      return 'ok'
     case 'server.connection.identify': return { connection_id: 1 }
     case 'server.info': return { klippy_connected: true, klippy_state: klippy, moonraker_version: 'mock' }
-    case 'printer.objects.list': return { objects: Object.keys(status) }
+    case 'printer.objects.list': return { objects: [...new Set([...Object.keys(status), ...MACROS.map((m) => `gcode_macro ${m}`)])] }
     case 'printer.objects.subscribe': {
       const wanted = Object.keys((params?.objects as object) ?? {})
       return { eventtime: Date.now() / 1000, status: Object.fromEntries(wanted.filter((k) => k in status).map((k) => [k, status[k]])) }
@@ -175,6 +396,20 @@ const server = createServer(async (req, res) => {
     res.writeHead(200, { 'content-type': 'application/json' }).end('{"result":"ok"}')
     return
   }
+  if (req.method === 'POST' && url === '/server/files/upload') {
+    const chunks: Buffer[] = []
+    req.on('data', (d) => chunks.push(d))
+    req.on('end', () => {
+      const body = Buffer.concat(chunks).toString('utf8')
+      const fname = /filename="([^"]+)"/.exec(body)?.[1] ?? 'upload.gcode'
+      const content = body.split(/\r\n\r\n/).slice(-1)[0]?.split(/\r\n--/)[0] ?? ''
+      files[fname] = content
+      fileTimes[fname] = Date.now() / 1000
+      console.log(`  UPLOAD ${fname} (${content.length} bytes)`)
+      res.writeHead(201, { 'content-type': 'application/json' }).end(JSON.stringify({ item: { path: fname, root: 'gcodes' }, print_started: false }))
+    })
+    return
+  }
   const m = url.match(/^\/server\/files\/gcodes\/(.+)$/)
   if (m && files[m[1]!] != null) {
     res.writeHead(200, { 'content-type': 'text/plain' }).end(files[m[1]!])
@@ -202,9 +437,21 @@ wss.on('connection', (ws) => {
 // Gentle temperature drift so the readouts move
 setInterval(() => {
   if (klippy !== 'ready') return
-  const t = 24 + Math.sin(Date.now() / 4000) * 0.4
-  status.extruder.temperature = Number(t.toFixed(2))
-  notify('notify_status_update', [{ extruder: { temperature: status.extruder.temperature } }, Date.now() / 1000])
+  // Heaters creep toward their targets; idle ones drift around room temperature
+  for (const h of ['extruder', 'heater_bed']) {
+    const cur = status[h]!.temperature as number
+    const target = (status[h]!.target as number) || 24 + Math.sin(Date.now() / 4000) * 0.4
+    const next = cur + Math.max(-6, Math.min(6, (target - cur) * 0.25))
+    update(h, { temperature: Number(next.toFixed(2)) })
+  }
+  if (status.print_stats.state === 'printing') {
+    const p = Math.min(1, (status.virtual_sdcard.progress as number) + 0.01)
+    update('virtual_sdcard', { progress: p })
+    if (p >= 1) {
+      update('print_stats', { state: 'complete' })
+      respond(`Done printing file ${jobFile}`)
+    }
+  }
 }, 1000)
 
 server.listen(PORT, () => console.log(`Mock Moonraker (${scenario}) on http://localhost:${PORT}`))

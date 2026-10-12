@@ -1,10 +1,14 @@
+import type { CheckedScript } from '@/control/commands'
+
 /**
  * Moonraker websocket client (JSON-RPC 2.0 over /websocket).
  *
- * PHASE 2a IS READ-ONLY. The client refuses to send any method that is not
- * in READ_ONLY_METHODS, except the emergency stop. There is no way to send
- * G-code, run a macro, start a job or move the machine through this file.
- * Phase 2b adds an explicit, separately reviewed list of actions.
+ * Two gates:
+ * - Reads go through call(), which only sends READ_ONLY_METHODS.
+ * - Actions go through act(), which only sends ACTION_METHODS. G-code goes
+ *   out only as a CheckedScript (src/control/commands.ts), so every script
+ *   has been through the safety check and any confirmation it needed.
+ * The emergency stop needs neither.
  *
  * Connection life cycle:
  *   connect -> identify -> server.info
@@ -28,6 +32,17 @@ export const READ_ONLY_METHODS: ReadonlySet<string> = new Set([
   'printer.objects.list',
   'printer.objects.subscribe',
   'server.files.list',
+  'server.gcode_store',
+  'printer.gcode.help',
+])
+
+/** Methods that change the machine. Each has its own public function below. */
+export const ACTION_METHODS: ReadonlySet<string> = new Set([
+  'printer.gcode.script',
+  'printer.print.start',
+  'printer.print.pause',
+  'printer.print.resume',
+  'printer.print.cancel',
 ])
 const EMERGENCY_STOP = 'printer.emergency_stop'
 
@@ -39,7 +54,10 @@ export const WATCHED_OBJECTS: Record<string, string[] | null> = {
   webhooks: ['state', 'state_message'],
   print_stats: ['state', 'filename', 'message', 'print_duration'],
   virtual_sdcard: ['progress', 'is_active'],
-  toolhead: ['position', 'homed_axes'],
+  toolhead: ['position', 'homed_axes', 'axis_minimum', 'axis_maximum'],
+  gcode_move: ['gcode_position', 'homing_origin', 'speed_factor', 'absolute_coordinates'],
+  pause_resume: ['is_paused'],
+  idle_timeout: ['state'],
   extruder: ['temperature', 'target'],
   heater_bed: ['temperature', 'target'],
   'gcode_macro SWAP_TOOL': ['current_tool', 'pending_tool'],
@@ -59,6 +77,20 @@ export interface ClientHandlers {
   onKlippy?: (state: KlippyState, message?: string) => void
   /** replace=true: a full snapshot (after subscribing); false: a partial update to merge. */
   onStatus?: (status: Status, replace: boolean) => void
+  /** A line of Klipper output (console, prompts). */
+  onGcodeResponse?: (line: string) => void
+  /** Recent console history, oldest first, sent once Klipper is ready. */
+  onGcodeStore?: (entries: GcodeStoreEntry[]) => void
+  /** Every object Klipper has (macros are "gcode_macro NAME"). */
+  onObjects?: (objects: string[]) => void
+  /** Klipper's command list with descriptions (macros included). */
+  onHelp?: (help: Record<string, string>) => void
+}
+
+export interface GcodeStoreEntry {
+  message: string
+  time: number
+  type: 'command' | 'response'
 }
 
 interface Pending {
@@ -134,7 +166,64 @@ export class MoonrakerClient {
     if (!res.ok) throw new Error(`Emergency stop failed: HTTP ${res.status}`)
   }
 
+  // ---- actions ---------------------------------------------------------
+
+  /**
+   * Run checked G-code. Moonraker answers when Klipper has finished, which
+   * can take minutes (homing, M190), so the timeout is long.
+   */
+  runScript(script: CheckedScript): Promise<unknown> {
+    return this.act('printer.gcode.script', { script }, 3_600_000)
+  }
+
+  startPrint(filename: string): Promise<unknown> {
+    return this.act('printer.print.start', { filename })
+  }
+
+  pausePrint(): Promise<unknown> {
+    return this.act('printer.print.pause')
+  }
+
+  resumePrint(): Promise<unknown> {
+    return this.act('printer.print.resume')
+  }
+
+  cancelPrint(): Promise<unknown> {
+    return this.act('printer.print.cancel', undefined, 60_000)
+  }
+
+  /** Upload a G-code file to the gcodes folder. Never starts it. */
+  uploadFile(file: File, onProgress?: (fraction: number) => void): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const form = new FormData()
+      form.append('root', 'gcodes')
+      form.append('print', 'false')
+      form.append('file', file, file.name)
+      const xhr = new XMLHttpRequest()
+      xhr.open('POST', `${this.baseUrl}/server/files/upload`)
+      xhr.upload.onprogress = (e) => e.lengthComputable && onProgress?.(e.loaded / e.total)
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          try {
+            const r = JSON.parse(xhr.responseText) as { item?: { path?: string }; result?: { item?: { path?: string } } }
+            resolve(r.item?.path ?? r.result?.item?.path ?? file.name)
+          } catch {
+            resolve(file.name)
+          }
+        } else reject(new Error(`Upload failed: HTTP ${xhr.status}`))
+      }
+      xhr.onerror = () => reject(new Error('Upload failed: network error'))
+      xhr.send(form)
+    })
+  }
+
   // ---- internals -------------------------------------------------------
+
+  private act(method: string, params?: Record<string, unknown>, timeoutMs = 10000): Promise<unknown> {
+    if (!ACTION_METHODS.has(method)) return Promise.reject(new Error(`Blocked: "${method}" is not an allowed action`))
+    return this.send(method, params, timeoutMs)
+  }
+
 
   /** The only path for normal requests: refuses anything outside the read-only list. */
   private call(method: string, params?: Record<string, unknown>): Promise<unknown> {
@@ -231,12 +320,20 @@ export class MoonrakerClient {
   private async subscribe() {
     const list = (await this.call('printer.objects.list')) as { objects?: string[] }
     const present = new Set(list.objects ?? [])
+    this.handlers.onObjects?.(list.objects ?? [])
     const objects: Record<string, string[] | null> = {}
     for (const [name, fields] of Object.entries(WATCHED_OBJECTS)) {
       if (present.has(name)) objects[name] = fields
     }
     const r = (await this.call('printer.objects.subscribe', { objects })) as { status?: Status }
     this.handlers.onStatus?.(r.status ?? {}, true)
+    // Console history and command list: nice to have, never fatal
+    this.call('server.gcode_store', { count: 200 })
+      .then((g) => this.handlers.onGcodeStore?.(((g as { gcode_store?: GcodeStoreEntry[] }).gcode_store ?? [])))
+      .catch(() => {})
+    this.call('printer.gcode.help')
+      .then((h) => this.handlers.onHelp?.((h ?? {}) as Record<string, string>))
+      .catch(() => {})
   }
 
   private onMessage(raw: string) {
@@ -258,6 +355,11 @@ export class MoonrakerClient {
       case 'notify_status_update': {
         const diff = msg.params?.[0]
         if (diff && typeof diff === 'object') this.handlers.onStatus?.(diff as Status, false)
+        break
+      }
+      case 'notify_gcode_response': {
+        const line = msg.params?.[0]
+        if (typeof line === 'string') this.handlers.onGcodeResponse?.(line)
         break
       }
       case 'notify_klippy_ready':

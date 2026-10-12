@@ -3,7 +3,7 @@
  * toolhead emblems (see toolheads.ts for the class names).
  */
 
-export type NavIconId = 'prepare' | 'preview' | 'device' | 'toolheads' | 'files' | 'care' | 'style' | 'settings'
+export type NavIconId = 'prepare' | 'preview' | 'control' | 'pendant' | 'toolheads' | 'files' | 'care' | 'style' | 'settings'
 
 export const NAV_ICONS: Record<NavIconId, { title: string; body: string }> = {
   // Isometric block: the model you bring in
@@ -20,15 +20,21 @@ export const NAV_ICONS: Record<NavIconId, { title: string; body: string }> = {
       <path d="M12 3.5l9 4.5-9 4.5-9-4.5z"/>
       <path d="M3 12.2l9 4.5 9-4.5M3 16.4l9 4.5 9-4.5"/>`,
   },
-  // A dial with a needle: live machine status
-  device: {
-    title: 'Device',
+  // A jog pad: four arrows around a centre
+  control: {
+    title: 'Control',
     body: `
-      <path d="M3.5 16.5a8.5 8.5 0 0 1 17 0"/>
-      <path d="M12 16.5l4.2-5.2"/>
-      <circle class="f" cx="12" cy="16.5" r="1.5"/>
-      <path d="M5.6 10.4l1.2 1M12 7.5V9M18.4 10.4l-1.2 1"/>
-      <path d="M2.5 20.5h19"/>`,
+      <path d="M12 2.8l2.6 3H9.4zM12 21.2l2.6-3H9.4zM2.8 12l3-2.6v5.2zM21.2 12l-3-2.6v5.2z"/>
+      <circle cx="12" cy="12" r="3.2"/>
+      <circle class="f" cx="12" cy="12" r="1.1"/>`,
+  },
+  // A phone with a small jog cross: the pendant
+  pendant: {
+    title: 'Pendant',
+    body: `
+      <rect x="6" y="2.5" width="12" height="19" rx="2.5"/>
+      <path d="M12 7.5v6M9 10.5h6"/>
+      <path d="M10.5 18.2h3"/>`,
   },
   // Four mounts, one open for a new tool
   toolheads: {

@@ -1,6 +1,8 @@
 # Testing on the machine
 
-Phase 2a only reads from the Rhino, so these checks change nothing on the Pi. The one exception is the E-stop check (A6), which really sends M112.
+Run these in order. 2a (A) only reads; Care (C) only changes maintenance records; 2b (B) moves the machine. Don't start B until every A check passes, because B relies on Studio reading the mounted toolhead correctly.
+
+The E-stop check (A6) really sends M112.
 
 Before you start: Rhino idle, no job running, nothing hot. Run `npm test` first; all tests should pass.
 
@@ -40,3 +42,30 @@ Needs the Portal running on the Pi (it normally is: `http://mainsailos.local:500
 What the app sent is visible in the browser's developer tools (Network → WS → messages): only `server.*`, `printer.objects.*` and, in A6, `printer.emergency_stop`.
 
 The checks above were run against the mock Moonraker, not the real machine. A1 to A8 are the first run on hardware.
+
+## Phase 2b: control (moves the machine)
+
+Before you start: bed clear, nothing in the nozzle path, hand near the physical stop. Use 1 mm steps until B3 passes. If anything moves when or where you didn't expect, press Stop and stop testing.
+
+| # | Do this | Pass when | Stop if |
+|---|---|---|---|
+| B1 | Open Control without unlocking | Jog buttons are disabled; the console shows Klipper's recent history | Any jog button works while locked |
+| B2 | Unlock motion, wait 60 s without jogging | It relocks by itself; also relocks when you switch to another screen | It stays unlocked |
+| B3 | Unlock, jog X+ 1 mm, Y+ 1 mm, Z+ 1 mm (BlockOne mounted) | Each axis moves 1 mm the right way; Mainsail's position agrees | Wrong axis or direction |
+| B4 | Jog toward a limit with 50 mm steps | Studio refuses the step that would pass the travel, before sending | The machine tries to move past it |
+| B5 | Home all, then Home X Y | Each asks first and says what will happen; your G28 rules apply (no Z with a non-print head) | It homes without asking |
+| B6 | Type `G1 Z5` in the console | A confirmation lists the line and "moves the machine"; Cancel sends nothing | It moves without asking |
+| B7 | Type `M3 S100` with LightSaber **not** mounted, then Cancel | A "This powers a tool" confirmation appears; Cancel sends nothing | It sends without asking |
+| B8 | Swap toolhead button | SWAP_TOOL's question appears in Studio and Mainsail; picking a slot and finishing the swap shows the new tool in Studio | Studio shows the new tool before you confirm it in the wizard |
+| B9 | Heat: bed to 40°, then Off | Target set and cleared, matches Mainsail | |
+| B10 | Upload a small print file | It appears in Files; it doesn't start | It starts |
+| B11 | Start a file for a tool that isn't mounted | Start is replaced by "Swap to …"; nothing starts | It starts |
+| B12 | Start a BlockOne file with BlockOne mounted | Confirmation explains START_JOB; job runs; Pause, then Resume (asks), then Cancel (asks) work | Cancel doesn't switch the heaters off |
+| B13 | With LightSaber mounted, Start a laser file (config 1.4.1 on the Pi) | Studio runs LASER_JOB_SETUP FILE=…; its questions show in Studio; the laser only fires after the wizard's own steps | The laser fires before the wizard's start step |
+| B14 | E-stop from Studio, then Restart Klipper from the red alert | Shutdown, then a confirmation, then Klipper restarts and the tool shows "not confirmed" until RESTORE_TOOL | |
+| B15 | Pendant: open `#/pendant` on your phone on the same Wi-Fi, unlock, jog 1 mm, lock the phone screen, unlock the phone | Jogs work; after locking the phone screen, motion is locked again | Motion is still unlocked after the phone screen was off |
+| B16 | Pendant: press Stop | Klipper shuts down | |
+
+Notes:
+- B13 needs Toolhead_Manager 1.4.1 on the Pi (the laser rail fix). On 1.3.4, don't run laser jobs from Studio yet.
+- Pendant over plain http can't keep the phone screen on. Raise the phone's auto-lock time while you use it.

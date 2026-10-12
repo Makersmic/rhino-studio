@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { MoonrakerClient, READ_ONLY_METHODS, type Status } from './client'
+import { MoonrakerClient, READ_ONLY_METHODS, ACTION_METHODS, type Status } from './client'
+import { approve, check } from '@/control/commands'
 
 /** A stand-in for the browser WebSocket that answers like Moonraker. */
 class FakeSocket {
@@ -55,7 +56,7 @@ function make() {
 
 afterEach(() => vi.useRealTimers())
 
-describe('MoonrakerClient (read-only)', () => {
+describe('MoonrakerClient', () => {
   it('connects, subscribes only to objects Klipper has, and reports ready', async () => {
     const { c, events } = make()
     c.connect()
@@ -86,7 +87,33 @@ describe('MoonrakerClient (read-only)', () => {
     const call = (c as unknown as { call: (m: string, p?: object) => Promise<unknown> }).call.bind(c)
     await expect(call('printer.gcode.script', { script: 'G28' })).rejects.toThrow(/not allowed/)
     await expect(call('printer.print.start', { filename: 'a.gcode' })).rejects.toThrow(/not allowed/)
-    expect(FakeSocket.last!.sent.some((m) => m.method.startsWith('printer.gcode') || m.method.startsWith('printer.print'))).toBe(false)
+    expect(FakeSocket.last!.sent.some((m) => m.method === 'printer.gcode.script' || m.method.startsWith('printer.print'))).toBe(false)
+  })
+
+  it('sends checked G-code and job actions, and nothing outside the action list', async () => {
+    const { c } = make()
+    c.connect()
+    for (let i = 0; i < 10; i++) await flush()
+    await c.runScript(approve(check('G28', { jobActive: false }), true))
+    await c.pausePrint()
+    const sent = FakeSocket.last!.sent
+    expect(sent.at(-2)).toEqual({ method: 'printer.gcode.script', params: { script: 'G28' } })
+    expect(sent.at(-1)!.method).toBe('printer.print.pause')
+    const act = (c as unknown as { act: (m: string) => Promise<unknown> }).act.bind(c)
+    await expect(act('machine.reboot')).rejects.toThrow(/not an allowed action/)
+    await expect(act('server.files.delete_file')).rejects.toThrow(/not an allowed action/)
+    expect([...ACTION_METHODS].every((m) => m.startsWith('printer.'))).toBe(true)
+  })
+
+  it('passes Klipper output and prompt lines to the app', async () => {
+    const lines: string[] = []
+    const c = new MoonrakerClient('http://rhino.test', { onGcodeResponse: (l) => lines.push(l) }, {
+      WebSocketImpl: FakeSocket as unknown as new (url: string) => WebSocket,
+    })
+    c.connect()
+    for (let i = 0; i < 10; i++) await flush()
+    FakeSocket.last!.push('notify_gcode_response', ['// action:prompt_begin Swap toolhead'])
+    expect(lines).toEqual(['// action:prompt_begin Swap toolhead'])
   })
 
   it('sends the emergency stop over the websocket', async () => {

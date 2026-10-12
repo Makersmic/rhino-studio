@@ -6,7 +6,8 @@
  *   (SWAP_TOOL.current_tool). The UI never sets it, never guesses it, and
  *   never remembers it across reloads. Any disconnect or Klipper restart
  *   clears it back to unknown.
- * - Phase 2a sends nothing that changes the machine except the emergency stop.
+ * - Commands reach the machine only as CheckedScripts from the control store
+ *   (src/stores/control.ts), never as raw strings.
  */
 import { defineStore } from 'pinia'
 import { computed, ref, shallowRef, triggerRef } from 'vue'
@@ -14,6 +15,8 @@ import { MoonrakerClient, type ConnectionState, type KlippyState, type Status } 
 import { deriveToolState, describeToolState, mergedToolMapping, mergedToolTypes } from '@/moonraker/toolState'
 import { lookFor, type ToolheadLook } from '@/toolheads/registry'
 import { brand } from '@/brand/brand'
+import type { CheckedScript } from '@/control/commands'
+import { useControlStore } from './control'
 
 export type { ConnectionState, KlippyState }
 
@@ -44,6 +47,18 @@ export const useMachineStore = defineStore('machine', () => {
         },
         onKlippy(s) {
           klippy.value = s
+        },
+        onGcodeResponse(line) {
+          useControlStore().onResponse(line)
+        },
+        onGcodeStore(entries) {
+          useControlStore().onStore(entries)
+        },
+        onObjects(objects) {
+          useControlStore().onObjects(objects)
+        },
+        onHelp(help) {
+          useControlStore().onHelp(help)
         },
         onStatus(st, replace) {
           if (replace) {
@@ -121,6 +136,12 @@ export const useMachineStore = defineStore('machine', () => {
       homed: typeof homed === 'string' ? homed : '',
     }
   })
+  const limits = computed(() => {
+    const lo = status.value.toolhead?.axis_minimum
+    const hi = status.value.toolhead?.axis_maximum
+    return { min: Array.isArray(lo) ? (lo as number[]) : null, max: Array.isArray(hi) ? (hi as number[]) : null }
+  })
+
   const job = computed(() => ({
     state: (status.value.print_stats?.state as string | undefined) ?? null,
     filename: (status.value.print_stats?.filename as string | undefined) || null,
@@ -143,6 +164,18 @@ export const useMachineStore = defineStore('machine', () => {
     return client?.fileUrl(path) ?? null
   }
 
+  // Actions. Only the control store calls these.
+  function need(): MoonrakerClient {
+    if (!client || !online.value) throw new Error('Not connected')
+    return client
+  }
+  const runChecked = (s: CheckedScript) => need().runScript(s)
+  const startPrint = (path: string) => need().startPrint(path)
+  const pausePrint = () => need().pausePrint()
+  const resumePrint = () => need().resumePrint()
+  const cancelPrint = () => need().cancelPrint()
+  const uploadFile = (file: File, onProgress?: (f: number) => void) => need().uploadFile(file, onProgress)
+
   return {
     connection,
     connectionDetail,
@@ -161,10 +194,18 @@ export const useMachineStore = defineStore('machine', () => {
     bed,
     position,
     job,
+    limits,
+    status,
     connect,
     disconnect,
     emergencyStop,
     listFiles,
     fileUrl,
+    runChecked,
+    startPrint,
+    pausePrint,
+    resumePrint,
+    cancelPrint,
+    uploadFile,
   }
 })

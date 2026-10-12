@@ -2,7 +2,14 @@
 
 One interface for every Rhino Multi Motion System process: import a model, pick a toolhead, prepare, preview, send and monitor. "Rhino Studio" is a working title; the name and logo live in `src/brand/brand.ts`.
 
-Status: **Phase 2a + Care** (read-only machine connection, preventive maintenance). The app shows live status from Klipper, the mounted toolhead, and the files on the Pi. It can't move the Rhino, heat anything, run a macro or start a job. The one thing it can send is the emergency stop.
+Status: **Phase 2b** (machine control), on top of 2a (live status) and Care (maintenance). **This version can move the Rhino, heat it, run macros and start jobs.** Run the checks in [docs/testing.md](docs/testing.md) in order before trusting it, starting with 2a's A1-A8.
+
+### What it can do
+
+- **Control** screen: jog (locked until you unlock it, relocks after 60 s idle), home, motors off, heater targets, the running job (pause, resume, cancel), the mounted toolhead with Swap and Confirm, and a console with your macros arranged beside it.
+- **Pendant mode** (Control → Pendant mode, or `#/pendant`): the phone as a jog pendant at the machine. Big jog buttons, work/machine position, set Z zero / work zero, and a Stop button that's always on screen.
+- **Klipper prompts**: the Rhino wizards' questions (SWAP_TOOL, RESTORE_TOOL, the job setup wizards) pop up in Studio as well as Mainsail. A button runs only its own command.
+- **Files**: upload (button or drag and drop; never starts the file) and Start. Start checks the file's toolhead against the mounted one and blocks a mismatch (offering the swap). Print files start directly (their START_JOB checks again on the machine); laser, spindle, knife and added-tool files start through LASER_JOB_SETUP, CNC_JOB_SETUP, DRAGKNIFE_JOB_SETUP or TOOL_JOB_SETUP with `FILE=`, so the wizard's safety steps and the laser rail (config 1.4.1) aren't skipped.
 
 ## Run it on your PC
 
@@ -58,7 +65,7 @@ Other commands:
 | `npm run build` | Type-checks, then builds static files into `dist/` |
 | `npm run preview` | Serves the `dist/` build locally |
 | `npm run icons` | Exports every icon to `design/icons/` as standalone SVG files |
-| `npm test` | Runs the unit tests (tool state, G-code headers, the read-only client) |
+| `npm test` | Runs the unit tests (command safety, prompts, job starts, tool state, G-code headers, client gates, care rules) |
 | `npm run mock` | Starts the pretend Moonraker |
 
 The built `dist/` folder is plain static files and works from any folder, so later it can be served by the nginx that already serves Mainsail on the Pi. Deployment to the Pi comes with Phase 2.
@@ -72,9 +79,10 @@ src/
   styles/       tokens.css (every colour, size, font) and base.css
   toolheads/    look of each toolhead: accent, icon, summary
   moonraker/    websocket client, tool-state rules, G-code header reader (+ tests)
+  control/      command safety check, prompt parser, job-start rules (+ tests); motion, heat, job, console panels; dialogs
   portal/       Rhino Portal client (maintenance API)
   maintenance/  care rules (+ tests), task cards, log-work dialog, care tiles
-  stores/       machine state, connection settings, theme
+  stores/       machine state, control (console, prompts, motion lock, confirmations), care, settings, theme
   components/   shell (top bar, rail, E-stop) and shared parts
   views/        one file per screen
   router.ts     screens and their URLs
@@ -108,8 +116,13 @@ Open **Style** in the app for the live guide. The direction is a workshop instru
 
 - The mounted toolhead comes only from Klipper (`printer["gcode_macro SWAP_TOOL"].current_tool`). The UI never sets it, guesses it, or keeps it after a disconnect or Klipper restart.
 - After a restart, `current_tool` is 0 until RESTORE_TOOL is answered. The slot in `save_variables` is shown as "last saved", never as mounted.
-- In Phase 2a the Moonraker client only sends methods on a read-only allowlist (`READ_ONLY_METHODS` in `src/moonraker/client.ts`), plus the emergency stop. Anything else is refused before it leaves the browser, and a unit test checks it.
-- Anything that moves the machine or powers the laser or spindle will ask for confirmation. The E-stop never asks.
+- The Moonraker client has two allowlists: `READ_ONLY_METHODS` and `ACTION_METHODS` (G-code, start, pause, resume, cancel). Anything else is refused before it leaves the browser; unit tests check both.
+- G-code only leaves as a `CheckedScript` from `src/control/commands.ts`. Every line is classified; anything that moves the machine, powers a tool (M3/M4, SET_PIN, servos, laser rail, spindle, SWITCH_T0/T1 on the shared servo channel), changes the recorded toolhead, restarts Klipper, starts a job or runs an `_internal` macro asks first and says what each line does. Stops (M112, EMERGENCY_STOP) never ask.
+- The console is a full console (your choice): you can confirm anything. It guards against slips, not against intent.
+- Jogging is locked until you unlock it, relocks after 60 s idle, when you leave the screen, lock the phone or switch apps, and whenever Klipper isn't ready, a job is running, a swap is under way or the mounted tool changes. It needs a confirmed toolhead (tool lengths differ) and homed axes, and refuses moves past the machine's travel. One tap is one fixed step: there is no hold-to-move, so a lost touch or dropped Wi-Fi can't leave the machine moving.
+- Prompt buttons run only their own command. A button whose command is `action:prompt_end` is sent back as `RESPOND TYPE=command MSG="action:prompt_end"`.
+- Jobs: Start is blocked unless the mounted tool is confirmed and matches the file; files that declare no toolhead get a warning. Cancel and Resume ask; Pause doesn't.
+- Maintenance never blocks: overdue care shows in the start confirmation, nothing more.
 - The on-screen E-stop depends on the browser, network, Pi and Moonraker. It does not replace a physical E-stop or power switch.
 - The Portal client may only read maintenance and log work or snooze (`PORTAL_WRITES` in `src/portal/client.ts`). Those change maintenance records, never the machine.
 - Generated jobs call the existing macros (START_JOB, SWAP_TOOL, END_PRINT) instead of raw tool-change or power G-code.

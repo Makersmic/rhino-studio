@@ -5,8 +5,8 @@
  * - Acts on the first press. No confirmation: an E-stop must never ask.
  * - Enabled whenever the app is trying to reach a machine. If the websocket
  *   is down it falls back to Moonraker's HTTP endpoint.
- * - After an E-stop Klipper is shut down. Restart it from Mainsail
- *   (FIRMWARE_RESTART); Phase 2a doesn't send restarts.
+ * - After an E-stop Klipper is shut down. The alert under the top bar offers
+ *   Restart Klipper (FIRMWARE_RESTART, with a confirmation).
  *
  * This button is a convenience, not a safety device. It depends on the
  * browser, Wi-Fi, the Pi and Moonraker all working. Keep a physical E-stop

@@ -1,7 +1,8 @@
 <script setup lang="ts">
 /**
  * G-code files on the Pi, with the toolhead each one asks for.
- * Read-only: nothing here starts, deletes or uploads (that's Phase 2b).
+ * Upload files, and start a job once Studio has checked the file's toolhead
+ * against the mounted one (see src/control/jobs.ts). Nothing is deleted here.
  */
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import EmptyState from '@/components/EmptyState.vue'
@@ -14,9 +15,12 @@ import { fetchFileToolhead } from '@/moonraker/gcodeHeader'
 import type { FileEntry } from '@/moonraker/client'
 import { useMachineStore } from '@/stores/machine'
 import { useMaintenanceStore } from '@/stores/maintenance'
+import { useControlStore } from '@/stores/control'
+import { careText } from '@/maintenance/summary'
 
 const machine = useMachineStore()
 const care = useMaintenanceStore()
+const control = useControlStore()
 const files = ref<FileEntry[]>([])
 const loading = ref(false)
 const error = ref<string | null>(null)
@@ -92,9 +96,73 @@ const rows = computed(() =>
       needsSwap: !!tool && machine.mountedVerified && tool !== machine.mountedName,
       matches: !!tool && machine.mountedVerified && tool === machine.mountedName,
       care: tool ? care.forTool(tool) : null,
+      start: control.startCheck(f.path, h === 'error' ? null : h),
     }
   }),
 )
+
+// ---- start --------------------------------------------------------------
+const starting = ref<string | null>(null)
+async function start(f: FileEntry) {
+  starting.value = f.path
+  try {
+    // Files past the newest 40 haven't been read yet: read this one now
+    let h = heads.value[key(f)]
+    if (h === undefined) {
+      const url = machine.fileUrl(f.path)
+      h = url ? await fetchFileToolhead(url).catch(() => null) : null
+      heads.value = { ...heads.value, [key(f)]: h }
+    }
+    const tool = h && h !== 'error' ? h : machine.mountedName
+    const c = tool ? care.forTool(tool) : null
+    const careNote = c && (c.overdue || c.dueSoon) && c.next ? `Care for ${tool}: ${careText(c)} (${c.next.title}). Nothing is blocked; it's your call.` : null
+    const ok = await control.startJob(f.path, h === 'error' ? null : h, careNote)
+    if (ok) setTimeout(load, 1500)
+  } finally {
+    starting.value = null
+  }
+}
+
+// ---- upload -------------------------------------------------------------
+const uploading = ref<{ name: string; progress: number } | null>(null)
+const uploadMsg = ref<string | null>(null)
+const picker = ref<HTMLInputElement | null>(null)
+const dragging = ref(false)
+const ALLOWED = /\.(gcode|gco|g|nc|ngc)$/i
+
+async function upload(list: FileList | null) {
+  const file = list?.[0]
+  if (!file) return
+  if (!ALLOWED.test(file.name)) {
+    uploadMsg.value = `${file.name} isn't a G-code file (.gcode, .nc, .ngc, .gco, .g)`
+    return
+  }
+  if (files.value.some((f) => f.path === file.name)) {
+    const ok = await control.confirm({
+      title: `Replace ${file.name}?`,
+      body: 'A file with this name is already on the Pi. Uploading replaces it.',
+      confirmLabel: 'Replace',
+      tone: 'normal',
+    })
+    if (!ok) return
+  }
+  uploading.value = { name: file.name, progress: 0 }
+  uploadMsg.value = null
+  try {
+    const path = await machine.uploadFile(file, (p) => uploading.value && (uploading.value.progress = p))
+    uploadMsg.value = `Uploaded ${path}. It isn't started; press Start when you're ready.`
+    await load()
+  } catch (e) {
+    uploadMsg.value = (e as Error).message
+  } finally {
+    uploading.value = null
+    if (picker.value) picker.value.value = ''
+  }
+}
+function onDrop(e: DragEvent) {
+  dragging.value = false
+  void upload(e.dataTransfer?.files ?? null)
+}
 
 const fmtDate = (s: number) => new Date(s * 1000).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
 const fmtSize = (b: number) => (b > 1048576 ? `${(b / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`)
@@ -104,7 +172,7 @@ const fmtSize = (b: number) => (b > 1048576 ? `${(b / 1048576).toFixed(1)} MB` :
   <div class="view">
     <div class="view-head">
       <h1>Files</h1>
-      <p>G-code on the Pi, with the toolhead each job asks for. Starting jobs from here comes in Phase 2b.</p>
+      <p>G-code on the Pi, with the toolhead each job asks for. Start checks the file against the mounted toolhead; laser, spindle and knife jobs start through their Rhino setup wizard.</p>
     </div>
 
     <EmptyState v-if="!machine.online" title="Connect to see files on the Pi">
@@ -112,10 +180,27 @@ const fmtSize = (b: number) => (b > 1048576 ? `${(b / 1048576).toFixed(1)} MB` :
       The list comes from Moonraker's gcodes folder. Each file shows the toolhead from its START_JOB line, so you can see at a glance what needs to be mounted.
     </EmptyState>
 
-    <RsPanel v-else :title="`${files.length} files`">
+    <RsPanel
+      v-else
+      :title="`${files.length} files`"
+      class="drop"
+      :class="{ dragging }"
+      @dragover.prevent="dragging = true"
+      @dragleave="dragging = false"
+      @drop.prevent="onDrop"
+    >
       <template #actions>
+        <input ref="picker" type="file" accept=".gcode,.gco,.g,.nc,.ngc" class="visually-hidden" @change="upload(($event.target as HTMLInputElement).files)" />
+        <RsButton :disabled="!!uploading" @click="picker?.click()">Upload</RsButton>
         <RsButton variant="quiet" :disabled="loading" @click="load">Refresh</RsButton>
       </template>
+
+      <p v-if="uploading" class="upl" role="status">
+        Uploading {{ uploading.name }}… {{ Math.round(uploading.progress * 100) }}%
+        <span class="bar"><span :style="{ width: `${uploading.progress * 100}%` }" /></span>
+      </p>
+      <p v-else-if="uploadMsg" class="upl" role="status">{{ uploadMsg }}</p>
+      <p v-else class="muted small hint">Drop a G-code file here to upload it. Uploading never starts it.</p>
 
       <p v-if="error" class="error">Couldn't list files: {{ error }}</p>
       <p v-else-if="!loading && !files.length" class="muted">No G-code files in the gcodes folder yet.</p>
@@ -138,6 +223,20 @@ const fmtSize = (b: number) => (b > 1048576 ? `${(b / 1048576).toFixed(1)} MB` :
             <span v-if="r.needsSwap" class="tag swap">Needs {{ r.tool }}</span>
             <span v-else-if="r.matches" class="tag ok">Fits mounted tool</span>
           </span>
+          <span class="go">
+            <RsButton
+              v-if="r.start.swapTo != null && r.tool"
+              variant="quiet"
+              :disabled="control.jobActive || !machine.klippyReady"
+              @click="control.swapTo(r.start.swapTo, r.tool)"
+            >Swap to {{ r.tool }}</RsButton>
+            <RsButton
+              v-else
+              :disabled="starting === r.f.path || (!r.start.ok && r.start.block !== 'Still reading the file')"
+              :title="r.start.block ?? 'Check and start this job'"
+              @click="start(r.f)"
+            >Start</RsButton>
+          </span>
         </li>
       </ul>
       <p v-if="files.length > 40" class="muted small note">Toolheads are read for the newest 40 files, to keep the load on the Pi light.</p>
@@ -149,7 +248,7 @@ const fmtSize = (b: number) => (b > 1048576 ? `${(b / 1048576).toFixed(1)} MB` :
 .list { list-style: none; margin: 0; padding: 0; }
 .file {
   display: grid;
-  grid-template-columns: 170px minmax(0, 1fr) auto auto;
+  grid-template-columns: 170px minmax(0, 1fr) auto auto 150px;
   align-items: center;
   gap: var(--rs-space-4);
   padding: var(--rs-space-3) 0;
@@ -164,11 +263,18 @@ const fmtSize = (b: number) => (b > 1048576 ? `${(b / 1048576).toFixed(1)} MB` :
 .tag.ok { border: 1.5px solid var(--rs-line-strong); }
 .tag.care { background: var(--rs-warn-fill); color: var(--th-ink); text-decoration: none; }
 .small { font-size: var(--rs-text-sm); }
+.go { display: flex; justify-content: flex-end; }
+.hint, .upl { margin-bottom: var(--rs-space-3); }
+.upl { font-size: var(--rs-text-sm); color: var(--rs-text-strong); display: flex; flex-direction: column; gap: 6px; }
+.upl .bar { height: 6px; border-radius: var(--rs-radius-pill); background: var(--rs-surface-2); overflow: hidden; }
+.upl .bar span { display: block; height: 100%; background: var(--rs-active); }
+.drop.dragging { outline: 2px dashed var(--rs-text-strong); outline-offset: -8px; }
 .note { margin-top: var(--rs-space-3); }
 .error { color: var(--rs-danger); }
 @media (max-width: 820px) {
   .file { grid-template-columns: 1fr auto; }
   .name { grid-column: 1 / -1; order: -1; }
   .fit { min-width: 0; }
+  .go { grid-column: 1 / -1; justify-content: flex-start; }
 }
 </style>

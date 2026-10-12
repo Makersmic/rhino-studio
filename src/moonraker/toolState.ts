@@ -102,7 +102,7 @@ export function describeToolState(s: ToolState): string {
     case 'swapping': return `Swap in progress to ${s.toName ?? `slot ${s.toSlot}`}`
     case 'none-confirmed':
       return s.lastSavedSlot
-        ? `Not confirmed since restart. Last saved: ${s.lastSavedName ?? `slot ${s.lastSavedSlot}`}. Answer the RESTORE_TOOL question in Mainsail.`
+        ? `Not confirmed since restart. Last saved: ${s.lastSavedName ?? `slot ${s.lastSavedSlot}`}. Confirm it with RESTORE_TOOL (Confirm mounted tool on Control).`
         : 'No toolhead confirmed. Use SWAP_TOOL to fit one.'
     case 'unmapped': return `Slot ${s.slot} isn't in Klipper's tool_mapping`
     case 'unknown':

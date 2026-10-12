@@ -4,6 +4,8 @@ import { useRoute } from 'vue-router'
 import AppTopBar from '@/components/AppTopBar.vue'
 import AppRail from '@/components/AppRail.vue'
 import AppAlerts from '@/components/AppAlerts.vue'
+import ConfirmDialog from '@/control/ConfirmDialog.vue'
+import PromptDialog from '@/control/PromptDialog.vue'
 import { useMachineStore } from '@/stores/machine'
 import { useThemeStore } from '@/stores/theme'
 import { useSettingsStore, portalBase } from '@/stores/settings'
@@ -35,15 +37,21 @@ watchEffect(() => {
 </script>
 
 <template>
-  <a class="skip" href="#main">Skip to content</a>
-  <AppTopBar />
-  <div class="body">
-    <AppRail />
-    <main id="main" tabindex="-1">
-      <AppAlerts />
-      <RouterView />
-    </main>
-  </div>
+  <!-- Pendant mode is full screen: no top bar or nav (it has its own Stop) -->
+  <RouterView v-if="route.meta.bare" />
+  <template v-else>
+    <a class="skip" href="#main">Skip to content</a>
+    <AppTopBar />
+    <div class="body">
+      <AppRail />
+      <main id="main" tabindex="-1">
+        <AppAlerts />
+        <RouterView />
+      </main>
+    </div>
+  </template>
+  <PromptDialog />
+  <ConfirmDialog />
 </template>
 
 <style scoped>

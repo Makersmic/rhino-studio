@@ -37,7 +37,7 @@ const caption = computed(() => {
       <BrandMark />
     </RouterLink>
 
-    <RouterLink to="/device" class="mounted" aria-live="polite" :title="machine.toolStateText">
+    <RouterLink to="/control" class="mounted" aria-live="polite" :title="machine.toolStateText">
       <ToolheadBadge
         :look="machine.mountedLook"
         :slot="machine.mountedSlot"
