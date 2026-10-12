@@ -33,6 +33,6 @@ defineProps<{
 .k em.live { background: var(--rs-ink); color: var(--rs-on-ink); box-shadow: none; }
 .big { font-size: 2.4rem; line-height: 0.9; margin-top: 18px; white-space: nowrap; } /* top lines up with the temperatures */
 .big small { font-family: var(--rs-font-ui); font-size: 0.4em; color: var(--rs-text-muted); margin-left: -0.04em; vertical-align: top; }
-.sub { font-size: var(--rs-text-xs); color: var(--rs-text-muted); white-space: nowrap; min-height: 1.3em; }
+.sub { font-size: 11px; font-weight: var(--rs-weight-medium); color: var(--rs-text-muted); white-space: nowrap; min-height: 1.3em; margin-top: 2px; } /* same size and line as the set temperature */
 @media (max-width: 560px) { .big { font-size: 2.1rem; } }
 </style>

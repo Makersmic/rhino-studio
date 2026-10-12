@@ -57,14 +57,18 @@ const jobLabel: Record<string, string> = { standby: 'Idle', printing: 'Running',
   <section class="strip" aria-label="Machine status" :style="{ '--cols': columns }">
     <!-- Toolhead -->
     <div class="seg tool" :style="{ '--accent': `var(${machine.mountedLook.accentVar})` }" :class="{ unverified: !machine.mountedVerified }">
-      <span class="emblem"><Icon :tool="machine.mountedLook.icon" :size="50" /></span>
+      <!-- The tile spans the same height as the other cells (label line to
+           detail line); the three text lines sit on their three lines. -->
+      <span class="emblem"><Icon :tool="machine.mountedLook.icon" :size="62" /></span>
       <div class="tool-text">
         <span class="k">Toolhead</span>
         <strong class="tool-name">{{ machine.mountedVerified ? machine.mountedName : 'Unknown' }}</strong>
-        <span class="sub">{{ toolState }}</span>
-        <RouterLink v-if="care.mountedCare && (care.mountedCare.overdue || care.mountedCare.dueSoon)" to="/care" class="care" :class="{ overdue: care.mountedCare.overdue }">
-          Care: {{ careText(care.mountedCare) }}
-        </RouterLink>
+        <span class="tool-detail">
+          <span class="sub">{{ toolState }}</span>
+          <RouterLink v-if="care.mountedCare && (care.mountedCare.overdue || care.mountedCare.dueSoon)" to="/care" class="care" :class="{ overdue: care.mountedCare.overdue }">
+            Care: {{ careText(care.mountedCare) }}
+          </RouterLink>
+        </span>
       </div>
     </div>
 
@@ -174,13 +178,13 @@ const jobLabel: Record<string, string> = { standby: 'Idle', printing: 'Running',
 .sub { font-size: var(--rs-text-xs); color: var(--rs-text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* toolhead */
-.tool { flex-direction: row; align-items: flex-start; gap: var(--rs-space-4); } /* label on the same top line as the others */
+.tool { --tile: 96px; flex-direction: row; align-items: flex-start; gap: var(--rs-space-4); } /* label on the same top line as the others */
 .emblem {
   position: relative;
   display: grid;
   place-items: center;
-  width: 70px;
-  height: 70px;
+  width: var(--tile);
+  height: var(--tile);
   flex: none;
   border-radius: var(--rs-radius-md);
   background: var(--rs-surface-2);
@@ -190,10 +194,13 @@ const jobLabel: Record<string, string> = { standby: 'Idle', printing: 'Running',
 .emblem::after { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 5px; background: var(--accent); }
 .unverified .emblem { background: var(--rs-dither-faint), var(--rs-surface-2); color: var(--rs-text-muted); }
 .unverified .emblem::after { display: none; }
-.tool-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
-.tool-text .sub { font-size: 11px; }
-.tool-name { font-size: 1.35rem; line-height: 1.15; font-weight: var(--rs-weight-medium); color: var(--rs-text-strong); }
-.care { align-self: flex-start; margin-top: 6px; font-size: var(--rs-text-xs); font-weight: var(--rs-weight-medium); color: var(--rs-text-strong); text-decoration: none; padding: 1px 7px; border-radius: var(--rs-radius-sm); box-shadow: inset 0 0 0 1px var(--rs-line-strong); }
+.tool-text { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+/* Three lines matched to the readout cells: label line, value line (name's
+   capitals level with the tops of the digits), detail line (level with "215°"). */
+.tool-name { font-size: 1.35rem; line-height: 1; margin-top: 21px; font-weight: var(--rs-weight-medium); color: var(--rs-text-strong); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tool-detail { display: flex; align-items: center; gap: 8px; margin-top: 23px; min-width: 0; height: 14px; }
+.tool-detail .sub { font-size: 11px; font-weight: var(--rs-weight-medium); }
+.care { flex: none; font-size: var(--rs-text-xs); font-weight: var(--rs-weight-medium); color: var(--rs-text-strong); text-decoration: none; padding: 0 6px; line-height: 16px; border-radius: var(--rs-radius-sm); box-shadow: inset 0 0 0 1px var(--rs-line-strong); }
 .care.overdue { background: var(--rs-ink); color: var(--rs-on-ink); box-shadow: none; }
 .mini { height: 26px; padding: 0 10px; border-radius: var(--rs-radius-md); border: 1px solid var(--rs-line-strong); background: transparent; color: var(--rs-text-strong); font-size: var(--rs-text-sm); font-weight: var(--rs-weight-medium); cursor: pointer; }
 .mini.primary { background: var(--rs-ink); border-color: var(--rs-ink); color: var(--rs-on-ink); }
