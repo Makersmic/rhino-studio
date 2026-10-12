@@ -6,7 +6,9 @@ Status: **Phase 2b** (machine control), on top of 2a (live status) and Care (mai
 
 ### What it can do
 
-- **Control** screen: jog (locked until you unlock it, relocks after 60 s idle), home, motors off, heater targets, the running job (pause, resume, cancel), the mounted toolhead with Swap and Confirm, and a console with your macros arranged beside it.
+- **Dashboard** (the home screen): a landscape "lock screen" for the machine. The camera fills the background; the mounted tool, temperatures (body temperature for tools without a hotend), position, the clock and what the machine is doing (Idle, Busy, Printing, Paused…) run along the top; the job, time left and finish time along the bottom; and a short stack of notices says what the tool is doing, with anything that needs you in red. It's look-only: values link to the screen with the details, and the only control is the top bar's Stop.
+- **Cameras**: every camera Moonraker knows (the same list Mainsail uses), shown on Control in a Camera panel with gallery arrows and dots, and behind the Dashboard. Add, edit, turn, mirror, switch off and delete cameras in Settings → Cameras, with a live preview. MJPEG streams, MJPEG snapshots, IP-camera video and web-page cameras work; WebRTC and HLS come later.
+- **Control** screen: a camera, jog (locked until you unlock it, relocks after 60 s idle), home, motors off, heater targets, the running job (pause, resume, cancel), the mounted toolhead with Swap and Confirm, and a console with your macros arranged beside it.
 - **Pendant mode** (Control → Pendant mode, or `#/pendant`): the phone as a pendant at the machine, with Stop always on screen.
   - **Jog** screen uses two-hand control: the jog keys stay greyed out unless the **Hold** button in the bottom corner is held. Hold with one thumb, tap with the other; one tap is one step. Letting go, a cancelled touch, the screen turning off or switching apps kills the keys at once. A left-handed option mirrors the layout. On a computer, hold Shift as the Hold button.
   - **Status** screen: big work/machine position, Home, Set Z zero / Set work zero.
@@ -57,7 +59,7 @@ npm run mock                                      # pretend Moonraker on port 71
 MOONRAKER=http://localhost:7125 PORTAL=http://localhost:7125 npm run dev   # second terminal
 ```
 
-`MOCK_SCENARIO=restart`, `swap` or `custom` changes what the mock reports. It prints every request the app makes. The mock also serves the Portal's maintenance API with real data from the Portal's own year-of-use demo (`scripts/fixtures/`).
+`MOCK_SCENARIO=restart`, `swap` or `custom` changes what the mock reports. The mock has three pretend cameras showing rendered frames of a print (`MOCK_CAMERAS=0` starts with none). It prints every request the app makes. The mock also serves the Portal's maintenance API with real data from the Portal's own year-of-use demo (`scripts/fixtures/`).
 
 Other commands:
 
@@ -84,7 +86,9 @@ src/
   control/      command safety check, prompt parser, job-start rules (+ tests); motion, heat, job, console panels; dialogs
   portal/       Rhino Portal client (maintenance API)
   maintenance/  care rules (+ tests), task cards, log-work dialog, care tiles
-  stores/       machine state, control (console, prompts, motion lock, confirmations), care, settings, theme
+  webcams/      camera rules (+ tests), the camera viewer, Settings → Cameras
+  dashboard/    Dashboard notices (+ tests)
+  stores/       machine state, control (console, prompts, motion lock, confirmations), cameras, care, settings, theme
   components/   shell (top bar, rail, E-stop) and shared parts
   views/        one file per screen
   router.ts     screens and their URLs
@@ -109,7 +113,7 @@ docs/           testing on the machine
 Open **Style** in the app for the live guide. The direction is an **e-paper instrument**: every card is a small e-paper display, the whole app is one consistent set of modules (in the spirit of Mainsail's dashboard), and almost everything is drawn with two colours.
 
 - **Ink and paper** do the work. Night theme is inverted e-ink (charcoal paper, light ink); day theme is warm matte paper with black ink.
-- **Red means stop**, and nothing else is red.
+- **Red means stop**, and nothing else is red. One exception: on the Dashboard's camera overlay, red marks what needs your attention (a question waiting, a paused job, overdue care), because text there sits on live video and needs a colour that reads over any picture.
 - **Toolhead colours** appear only as a small tab on a tool's tile or badge and the thin band under the top bar.
 - **Dither patterns** do the shading, the way e-ink displays do: progress bars, locked jog keys, care that's coming due. Overdue is solid ink.
 - **Inverted ink** (an ink block with paper text) means live or selected: the armed jog keys, the held Hold button, the chosen step size, the current screen in the nav.
@@ -129,6 +133,8 @@ Open **Style** in the app for the live guide. The direction is an **e-paper inst
 - Jobs: Start is blocked unless the mounted tool is confirmed and matches the file; files that declare no toolhead get a warning. Cancel and Resume ask; Pause doesn't.
 - Maintenance never blocks: overdue care shows in the start confirmation, nothing more.
 - The on-screen E-stop depends on the browser, network, Pi and Moonraker. It does not replace a physical E-stop or power switch.
+- Cameras: reading the list is in `READ_ONLY_METHODS`; editing it uses a third allowlist, `CAMERA_METHODS` (`server.webcams.post_item`, `server.webcams.delete_item`), which only changes Moonraker's camera list. Deleting a camera asks first. A camera picture can lag or freeze: it is not a safety device.
+- The Dashboard is look-only: no buttons that act on the machine, and Klipper's wizard questions are answered on Control (the Dashboard shows a red notice that one is waiting). The top bar's Stop stays.
 - The Portal client may only read maintenance and log work or snooze (`PORTAL_WRITES` in `src/portal/client.ts`). Those change maintenance records, never the machine.
 - Generated jobs call the existing macros (START_JOB, SWAP_TOOL, END_PRINT) instead of raw tool-change or power G-code.
 
@@ -143,3 +149,5 @@ Third-party pieces in use:
 | Vue, Vue Router, Pinia, Vite | MIT |
 | Archivo, Doto, JetBrains Mono (via Fontsource) | SIL Open Font License 1.1 |
 | Kiri:Moto engine (from Phase 3) | MIT |
+
+The mock's camera frames (`scripts/fixtures/webcam/`) were rendered for this project with three.js (MIT); three.js itself isn't part of the app.

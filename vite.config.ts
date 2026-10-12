@@ -54,6 +54,8 @@ export default defineConfig({
       '/printer': originFix,
       '/machine': originFix,
       '/access': originFix,
+      // Cameras: crowsnest streams that the Pi's nginx serves at /webcam/, /webcam2/ ...
+      '^/webcam\\d*/': originFix,
       '/portal': {
         target: portalTarget,
         changeOrigin: true,

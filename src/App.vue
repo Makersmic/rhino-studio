@@ -48,18 +48,20 @@ watchEffect(() => {
     <div class="body">
       <AppRail />
       <main id="main" tabindex="-1">
-        <AppAlerts />
+        <!-- The Dashboard shows the same alerts as its own notices -->
+        <AppAlerts v-if="!route.meta.ownAlerts" />
         <RouterView />
       </main>
     </div>
   </template>
-  <PromptDialog />
+  <!-- The Dashboard is look-only: wizard questions are answered on Control (its notice says so) -->
+  <PromptDialog v-if="!route.meta.lookOnly" />
   <ConfirmDialog />
 </template>
 
 <style scoped>
 .body { display: flex; align-items: flex-start; }
-main { flex: 1; min-width: 0; outline: none; }
+main { flex: 1; min-width: 0; outline: none; display: flex; flex-direction: column; min-height: calc(100vh - var(--rs-topbar-h)); }
 .skip {
   position: absolute;
   left: var(--rs-space-2);

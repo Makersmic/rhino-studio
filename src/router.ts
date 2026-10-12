@@ -5,7 +5,8 @@ import { createRouter, createWebHashHistory } from 'vue-router'
 export const router = createRouter({
   history: createWebHashHistory(),
   routes: [
-    { path: '/', redirect: '/prepare' },
+    { path: '/', redirect: '/dashboard' },
+    { path: '/dashboard', component: () => import('./views/DashboardView.vue'), meta: { title: 'Dashboard', ownAlerts: true, lookOnly: true } },
     { path: '/prepare', component: () => import('./views/PrepareView.vue'), meta: { title: 'Prepare' } },
     { path: '/preview', component: () => import('./views/PreviewView.vue'), meta: { title: 'Preview' } },
     { path: '/control', component: () => import('./views/ControlView.vue'), meta: { title: 'Control' } },
@@ -16,6 +17,6 @@ export const router = createRouter({
     { path: '/care', component: () => import('./views/CareView.vue'), meta: { title: 'Care' } },
     { path: '/style', component: () => import('./views/StyleGuideView.vue'), meta: { title: 'Style guide' } },
     { path: '/settings', component: () => import('./views/SettingsView.vue'), meta: { title: 'Settings' } },
-    { path: '/:pathMatch(.*)*', redirect: '/prepare' },
+    { path: '/:pathMatch(.*)*', redirect: '/dashboard' },
   ],
 })

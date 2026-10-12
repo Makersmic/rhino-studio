@@ -4,7 +4,8 @@
  * Every card is a small e-paper display: matte paper, crisp ink, nothing
  * else. Two colours do almost all the work:
  *   ink + paper    everything
- *   red            stop and danger only
+ *   red            stop and danger only (on the Dashboard's camera
+ *                  overlay: "needs your attention")
  *   tool accent    a small tab that says which toolhead is mounted
  * Shading is done the way e-ink does it, with dither (dot) patterns, not
  * extra colours: progress, locked, due. "Live" or "selected" is inverted
@@ -151,4 +152,26 @@
   --rs-dither: radial-gradient(var(--rs-dot) 0.85px, transparent 1.15px) 0 0 / 4px 4px;
   --rs-dither-dense: radial-gradient(var(--rs-dot) 0.95px, transparent 1.2px) 0 0 / 3px 3px;
   --rs-dither-faint: radial-gradient(var(--rs-dot-faint) 0.9px, transparent 1.2px) 0 0 / 5px 5px;
+}
+
+/*
+ * Camera overlay (Dashboard, camera panels). Text sits straight on live
+ * video, which can be bright or dark in either theme, so these are the
+ * same in every theme: white text with a soft shadow, red for anything
+ * that needs attention, and a faint dark wash only along the edges.
+ */
+:root {
+  --rs-cam-bg: #050606;
+  --rs-overlay-text: #ffffff;
+  --rs-overlay-muted: rgb(255 255 255 / 0.74);
+  --rs-overlay-faint: rgb(255 255 255 / 0.32);
+  --rs-overlay-alert: #ff3b30;
+  --rs-overlay-shadow: 0 1px 2px rgb(0 0 0 / 0.9), 0 0 14px rgb(0 0 0 / 0.55);
+  --rs-overlay-icon-shadow: drop-shadow(0 1px 2px rgb(0 0 0 / 0.85));
+  --rs-overlay-scrim-top: linear-gradient(rgb(0 0 0 / 0.66), rgb(0 0 0 / 0.28) 55%, rgb(0 0 0 / 0));
+  --rs-overlay-scrim-bottom: linear-gradient(rgb(0 0 0 / 0), rgb(0 0 0 / 0.3) 45%, rgb(0 0 0 / 0.7));
+  --rs-overlay-scrim-side: linear-gradient(90deg, rgb(0 0 0 / 0.5), rgb(0 0 0 / 0));
+  --rs-overlay-button: rgb(0 0 0 / 0.42);
+  --rs-overlay-glow: 0 0 8px rgb(255 255 255 / 0.5);
+  --rs-overlay-dither: radial-gradient(rgb(255 255 255 / 0.07) 0.9px, transparent 1.2px) 0 0 / 5px 5px;
 }

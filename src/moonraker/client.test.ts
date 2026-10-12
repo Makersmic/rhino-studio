@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { MoonrakerClient, READ_ONLY_METHODS, ACTION_METHODS, type Status } from './client'
+import { MoonrakerClient, READ_ONLY_METHODS, ACTION_METHODS, CAMERA_METHODS, type Status } from './client'
 import { approve, check } from '@/control/commands'
 
 /** A stand-in for the browser WebSocket that answers like Moonraker. */
@@ -26,6 +26,7 @@ class FakeSocket {
       : msg.method === 'printer.objects.list' ? { objects: ['webhooks', 'extruder', 'gcode_macro SWAP_TOOL', 'gcode_macro VARIABLES'] }
       : msg.method === 'printer.objects.subscribe' ? { status: { extruder: { temperature: 21 } } }
       : msg.method === 'server.files.list' ? [{ path: 'a.gcode', modified: 1, size: 10 }]
+      : msg.method === 'server.webcams.list' ? { webcams: [{ name: 'Bed', uid: 'u1' }] }
       : 'ok'
     queueMicrotask(() => this.onmessage?.({ data: JSON.stringify({ jsonrpc: '2.0', id: msg.id, result }) }))
   }
@@ -137,5 +138,38 @@ describe('MoonrakerClient', () => {
     expect(events.status.at(-1)).toEqual([{}, true])
     expect(events.states.at(-1)).toBe('error')
     c.disconnect()
+  })
+  it('reads the camera list on connect and follows changes', async () => {
+    const lists: unknown[][] = []
+    const c = new MoonrakerClient('http://rhino.test', { onWebcams: (w) => lists.push(w) }, {
+      WebSocketImpl: FakeSocket as unknown as new (url: string) => WebSocket,
+    })
+    c.connect()
+    for (let i = 0; i < 10; i++) await flush()
+    expect(lists[0]).toEqual([{ name: 'Bed', uid: 'u1' }])
+    FakeSocket.last!.push('notify_webcams_changed', [{ webcams: [] }])
+    expect(lists.at(-1)).toEqual([])
+  })
+
+  it('edits cameras only through the camera list, never anything else', async () => {
+    const { c } = make()
+    c.connect()
+    for (let i = 0; i < 10; i++) await flush()
+    await c.saveWebcam({ name: 'Bed', stream_url: '/webcam/?action=stream' })
+    await c.deleteWebcam('u1')
+    const sent = FakeSocket.last!.sent
+    expect(sent.at(-2)!.method).toBe('server.webcams.post_item')
+    expect(sent.at(-1)).toEqual({ method: 'server.webcams.delete_item', params: { uid: 'u1' } })
+    const configure = (c as unknown as { configure: (m: string, p: object) => Promise<unknown> }).configure.bind(c)
+    await expect(configure('printer.gcode.script', { script: 'G28' })).rejects.toThrow(/not an allowed camera change/)
+    await expect(configure('server.database.post_item', {})).rejects.toThrow(/not an allowed camera change/)
+    expect([...CAMERA_METHODS].every((m) => m.startsWith('server.webcams.'))).toBe(true)
+  })
+
+  it('resolves camera paths against the machine address', () => {
+    const { c } = make()
+    expect(c.resolveUrl('/webcam/?action=stream')).toBe('http://rhino.test/webcam/?action=stream')
+    expect(c.resolveUrl('webcam2/?action=snapshot')).toBe('http://rhino.test/webcam2/?action=snapshot')
+    expect(c.resolveUrl('http://192.168.1.60:8080/stream')).toBe('http://192.168.1.60:8080/stream')
   })
 })

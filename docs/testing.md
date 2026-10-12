@@ -71,3 +71,26 @@ Before you start: bed clear, nothing in the nozzle path, hand near the physical 
 Notes:
 - B13 needs Toolhead_Manager 1.4.1 on the Pi (the laser rail fix). On 1.3.4, don't run laser jobs from Studio yet.
 - Pendant over plain http can't keep the phone screen on. Raise the phone's auto-lock time while you use it.
+
+## Cameras and Dashboard
+
+Nothing here moves the machine. Camera edits change Moonraker's camera list, which Mainsail uses too.
+
+| # | Do this | Pass when | If it fails |
+|---|---|---|---|
+| D1 | Open Control | The Camera panel shows the cameras already set up in Mainsail, live | "isn't answering": open `http://mainsailos.local/webcam/?action=stream` in the browser. If that fails too, crowsnest isn't running |
+| D2 | With two or more cameras, use the arrows, the dots, and the left/right keys | Each switches camera and the count (e.g. 2 of 3) follows; the Dashboard shows the same camera | Note which control |
+| D3 | Settings → Cameras → Add camera, with a wrong address | The preview says the camera isn't answering; Save still works but the panel shows the same message | |
+| D4 | Edit that camera to a real address, turn it, mirror it | The preview updates; after saving, Mainsail shows the same camera with the same turn and mirror | Mainsail doesn't show it: note the Moonraker version |
+| D5 | Delete it | Asks first; it disappears from Studio and Mainsail; crowsnest is unchanged | It deletes without asking |
+| D6 | Leave Control open, switch to another app or lock the phone for 30 s, come back | The picture resumes. On the Pi, `top` shows crowsnest's CPU drop while it's hidden | CPU stays up while hidden |
+| D7 | Open the Dashboard during a print | Stats along the top, notices on the left, job along the bottom with time left and finish time. No buttons that act on the machine; tapping a value opens its screen; Stop stays in the top bar | Anything on it starts, stops or moves something (apart from the top bar's Stop) |
+| D8 | During a job run a wizard that asks a question (or start a laser job) | The Dashboard shows "Klipper is asking" in red; the question itself appears on Control, not on the Dashboard | |
+| D9 | Mount a non-print tool | The Dashboard says "Body temperature" with "No sensor yet" instead of the hotend | It shows a hotend reading for a laser, spindle or knife |
+| D10 | Klipper busy without a job (Home all from Mainsail) | The Dashboard's state reads Busy and a "Machine busy" notice shows until homing ends | |
+
+Notes:
+- Each open camera view is one more stream the Pi 3B sends. Studio only pulls frames from the camera that's on screen, and stops when hidden. If Klipper reports "Timer too close" while watching, use "MJPEG snapshots" at 5 fps instead.
+- A camera is not a safety device: the picture can lag or freeze without notice. Don't leave a laser or spindle job unwatched because the Dashboard looks fine.
+- WebRTC and HLS cameras show "not supported yet". Crowsnest's default (ustreamer, MJPEG) works.
+

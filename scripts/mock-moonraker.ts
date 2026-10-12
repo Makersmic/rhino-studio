@@ -13,13 +13,19 @@
  * It logs every method the app sends, so you can see that Phase 2a only
  * reads. The emergency stop puts the mock Klipper into "shutdown" like M112.
  *
+ * Cameras: three pretend cameras (bed, nozzle, side) show rendered frames
+ * of a print in progress (scripts/fixtures/webcam), served like crowsnest:
+ * /webcam/?action=stream (MJPEG) and ?action=snapshot. MOCK_CAMERAS=0
+ * starts with none, to see the empty states. Adding, editing and deleting
+ * cameras works and is kept until the mock stops.
+ *
  * It also pretends to be the Rhino Portal's maintenance API, using a real
  * overview from the Portal's year-of-use demo (scripts/fixtures). Run the
  * dev server with PORTAL=http://localhost:7125 as well. One task (the laser
  * lens) is made overdue so every state shows.
  */
 import { createServer, type IncomingMessage } from 'node:http'
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
 import { WebSocketServer, type WebSocket } from 'ws'
 
 const PORT = Number(process.env.MOCK_PORT ?? 7125)
@@ -67,6 +73,30 @@ const files: Record<string, string> = {
 }
 const fileTimes = Object.fromEntries(Object.keys(files).map((f, i) => [f, Date.now() / 1000 - i * 3600]))
 
+// ---- pretend cameras -----------------------------------------------------
+const frameDir = new URL('./fixtures/webcam/', import.meta.url)
+const frames: Record<string, Buffer[]> = {}
+for (const f of readdirSync(frameDir).sort()) {
+  const m = /^(\w+)-\d+\.jpg$/.exec(f)
+  if (m) (frames[m[1]!] ??= []).push(readFileSync(new URL(f, frameDir)))
+}
+const camPaths: Record<string, string> = { webcam: 'bed', webcam2: 'nozzle', webcam3: 'side' }
+let webcamSeq = 0
+const cam = (name: string, path: string, service: string, extra: Record<string, unknown> = {}) => ({
+  name, uid: `mock-${++webcamSeq}`, location: 'printer', service, enabled: true, icon: 'mdiWebcam',
+  target_fps: 15, target_fps_idle: 5, stream_url: `/${path}/?action=stream`, snapshot_url: `/${path}/?action=snapshot`,
+  flip_horizontal: false, flip_vertical: false, rotation: 0, aspect_ratio: '16:9', extra_data: {}, source: 'database', ...extra,
+})
+let webcams: Record<string, unknown>[] = process.env.MOCK_CAMERAS === '0' ? [] : [
+  cam('Bed', 'webcam', 'mjpegstreamer'),
+  cam('Nozzle', 'webcam2', 'mjpegstreamer-adaptive', { target_fps: 4 }),
+  cam('Side', 'webcam3', 'mjpegstreamer'),
+]
+const frameAt = (set: string) => {
+  const list = frames[set] ?? frames.bed ?? []
+  return list[Math.floor(Date.now() / 400) % Math.max(1, list.length)]
+}
+
 const sockets = new Set<WebSocket>()
 const notify = (method: string, params?: unknown[]) => {
   const msg = JSON.stringify({ jsonrpc: '2.0', method, ...(params ? { params } : {}) })
@@ -111,11 +141,21 @@ let jobFile = ''
 const name = (slot: number) => toolMapping[slot] ?? (custom.tool_mapping as Record<number, string>)[slot] ?? `slot ${slot}`
 const arg = (line: string, k: string) => new RegExp(`${k}=("?)([^\\s"]+)\\1`, 'i').exec(line)?.[2]
 
+let busyTimer: ReturnType<typeof setTimeout> | null = null
+function busyFor(ms: number) {
+  update('idle_timeout', { state: 'Printing' })
+  if (busyTimer) clearTimeout(busyTimer)
+  busyTimer = setTimeout(() => {
+    if (status.print_stats.state !== 'printing') update('idle_timeout', { state: 'Ready' })
+  }, ms)
+}
+
 function startJob(file: string) {
   if (!(file in files)) throw new Error(`File not found: ${file}`)
   jobFile = file
   update('print_stats', { state: 'printing', filename: file, print_duration: 0 })
   update('virtual_sdcard', { progress: 0, is_active: true })
+  update('idle_timeout', { state: 'Printing' })
   respond(`File opened:${file}`)
 }
 
@@ -284,8 +324,28 @@ function handle(method: string, params: Record<string, unknown> | undefined): un
       gcodeStore.push({ message: script, time: Date.now() / 1000, type: 'command' })
       console.log(`  GCODE ${script.replace(/\n/g, ' | ')}`)
       if (klippy !== 'ready' && !/^\s*(FIRMWARE_RESTART|RESTART)\s*$/i.test(script)) throw new Error('Klipper is not ready')
+      busyFor(4000) // Klipper reports "Printing" while it works through commands
       for (const l of script.split('\n')) runLine(l)
       return 'ok'
+    }
+    case 'server.webcams.list': return { webcams }
+    case 'server.webcams.post_item': {
+      const p = { ...(params ?? {}) } as Record<string, unknown>
+      const i = webcams.findIndex((w) => w.uid === p.uid)
+      const item = { ...(i >= 0 ? webcams[i] : cam(String(p.name), 'webcam', 'mjpegstreamer')), ...p, source: 'database' }
+      if (i >= 0) webcams[i] = item
+      else webcams.push(item)
+      console.log(`  CAMERA saved ${item.name}`)
+      notify('notify_webcams_changed', [{ webcams }])
+      return { webcam: item }
+    }
+    case 'server.webcams.delete_item': {
+      const gone = webcams.find((w) => w.uid === params?.uid)
+      if (!gone) throw new Error('No such camera')
+      webcams = webcams.filter((w) => w !== gone)
+      console.log(`  CAMERA deleted ${gone.name}`)
+      notify('notify_webcams_changed', [{ webcams }])
+      return { webcam: gone }
     }
     case 'server.gcode_store': return { gcode_store: gcodeStore.slice(-Number(params?.count ?? 100)) }
     case 'printer.gcode.help': return HELP
@@ -389,7 +449,7 @@ async function portal(req: IncomingMessage, res: import('node:http').ServerRespo
 
 const server = createServer(async (req, res) => {
   const url = decodeURIComponent((req.url ?? '').split('?')[0]!)
-  console.log(`HTTP ${req.method} ${url}${req.headers.range ? ` (${req.headers.range})` : ''}`)
+  if (!url.startsWith("/webcam")) console.log(`HTTP ${req.method} ${url}${req.headers.range ? ` (${req.headers.range})` : ''}`)
   if (await portal(req, res, url)) return
   if (req.method === 'POST' && url === '/printer/emergency_stop') {
     emergencyStop('http')
@@ -407,6 +467,31 @@ const server = createServer(async (req, res) => {
       fileTimes[fname] = Date.now() / 1000
       console.log(`  UPLOAD ${fname} (${content.length} bytes)`)
       res.writeHead(201, { 'content-type': 'application/json' }).end(JSON.stringify({ item: { path: fname, root: 'gcodes' }, print_started: false }))
+    })
+    return
+  }
+  const camm = url.match(/^\/(webcam\d*)\/?$/)
+  if (req.method === 'GET' && camm && camPaths[camm[1]!]) {
+    const set = camPaths[camm[1]!]!
+    const action = new URL(req.url ?? '/', 'http://x').searchParams.get('action')
+    if (action === 'snapshot') {
+      res.writeHead(200, { 'content-type': 'image/jpeg', 'cache-control': 'no-store' }).end(frameAt(set))
+      return
+    }
+    // MJPEG: one JPEG after another in a multipart response, like crowsnest
+    res.writeHead(200, { 'content-type': 'multipart/x-mixed-replace; boundary=rsframe', 'cache-control': 'no-store', connection: 'close' })
+    const send = () => {
+      const jpg = frameAt(set)
+      if (!jpg) return
+      res.write(`--rsframe\r\nContent-Type: image/jpeg\r\nContent-Length: ${jpg.length}\r\n\r\n`)
+      res.write(jpg)
+      res.write('\r\n')
+    }
+    send()
+    const t = setInterval(send, 200)
+    req.on('close', () => {
+      clearInterval(t)
+      console.log(`  CAMERA ${camm[1]} stream closed`)
     })
     return
   }
@@ -447,7 +532,10 @@ setInterval(() => {
   if (status.print_stats.state === 'printing') {
     const p = Math.min(1, (status.virtual_sdcard.progress as number) + 0.01)
     update('virtual_sdcard', { progress: p })
+    // pretend each second is 40 s of a real job, so the time estimates look real
+    update('print_stats', { print_duration: (status.print_stats.print_duration as number) + 40 })
     if (p >= 1) {
+      update('idle_timeout', { state: 'Ready' })
       update('print_stats', { state: 'complete' })
       respond(`Done printing file ${jobFile}`)
     }

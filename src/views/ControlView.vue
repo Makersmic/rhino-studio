@@ -3,8 +3,8 @@
  * Control: one status display, then the modules you drive the machine with.
  *
  *   [ status: toolhead | hotend | bed | position | job          ]
- *   [ motion                    ] [ temperatures               ]
- *   [                           ] [ job                        ]
+ *   [ motion                    ] [ camera                     ]
+ *   [ job                       ] [ temperatures               ]
  *   [ macros         ] [ console                               ]
  *
  * Every command goes through the control store's safety check.
@@ -14,6 +14,7 @@ import StatusStrip from '@/control/StatusStrip.vue'
 import MotionPanel from '@/control/MotionPanel.vue'
 import HeatPanel from '@/control/HeatPanel.vue'
 import JobPanel from '@/control/JobPanel.vue'
+import WebcamPanel from '@/control/WebcamPanel.vue'
 import MacroPanel from '@/control/MacroPanel.vue'
 import ConsolePanel from '@/control/ConsolePanel.vue'
 </script>
@@ -28,10 +29,13 @@ import ConsolePanel from '@/control/ConsolePanel.vue'
     <StatusStrip />
 
     <div class="grid-a">
-      <MotionPanel class="motion" />
       <div class="stack">
-        <HeatPanel />
+        <MotionPanel class="motion" />
         <JobPanel />
+      </div>
+      <div class="stack">
+        <WebcamPanel />
+        <HeatPanel />
       </div>
     </div>
 

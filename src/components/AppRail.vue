@@ -8,6 +8,7 @@ const care = useMaintenanceStore()
 interface NavItem { to: string; label: string; icon: NavIconId }
 
 const main: NavItem[] = [
+  { to: '/dashboard', label: 'Dashboard', icon: 'dashboard' },
   { to: '/prepare', label: 'Prepare', icon: 'prepare' },
   { to: '/preview', label: 'Preview', icon: 'preview' },
   { to: '/control', label: 'Control', icon: 'control' },
@@ -120,7 +121,8 @@ const secondary: NavItem[] = [
     overflow-x: auto;
   }
   .group { flex-direction: row; gap: 0; }
-  .item { min-width: 54px; }
+  .group:first-child { flex: 1; justify-content: space-between; }
+  .item { min-width: 44px; font-size: 10px; letter-spacing: -0.01em; }
   .bottom li:first-child { display: none; }
 }
 </style>

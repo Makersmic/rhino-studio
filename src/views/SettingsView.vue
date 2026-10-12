@@ -7,6 +7,7 @@ import { useSettingsStore, normalizeAddress, portalBase } from '@/stores/setting
 import { useMaintenanceStore } from '@/stores/maintenance'
 import { useMachineStore } from '@/stores/machine'
 import { brand } from '@/brand/brand'
+import CamerasPanel from '@/webcams/CamerasPanel.vue'
 
 const theme = useThemeStore()
 const settings = useSettingsStore()
@@ -73,6 +74,8 @@ const options: { value: ThemePref; label: string }[] = [
         </form>
       </RsPanel>
 
+      <CamerasPanel class="wide" />
+
       <RsPanel title="About" index="03">
         <p>{{ brand.name }} {{ brand.version }}</p>
         <p class="muted small">For the {{ brand.machine }}. Free software under GPL-3.0-or-later.</p>
@@ -82,12 +85,15 @@ const options: { value: ThemePref; label: string }[] = [
 </template>
 
 <style scoped>
-.segmented { border: 0; margin: 0 0 var(--rs-space-3); padding: 4px; display: inline-flex; gap: 4px; border-radius: var(--rs-radius-pill); background: var(--rs-bg); }
-.seg span { display: inline-flex; align-items: center; height: 36px; padding: 0 var(--rs-space-4); border-radius: var(--rs-radius-pill); cursor: pointer; font-weight: var(--rs-weight-medium); color: var(--rs-text-muted); }
-.seg input:checked + span { background: var(--rs-paper); color: var(--rs-paper-ink); }
+.grid { grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); }
+.wide { grid-column: 1 / -1; }
+.segmented { border: 1px solid var(--rs-line-strong); margin: 0 0 var(--rs-space-3); padding: 0; display: inline-flex; border-radius: var(--rs-radius-md); overflow: hidden; }
+.seg + .seg span { border-left: 1px solid var(--rs-line-strong); }
+.seg span { display: inline-flex; align-items: center; height: 36px; padding: 0 var(--rs-space-4); cursor: pointer; font-weight: var(--rs-weight-medium); color: var(--rs-text-muted); }
+.seg input:checked + span { background: var(--rs-ink); color: var(--rs-on-ink); }
 .seg input:focus-visible + span { box-shadow: var(--rs-focus); }
 .field { display: flex; flex-direction: column; gap: var(--rs-space-1); font-size: var(--rs-text-sm); margin-bottom: var(--rs-space-2); }
-.field input { height: 42px; padding: 0 var(--rs-space-4); border-radius: var(--rs-radius-pill); border: 1.5px solid var(--rs-line-strong); background: transparent; }
+.field input { height: 38px; padding: 0 12px; border-radius: var(--rs-radius-md); border: 1px solid var(--rs-line-strong); background: transparent; color: var(--rs-text-strong); }
 .field input:focus-visible { border-color: var(--rs-text-strong); }
 .small { font-size: var(--rs-text-sm); }
 .stack { display: flex; flex-direction: column; gap: var(--rs-space-3); }

@@ -8,7 +8,10 @@ import type { CheckedScript } from '@/control/commands'
  * - Actions go through act(), which only sends ACTION_METHODS. G-code goes
  *   out only as a CheckedScript (src/control/commands.ts), so every script
  *   has been through the safety check and any confirmation it needed.
- * The emergency stop needs neither.
+ * - Camera settings go through configure(), which only sends CAMERA_METHODS.
+ *   They change Moonraker's camera list (shared with Mainsail), never the
+ *   machine.
+ * The emergency stop needs none of them.
  *
  * Connection life cycle:
  *   connect -> identify -> server.info
@@ -34,7 +37,14 @@ export const READ_ONLY_METHODS: ReadonlySet<string> = new Set([
   'server.files.list',
   'server.gcode_store',
   'printer.gcode.help',
+  'server.webcams.list',
 ])
+
+/**
+ * Methods that edit the camera list in Moonraker's database (the same list
+ * Mainsail and Fluidd use). They never touch Klipper or the machine.
+ */
+export const CAMERA_METHODS: ReadonlySet<string> = new Set(['server.webcams.post_item', 'server.webcams.delete_item'])
 
 /** Methods that change the machine. Each has its own public function below. */
 export const ACTION_METHODS: ReadonlySet<string> = new Set([
@@ -85,6 +95,8 @@ export interface ClientHandlers {
   onObjects?: (objects: string[]) => void
   /** Klipper's command list with descriptions (macros included). */
   onHelp?: (help: Record<string, string>) => void
+  /** Moonraker's camera list (raw entries); sent on connect and whenever it changes. */
+  onWebcams?: (webcams: unknown[]) => void
 }
 
 export interface GcodeStoreEntry {
@@ -133,6 +145,21 @@ export class MoonrakerClient {
     return `${this.baseUrl}/server/files/gcodes/${path.split('/').map(encodeURIComponent).join('/')}`
   }
 
+  /**
+   * A camera's stream or snapshot address. Moonraker stores them as written
+   * in the camera settings, usually a path like /webcam/?action=stream that
+   * the Pi's nginx serves; paths are taken relative to the machine's address.
+   */
+  resolveUrl(url: string): string {
+    if (/^[a-z][a-z0-9+.-]*:/i.test(url)) return url
+    const base = this.baseUrl || window.location.origin
+    try {
+      return new URL(url.startsWith('/') ? url : `/${url}`, base).toString()
+    } catch {
+      return url
+    }
+  }
+
   connect(): void {
     this.wanted = true
     this.retry = 0
@@ -164,6 +191,22 @@ export class MoonrakerClient {
     }
     const res = await fetch(`${this.baseUrl}/printer/emergency_stop`, { method: 'POST' })
     if (!res.ok) throw new Error(`Emergency stop failed: HTTP ${res.status}`)
+  }
+
+  async listWebcams(): Promise<unknown[]> {
+    const r = (await this.call('server.webcams.list')) as { webcams?: unknown[] }
+    return Array.isArray(r?.webcams) ? r.webcams : []
+  }
+
+  // ---- camera settings (Moonraker database, not the machine) ------------
+
+  /** Add a camera (no uid) or change one (with its uid). */
+  saveWebcam(item: Record<string, unknown>): Promise<unknown> {
+    return this.configure('server.webcams.post_item', item)
+  }
+
+  deleteWebcam(uid: string): Promise<unknown> {
+    return this.configure('server.webcams.delete_item', { uid })
   }
 
   // ---- actions ---------------------------------------------------------
@@ -224,6 +267,10 @@ export class MoonrakerClient {
     return this.send(method, params, timeoutMs)
   }
 
+  private configure(method: string, params: Record<string, unknown>): Promise<unknown> {
+    if (!CAMERA_METHODS.has(method)) return Promise.reject(new Error(`Blocked: "${method}" is not an allowed camera change`))
+    return this.send(method, params)
+  }
 
   /** The only path for normal requests: refuses anything outside the read-only list. */
   private call(method: string, params?: Record<string, unknown>): Promise<unknown> {
@@ -272,6 +319,7 @@ export class MoonrakerClient {
       this.failPending('Connection closed')
       this.handlers.onStatus?.({}, true)
       this.handlers.onKlippy?.('unknown')
+      this.handlers.onWebcams?.([])
       if (this.wanted) {
         this.handlers.onState?.('error', `Can't reach Moonraker at ${this.wsUrl}`)
         this.scheduleReconnect()
@@ -296,6 +344,10 @@ export class MoonrakerClient {
       /* older Moonraker without identify: carry on */
     }
     this.handlers.onState?.('online')
+    // Cameras come from Moonraker, so they work even while Klipper is down
+    this.listWebcams()
+      .then((w) => this.handlers.onWebcams?.(w))
+      .catch(() => this.handlers.onWebcams?.([]))
     await this.checkKlippy()
   }
 
@@ -360,6 +412,12 @@ export class MoonrakerClient {
       case 'notify_gcode_response': {
         const line = msg.params?.[0]
         if (typeof line === 'string') this.handlers.onGcodeResponse?.(line)
+        break
+      }
+      case 'notify_webcams_changed': {
+        const p = msg.params?.[0] as { webcams?: unknown[] } | undefined
+        if (Array.isArray(p?.webcams)) this.handlers.onWebcams?.(p.webcams)
+        else this.listWebcams().then((w) => this.handlers.onWebcams?.(w)).catch(() => {})
         break
       }
       case 'notify_klippy_ready':

@@ -3,9 +3,25 @@
  * toolhead emblems (see toolheads.ts for the class names).
  */
 
-export type NavIconId = 'prepare' | 'preview' | 'control' | 'pendant' | 'toolheads' | 'files' | 'care' | 'style' | 'settings'
+export type NavIconId = 'dashboard' | 'camera' | 'prepare' | 'preview' | 'control' | 'pendant' | 'toolheads' | 'files' | 'care' | 'style' | 'settings'
 
 export const NAV_ICONS: Record<NavIconId, { title: string; body: string }> = {
+  // A landscape screen with a status line along the top: the lock-screen dashboard
+  dashboard: {
+    title: 'Dashboard',
+    body: `
+      <rect x="2.5" y="4.5" width="19" height="15" rx="2.5"/>
+      <path d="M6 8.5h4.5M13.5 8.5h1.5M18 8.5h.01"/>
+      <path class="c" d="M6 16l3.5-3 3 2 2.5-2.5 3 3"/>`,
+  },
+  // A camera body with its lens
+  camera: {
+    title: 'Camera',
+    body: `
+      <path d="M3 8.2a2 2 0 0 1 2-2h2.3l1.6-2.2h6.2l1.6 2.2H19a2 2 0 0 1 2 2V18a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+      <circle cx="12" cy="13" r="4"/>
+      <circle class="f" cx="12" cy="13" r="1.3"/>`,
+  },
   // Isometric block: the model you bring in
   prepare: {
     title: 'Prepare',

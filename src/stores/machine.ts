@@ -17,6 +17,7 @@ import { lookFor, type ToolheadLook } from '@/toolheads/registry'
 import { brand } from '@/brand/brand'
 import type { CheckedScript } from '@/control/commands'
 import { useControlStore } from './control'
+import { useWebcamsStore } from './webcams'
 
 export type { ConnectionState, KlippyState }
 
@@ -38,6 +39,7 @@ export const useMachineStore = defineStore('machine', () => {
 
   function connect(baseUrl: string) {
     client?.disconnect()
+    lastBase = baseUrl.replace(/\/+$/, '')
     client = new MoonrakerClient(
       baseUrl,
       {
@@ -60,6 +62,9 @@ export const useMachineStore = defineStore('machine', () => {
         onHelp(help) {
           useControlStore().onHelp(help)
         },
+        onWebcams(list) {
+          useWebcamsStore().setFromMoonraker(list)
+        },
         onStatus(st, replace) {
           if (replace) {
             status.value = { ...st }
@@ -80,6 +85,7 @@ export const useMachineStore = defineStore('machine', () => {
     client = null
     status.value = {}
     klippy.value = 'unknown'
+    useWebcamsStore().setFromMoonraker([])
   }
 
   const online = computed(() => connection.value === 'online')
@@ -146,7 +152,16 @@ export const useMachineStore = defineStore('machine', () => {
     state: (status.value.print_stats?.state as string | undefined) ?? null,
     filename: (status.value.print_stats?.filename as string | undefined) || null,
     progress: num(status.value.virtual_sdcard?.progress),
+    /** seconds actually spent running (pauses not counted) */
+    duration: num(status.value.print_stats?.print_duration),
+    message: (status.value.print_stats?.message as string | undefined) || null,
   }))
+
+  /**
+   * Klipper is working through commands (idle_timeout reports "Printing"
+   * whenever it is executing G-code, job or not: homing, a macro, heating).
+   */
+  const busy = computed(() => klippyReady.value && status.value.idle_timeout?.state === 'Printing')
 
   // ---- actions ----------------------------------------------------------
 
@@ -163,6 +178,17 @@ export const useMachineStore = defineStore('machine', () => {
   function fileUrl(path: string) {
     return client?.fileUrl(path) ?? null
   }
+
+  // ---- cameras (Moonraker's camera list; never the machine) -----------------
+
+  let lastBase = ''
+  function webcamUrl(path: string): string {
+    if (client) return client.resolveUrl(path)
+    if (/^[a-z][a-z0-9+.-]*:/i.test(path)) return path
+    return `${lastBase}${path.startsWith('/') ? '' : '/'}${path}`
+  }
+  const saveWebcam = (item: Record<string, unknown>) => need().saveWebcam(item)
+  const deleteWebcam = (uid: string) => need().deleteWebcam(uid)
 
   // Actions. Only the control store calls these.
   function need(): MoonrakerClient {
@@ -194,6 +220,7 @@ export const useMachineStore = defineStore('machine', () => {
     bed,
     position,
     job,
+    busy,
     limits,
     status,
     connect,
@@ -201,6 +228,9 @@ export const useMachineStore = defineStore('machine', () => {
     emergencyStop,
     listFiles,
     fileUrl,
+    webcamUrl,
+    saveWebcam,
+    deleteWebcam,
     runChecked,
     startPrint,
     pausePrint,
