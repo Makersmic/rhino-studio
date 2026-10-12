@@ -1,13 +1,20 @@
 <script setup lang="ts">
 /**
- * Macro buttons, grouped by what you're doing (see macroGroups.ts).
- * Each one goes through the same safety check as the console.
+ * Macro buttons (see macroGroups.ts for what goes where).
+ *
+ *   kind="tool"    macros for the mounted toolhead; changes with the tool and
+ *                  wears the tool's accent tab, like the status box tile
+ *   kind="shared"  system macros; the same whatever is mounted
+ *
+ * Each button goes through the same safety check as the console.
  */
 import { computed, ref } from 'vue'
 import RsPanel from '@/components/RsPanel.vue'
 import { useControlStore } from '@/stores/control'
 import { useMachineStore } from '@/stores/machine'
-import { hiddenForOtherTools, macroGroups } from './macroGroups'
+import { hiddenForOtherTools, macroPanels, type MacroGroup } from './macroGroups'
+
+const props = defineProps<{ kind: 'tool' | 'shared' }>()
 
 const control = useControlStore()
 const machine = useMachineStore()
@@ -15,25 +22,34 @@ const machine = useMachineStore()
 // Macros for other tools are left out unless you ask for them (they'd be refused anyway)
 const showAll = ref(false)
 const toolType = computed(() => (machine.toolState.kind === 'mounted' ? machine.toolState.type : null))
+const toolName = computed(() => (machine.toolState.kind === 'mounted' ? machine.mountedName : null))
 const available = computed(() => new Set(control.macros.keys()))
-const hidden = computed(() => hiddenForOtherTools(available.value, toolType.value, machine.mountedName))
-const groups = computed(() =>
-  macroGroups(available.value, {
-    toolType: toolType.value,
-    toolName: machine.mountedName,
-    needsRestore: machine.toolState.kind === 'none-confirmed' && !!machine.toolState.lastSavedSlot,
-    showAll: showAll.value,
-  }),
+const panels = computed(() =>
+  macroPanels(available.value, { toolType: toolType.value, toolName: toolName.value, showAll: showAll.value }),
 )
+const hidden = computed(() => hiddenForOtherTools(available.value, toolType.value, toolName.value))
+
+const groups = computed<MacroGroup[]>(() => {
+  if (props.kind === 'shared') return panels.value.shared
+  const g: MacroGroup[] = []
+  if (panels.value.tool.length) g.push({ title: '', buttons: panels.value.tool })
+  if (panels.value.toolMore.length) g.push({ title: showAll.value ? 'More, including other tools' : 'More for this tool', buttons: panels.value.toolMore.map((b) => ({ ...b, label: b.name })), dense: true })
+  return g
+})
+
+const title = computed(() => (props.kind === 'shared' ? 'Every tool' : toolName.value ? `For ${toolName.value}` : 'Tool macros'))
+const status = computed(() => (props.kind === 'shared' ? 'System' : toolName.value ? 'Changes with the tool' : undefined))
+const accent = computed(() => (props.kind === 'tool' && machine.mountedVerified ? `var(${machine.mountedLook.accentVar})` : undefined))
+
 const runMacro = (name: string, label: string) => control.send(name, { label })
 </script>
 
 <template>
-  <RsPanel title="Macros" :status="machine.mountedName ? `for ${machine.mountedName}` : undefined">
+  <RsPanel :title="title" :status="status" class="macro-panel" :class="[kind, { tabbed: !!accent }]" :style="accent ? { '--accent': accent } : undefined">
     <div class="macros">
       <section v-for="g in groups" :key="g.title" class="group">
-        <h3>{{ g.title }}</h3>
-        <div class="buttons" :class="{ dense: g.title === 'Other macros' }">
+        <h3 v-if="g.title">{{ g.title }}</h3>
+        <div class="buttons" :class="{ dense: g.dense }">
           <button
             v-for="b in g.buttons"
             :key="b.name"
@@ -48,18 +64,37 @@ const runMacro = (name: string, label: string) => control.send(name, { label })
           </button>
         </div>
       </section>
-      <p v-if="!groups.length" class="muted small">Macros appear when Klipper is connected.</p>
+
+      <p v-if="!machine.klippyReady && !groups.length" class="muted small">Macros appear when Klipper is connected.</p>
+      <p v-else-if="kind === 'tool' && !toolName" class="muted small">
+        No tool confirmed. Swap or confirm the tool in the top bar; its macros appear once Klipper confirms it.
+      </p>
+      <p v-else-if="kind === 'tool' && !groups.length" class="muted small">This tool has no macros of its own.</p>
     </div>
+
     <p class="note">
-      Wizard macros ask their own questions. Macros that move the machine or power a tool ask first.
-      <template v-if="hidden">
-        <button type="button" class="more" @click="showAll = !showAll">{{ showAll ? 'Hide' : 'Show' }} {{ hidden }} for other tools</button>
+      <template v-if="kind === 'tool'">
+        Wizard macros ask their own questions. Macros that move the machine or power a tool ask first.
+        <button v-if="hidden" type="button" class="more" @click="showAll = !showAll">{{ showAll ? 'Hide' : 'Show' }} {{ hidden }} for other tools</button>
       </template>
+      <template v-else>Swap and Confirm tool are in the top bar. Pause and Cancel are with the job.</template>
     </p>
   </RsPanel>
 </template>
 
 <style scoped>
+/* The mounted tool's tab on the tool panel, the same tab as the status box tile */
+.tabbed :deep(.head) { position: relative; }
+.tabbed :deep(.head)::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 12px;
+  bottom: 12px;
+  width: 5px;
+  border-radius: 0 2px 2px 0;
+  background: var(--accent);
+}
 .macros { display: flex; flex-direction: column; gap: var(--rs-space-4); }
 h3 { font-size: var(--rs-text-xs); font-weight: var(--rs-weight-medium); color: var(--rs-text-muted); margin-bottom: var(--rs-space-2); }
 .buttons { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 6px; }

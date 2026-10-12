@@ -31,8 +31,13 @@ import ConsolePanel from '@/control/ConsolePanel.vue'
       <WebcamPanel />
     </div>
 
+    <!-- Macros: the mounted tool's own (changes with the tool) above the
+         system ones (always the same), beside the console. -->
     <div class="grid-b">
-      <MacroPanel />
+      <div class="stack macros-col">
+        <MacroPanel kind="tool" />
+        <MacroPanel kind="shared" />
+      </div>
       <ConsolePanel />
     </div>
   </div>

@@ -1,7 +1,19 @@
 /**
- * Macro buttons, arranged by what you're doing. Only macros Klipper actually
- * has are shown, so this works on older and newer Rhino configs alike.
- * Every button still goes through the same safety check as the console.
+ * Macro buttons, split into two panels:
+ *
+ *   - Tool panel: macros for the mounted toolhead only. It changes when the
+ *     tool changes, so it carries the tool's name and accent.
+ *   - Shared panel: system macros that work whatever is mounted (backups,
+ *     care, toolhead lists, and the machine's own hardware such as lights or
+ *     an exhaust fan). It never changes, so its buttons stay in one place.
+ *
+ * Not here on purpose:
+ *   - Swap and Confirm tool live in the top bar, beside the mounted tool.
+ *   - Pause, Resume and Cancel live with the running job in the status box.
+ *
+ * Only macros Klipper actually has are shown, so this works on older and
+ * newer Rhino configs alike. Every button still goes through the same safety
+ * check as the console.
  */
 
 export interface MacroButton {
@@ -14,15 +26,25 @@ export interface MacroButton {
 export interface MacroGroup {
   title: string
   buttons: MacroButton[]
+  /** Small monospace buttons for the long tail of unsorted macros */
+  dense?: boolean
+}
+
+export interface MacroPanels {
+  /** Buttons for the mounted tool, in the order you'd usually use them */
+  tool: MacroButton[]
+  /** More macros that belong to the mounted tool but are rarely clicked */
+  toolMore: MacroButton[]
+  /** System macros, the same whatever is mounted */
+  shared: MacroGroup[]
 }
 
 const LABELS: Record<string, string> = {
-  SWAP_TOOL: 'Swap toolhead',
-  RESTORE_TOOL: 'Confirm mounted tool',
   SET_Z_ZERO: 'Set Z zero',
   LIST_TOOLHEADS: 'List toolheads',
   CHECK_TOOLHEADS: 'Check toolheads',
   PREHEAT: 'Preheat',
+  BED_COOLDOWN: 'Bed cooldown',
   NOZZLE_HEIGHT_CALIBRATE: 'Nozzle height',
   FILAMENT_CHANGE: 'Change filament',
   PURGE: 'Purge',
@@ -30,92 +52,139 @@ const LABELS: Record<string, string> = {
   LASER_FOCUS_ALIGN: 'Focus and align',
   SET_WORK_ZERO: 'Set work zero',
   CALIBRATE_ESC: 'Calibrate ESC',
-  BED_COOLDOWN: 'Bed cooldown',
   BACKUP_CFG: 'Back up config',
+  SHOW_BACKUP_LOCATION: 'Backup location',
   PM_STATUS: 'Maintenance status',
   LEDMAX: 'Lights full',
   LEDMIN: 'Lights low',
   LEDOFF: 'Lights off',
+  LEDFLASH: 'Lights flash',
+  SWITCH_T0: 'Path 1',
+  SWITCH_T1: 'Path 2',
 }
 
+/** The main buttons for each kind of tool, in the order you'd use them. */
 const BY_TYPE: Record<string, string[]> = {
-  DEPOSITION: ['PREHEAT', 'NOZZLE_HEIGHT_CALIBRATE', 'FILAMENT_CHANGE', 'PURGE', 'CALCULATE_PA'],
+  // The heated bed only serves printing, so its macros belong to print heads.
+  DEPOSITION: ['PREHEAT', 'BED_COOLDOWN', 'NOZZLE_HEIGHT_CALIBRATE', 'FILAMENT_CHANGE', 'PURGE', 'CALCULATE_PA'],
   LASER: ['LASER_FOCUS_ALIGN', 'SET_Z_ZERO'],
   CNC: ['SET_Z_ZERO', 'SET_WORK_ZERO', 'CALIBRATE_ESC'],
   DRAG_KNIFE: ['SET_Z_ZERO'],
 }
 
 /**
- * Macros that belong to one kind of tool. They're left out of the buttons
- * while a different tool is mounted (or none is confirmed): they'd be
- * refused by the macro anyway, and they crowd out what applies. They stay
- * reachable from the console, and the panel can show them on request.
+ * Macros that belong to one kind of tool. They're left out while a different
+ * tool is mounted (or none is confirmed): they'd be refused by the macro
+ * anyway, and they crowd out what applies. They stay reachable from the
+ * console, and the tool panel can show them on request.
  */
 const OWNED_BY_TYPE: Record<string, string[]> = {
-  DEPOSITION: ['PREHEAT', 'NOZZLE_HEIGHT_CALIBRATE', 'FILAMENT_CHANGE', 'PURGE', 'CALCULATE_PA', 'PRIME_LINE', 'LOAD_FILAMENT', 'UNLOAD_FILAMENT'],
-  LASER: ['ACTIVATE_LASER', 'DEACTIVATE_LASER', 'SET_LASER_POWER', 'LASER_FOCUS_ALIGN', 'LASERHOME'],
-  CNC: ['SET_WORK_ZERO', 'SPINDLE_ACTIVATE', 'SPINDLE_DEACTIVATE', 'CALIBRATE_ESC', 'G54'],
+  DEPOSITION: [
+    'PREHEAT', 'BED_COOLDOWN', 'NOZZLE_HEIGHT_CALIBRATE', 'FILAMENT_CHANGE', 'PURGE', 'CALCULATE_PA', 'PRIME_LINE',
+    'LOAD_FILAMENT', 'UNLOAD_FILAMENT', 'SET_PAUSE_AT_LAYER', 'SET_PAUSE_NEXT_LAYER',
+  ],
+  LASER: ['ACTIVATE_LASER', 'DEACTIVATE_LASER', 'SET_LASER_POWER', 'LASER_FOCUS_ALIGN', 'LASERHOME', 'SET_Z_ZERO'],
+  CNC: ['SET_WORK_ZERO', 'SPINDLE_ACTIVATE', 'SPINDLE_DEACTIVATE', 'CALIBRATE_ESC', 'G54', 'SET_Z_ZERO'],
+  DRAG_KNIFE: ['SET_Z_ZERO'],
   POWERED: ['SET_TOOL_POWER'],
 }
+
 /** Macros for one named tool (SwitchFly's filament path servo). */
 const OWNED_BY_NAME: Record<string, string[]> = {
   SwitchFly: ['SWITCH_T0', 'SWITCH_T1'],
 }
 
-/** True when a macro belongs to a tool other than the mounted one. */
+/**
+ * True when a macro belongs to other tools and not the mounted one. A macro
+ * can belong to several kinds of tool (Set Z zero: laser, spindle, knife).
+ */
 export function forOtherTool(name: string, toolType: string | null, toolName: string | null): boolean {
   const n = name.toUpperCase()
-  for (const [type, list] of Object.entries(OWNED_BY_TYPE)) if (list.includes(n) && type !== toolType) return true
-  for (const [tool, list] of Object.entries(OWNED_BY_NAME)) if (list.includes(n) && tool !== toolName) return true
-  return false
+  const owners = [
+    ...Object.entries(OWNED_BY_TYPE).filter(([, list]) => list.includes(n)).map(([type]) => `type:${type}`),
+    ...Object.entries(OWNED_BY_NAME).filter(([, list]) => list.includes(n)).map(([tool]) => `name:${tool}`),
+  ]
+  return owners.length > 0 && !owners.includes(`type:${toolType}`) && !owners.includes(`name:${toolName}`)
 }
 
-/** Run inside other macros or by Studio's own buttons; not offered as buttons. */
+/** True when a macro belongs to the mounted tool. */
+function ownedByMounted(name: string, toolType: string | null, toolName: string | null): boolean {
+  const n = name.toUpperCase()
+  return (!!toolType && !!OWNED_BY_TYPE[toolType]?.includes(n)) || (!!toolName && !!OWNED_BY_NAME[toolName]?.includes(n))
+}
+
+/** Shared panel, in this order. */
+const SHARED_KNOWN: { title: string; names: string[] }[] = [
+  { title: 'Toolheads', names: ['LIST_TOOLHEADS', 'CHECK_TOOLHEADS'] },
+  { title: 'Machine', names: ['BACKUP_CFG', 'SHOW_BACKUP_LOCATION', 'PM_STATUS'] },
+]
+
+/**
+ * The machine's own hardware (lights, chamber, exhaust, filters), recognised
+ * by name so a new light or exhaust-fan macro lands here without code
+ * changes. It is never tool power: air assist and coolant belong to tools.
+ */
+const SYSTEM_HARDWARE = /^(LED|LIGHT|LIGHTS|CASE_?LIGHT|CHAMBER|ENCLOSURE|EXHAUST|NEVERMORE|FILTER|VENT)/
+
+/** Run inside other macros or by Studio's own controls elsewhere; never offered as buttons. */
 const HIDDEN = new Set([
   'G0', 'G1', 'G28', 'M0', 'M3', 'M4', 'M5', 'PAUSE', 'RESUME', 'CANCEL_PRINT', 'END_PRINT', 'START_JOB', 'START_SEQUENCE',
   'VARIABLES', 'CUSTOM_TOOLS', 'RHINO_POSITIONS', 'EMERGENCY_STOP', 'CONFIRM_TOOL_INSTALL', 'CONFIRM_TOOLHEAD',
   'LASER_JOB_SETUP', 'CNC_JOB_SETUP', 'DRAGKNIFE_JOB_SETUP', 'TOOL_JOB_SETUP',
+  // in the top bar, beside the mounted tool
+  'SWAP_TOOL', 'RESTORE_TOOL',
 ])
 
 const label = (n: string) => LABELS[n] ?? n.replace(/_/g, ' ').toLowerCase().replace(/^\w/, (c) => c.toUpperCase())
+const visible = (n: string) => !n.startsWith('_') && !HIDDEN.has(n.toUpperCase()) && !/^[GM]\d/.test(n)
 
-export function macroGroups(
+export function macroPanels(
   available: ReadonlySet<string>,
-  opts: { toolType: string | null; toolName: string | null; needsRestore: boolean; showAll?: boolean },
-): MacroGroup[] {
-  const has = (n: string) => available.has(n) && (opts.showAll || !forOtherTool(n, opts.toolType, opts.toolName))
+  opts: { toolType: string | null; toolName: string | null; showAll?: boolean },
+): MacroPanels {
+  const { toolType, toolName } = opts
+  const has = (n: string) => available.has(n) && visible(n)
   const used = new Set<string>()
-  const pick = (names: string[], suggested: string[] = []) =>
-    names.filter((n) => has(n) && !used.has(n)).map((n) => (used.add(n), { name: n, label: label(n), suggested: suggested.includes(n) }))
+  const take = (n: string): MacroButton => (used.add(n), { name: n, label: label(n) })
 
-  const groups: MacroGroup[] = []
-  // RESTORE_TOOL is only offered when Klipper is waiting for it (after a restart)
-  if (!opts.needsRestore) used.add('RESTORE_TOOL')
-  const toolhead = pick(['RESTORE_TOOL', 'SWAP_TOOL', 'SET_Z_ZERO', 'LIST_TOOLHEADS', 'CHECK_TOOLHEADS'], ['RESTORE_TOOL'])
-  // SET_Z_ZERO belongs with the tool when one is mounted that uses it
-  if (opts.toolType && BY_TYPE[opts.toolType]?.includes('SET_Z_ZERO')) {
-    const i = toolhead.findIndex((b) => b.name === 'SET_Z_ZERO')
-    if (i >= 0) {
-      toolhead.splice(i, 1)
-      used.delete('SET_Z_ZERO')
+  // ---- tool panel ----
+  const main = toolType ? [...(BY_TYPE[toolType] ?? []), ...(toolName ? OWNED_BY_NAME[toolName] ?? [] : [])] : []
+  const tool = main.filter((n) => has(n) && !used.has(n)).map(take)
+  const toolMore = [...available]
+    .filter((n) => has(n) && !used.has(n) && ownedByMounted(n, toolType, toolName))
+    .sort()
+    .map(take)
+  // asked for: other tools' macros too, clearly after the mounted tool's
+  if (opts.showAll) {
+    for (const n of [...available].filter((n) => has(n) && !used.has(n) && forOtherTool(n, toolType, toolName)).sort()) {
+      toolMore.push(take(n))
     }
   }
-  if (toolhead.length) groups.push({ title: 'Toolhead', buttons: toolhead })
 
-  if (opts.toolType && opts.toolName) {
-    const forTool = pick([...(BY_TYPE[opts.toolType] ?? []), ...(OWNED_BY_NAME[opts.toolName] ?? [])])
-    if (forTool.length) groups.push({ title: `For ${opts.toolName}`, buttons: forTool })
+  // ---- shared panel ----
+  const shared: MacroGroup[] = []
+  for (const g of SHARED_KNOWN) {
+    const buttons = g.names.filter((n) => has(n) && !used.has(n)).map(take)
+    if (buttons.length) shared.push({ title: g.title, buttons })
   }
+  const hardware = [...available]
+    .filter((n) => has(n) && !used.has(n) && SYSTEM_HARDWARE.test(n.toUpperCase()) && !forOtherTool(n, toolType, toolName))
+    .sort((a, b) => order(a) - order(b) || a.localeCompare(b))
+    .map(take)
+  if (hardware.length) shared.push({ title: 'Lights and air', buttons: hardware })
+  const rest = [...available].filter((n) => has(n) && !used.has(n) && !forOtherTool(n, toolType, toolName)).sort()
+  if (rest.length) shared.push({ title: 'Other macros', buttons: rest.map((n) => ({ name: n, label: n })), dense: true })
 
-  const machine = pick(['BED_COOLDOWN', 'BACKUP_CFG', 'PM_STATUS', 'LEDMAX', 'LEDMIN', 'LEDOFF'])
-  if (machine.length) groups.push({ title: 'Machine', buttons: machine })
+  return { tool, toolMore, shared }
+}
 
-  const rest = [...available].filter((n) => has(n) && !n.startsWith('_') && !HIDDEN.has(n) && !used.has(n) && !/^[GM]\d/.test(n)).sort()
-  if (rest.length) groups.push({ title: 'Other macros', buttons: rest.map((n) => ({ name: n, label: n })) })
-  return groups
+/** Lights in a sensible order (full, low, off, flash), then everything else. */
+function order(n: string): number {
+  const i = ['LEDMAX', 'LEDMIN', 'LEDOFF', 'LEDFLASH'].indexOf(n.toUpperCase())
+  return i < 0 ? 99 : i
 }
 
 /** How many macros are left out because they belong to another tool. */
 export function hiddenForOtherTools(available: ReadonlySet<string>, toolType: string | null, toolName: string | null): number {
-  return [...available].filter((n) => !n.startsWith('_') && !HIDDEN.has(n) && forOtherTool(n, toolType, toolName)).length
+  return [...available].filter((n) => visible(n) && forOtherTool(n, toolType, toolName)).length
 }
