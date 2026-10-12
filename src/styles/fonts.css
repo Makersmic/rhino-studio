@@ -1,0 +1,21 @@
+/*
+ * DSEG7 Classic: a seven-segment "alarm clock" face for big readouts.
+ * By keshikan, SIL Open Font License 1.1 (see src/assets/fonts/DSEG-LICENSE.txt),
+ * bundled unmodified so the app works offline on the shop network.
+ * It draws digits, ':' '.' '-' and a few letters; units (°, %) and the
+ * no-data dash use the interface font.
+ */
+@font-face {
+  font-family: 'DSEG7 Classic';
+  src: url('../assets/fonts/DSEG7Classic-Bold.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'DSEG7 Classic';
+  src: url('../assets/fonts/DSEG7Classic-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}

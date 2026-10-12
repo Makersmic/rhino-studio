@@ -18,9 +18,9 @@
  */
 
 :root {
-  /* Type: Archivo for the interface, Doto (dot-matrix) for big readouts */
+  /* Type: Archivo for the interface, DSEG7 Classic (seven-segment) for big readouts */
   --rs-font-ui: 'Archivo Variable', system-ui, sans-serif;
-  --rs-font-display: 'Doto Variable', 'Archivo Variable', ui-monospace, monospace;
+  --rs-font-display: 'DSEG7 Classic', 'Archivo Variable', ui-monospace, monospace;
   --rs-font-code: 'JetBrains Mono', ui-monospace, monospace;
 
   --rs-text-xs: 0.75rem;    /* 12px  captions, units */
@@ -96,6 +96,7 @@
   --rs-graph-target: #8d8f93;
   --rs-graph-grid: rgb(232 230 224 / 0.13);
   --rs-edit-fill: rgb(232 230 224 / 0.09);
+  --rs-key-fill: #2e3034; /* jog keys at rest: solid grey */
 }
 
 /* Day: e-paper. Grey housing, warm matte paper, black ink. */
@@ -122,6 +123,7 @@
   --rs-graph-target: #8a8b8e;
   --rs-graph-grid: rgb(21 22 24 / 0.2);
   --rs-edit-fill: rgb(21 22 24 / 0.07);
+  --rs-key-fill: #d6d5d0;
 }
 
 @media (prefers-color-scheme: light) {
@@ -149,6 +151,7 @@
     --rs-graph-grid: rgb(21 22 24 / 0.2);
   --rs-graph-grid: rgb(21 22 24 / 0.2);
     --rs-edit-fill: rgb(21 22 24 / 0.07);
+    --rs-key-fill: #d6d5d0;
   }
 }
 

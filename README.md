@@ -120,7 +120,7 @@ docs/           testing on the machine
 | Components | Our own, no library | Keeps one visual identity; nothing to fight |
 | State | Pinia | Vue's official store; machine state is shared by many screens |
 | Routing | Hash URLs (`#/prepare`) | Runs from any static folder without server rewrite rules |
-| Fonts | Archivo, Doto (dot-matrix readouts) and JetBrains Mono, bundled | Clean interface, one futuristic touch for numbers you read from across the shop; works offline |
+| Fonts | Archivo, DSEG7 Classic (seven-segment readouts) and JetBrains Mono, bundled | Clean interface, alarm-clock numbers you read from across the shop; works offline |
 | Slicing (from Phase 3) | Kiri:Moto engine in the browser | Keeps CPU load off the Pi 3B so Klipper's timing isn't disturbed |
 
 ## Design system
@@ -133,7 +133,7 @@ Open **Style** in the app for the live guide. The direction is an **e-paper inst
 - **Toolhead colours** appear only as a small tab on a tool's tile or badge and the thin band under the top bar.
 - **Dither patterns** do the shading, the way e-ink displays do: progress bars, locked jog keys, care that's coming due. Overdue is solid ink.
 - **Inverted ink** (an ink block with paper text) means live or selected: the armed jog keys, the held Hold button, the chosen step size, the current screen in the nav.
-- **Type**: Archivo for the interface; **Doto**, a dot-matrix face, only for big readouts (temperatures, tool outputs, job %, the Dashboard clock); **JetBrains Mono** for positions (read to two decimals, so they get a plain, exact face), G-code and the console. All bundled.
+- **Type**: Archivo for the interface; **DSEG7 Classic**, a seven-segment alarm-clock face, only for big readouts (temperatures, tool outputs, job %, the Dashboard clock); **JetBrains Mono** for positions (read to two decimals, so they get a plain, exact face), G-code and the console. All bundled.
 - **Hierarchy in the Control status box**: the job % is the biggest number, temperatures and tool outputs next, position smallest.
 - **Buttons**: outlined = actions; filled ink = the one primary on a module; quiet text = minor (Snooze, Refresh); filled tiles = macro keys only; red = stop or destroy (Cancel job is outlined red, set apart from Pause).
 - Every card is an `RsPanel` module: title on the left, a short live status on the right, a dotted rule, then the body.
@@ -166,7 +166,8 @@ Third-party pieces in use:
 | Package | Licence |
 |---|---|
 | Vue, Vue Router, Pinia, Vite | MIT |
-| Archivo, Doto, JetBrains Mono (via Fontsource) | SIL Open Font License 1.1 |
+| Archivo, JetBrains Mono (via Fontsource) | SIL Open Font License 1.1 |
+| DSEG7 Classic by keshikan (bundled in `src/assets/fonts/`, unmodified, licence alongside) | SIL Open Font License 1.1 |
 | Kiri:Moto engine (from Phase 3) | MIT |
 
 The mock's camera frames (`scripts/fixtures/webcam/`) were rendered for this project with three.js (MIT); three.js itself isn't part of the app.

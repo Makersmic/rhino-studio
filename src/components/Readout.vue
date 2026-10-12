@@ -1,5 +1,5 @@
 <script setup lang="ts">
-/** A readout cell: label, a big dot-matrix number, detail. An em dash when there's no data. */
+/** A readout cell: label, a big seven-segment number, detail. An em dash when there's no data. */
 defineProps<{ label: string; value?: string | null; unit?: string; detail?: string; note?: string }>()
 </script>
 

@@ -325,26 +325,27 @@ const fullscreen = () => document.documentElement.requestFullscreen?.().catch(()
 .seg button[aria-checked='true'] { background: var(--rs-ink); color: var(--rs-on-ink); }
 
 .keys {
-  flex: 1; min-height: 230px; max-height: 400px;
-  display: grid; grid-template-columns: 1fr 80px; gap: 8px; align-items: stretch; touch-action: none;
+  /* square keys, sized to the phone: three across plus the Z column */
+  --key: clamp(60px, calc((100vw - 92px) / 4.3), 92px);
+  display: grid; grid-template-columns: auto var(--key); justify-content: space-evenly; align-items: center; gap: 12px; touch-action: none;
   padding: 10px; border: 1px solid var(--rs-line); border-radius: var(--rs-radius-lg); background: var(--rs-surface);
 }
-.lefty .keys { grid-template-columns: 80px 1fr; }
+.lefty .keys { grid-template-columns: var(--key) auto; }
 .lefty .zc { order: -1; }
-.xy { display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, minmax(56px, 1fr)); gap: 8px; }
+.xy { display: grid; grid-template-columns: repeat(3, var(--key)); grid-template-rows: repeat(3, var(--key)); gap: 8px; }
 .xy .up { grid-area: 1 / 2; } .xy .left { grid-area: 2 / 1; } .xy .hub { grid-area: 2 / 2; } .xy .right { grid-area: 2 / 3; } .xy .down { grid-area: 3 / 2; }
-.zc { display: grid; grid-template-rows: 1fr auto 1fr; gap: 8px; }
+.zc { display: grid; grid-template-rows: var(--key) var(--key) var(--key); grid-template-columns: var(--key); gap: 8px; }
 .k {
   border-radius: var(--rs-radius-md);
   border: 1px solid var(--rs-line-strong);
   background: var(--rs-surface);
   color: var(--rs-text-strong);
   font-size: 1.1rem; font-weight: var(--rs-weight-bold); letter-spacing: 0.02em;
-  min-height: 56px; touch-action: none;
+  width: var(--key); height: var(--key); padding: 0; touch-action: none;
   transition: background 70ms, color 70ms;
 }
-/* Dead until Hold is held: faint dither, like an unrefreshed e-ink region */
-.k:disabled { background: var(--rs-dither-faint), var(--rs-surface); border-color: var(--rs-line); color: var(--rs-text-muted); }
+/* Dead until Hold is held: solid light grey, label faded */
+.k:disabled { background: var(--rs-key-fill); border-color: transparent; color: var(--rs-text-muted); }
 /* Live: inverted ink */
 .live .k:not(:disabled) { background: var(--rs-ink); border-color: var(--rs-ink); color: var(--rs-on-ink); }
 .k:active:not(:disabled) { transform: scale(0.97); }
@@ -358,7 +359,7 @@ const fullscreen = () => document.documentElement.requestFullscreen?.().catch(()
   flex: 0 0 54%; min-height: 116px;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
   border: 1.5px solid var(--rs-line-strong); border-radius: var(--rs-radius-lg);
-  background: var(--rs-dither-faint), var(--rs-surface);
+  background: var(--rs-key-fill); border-color: transparent;
   color: var(--rs-text-strong); touch-action: none;
 }
 .ring { width: 34px; height: 34px; border-radius: 50%; border: 2px solid currentColor; display: grid; place-items: center; }

@@ -167,7 +167,8 @@ function toggle() {
   position: relative;
   display: flex;
   align-items: flex-end;
-  width: 5.4rem;
+  /* room for three seven-segment digits and the degree sign */
+  width: calc(var(--g) * 2.95);
   height: calc(var(--g) + 18px);
   padding: 16px 8px 0 6px;
   margin: 0 0 0 -6px;
@@ -229,6 +230,5 @@ function toggle() {
 .hint.bad { color: var(--rs-text-strong); font-weight: var(--rs-weight-medium); }
 @media (max-width: 560px) {
   .cell { --g: 2.1rem; }
-  .box { width: 4.6rem; }
 }
 </style>

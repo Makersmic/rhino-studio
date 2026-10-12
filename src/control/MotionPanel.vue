@@ -115,8 +115,8 @@ onBeforeUnmount(() => control.lockMotion())
 .right { flex-direction: row-reverse; } .right i { transform: rotate(45deg); }
 .key:hover:not(:disabled) { background: var(--rs-ink); color: var(--rs-on-ink); border-color: var(--rs-ink); }
 .key:active:not(:disabled) { transform: translateY(1px); }
-/* dead keys: faint dither, like an unrefreshed e-ink region */
-.key:disabled { cursor: not-allowed; background: var(--rs-dither-faint), var(--rs-surface); border-color: var(--rs-line); color: var(--rs-text-muted); }
+/* dead keys: solid light grey, same as the pendant */
+.key:disabled { cursor: not-allowed; background: var(--rs-key-fill); border-color: transparent; color: var(--rs-text-muted); }
 .center { display: flex; flex-direction: column; align-items: center; justify-content: center; border-radius: 50%; }
 .center .rs-num { font-size: 1.25rem; }
 .center small { font-size: 10px; color: var(--rs-text-muted); }

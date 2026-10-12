@@ -162,7 +162,7 @@ const isUnknown = (t: ToolheadLook) => t.icon === 'unknown'
           <code class="t-code">SWAP_TOOL TOOL=3</code>
         </div>
       </div>
-      <p class="muted note">Archivo for the interface, Doto (a dot-matrix face) for big readouts only, JetBrains Mono for G-code and the console. All bundled, so the app works offline on the shop network.</p>
+      <p class="muted note">Archivo for the interface, DSEG7 Classic (a seven-segment, alarm-clock face) for big readouts only, JetBrains Mono for positions, JetBrains Mono for G-code and the console. All bundled, so the app works offline on the shop network.</p>
     </RsPanel>
 
     <SectionRule label="Surfaces and signals" />
