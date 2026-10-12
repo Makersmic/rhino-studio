@@ -27,6 +27,8 @@ export interface ConfirmRequest {
   body: string
   /** Lines to show in mono, each with what it does */
   lines?: { text: string; reason: string }[]
+  /** Instead of the lines: one big plain-language item (e.g. the tool being swapped to) */
+  feature?: string
   confirmLabel: string
   tone: 'motion' | 'danger' | 'normal'
   resolve: (ok: boolean) => void
@@ -140,7 +142,10 @@ export const useControlStore = defineStore('control', () => {
    * Send a script: check it, ask if needed, then run it.
    * label: what to show in the console instead of the raw script (buttons).
    */
-  async function send(script: string, opts: { label?: string; confirmBody?: string } = {}): Promise<boolean> {
+  async function send(
+    script: string,
+    opts: { label?: string; confirmBody?: string; confirmTitle?: string; confirmFeature?: string } = {},
+  ): Promise<boolean> {
     // Stops always go; a restart may go while Klipper is shut down (that's how you recover)
     const recovery = /^\s*(FIRMWARE_RESTART|RESTART)\s*$/i.test(script) && machine.online
     if (!machine.klippyReady && !recovery && !/^\s*(M112|EMERGENCY_STOP)\b/i.test(script)) {
@@ -157,11 +162,12 @@ export const useControlStore = defineStore('control', () => {
       const flagged = c.lines.filter((l) => l.risk !== 'none' && l.risk !== 'heat')
       const worst = flagged.find((l) => l.risk === c.risk) ?? flagged[0]
       confirmed = await confirm({
-        title: RISK_TITLE[worst?.risk ?? 'motion'] ?? 'Run this?',
+        title: opts.confirmTitle ?? RISK_TITLE[worst?.risk ?? 'motion'] ?? 'Run this?',
         body:
           opts.confirmBody ??
           (jobActive.value ? 'A job is running. ' : '') + 'Check the machine is clear and you are ready to stop it.',
         lines: c.lines.map((l) => ({ text: l.line, reason: l.reason })),
+        feature: opts.confirmFeature,
         confirmLabel: 'Run it',
         tone: c.risk === 'tool-state' || c.risk === 'restart' || jobActive.value ? 'danger' : 'motion',
       })
@@ -339,7 +345,9 @@ export const useControlStore = defineStore('control', () => {
   async function swapTo(slot: number, name: string) {
     return send(`SWAP_TOOL TOOL=${slot}`, {
       label: `Swap to ${name}`,
-      confirmBody: `Runs SWAP_TOOL TOOL=${slot}: the machine cools down and lowers the bed, then asks you to fit ${name}. Follow its questions here or in Mainsail.`,
+      confirmTitle: 'Tool Swap Initialized',
+      confirmFeature: name,
+      confirmBody: `The machine cools down and lowers the bed, then asks you to fit ${name}. Follow its questions here or in Mainsail.`,
     })
   }
 

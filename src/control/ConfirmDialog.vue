@@ -33,7 +33,12 @@ const answer = (ok: boolean) => control.pendingConfirm?.resolve(ok)
       <span class="mark" aria-hidden="true" />
       <h2 id="confirm-title">{{ control.pendingConfirm.title }}</h2>
       <p class="text">{{ control.pendingConfirm.body }}</p>
-      <ul v-if="control.pendingConfirm.lines?.length" class="lines">
+      <!-- One plain item (the tool being swapped to) replaces the command list;
+           the command is still in the tooltip and in the console log. -->
+      <div v-if="control.pendingConfirm.feature" class="feature" :title="control.pendingConfirm.lines?.map((l) => l.text).join('\n')">
+        {{ control.pendingConfirm.feature }}
+      </div>
+      <ul v-else-if="control.pendingConfirm.lines?.length" class="lines">
         <li v-for="(l, i) in control.pendingConfirm.lines" :key="i">
           <code>{{ l.text }}</code>
           <span v-if="l.reason">{{ l.reason }}</span>
@@ -67,6 +72,17 @@ const answer = (ok: boolean) => control.pendingConfirm?.resolve(ok)
 h2 { font-size: var(--rs-text-xl); font-weight: var(--rs-weight-body); letter-spacing: -0.02em; }
 .text { white-space: pre-line; }
 .lines { list-style: none; margin: 0; padding: var(--rs-space-3) var(--rs-space-4); border-radius: var(--rs-radius-md); background: var(--rs-surface-2); display: flex; flex-direction: column; gap: var(--rs-space-2); }
+.feature {
+  padding: var(--rs-space-3) var(--rs-space-4);
+  border-radius: var(--rs-radius-md);
+  background: var(--rs-surface-2);
+  color: var(--rs-text-strong);
+  font-size: 1.65rem; /* 26.4px: twice the command text (13.2px) */
+  font-weight: var(--rs-weight-medium);
+  line-height: 1.15;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
 .lines li { display: flex; flex-direction: column; gap: 2px; }
 .lines code { color: var(--rs-text-strong); overflow-wrap: anywhere; }
 .lines span { font-size: var(--rs-text-sm); color: var(--rs-text-muted); }

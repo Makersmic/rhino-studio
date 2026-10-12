@@ -49,7 +49,7 @@ function toggle() {
 
 function pick(slot: number, name: string) {
   open.value = false
-  control.send(`SWAP_TOOL TOOL=${slot}`, { label: `Swap to ${name}` })
+  control.swapTo(slot, name)
 }
 
 function onKey(e: KeyboardEvent) {
@@ -123,7 +123,6 @@ onBeforeUnmount(() => {
           <small>Slot {{ t.slot }}<template v-if="t.type"> · {{ typeText[t.type] ?? t.type }}</template></small>
         </span>
       </button>
-      <p class="foot">The machine cools down and parks first; you confirm before anything moves.</p>
     </div>
   </div>
 </template>
@@ -164,8 +163,7 @@ onBeforeUnmount(() => {
   color: var(--rs-on-swap-menu);
   box-shadow: 0 10px 28px rgb(0 0 0 / 0.28);
 }
-.head, .foot { margin: 0; padding: 6px 8px; font-size: 11px; font-weight: var(--rs-weight-medium); opacity: 0.8; }
-.foot { padding-top: 8px; font-weight: 400; line-height: 1.35; }
+.head { margin: 0; padding: 6px 8px; font-size: 11px; font-weight: var(--rs-weight-medium); opacity: 0.8; }
 .item {
   display: flex;
   align-items: center;
