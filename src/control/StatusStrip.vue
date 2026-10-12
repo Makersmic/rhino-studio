@@ -1,11 +1,13 @@
 <script setup lang="ts">
 /**
  * The machine at a glance, as one e-paper display:
- * toolhead | hotend | bed | position | job.
- * Big numbers are dot-matrix; everything else is quiet.
+ * toolhead | hotend (or body) | bed | position | job.
+ * Big numbers are dot-matrix; everything else is quiet. Temperatures are
+ * edited in place (TempCell), each with its history graph.
  */
 import { computed } from 'vue'
 import Icon from '@/icons/Icon.vue'
+import TempCell from './TempCell.vue'
 import { useMachineStore } from '@/stores/machine'
 import { useControlStore } from '@/stores/control'
 import { useMaintenanceStore } from '@/stores/maintenance'
@@ -15,7 +17,15 @@ const machine = useMachineStore()
 const control = useControlStore()
 const care = useMaintenanceStore()
 
-const temp = (n: number | null) => (n == null ? '—' : n.toFixed(0))
+
+// A tool without a hotend shows its body temperature: its thermistor plugs
+// into the same T0 input. Only a confirmed print head can heat the hotend.
+const printHead = computed(() => machine.toolState.kind === 'mounted' && machine.toolState.type === 'DEPOSITION')
+const bodyTool = computed(() => machine.toolState.kind === 'mounted' && machine.toolState.type !== 'DEPOSITION')
+const hotendLabel = computed(() => (bodyTool.value ? 'Body temperature' : 'Hotend'))
+const hotendLock = computed(() =>
+  bodyTool.value ? 'No heater on this tool' : printHead.value ? undefined : 'Confirm a print head to heat it',
+)
 const pos = computed(() => machine.position.xyz)
 const homed = computed(() => machine.position.homed.toLowerCase())
 const f2 = (n: number | undefined) => (n == null ? '—' : n.toFixed(2))
@@ -66,18 +76,12 @@ const jobLabel: Record<string, string> = { standby: 'Idle', printing: 'Running',
       </div>
     </div>
 
-    <!-- Hotend -->
+    <!-- Hotend (or the tool body), bed: edit in place -->
     <div class="seg">
-      <span class="k">Hotend</span>
-      <span class="big rs-num" :class="{ empty: machine.hotend.temp == null }">{{ temp(machine.hotend.temp) }}<small v-if="machine.hotend.temp != null">°</small></span>
-      <span class="sub">{{ machine.hotend.target ? `Target ${temp(machine.hotend.target)}°` : machine.hotend.temp == null ? '—' : 'Off' }}</span>
+      <TempCell heater="extruder" :label="hotendLabel" :temp="machine.hotend.temp" :target="machine.hotend.target" :editable="printHead" :locked-reason="hotendLock" />
     </div>
-
-    <!-- Bed -->
     <div class="seg">
-      <span class="k">Bed</span>
-      <span class="big rs-num" :class="{ empty: machine.bed.temp == null }">{{ temp(machine.bed.temp) }}<small v-if="machine.bed.temp != null">°</small></span>
-      <span class="sub">{{ machine.bed.target ? `Target ${temp(machine.bed.target)}°` : machine.bed.temp == null ? '—' : 'Off' }}</span>
+      <TempCell heater="heater_bed" label="Bed" :temp="machine.bed.temp" :target="machine.bed.target" :editable="true" />
     </div>
 
     <!-- Position -->
@@ -103,7 +107,7 @@ const jobLabel: Record<string, string> = { standby: 'Idle', printing: 'Running',
 <style scoped>
 .strip {
   display: grid;
-  grid-template-columns: minmax(250px, 1.5fr) repeat(2, minmax(110px, 0.7fr)) minmax(230px, 1.2fr) minmax(170px, 1fr);
+  grid-template-columns: minmax(240px, 1.3fr) auto auto minmax(200px, 1fr) minmax(170px, 1fr);
   border: 1px solid var(--rs-line);
   border-radius: var(--rs-radius-lg);
   background: var(--rs-surface);
@@ -151,6 +155,7 @@ const jobLabel: Record<string, string> = { standby: 'Idle', printing: 'Running',
 .unverified .emblem { background: var(--rs-dither-faint), var(--rs-surface-2); color: var(--rs-text-muted); }
 .unverified .emblem::after { display: none; }
 .tool-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.tool-text .sub { white-space: normal; }
 .tool-name { font-size: var(--rs-text-lg); font-weight: var(--rs-weight-medium); color: var(--rs-text-strong); }
 .care { align-self: flex-start; margin-top: 4px; font-size: var(--rs-text-xs); font-weight: var(--rs-weight-medium); color: var(--rs-text-strong); text-decoration: none; padding: 1px 7px; border-radius: var(--rs-radius-sm); box-shadow: inset 0 0 0 1px var(--rs-line-strong); }
 .care.overdue { background: var(--rs-ink); color: var(--rs-on-ink); box-shadow: none; }
@@ -172,7 +177,7 @@ const jobLabel: Record<string, string> = { standby: 'Idle', printing: 'Running',
 .bar span { display: block; height: 100%; background: var(--rs-ink); }
 
 @media (max-width: 1180px) {
-  .strip { grid-template-columns: 1fr 1fr 1fr; }
+  .strip { grid-template-columns: auto auto minmax(0, 1fr); }
   .tool { grid-column: 1 / -1; }
   .seg + .seg::before { display: none; }
   .seg { border-top: 1px solid var(--rs-line); }

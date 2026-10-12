@@ -18,6 +18,7 @@ import { brand } from '@/brand/brand'
 import type { CheckedScript } from '@/control/commands'
 import { useControlStore } from './control'
 import { useWebcamsStore } from './webcams'
+import { useTempsStore } from './temps'
 
 export type { ConnectionState, KlippyState }
 
@@ -61,6 +62,9 @@ export const useMachineStore = defineStore('machine', () => {
         },
         onHelp(help) {
           useControlStore().onHelp(help)
+        },
+        onTemperatureStore(store) {
+          useTempsStore().seed(store)
         },
         onWebcams(list) {
           useWebcamsStore().setFromMoonraker(list)

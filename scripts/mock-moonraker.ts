@@ -73,6 +73,24 @@ const files: Record<string, string> = {
 }
 const fileTimes = Object.fromEntries(Object.keys(files).map((f, i) => [f, Date.now() / 1000 - i * 3600]))
 
+// ---- temperature history (Moonraker keeps 20 minutes, one reading a second) --
+type Series = { temperatures: number[]; targets: number[]; powers: number[] }
+const tempStore: Record<string, Series> = { extruder: { temperatures: [], targets: [], powers: [] }, heater_bed: { temperatures: [], targets: [], powers: [] } }
+{
+  // A made-up past: the hotend was heated to 210 for a while, then cooled
+  let e = 24, b = 23.6
+  for (let i = 1200; i > 0; i--) {
+    const et = i > 840 || i < 420 ? 0 : 210
+    const bt = i > 900 || i < 360 ? 0 : 60
+    e += ((et || 24) - e) * (et ? 0.03 : 0.008) + (Math.random() - 0.5) * 0.6
+    b += ((bt || 23.6) - b) * (bt ? 0.012 : 0.004) + (Math.random() - 0.5) * 0.2
+    tempStore.extruder.temperatures.push(+e.toFixed(2)); tempStore.extruder.targets.push(et); tempStore.extruder.powers.push(0)
+    tempStore.heater_bed.temperatures.push(+b.toFixed(2)); tempStore.heater_bed.targets.push(bt); tempStore.heater_bed.powers.push(0)
+  }
+  status.extruder.temperature = e
+  status.heater_bed.temperature = b
+}
+
 // ---- pretend cameras -----------------------------------------------------
 const frameDir = new URL('./fixtures/webcam/', import.meta.url)
 const frames: Record<string, Buffer[]> = {}
@@ -328,6 +346,7 @@ function handle(method: string, params: Record<string, unknown> | undefined): un
       for (const l of script.split('\n')) runLine(l)
       return 'ok'
     }
+    case 'server.temperature_store': return tempStore
     case 'server.webcams.list': return { webcams }
     case 'server.webcams.post_item': {
       const p = { ...(params ?? {}) } as Record<string, unknown>
@@ -528,6 +547,9 @@ setInterval(() => {
     const target = (status[h]!.target as number) || 24 + Math.sin(Date.now() / 4000) * 0.4
     const next = cur + Math.max(-6, Math.min(6, (target - cur) * 0.25))
     update(h, { temperature: Number(next.toFixed(2)) })
+    const series = tempStore[h]!
+    series.temperatures.push(Number(next.toFixed(2))); series.targets.push((status[h]!.target as number) || 0); series.powers.push(0)
+    if (series.temperatures.length > 1200) { series.temperatures.shift(); series.targets.shift(); series.powers.shift() }
   }
   if (status.print_stats.state === 'printing') {
     const p = Math.min(1, (status.virtual_sdcard.progress as number) + 0.01)

@@ -6,6 +6,8 @@
  *   ink + paper    everything
  *   red            stop and danger only (on the Dashboard's camera
  *                  overlay: "needs your attention")
+ *   graphs         may use a few simple colours (temperature graphs: a
+ *                  thin red line for the reading, grey for the target)
  *   tool accent    a small tab that says which toolhead is mounted
  * Shading is done the way e-ink does it, with dither (dot) patterns, not
  * extra colours: progress, locked, due. "Live" or "selected" is inverted
@@ -90,6 +92,9 @@
   --rs-ok: #ecebe6;
   --rs-dot: rgb(232 230 224 / 0.55);
   --rs-dot-faint: rgb(232 230 224 / 0.16);
+  --rs-graph-temp: #ff5c4d;
+  --rs-graph-target: #8d8f93;
+  --rs-edit-fill: rgb(232 230 224 / 0.09);
 }
 
 /* Day: e-paper. Grey housing, warm matte paper, black ink. */
@@ -112,6 +117,9 @@
   --rs-ok: #151618;
   --rs-dot: rgb(21 22 24 / 0.6);
   --rs-dot-faint: rgb(21 22 24 / 0.16);
+  --rs-graph-temp: #d0301f;
+  --rs-graph-target: #8a8b8e;
+  --rs-edit-fill: rgb(21 22 24 / 0.07);
 }
 
 @media (prefers-color-scheme: light) {
@@ -134,6 +142,9 @@
     --rs-ok: #151618;
     --rs-dot: rgb(21 22 24 / 0.6);
     --rs-dot-faint: rgb(21 22 24 / 0.16);
+    --rs-graph-temp: #d0301f;
+    --rs-graph-target: #8a8b8e;
+    --rs-edit-fill: rgb(21 22 24 / 0.07);
   }
 }
 

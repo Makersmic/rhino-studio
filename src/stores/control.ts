@@ -264,7 +264,18 @@ export const useControlStore = defineStore('control', () => {
     await send('M84', { label: 'Motors off', confirmBody: 'The motors lose holding power: the bed may drop under its own weight, and you will need to home again before jogging.' })
   }
 
+  /**
+   * Heater targets. The hotend heater output (HE0) stays wired when a laser,
+   * spindle or knife is mounted, so a hotend target above 0 needs a verified
+   * print head. Switching a heater off is always allowed.
+   */
+  const hotendSettable = computed(() => machine.toolState.kind === 'mounted' && machine.toolState.type === 'DEPOSITION')
+
   async function setHeater(heater: 'extruder' | 'heater_bed', target: number) {
+    if (heater === 'extruder' && target > 0 && !hotendSettable.value) {
+      log('error', 'Hotend not set: heating it needs a confirmed print head mounted.')
+      return
+    }
     const h = heaterScript(heater, target)
     if ('error' in h) {
       log('error', h.error)
@@ -418,6 +429,7 @@ export const useControlStore = defineStore('control', () => {
     home,
     motorsOff,
     setHeater,
+    hotendSettable,
     startCheck,
   }
 })

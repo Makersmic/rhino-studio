@@ -19,6 +19,7 @@ import { useControlStore } from '@/stores/control'
 import { useMaintenanceStore } from '@/stores/maintenance'
 import { useWebcamsStore } from '@/stores/webcams'
 import { careText } from '@/maintenance/summary'
+import { plausible } from '@/control/tempHistory'
 import { formatDuration, isPrintTool, notices, operationName, remainingSeconds } from '@/dashboard/notices'
 
 const machine = useMachineStore()
@@ -46,7 +47,7 @@ const toolLine = computed(() => {
 })
 const toolAlert = computed(() => machine.online && (machine.toolState.kind === 'none-confirmed' || machine.toolState.kind === 'unmapped'))
 
-// A tool without a hotend shows its body temperature (thermistors come later)
+// A tool without a hotend shows its body temperature: its thermistor shares the T0 input
 const printTool = computed(() => !tool.value || isPrintTool(tool.value.type))
 const t = (n: number | null) => (n == null ? '—' : n.toFixed(0))
 
@@ -123,8 +124,8 @@ const list = computed(() =>
             <span class="sub">{{ machine.hotend.target ? `Set ${t(machine.hotend.target)}°` : machine.hotend.temp == null ? '—' : 'Off' }}</span>
           </template>
           <template v-else>
-            <span class="v rs-num empty">—</span>
-            <span class="sub">No sensor yet</span>
+            <span class="v rs-num" :class="{ empty: !plausible(machine.hotend.temp) }">{{ plausible(machine.hotend.temp) ? t(machine.hotend.temp) : '—' }}<small v-if="plausible(machine.hotend.temp)">°</small></span>
+            <span class="sub">{{ plausible(machine.hotend.temp) ? 'Tool body' : 'No sensor' }}</span>
           </template>
         </RouterLink>
 

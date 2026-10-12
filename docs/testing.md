@@ -57,7 +57,10 @@ Before you start: bed clear, nothing in the nozzle path, hand near the physical 
 | B6 | Type `G1 Z5` in the console | A confirmation lists the line and "moves the machine"; Cancel sends nothing | It moves without asking |
 | B7 | Type `M3 S100` with LightSaber **not** mounted, then Cancel | A "This powers a tool" confirmation appears; Cancel sends nothing | It sends without asking |
 | B8 | Swap toolhead button | SWAP_TOOL's question appears in Studio and Mainsail; picking a slot and finishing the swap shows the new tool in Studio | Studio shows the new tool before you confirm it in the wizard |
-| B9 | Heat: bed to 40°, then Off | Target set and cleared, matches Mainsail | |
+| B9 | In the status strip, click the bed temperature, type 40, Enter; then click it again, type 0, Enter | The box fills light grey while you type; the small set temperature in its corner reads 40°, then Off; Mainsail agrees | |
+| B9b | Click the hotend temperature, type 80, press Esc (or click away) | Nothing is sent; the set temperature is unchanged | A target is set |
+| B9c | Mount LightSaber (or any non-print tool) | The hotend reads "Body temperature", says "No heater on this tool" and can't be clicked. (The console can still send a hotend target: it's a full console.) | The box can be edited |
+| B9d | Watch the graphs for a few minutes; press the dots | Red line follows the reading, grey line sits at the set temperature; the dots widen the graph to the last 20 minutes and back | |
 | B10 | Upload a small print file | It appears in Files; it doesn't start | It starts |
 | B11 | Start a file for a tool that isn't mounted | Start is replaced by "Swap to …"; nothing starts | It starts |
 | B12 | Start a BlockOne file with BlockOne mounted | Confirmation explains START_JOB; job runs; Pause, then Resume (asks), then Cancel (asks) work | Cancel doesn't switch the heaters off |

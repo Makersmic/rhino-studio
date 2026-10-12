@@ -38,6 +38,7 @@ export const READ_ONLY_METHODS: ReadonlySet<string> = new Set([
   'server.gcode_store',
   'printer.gcode.help',
   'server.webcams.list',
+  'server.temperature_store',
 ])
 
 /**
@@ -95,6 +96,8 @@ export interface ClientHandlers {
   onObjects?: (objects: string[]) => void
   /** Klipper's command list with descriptions (macros included). */
   onHelp?: (help: Record<string, string>) => void
+  /** Moonraker's last 20 minutes of heater readings (raw), sent once Klipper is ready. */
+  onTemperatureStore?: (store: unknown) => void
   /** Moonraker's camera list (raw entries); sent on connect and whenever it changes. */
   onWebcams?: (webcams: unknown[]) => void
 }
@@ -385,6 +388,9 @@ export class MoonrakerClient {
       .catch(() => {})
     this.call('printer.gcode.help')
       .then((h) => this.handlers.onHelp?.((h ?? {}) as Record<string, string>))
+      .catch(() => {})
+    this.call('server.temperature_store', { include_monitors: false })
+      .then((t) => this.handlers.onTemperatureStore?.(t))
       .catch(() => {})
   }
 
