@@ -5,7 +5,7 @@
  * One big display with the camera as its background, read like a phone's
  * lock screen:
  *   top-left    the mounted tool          top-right  machine state
- *   bottom-left notices, then the job % (very large) with the job's file
+ *   bottom-left notices, then the job % (large) with the job's file
  *               and times beside it; nothing there when no job is running
  *   bottom rail every other reading on one line: temperatures or tool
  *               outputs, position, care, camera
@@ -280,8 +280,8 @@ a:focus-visible { outline: 2px solid var(--rs-overlay-text); outline-offset: 3px
 .notices a:hover strong { text-decoration: underline; text-underline-offset: 4px; }
 
 .hero { display: flex; align-items: flex-end; gap: var(--rs-space-5); min-width: 0; }
-.big { font-size: 16.8rem; line-height: 0.8; color: var(--rs-overlay-text); } /* the one thing to read from across the shop */
-.big small { font-family: var(--rs-font-ui); font-weight: var(--rs-weight-medium); font-size: 0.12em; margin-left: 2px; vertical-align: top; color: var(--rs-overlay-muted); }
+.big { font-size: 5.6rem; line-height: 0.8; color: var(--rs-overlay-text); }
+.big small { font-family: var(--rs-font-ui); font-weight: var(--rs-weight-medium); font-size: 0.26em; margin-left: 2px; vertical-align: top; color: var(--rs-overlay-muted); }
 .about { display: flex; flex-direction: column; gap: 3px; min-width: 0; padding-bottom: 2px; }
 .file { font-size: var(--rs-text-lg); font-weight: var(--rs-weight-semibold, 600); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .safety { font-size: var(--rs-text-xs); color: var(--rs-overlay-muted); }
@@ -311,7 +311,7 @@ a.hero:hover .file { text-decoration: underline; text-underline-offset: 4px; }
   .dash { padding: var(--rs-space-3) var(--rs-space-3) 96px; }
   .screen { --m: var(--rs-space-4); min-height: 600px; }
   .top { padding-top: var(--rs-space-4); }
-  .big { font-size: min(11rem, 30vw); }
+  .big { font-size: 3.8rem; }
   .hero { flex-direction: column; align-items: flex-start; gap: var(--rs-space-2); }
   .rail { display: grid; grid-template-columns: 1fr 1fr; }
   .camname { grid-column: 1 / -1; margin-left: 0; }
