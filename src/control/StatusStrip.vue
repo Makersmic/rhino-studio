@@ -1,7 +1,8 @@
 <script setup lang="ts">
 /**
  * The machine at a glance, as one e-paper display:
- *   toolhead | what this tool uses | position | job
+ *   toolhead | what this tool uses | job (with Pause / Resume / Cancel)
+ * Position lives in the Motion panel, under the jog keys.
  * The middle depends on the mounted tool (src/toolheads/readouts.ts):
  *   print head   hotend, bed, part fan
  *   laser        laser rail and power, body temperature
@@ -33,13 +34,8 @@ const readouts = computed(() => machine.plan.readouts)
 const out = computed(() => machine.outputs)
 const pct = (v: number | null | undefined) => (v == null ? null : v * 100)
 
-const work = computed(() => machine.plan.position === 'work')
-const pos = computed(() => (work.value ? machine.workPosition : machine.position.xyz))
-const homed = computed(() => machine.position.homed.toLowerCase())
-const f2 = (n: number | undefined) => (n == null ? '—' : n.toFixed(2))
-const f1 = (n: number | undefined) => (n == null ? '—' : n.toFixed(1))
 
-const columns = computed(() => `minmax(250px, 1.2fr) ${'auto '.repeat(readouts.value.length)}minmax(200px, 1fr) minmax(170px, 1fr)`)
+const columns = computed(() => `minmax(250px, 1.2fr) ${'auto '.repeat(readouts.value.length)}minmax(230px, 1.3fr)`)
 
 const toolState = computed(() => {
   switch (machine.toolState.kind) {
@@ -140,25 +136,19 @@ const jobLabel: Record<string, string> = { standby: 'Idle', printing: 'Running',
       />
     </div>
 
-    <!-- Position: work coordinates first for tools that cut from a work zero -->
-    <div class="seg position">
-      <span class="k">{{ work ? 'Work position' : 'Position' }} <em>{{ homed ? `homed ${homed.toUpperCase()}` : 'not homed' }}</em></span>
-      <div class="xyz">
-        <span v-for="(a, i) in ['X', 'Y', 'Z']" :key="a" :class="{ unhomed: !homed.includes(a.toLowerCase()) }">
-          <b>{{ a }}</b><span class="coord" :class="{ empty: pos?.[i] == null }">{{ f2(pos?.[i]) }}</span>
-        </span>
-      </div>
-      <span v-if="work" class="sub machine">
-        {{ machine.hasWorkOffset ? `Machine ${machine.position.xyz?.map((v) => f1(v)).join('  ') ?? '—'}` : 'No work zero set: same as machine' }}
-      </span>
-    </div>
-
     <!-- Job -->
     <div class="seg job">
       <span class="k">Job <em>{{ job.state ? jobLabel[job.state] ?? job.state : '—' }}</em></span>
       <span class="big rs-num" :class="{ empty: !jobActive }">{{ jobActive ? jobPct : '—' }}<small v-if="jobActive">%</small></span>
       <span class="sub file">{{ job.filename || 'No file loaded' }}</span>
       <span v-if="jobActive" class="bar" role="progressbar" :aria-valuenow="jobPct" aria-valuemin="0" aria-valuemax="100"><span :style="{ width: `${jobPct}%` }" /></span>
+      <!-- the job's controls live here (no separate Job panel); Cancel sits apart from Pause -->
+      <div v-if="jobActive" class="job-acts">
+        <button v-if="job.state === 'printing'" type="button" class="mini" @click="control.pauseJob()">Pause</button>
+        <button v-else type="button" class="mini primary" @click="control.resumeJob()">Resume</button>
+        <button type="button" class="mini cancel" @click="control.cancelJob()">Cancel job</button>
+      </div>
+      <RouterLink v-else to="/files" class="sub start">Start a job from Files</RouterLink>
     </div>
   </section>
 </template>
@@ -222,16 +212,12 @@ const jobLabel: Record<string, string> = { standby: 'Idle', printing: 'Running',
 .mini.primary { background: var(--rs-ink); border-color: var(--rs-ink); color: var(--rs-on-ink); }
 .mini:disabled { opacity: 0.35; cursor: not-allowed; }
 
-/* position */
-.xyz { display: flex; flex-direction: column; gap: 3px; margin-top: auto; }
-.xyz > span { display: flex; align-items: baseline; justify-content: space-between; gap: var(--rs-space-3); }
-.xyz b { font-size: var(--rs-text-xs); font-weight: var(--rs-weight-medium); color: var(--rs-text-muted); }
-.coord { font-family: var(--rs-font-code); font-size: 1.15rem; font-variant-numeric: tabular-nums; color: var(--rs-text-strong); letter-spacing: -0.01em; }
-.coord.empty { color: var(--rs-text-muted); }
-.xyz .unhomed .coord { color: var(--rs-text-muted); }
-.machine { font-family: var(--rs-font-code); font-size: 11px; }
 
 /* job */
+.job-acts { display: flex; gap: var(--rs-space-2); margin-top: 6px; }
+.job-acts .cancel { margin-left: auto; border-color: var(--rs-danger); color: var(--rs-danger); }
+.job-acts .cancel:hover { background: var(--rs-danger); color: var(--rs-on-danger); }
+.start { color: var(--rs-text-strong); text-decoration: underline; text-underline-offset: 3px; }
 .file { margin-top: 2px; }
 .bar { display: block; height: 6px; border-radius: 2px; background: var(--rs-dither-faint); box-shadow: inset 0 0 0 1px var(--rs-line); overflow: hidden; }
 .bar span { display: block; height: 100%; background: var(--rs-ink); }

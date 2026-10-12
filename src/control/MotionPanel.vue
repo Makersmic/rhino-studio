@@ -27,6 +27,11 @@ const armed = computed(() => control.motionUnlocked && !control.motionBlock)
 const canJog = (a: Axis) => armed.value && homed.value.includes(a.toLowerCase())
 const busy = computed(() => !machine.klippyReady || control.jobActive)
 
+// Position lives here, under the keys you move it with
+const work = computed(() => machine.plan.position === 'work')
+const pos = computed(() => (work.value ? machine.workPosition : machine.position.xyz))
+const f2 = (n: number | undefined) => (n == null ? '—' : n.toFixed(2))
+
 onBeforeUnmount(() => control.lockMotion())
 </script>
 
@@ -77,6 +82,14 @@ onBeforeUnmount(() => control.lockMotion())
           <RsButton size="sm" variant="quiet" :disabled="busy" @click="control.motorsOff()">Motors off</RsButton>
         </div>
       </div>
+    </div>
+    <!-- Where the tool is: work coordinates first for tools that cut from a work zero -->
+    <div class="where" aria-label="Position">
+      <span class="lbl">{{ work ? 'Work position' : 'Position' }}<em>{{ homed ? `homed ${homed.toUpperCase()}` : 'not homed' }}</em></span>
+      <span v-for="(a, i) in ['X', 'Y', 'Z']" :key="a" class="ax" :class="{ unhomed: !homed.includes(a.toLowerCase()) }">
+        <b>{{ a }}</b><span class="coord">{{ f2(pos?.[i]) }}</span>
+      </span>
+      <span v-if="work" class="mach">{{ machine.hasWorkOffset ? `Machine ${machine.position.xyz?.map((v) => v.toFixed(1)).join('  ') ?? '—'}` : 'No work zero set' }}</span>
     </div>
   </RsPanel>
 </template>
@@ -137,6 +150,18 @@ legend { font-size: var(--rs-text-xs); color: var(--rs-text-muted); margin-botto
 .seg input:focus-visible + span { box-shadow: var(--rs-focus); position: relative; }
 .hint { font-size: var(--rs-text-xs); color: var(--rs-text-muted); min-height: 2.6em; }
 .homes { display: flex; flex-wrap: wrap; gap: var(--rs-space-2); margin-top: auto; }
+.where {
+  display: flex; align-items: baseline; flex-wrap: wrap; gap: var(--rs-space-2) var(--rs-space-6);
+  margin-top: var(--rs-space-5); padding-top: var(--rs-space-3);
+  background: radial-gradient(var(--rs-dot-faint) 0.9px, transparent 1.1px) 0 0 / 5px 2px repeat-x;
+}
+.where .lbl { font-size: var(--rs-text-xs); font-weight: var(--rs-weight-medium); color: var(--rs-text-muted); min-width: 9.5rem; }
+.where .lbl em { font-style: normal; margin-left: 6px; color: var(--rs-text); }
+.ax { display: inline-flex; align-items: baseline; gap: 8px; }
+.ax b { font-size: var(--rs-text-xs); font-weight: var(--rs-weight-medium); color: var(--rs-text-muted); }
+.coord { font-family: var(--rs-font-code); font-size: 1.3rem; font-variant-numeric: tabular-nums; color: var(--rs-text-strong); min-width: 6.5ch; text-align: right; letter-spacing: -0.01em; }
+.ax.unhomed .coord { color: var(--rs-text-muted); }
+.mach { margin-left: auto; font-family: var(--rs-font-code); font-size: 11px; color: var(--rs-text-muted); }
 @media (max-width: 1100px) and (min-width: 721px) { .layout { grid-template-columns: auto 1fr; } }
 @media (max-width: 720px) {
   /* phone: keys on top, step sizes and buttons full width below */
