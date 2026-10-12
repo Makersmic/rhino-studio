@@ -163,6 +163,9 @@ export function notices(i: NoticeInput): Notice[] {
     }
   }
   if (!tool || isPrintTool(tool.type)) heater('hotend', 'hotend', i.hotend, 50)
+  else if ((i.hotend.target ?? 0) > 0)
+    // The hotend heater output is still wired to the tool connector
+    add({ id: 'hotend', tone: 'alert', title: `Hotend heater on with ${tool.name} mounted`, detail: 'Switch it off on Control.', to: '/control' })
   heater('bed', 'bed', i.bed, 45)
 
   // --- care -------------------------------------------------------------------

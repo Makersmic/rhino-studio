@@ -68,6 +68,7 @@ describe('dashboard notices', () => {
     expect(notices({ ...base, bed: { temp: 70, target: 0 } })[0]!.title).toBe('Bed still hot: 70°')
     const knife = { ...base, toolState: { kind: 'mounted' as const, slot: 5, name: 'DragKnife', type: 'DRAG_KNIFE' }, hotend: { temp: 200, target: 0 } }
     expect(ids(knife)).toEqual(['ready'])
+    expect(notices({ ...knife, hotend: { temp: 40, target: 60 } })[0]).toMatchObject({ id: 'hotend', tone: 'alert' })
   })
 
   it('formats time and only estimates after 2 %', () => {

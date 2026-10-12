@@ -37,7 +37,10 @@ const paths = computed(() => graphPaths(temps.history[props.heater], temps.now, 
   width: var(--g, 3.1rem);
   height: var(--g, 3.1rem);
   border-radius: 4px;
-  background: radial-gradient(var(--rs-dot-faint) 0.8px, transparent 1px) 0 0 / 6px 6px;
+  /* graph paper: a fine 4 x 4 grid per square */
+  background:
+    linear-gradient(var(--rs-line) 1px, transparent 1px) 0 0 / 100% 25%,
+    linear-gradient(90deg, var(--rs-line) 1px, transparent 1px) 0 0 / calc(var(--g, 3.1rem) / 4) 100%;
   box-shadow: inset 0 0 0 1px var(--rs-line);
   overflow: hidden;
   transition: width 180ms ease;

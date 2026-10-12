@@ -75,6 +75,13 @@ export const WATCHED_OBJECTS: Record<string, string[] | null> = {
   'gcode_macro VARIABLES': ['tool_mapping', 'toolheads'],
   'gcode_macro CUSTOM_TOOLS': ['tool_mapping', 'toolheads'],
   save_variables: ['variables'],
+  // Tool outputs, read only (names from the Rhino config; only those Klipper has are watched)
+  fan: ['speed'],
+  'output_pin LASER_INITIALIZE': ['value'], // laser power rail
+  'output_pin SERVO_LASER': ['value'], // laser power (LightSaber) / filament path servo (SwitchFly)
+  'output_pin Spindle_power': ['value'], // spindle relay
+  'output_pin SPINDLE_SPEED': ['value'], // spindle ESC throttle: 0.3 = stopped, 1.0 = full
+  'gcode_macro TOOL_POWER_STATE': ['active', 'level', 'suspended'], // added powered tools
 }
 
 export interface FileEntry {

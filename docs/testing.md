@@ -97,3 +97,15 @@ Notes:
 - A camera is not a safety device: the picture can lag or freeze without notice. Don't leave a laser or spindle job unwatched because the Dashboard looks fine.
 - WebRTC and HLS cameras show "not supported yet". Crowsnest's default (ustreamer, MJPEG) works.
 
+## What each tool shows
+
+Read only, nothing moves. Compare each tool's status strip with Mainsail.
+
+| # | Do this | Pass when | If it fails |
+|---|---|---|---|
+| E1 | Mount BlockOne | Hotend, bed and part fan; position is machine position | |
+| E2 | Mount LightSaber | No hotend or bed; Laser shows Off with the rail off. During a laser job it shows Armed, then Firing with the power Mainsail shows for `output_pin SERVO_LASER` | Bed or hotend shows while both are cold and off |
+| E3 | Mount HotJoe, set a work zero, run CNC_JOB_SETUP to spin-up | Spindle Running with the throttle the wizard reports; Work position matches Mainsail's work coordinates, machine position below | Spindle shows Off while it's running (pin names differ on your config: note them) |
+| E4 | With HotJoe or LightSaber mounted, set the bed to 50 from the console | "Bed heating" appears in the strip and on the Dashboard; typing anything but 0 there is refused; 0 switches it off and it goes away once below 40° | |
+| E5 | Macros panel with each tool mounted | Only that tool's macros; "Show N for other tools" lists the rest | Another tool's macro shows by default |
+

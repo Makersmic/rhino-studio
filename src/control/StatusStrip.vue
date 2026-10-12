@@ -1,13 +1,20 @@
 <script setup lang="ts">
 /**
  * The machine at a glance, as one e-paper display:
- * toolhead | hotend (or body) | bed | position | job.
- * Big numbers are dot-matrix; everything else is quiet. Temperatures are
- * edited in place (TempCell), each with its history graph.
+ *   toolhead | what this tool uses | position | job
+ * The middle depends on the mounted tool (src/toolheads/readouts.ts):
+ *   print head   hotend, bed, part fan
+ *   laser        laser rail and power, body temperature
+ *   spindle      spindle relay and throttle, body temperature
+ *   knife        nothing extra (body temperature once a thermistor reads)
+ * plus a warm bed or a hotend heater left on, whatever the tool, so they
+ * can be switched off. Temperatures are edited in place (TempCell), each
+ * with its history graph; tool outputs are read only (OutputCell).
  */
 import { computed } from 'vue'
 import Icon from '@/icons/Icon.vue'
 import TempCell from './TempCell.vue'
+import OutputCell from './OutputCell.vue'
 import { useMachineStore } from '@/stores/machine'
 import { useControlStore } from '@/stores/control'
 import { useMaintenanceStore } from '@/stores/maintenance'
@@ -18,17 +25,21 @@ const control = useControlStore()
 const care = useMaintenanceStore()
 
 
-// A tool without a hotend shows its body temperature: its thermistor plugs
-// into the same T0 input. Only a confirmed print head can heat the hotend.
-const printHead = computed(() => machine.toolState.kind === 'mounted' && machine.toolState.type === 'DEPOSITION')
-const bodyTool = computed(() => machine.toolState.kind === 'mounted' && machine.toolState.type !== 'DEPOSITION')
-const hotendLabel = computed(() => (bodyTool.value ? 'Body temperature' : 'Hotend'))
-const hotendLock = computed(() =>
-  bodyTool.value ? 'No heater on this tool' : printHead.value ? undefined : 'Confirm a print head to heat it',
-)
-const pos = computed(() => machine.position.xyz)
+// Only a confirmed print head can heat the hotend; other tools show their
+// body temperature from the same T0 input.
+const printHead = computed(() => machine.toolKind === 'print')
+const hotendLock = computed(() => (printHead.value ? undefined : 'Confirm a print head to heat it'))
+const readouts = computed(() => machine.plan.readouts)
+const out = computed(() => machine.outputs)
+const pct = (v: number | null | undefined) => (v == null ? null : v * 100)
+
+const work = computed(() => machine.plan.position === 'work')
+const pos = computed(() => (work.value ? machine.workPosition : machine.position.xyz))
 const homed = computed(() => machine.position.homed.toLowerCase())
 const f2 = (n: number | undefined) => (n == null ? '—' : n.toFixed(2))
+const f1 = (n: number | undefined) => (n == null ? '—' : n.toFixed(1))
+
+const columns = computed(() => `minmax(240px, 1.3fr) ${'auto '.repeat(readouts.value.length)}minmax(200px, 1fr) minmax(170px, 1fr)`)
 
 const toolState = computed(() => {
   switch (machine.toolState.kind) {
@@ -42,12 +53,12 @@ const toolState = computed(() => {
 
 const job = computed(() => machine.job)
 const jobActive = computed(() => job.value.state === 'printing' || job.value.state === 'paused')
-const pct = computed(() => Math.round((job.value.progress ?? 0) * 100))
+const jobPct = computed(() => Math.round((job.value.progress ?? 0) * 100))
 const jobLabel: Record<string, string> = { standby: 'Idle', printing: 'Running', paused: 'Paused', complete: 'Finished', cancelled: 'Cancelled', error: 'Error' }
 </script>
 
 <template>
-  <section class="strip" aria-label="Machine status">
+  <section class="strip" aria-label="Machine status" :style="{ '--cols': columns }">
     <!-- Toolhead -->
     <div class="seg tool" :style="{ '--accent': `var(${machine.mountedLook.accentVar})` }" :class="{ unverified: !machine.mountedVerified }">
       <span class="emblem"><Icon :tool="machine.mountedLook.icon" :size="40" /></span>
@@ -76,30 +87,77 @@ const jobLabel: Record<string, string> = { standby: 'Idle', printing: 'Running',
       </div>
     </div>
 
-    <!-- Hotend (or the tool body), bed: edit in place -->
-    <div class="seg">
-      <TempCell heater="extruder" :label="hotendLabel" :temp="machine.hotend.temp" :target="machine.hotend.target" :editable="printHead" :locked-reason="hotendLock" />
-    </div>
-    <div class="seg">
-      <TempCell heater="heater_bed" label="Bed" :temp="machine.bed.temp" :target="machine.bed.target" :editable="true" />
+    <!-- What this tool uses -->
+    <div v-for="r in readouts" :key="r" class="seg">
+      <TempCell v-if="r === 'hotend'" heater="extruder" label="Hotend" :temp="machine.hotend.temp" :target="machine.hotend.target" :editable="printHead" :locked-reason="hotendLock" />
+      <TempCell v-else-if="r === 'body'" heater="extruder" label="Body temperature" :temp="machine.hotend.temp" :target="null" :editable="false" locked-reason="No heater on this tool" />
+      <TempCell
+        v-else-if="r === 'hotend-on'"
+        heater="extruder"
+        :label="(machine.hotend.target ?? 0) > 0 ? 'Hotend heater on' : 'Hotend still hot'"
+        :alert="(machine.hotend.target ?? 0) > 0"
+        :temp="machine.hotend.temp"
+        :target="machine.hotend.target"
+        :editable="true"
+        off-only
+      />
+      <TempCell v-else-if="r === 'bed'" heater="heater_bed" label="Bed" :temp="machine.bed.temp" :target="machine.bed.target" :editable="true" />
+      <TempCell
+        v-else-if="r === 'bed-warm'"
+        heater="heater_bed"
+        :label="(machine.bed.target ?? 0) > 0 ? 'Bed heating' : 'Bed still warm'"
+        :alert="(machine.bed.target ?? 0) > 0"
+        :temp="machine.bed.temp"
+        :target="machine.bed.target"
+        :editable="true"
+        off-only
+      />
+      <OutputCell v-else-if="r === 'fan'" label="Part fan" :percent="pct(out.fan)" sub="Cooling" />
+      <OutputCell
+        v-else-if="r === 'laser' && out.laser"
+        label="Laser"
+        :state="out.laser.armed ? (out.laser.power > 0 ? 'Firing' : 'Armed') : 'Off'"
+        :live="out.laser.armed"
+        :percent="out.laser.armed ? pct(out.laser.power) : 0"
+        :sub="out.laser.armed ? 'Power' : 'Rail off'"
+      />
+      <OutputCell
+        v-else-if="r === 'spindle' && out.spindle"
+        label="Spindle"
+        :state="out.spindle.on ? 'Running' : 'Off'"
+        :live="out.spindle.on"
+        :percent="out.spindle.on ? pct(out.spindle.throttle) : 0"
+        :sub="out.spindle.on ? 'Throttle' : 'Relay open'"
+      />
+      <OutputCell
+        v-else-if="r === 'power' && out.toolPower"
+        label="Tool power"
+        :state="out.toolPower.active ? (out.toolPower.suspended ? 'Paused' : 'On') : 'Off'"
+        :live="out.toolPower.active && !out.toolPower.suspended"
+        :percent="out.toolPower.active ? pct(out.toolPower.level) : 0"
+        sub="Output"
+      />
     </div>
 
-    <!-- Position -->
+    <!-- Position: work coordinates first for tools that cut from a work zero -->
     <div class="seg position">
-      <span class="k">Position <em>{{ homed ? `homed ${homed.toUpperCase()}` : 'not homed' }}</em></span>
+      <span class="k">{{ work ? 'Work position' : 'Position' }} <em>{{ homed ? `homed ${homed.toUpperCase()}` : 'not homed' }}</em></span>
       <div class="xyz">
         <span v-for="(a, i) in ['X', 'Y', 'Z']" :key="a" :class="{ unhomed: !homed.includes(a.toLowerCase()) }">
           <b>{{ a }}</b><span class="rs-num" :class="{ empty: pos?.[i] == null }">{{ f2(pos?.[i]) }}</span>
         </span>
       </div>
+      <span v-if="work" class="sub machine">
+        {{ machine.hasWorkOffset ? `Machine ${machine.position.xyz?.map((v) => f1(v)).join('  ') ?? '—'}` : 'No work zero set: same as machine' }}
+      </span>
     </div>
 
     <!-- Job -->
     <div class="seg job">
       <span class="k">Job <em>{{ job.state ? jobLabel[job.state] ?? job.state : '—' }}</em></span>
-      <span class="big rs-num" :class="{ empty: !jobActive }">{{ jobActive ? pct : '—' }}<small v-if="jobActive">%</small></span>
+      <span class="big rs-num" :class="{ empty: !jobActive }">{{ jobActive ? jobPct : '—' }}<small v-if="jobActive">%</small></span>
       <span class="sub file">{{ job.filename || 'No file loaded' }}</span>
-      <span v-if="jobActive" class="bar" role="progressbar" :aria-valuenow="pct" aria-valuemin="0" aria-valuemax="100"><span :style="{ width: `${pct}%` }" /></span>
+      <span v-if="jobActive" class="bar" role="progressbar" :aria-valuenow="jobPct" aria-valuemin="0" aria-valuemax="100"><span :style="{ width: `${jobPct}%` }" /></span>
     </div>
   </section>
 </template>
@@ -107,7 +165,7 @@ const jobLabel: Record<string, string> = { standby: 'Idle', printing: 'Running',
 <style scoped>
 .strip {
   display: grid;
-  grid-template-columns: minmax(240px, 1.3fr) auto auto minmax(200px, 1fr) minmax(170px, 1fr);
+  grid-template-columns: var(--cols);
   border: 1px solid var(--rs-line);
   border-radius: var(--rs-radius-lg);
   background: var(--rs-surface);
@@ -170,6 +228,7 @@ const jobLabel: Record<string, string> = { standby: 'Idle', printing: 'Running',
 .xyz b { font-size: var(--rs-text-xs); font-weight: var(--rs-weight-medium); color: var(--rs-text-muted); }
 .xyz .rs-num { font-size: 1.6rem; }
 .xyz .unhomed .rs-num { color: var(--rs-text-muted); }
+.machine { font-family: var(--rs-font-code); font-size: 11px; }
 
 /* job */
 .file { margin-top: 2px; }
@@ -177,7 +236,7 @@ const jobLabel: Record<string, string> = { standby: 'Idle', printing: 'Running',
 .bar span { display: block; height: 100%; background: var(--rs-ink); }
 
 @media (max-width: 1180px) {
-  .strip { grid-template-columns: auto auto minmax(0, 1fr); }
+  .strip { grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
   .tool { grid-column: 1 / -1; }
   .seg + .seg::before { display: none; }
   .seg { border-top: 1px solid var(--rs-line); }

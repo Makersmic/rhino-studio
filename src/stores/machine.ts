@@ -16,6 +16,8 @@ import { deriveToolState, describeToolState, mergedToolMapping, mergedToolTypes 
 import { lookFor, type ToolheadLook } from '@/toolheads/registry'
 import { brand } from '@/brand/brand'
 import type { CheckedScript } from '@/control/commands'
+import { readoutPlan, toolKind as kindOf, type ReadoutPlan, type ToolKind } from '@/toolheads/readouts'
+import { plausible } from '@/control/tempHistory'
 import { useControlStore } from './control'
 import { useWebcamsStore } from './webcams'
 import { useTempsStore } from './temps'
@@ -161,6 +163,54 @@ export const useMachineStore = defineStore('machine', () => {
     message: (status.value.print_stats?.message as string | undefined) || null,
   }))
 
+  /** Position in the job's coordinates (after work zero / G54 offsets). */
+  const workPosition = computed(() => {
+    const p = status.value.gcode_move?.gcode_position
+    return Array.isArray(p) ? (p.slice(0, 3) as number[]) : null
+  })
+  const hasWorkOffset = computed(() => {
+    const o = status.value.gcode_move?.homing_origin
+    return Array.isArray(o) && (o as number[]).slice(0, 3).some((v) => Math.abs(v) > 0.001)
+  })
+  const speedFactor = computed(() => num(status.value.gcode_move?.speed_factor))
+
+  /**
+   * What the tool outputs are doing, read from Klipper's pins (read only).
+   * null = that output doesn't exist in this config.
+   */
+  const pin = (name: string) => num(status.value[`output_pin ${name}`]?.value)
+  const outputs = computed(() => {
+    const rail = pin('LASER_INITIALIZE')
+    const laserPwm = pin('SERVO_LASER')
+    const relay = pin('Spindle_power')
+    const duty = pin('SPINDLE_SPEED')
+    const tp = status.value['gcode_macro TOOL_POWER_STATE']
+    return {
+      fan: num(status.value.fan?.speed),
+      laser: rail == null && laserPwm == null ? null : { armed: (rail ?? 0) > 0.01, power: laserPwm ?? 0 },
+      // The ESC reads 0.3 as stopped and 1.0 as full throttle
+      spindle: relay == null ? null : { on: relay > 0.5, throttle: relay > 0.5 && duty != null ? Math.max(0, Math.min(1, (duty - 0.3) / 0.7)) : 0 },
+      toolPower: tp ? { active: Number(tp.active) > 0, level: num(tp.level) ?? 0, suspended: Number(tp.suspended) > 0 } : null,
+    }
+  })
+
+  /** What kind of tool is mounted, and which readouts apply to it (src/toolheads/readouts.ts). */
+  const toolKind = computed<ToolKind>(() => kindOf(toolState.value.kind === 'mounted' ? toolState.value.type : null, toolState.value.kind === 'mounted'))
+  const plan = computed<ReadoutPlan>(() =>
+    readoutPlan({
+      kind: toolKind.value,
+      hotend: hotend.value,
+      bed: bed.value,
+      bodyReading: plausible(hotend.value.temp),
+      has: {
+        fan: outputs.value.fan != null,
+        laser: outputs.value.laser != null,
+        spindle: outputs.value.spindle != null,
+        toolPower: outputs.value.toolPower != null,
+      },
+    }),
+  )
+
   /**
    * Klipper is working through commands (idle_timeout reports "Printing"
    * whenever it is executing G-code, job or not: homing, a macro, heating).
@@ -225,6 +275,12 @@ export const useMachineStore = defineStore('machine', () => {
     position,
     job,
     busy,
+    workPosition,
+    hasWorkOffset,
+    speedFactor,
+    outputs,
+    toolKind,
+    plan,
     limits,
     status,
     connect,

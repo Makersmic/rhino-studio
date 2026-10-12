@@ -3,20 +3,26 @@
  * Macro buttons, grouped by what you're doing (see macroGroups.ts).
  * Each one goes through the same safety check as the console.
  */
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import RsPanel from '@/components/RsPanel.vue'
 import { useControlStore } from '@/stores/control'
 import { useMachineStore } from '@/stores/machine'
-import { macroGroups } from './macroGroups'
+import { hiddenForOtherTools, macroGroups } from './macroGroups'
 
 const control = useControlStore()
 const machine = useMachineStore()
 
+// Macros for other tools are left out unless you ask for them (they'd be refused anyway)
+const showAll = ref(false)
+const toolType = computed(() => (machine.toolState.kind === 'mounted' ? machine.toolState.type : null))
+const available = computed(() => new Set(control.macros.keys()))
+const hidden = computed(() => hiddenForOtherTools(available.value, toolType.value, machine.mountedName))
 const groups = computed(() =>
-  macroGroups(new Set(control.macros.keys()), {
-    toolType: machine.toolState.kind === 'mounted' ? machine.toolState.type : null,
+  macroGroups(available.value, {
+    toolType: toolType.value,
     toolName: machine.mountedName,
     needsRestore: machine.toolState.kind === 'none-confirmed' && !!machine.toolState.lastSavedSlot,
+    showAll: showAll.value,
   }),
 )
 const runMacro = (name: string, label: string) => control.send(name, { label })
@@ -44,7 +50,12 @@ const runMacro = (name: string, label: string) => control.send(name, { label })
       </section>
       <p v-if="!groups.length" class="muted small">Macros appear when Klipper is connected.</p>
     </div>
-    <p class="note">Wizard macros ask their own questions. Macros that move the machine or power a tool ask first.</p>
+    <p class="note">
+      Wizard macros ask their own questions. Macros that move the machine or power a tool ask first.
+      <template v-if="hidden">
+        <button type="button" class="more" @click="showAll = !showAll">{{ showAll ? 'Hide' : 'Show' }} {{ hidden }} for other tools</button>
+      </template>
+    </p>
   </RsPanel>
 </template>
 
@@ -73,4 +84,5 @@ h3 { font-size: var(--rs-text-xs); font-weight: var(--rs-weight-medium); color: 
 .dense .macro { min-height: 32px; font-family: var(--rs-font-code); font-size: 11px; font-weight: 400; background: transparent; }
 .note { margin-top: var(--rs-space-4); font-size: var(--rs-text-xs); color: var(--rs-text-muted); }
 .small { font-size: var(--rs-text-sm); }
+.more { margin-left: 4px; padding: 0; border: 0; background: none; color: var(--rs-text-strong); font: inherit; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
 </style>

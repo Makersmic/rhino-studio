@@ -138,6 +138,11 @@ legend { font-size: var(--rs-text-xs); color: var(--rs-text-muted); margin-botto
 .hint { font-size: var(--rs-text-xs); color: var(--rs-text-muted); min-height: 2.6em; }
 .homes { display: flex; flex-wrap: wrap; gap: var(--rs-space-2); margin-top: auto; }
 @media (max-width: 1100px) and (min-width: 721px) { .layout { grid-template-columns: auto 1fr; } }
+@media (max-width: 720px) {
+  /* phone: keys on top, step sizes and buttons full width below */
+  .layout { grid-template-columns: 1fr; }
+  .pad { justify-content: center; }
+}
 @media (max-width: 560px) {
   .xy { grid-template-columns: repeat(3, 54px); grid-template-rows: repeat(3, 54px); }
   .z { grid-template-rows: repeat(3, 54px); grid-template-columns: 54px; }

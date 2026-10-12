@@ -31,6 +31,10 @@ const props = defineProps<{
   editable: boolean
   /** why it can't be edited, for the tooltip */
   lockedReason?: string
+  /** can only be switched off here (a heater that's on or warm under a tool that doesn't use it) */
+  offOnly?: boolean
+  /** needs attention: label in inverted ink */
+  alert?: boolean
 }>()
 
 const control = useControlStore()
@@ -67,6 +71,11 @@ function cancel() {
 }
 async function commit() {
   const v = Number(draft.value.trim())
+  if (props.offOnly && v !== 0) {
+    problem.value = 'Only 0 (off) here: this tool doesn\'t use it'
+    input.value?.focus()
+    return
+  }
   if (draft.value.trim() === '' || !Number.isFinite(v) || v < 0 || v > max) {
     problem.value = `Enter 0 to ${max}°`
     input.value?.focus()
@@ -104,7 +113,7 @@ function toggle() {
 
 <template>
   <div class="cell">
-    <span class="k">{{ label }}</span>
+    <span class="k" :class="{ alert }">{{ label }}</span>
     <div class="row">
       <form v-if="editing" class="box editing" @submit.prevent="commit">
         <span class="set">Set {{ label.toLowerCase() }}</span>
@@ -136,18 +145,21 @@ function toggle() {
         <span class="now rs-num" :class="{ empty: reading == null }">{{ reading == null ? '—' : reading.toFixed(0) }}<small v-if="reading != null">°</small></span>
       </button>
 
-      <TempGraph :heater="heater" :expanded="expanded" :label="label" />
-      <button type="button" class="dots" :aria-expanded="expanded" :aria-label="expanded ? 'Shorter history' : 'Longer history'" :title="expanded ? 'Last 5 minutes' : 'Last 20 minutes'" @click="toggle">
-        <svg viewBox="0 0 20 6" aria-hidden="true"><circle cx="3" cy="3" r="1.6" /><circle cx="10" cy="3" r="1.6" /><circle cx="17" cy="3" r="1.6" /></svg>
-      </button>
+      <div class="gwrap">
+        <button type="button" class="dots" :aria-expanded="expanded" :aria-label="expanded ? 'Shorter history' : 'Longer history'" :title="expanded ? 'Show the last 5 minutes' : 'Show the last 20 minutes'" @click="toggle">
+          <svg viewBox="0 0 20 6" aria-hidden="true"><circle cx="3" cy="3" r="1.6" /><circle cx="10" cy="3" r="1.6" /><circle cx="17" cy="3" r="1.6" /></svg>
+        </button>
+        <TempGraph :heater="heater" :expanded="expanded" :label="label" />
+      </div>
     </div>
-    <span class="hint" :class="{ bad: problem }" role="status">{{ problem ?? (editing ? 'Enter sets it · 0 turns it off · Esc cancels' : !editable && lockedReason ? lockedReason : '') }}</span>
+    <span class="hint" :class="{ bad: problem }" role="status">{{ problem ?? (editing ? (offOnly ? 'Type 0 and Enter to switch it off · Esc cancels' : 'Enter sets it · 0 turns it off · Esc cancels') : !editable && lockedReason ? lockedReason : '') }}</span>
   </div>
 </template>
 
 <style scoped>
 .cell { display: flex; flex-direction: column; gap: 6px; min-width: 0; --g: 3.1rem; }
-.k { font-size: var(--rs-text-xs); color: var(--rs-text-muted); font-weight: var(--rs-weight-medium); white-space: nowrap; }
+.k { font-size: var(--rs-text-xs); color: var(--rs-text-muted); font-weight: var(--rs-weight-medium); white-space: nowrap; align-self: flex-start; }
+.k.alert { background: var(--rs-ink); color: var(--rs-on-ink); padding: 0 6px; border-radius: var(--rs-radius-sm); }
 .row { display: flex; align-items: flex-end; gap: 10px; margin-top: auto; }
 
 /* the "imaginary rectangle" around the reading */
@@ -196,11 +208,10 @@ function toggle() {
   outline: none;
 }
 .field:focus-visible { box-shadow: none; outline: none; }
+.gwrap { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
 .dots {
-  align-self: flex-start;
-  margin-top: 18px;
-  width: 26px;
-  height: 18px;
+  width: 24px;
+  height: 16px;
   padding: 0;
   display: grid;
   place-items: center;

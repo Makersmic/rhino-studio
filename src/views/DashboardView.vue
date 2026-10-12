@@ -20,7 +20,7 @@ import { useMaintenanceStore } from '@/stores/maintenance'
 import { useWebcamsStore } from '@/stores/webcams'
 import { careText } from '@/maintenance/summary'
 import { plausible } from '@/control/tempHistory'
-import { formatDuration, isPrintTool, notices, operationName, remainingSeconds } from '@/dashboard/notices'
+import { formatDuration, notices, operationName, remainingSeconds } from '@/dashboard/notices'
 
 const machine = useMachineStore()
 const control = useControlStore()
@@ -48,8 +48,29 @@ const toolLine = computed(() => {
 const toolAlert = computed(() => machine.online && (machine.toolState.kind === 'none-confirmed' || machine.toolState.kind === 'unmapped'))
 
 // A tool without a hotend shows its body temperature: its thermistor shares the T0 input
-const printTool = computed(() => !tool.value || isPrintTool(tool.value.type))
-const t = (n: number | null) => (n == null ? '—' : n.toFixed(0))
+const t = (n: number | null) => (n == null ? null : n.toFixed(0))
+const setLine = (h: { temp: number | null; target: number | null }) => (h.target ? `Set ${t(h.target)}°` : h.temp == null ? '—' : 'Off')
+
+/** The readouts that apply to the mounted tool, worded for the overlay. */
+interface Stat { id: string; label: string; value: string | null; unit: string; sub: string; alert?: boolean }
+const stats = computed<Stat[]>(() => {
+  const o = machine.outputs
+  const pc = (v: number) => Math.round(v * 100).toString()
+  return machine.plan.readouts.map((r): Stat => {
+    switch (r) {
+      case 'hotend': return { id: r, label: 'Hotend', value: t(machine.hotend.temp), unit: '°', sub: setLine(machine.hotend) }
+      case 'body': return { id: r, label: 'Body temperature', value: plausible(machine.hotend.temp) ? t(machine.hotend.temp) : null, unit: '°', sub: 'Tool body' }
+      case 'hotend-on': return { id: r, label: (machine.hotend.target ?? 0) > 0 ? 'Hotend heater on' : 'Hotend still hot', value: t(machine.hotend.temp), unit: '°', sub: setLine(machine.hotend), alert: (machine.hotend.target ?? 0) > 0 }
+      case 'bed': return { id: r, label: 'Bed', value: t(machine.bed.temp), unit: '°', sub: setLine(machine.bed) }
+      case 'bed-warm': return { id: r, label: (machine.bed.target ?? 0) > 0 ? 'Bed heating' : 'Bed still warm', value: t(machine.bed.temp), unit: '°', sub: setLine(machine.bed), alert: (machine.bed.target ?? 0) > 0 }
+      case 'fan': return { id: r, label: 'Part fan', value: o.fan == null ? null : pc(o.fan), unit: '%', sub: 'Cooling' }
+      case 'laser': return { id: r, label: 'Laser', value: o.laser?.armed ? pc(o.laser.power) : '0', unit: '%', sub: o.laser?.armed ? (o.laser.power > 0 ? 'Firing' : 'Armed') : 'Off', alert: !!o.laser?.armed }
+      case 'spindle': return { id: r, label: 'Spindle', value: o.spindle?.on ? pc(o.spindle.throttle) : '0', unit: '%', sub: o.spindle?.on ? 'Running · throttle' : 'Off' }
+      case 'power': return { id: r, label: 'Tool power', value: o.toolPower?.active ? pc(o.toolPower.level) : '0', unit: '%', sub: o.toolPower?.active ? 'On' : 'Off' }
+    }
+  })
+})
+const topCols = computed(() => `minmax(220px, 1.4fr) ${'minmax(100px, 0.7fr) '.repeat(stats.value.length)}minmax(170px, 1fr) minmax(200px, 1fr)`)
 
 const job = computed(() => machine.job)
 const jobActive = computed(() => job.value.state === 'printing' || job.value.state === 'paused')
@@ -58,7 +79,8 @@ const left = computed(() => (job.value.state === 'printing' ? remainingSeconds(j
 const doneAt = computed(() => (left.value == null ? '—' : new Date(now.value.getTime() + left.value * 1000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })))
 const op = computed(() => operationName(tool.value?.type))
 
-const pos = computed(() => machine.position.xyz)
+const workPos = computed(() => machine.plan.position === 'work')
+const pos = computed(() => (workPos.value ? machine.workPosition : machine.position.xyz))
 const homed = computed(() => machine.position.homed.toLowerCase())
 
 /** One word for what the machine is doing, top right under the clock. */
@@ -107,7 +129,7 @@ const list = computed(() =>
       <div class="scrim side-scrim" aria-hidden="true" />
 
       <!-- top border: the stats -->
-      <header class="top">
+      <header class="top" :style="{ '--cols': topCols }">
         <RouterLink to="/toolheads" class="stat tool" :style="{ '--accent': `var(${machine.mountedLook.accentVar})` }" :class="{ alert: toolAlert, unverified: !machine.mountedVerified }">
           <span class="emblem"><Icon :tool="machine.mountedLook.icon" :size="34" /></span>
           <span class="col">
@@ -117,26 +139,15 @@ const list = computed(() =>
           </span>
         </RouterLink>
 
-        <RouterLink to="/control" class="stat">
-          <span class="k">{{ printTool ? 'Hotend' : 'Body temperature' }}</span>
-          <template v-if="printTool">
-            <span class="v rs-num" :class="{ empty: machine.hotend.temp == null }">{{ t(machine.hotend.temp) }}<small v-if="machine.hotend.temp != null">°</small></span>
-            <span class="sub">{{ machine.hotend.target ? `Set ${t(machine.hotend.target)}°` : machine.hotend.temp == null ? '—' : 'Off' }}</span>
-          </template>
-          <template v-else>
-            <span class="v rs-num" :class="{ empty: !plausible(machine.hotend.temp) }">{{ plausible(machine.hotend.temp) ? t(machine.hotend.temp) : '—' }}<small v-if="plausible(machine.hotend.temp)">°</small></span>
-            <span class="sub">{{ plausible(machine.hotend.temp) ? 'Tool body' : 'No sensor' }}</span>
-          </template>
-        </RouterLink>
-
-        <RouterLink to="/control" class="stat">
-          <span class="k">Bed</span>
-          <span class="v rs-num" :class="{ empty: machine.bed.temp == null }">{{ t(machine.bed.temp) }}<small v-if="machine.bed.temp != null">°</small></span>
-          <span class="sub">{{ machine.bed.target ? `Set ${t(machine.bed.target)}°` : machine.bed.temp == null ? '—' : 'Off' }}</span>
+        <!-- what this tool uses (same rules as Control: src/toolheads/readouts.ts) -->
+        <RouterLink v-for="st in stats" :key="st.id" to="/control" class="stat" :class="{ alert: st.alert }">
+          <span class="k">{{ st.label }}</span>
+          <span class="v rs-num" :class="{ empty: st.value == null }">{{ st.value ?? '—' }}<small v-if="st.value != null">{{ st.unit }}</small></span>
+          <span class="sub">{{ st.sub }}</span>
         </RouterLink>
 
         <RouterLink to="/control" class="stat position">
-          <span class="k">Position <em>{{ homed ? `homed ${homed.toUpperCase()}` : 'not homed' }}</em></span>
+          <span class="k">{{ workPos ? 'Work position' : 'Position' }} <em>{{ homed ? `homed ${homed.toUpperCase()}` : 'not homed' }}</em></span>
           <span class="xyz">
             <span v-for="(a, i) in ['X', 'Y', 'Z']" :key="a" :class="{ unhomed: !homed.includes(a.toLowerCase()) }">
               <b>{{ a }}</b><span class="rs-num" :class="{ empty: pos?.[i] == null }">{{ pos?.[i] == null ? '—' : pos[i]!.toFixed(1) }}</span>
@@ -219,7 +230,7 @@ a:focus-visible { outline: 2px solid var(--rs-overlay-text); outline-offset: 3px
 /* ---- top border ---- */
 .top {
   display: grid;
-  grid-template-columns: minmax(220px, 1.4fr) repeat(2, minmax(110px, 0.7fr)) minmax(190px, 1fr) minmax(200px, 1fr);
+  grid-template-columns: var(--cols);
   align-items: start;
   gap: var(--rs-space-5);
   padding: var(--rs-space-5) var(--rs-space-6) 0;
@@ -241,6 +252,7 @@ a:focus-visible { outline: 2px solid var(--rs-overlay-text); outline-offset: 3px
 .unverified .emblem::after { display: none; }
 .name { font-size: var(--rs-text-lg); font-weight: var(--rs-weight-semibold, 600); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tool.alert .sub, .tool.alert .name { color: var(--rs-overlay-alert); }
+.stat.alert .k, .stat.alert .sub { color: var(--rs-overlay-alert); }
 .xyz { display: flex; flex-direction: column; gap: 1px; }
 .xyz > span { display: flex; align-items: baseline; justify-content: space-between; gap: var(--rs-space-3); max-width: 170px; }
 .xyz b { font-size: var(--rs-text-xs); font-weight: var(--rs-weight-medium); color: var(--rs-overlay-muted); }

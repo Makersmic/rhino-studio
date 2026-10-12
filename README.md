@@ -15,6 +15,21 @@ Status: **Phase 2b** (machine control), on top of 2a (live status) and Care (mai
 - **Klipper prompts**: the Rhino wizards' questions (SWAP_TOOL, RESTORE_TOOL, the job setup wizards) pop up in Studio as well as Mainsail. A button runs only its own command.
 - **Files**: upload (button or drag and drop; never starts the file) and Start. Start checks the file's toolhead against the mounted one and blocks a mismatch (offering the swap). Print files start directly (their START_JOB checks again on the machine); laser, spindle, knife and added-tool files start through LASER_JOB_SETUP, CNC_JOB_SETUP, DRAGKNIFE_JOB_SETUP or TOOL_JOB_SETUP with `FILE=`, so the wizard's safety steps and the laser rail (config 1.4.1) aren't skipped.
 
+### What each tool shows
+
+Everything that applies to every tool stays put: toolhead, position, job, camera, motion, macros, console, care. The rest follows the mounted tool (rules in `src/toolheads/readouts.ts`, shared by Control and the Dashboard):
+
+| Tool | Status strip shows | Position | Macro buttons |
+|---|---|---|---|
+| Print head (BlockOne, SwitchFly) | Hotend and bed (set in place, with graphs), part fan | Machine | Print macros; SwitchFly also gets its filament path switches |
+| Laser (LightSaber) | Laser rail and power (Off / Armed / Firing), body temperature | Machine (laser files use machine X/Y) | Focus and align, Set Z zero |
+| Spindle (HotJoe) | Spindle relay and throttle, body temperature | Work position first, machine below | Set Z zero, Set work zero, Calibrate ESC |
+| Drag knife | Body temperature once its thermistor reads | Work position first | Set Z zero |
+| Added powered tool | Tool power, body temperature | Work position first | |
+| No confirmed tool | Only heaters that are on or still hot | Machine | No tool-specific macros |
+
+Two things come back whatever the tool, because they matter for safety: a bed that's heating or still warm (40° and up) under a laser, spindle or knife job, and the hotend heater switched on while a tool without a hotend is mounted (its output is still wired to the tool connector). Both show with a label in inverted ink and can only be switched off from there. Tool outputs (laser, spindle, fan, tool power) are read from Klipper's pins and are read only: switching a tool on stays with its wizard, or the console, which asks first. Macros for other tools are hidden from the buttons ("Show N for other tools" brings them back) and stay available in the console.
+
 ## Run it on your PC
 
 Needs Node.js 20 or newer.
@@ -59,7 +74,7 @@ npm run mock                                      # pretend Moonraker on port 71
 MOONRAKER=http://localhost:7125 PORTAL=http://localhost:7125 npm run dev   # second terminal
 ```
 
-`MOCK_SCENARIO=restart`, `swap` or `custom` changes what the mock reports. The mock has three pretend cameras showing rendered frames of a print (`MOCK_CAMERAS=0` starts with none). It prints every request the app makes. The mock also serves the Portal's maintenance API with real data from the Portal's own year-of-use demo (`scripts/fixtures/`).
+`MOCK_SCENARIO=restart`, `swap`, `custom` or `spindle` (HotJoe mounted, with a work zero) changes what the mock reports. The mock has three pretend cameras showing rendered frames of a print (`MOCK_CAMERAS=0` starts with none). It prints every request the app makes. The mock also serves the Portal's maintenance API with real data from the Portal's own year-of-use demo (`scripts/fixtures/`).
 
 Other commands:
 
