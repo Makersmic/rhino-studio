@@ -47,6 +47,12 @@ const setText = computed(() => {
   if (props.target == null) return ''
   return props.target > 0 ? `${props.target.toFixed(0)}°` : 'Off'
 })
+/** What sits under the reading: "Set 215°", "Off", or why it can't be set. */
+const underText = computed(() => {
+  if (!props.editable) return props.lockedReason ?? ''
+  if (props.target == null) return ''
+  return props.target > 0 ? `Set ${props.target.toFixed(0)}°` : 'Off'
+})
 const canEdit = computed(() => props.editable && machine.klippyReady)
 
 // ---- editing ---------------------------------------------------------------
@@ -116,7 +122,6 @@ function toggle() {
     <span class="k" :class="{ alert }">{{ label }}</span>
     <div class="row">
       <form v-if="editing" class="box editing" @submit.prevent="commit">
-        <span class="set">Set {{ label.toLowerCase() }}</span>
         <input
           ref="input"
           v-model="draft"
@@ -141,7 +146,6 @@ function toggle() {
         :aria-label="`${label} ${reading == null ? 'no reading' : `${reading.toFixed(0)} degrees`}${setText ? `, set ${setText}` : ''}${canEdit ? '. Change' : ''}`"
         @click="start"
       >
-        <span class="set">{{ setText }}</span>
         <span class="now rs-num" :class="{ empty: reading == null }">{{ reading == null ? '—' : reading.toFixed(0) }}<small v-if="reading != null">°</small></span>
       </button>
 
@@ -152,7 +156,9 @@ function toggle() {
         <TempGraph :heater="heater" :expanded="expanded" :label="label" />
       </div>
     </div>
-    <span class="hint" :class="{ bad: problem }" role="status">{{ problem ?? (editing ? (offOnly ? 'Type 0 and Enter to switch it off · Esc cancels' : 'Enter sets it · 0 turns it off · Esc cancels') : !editable && lockedReason ? lockedReason : '') }}</span>
+    <!-- under the reading: the set temperature, or what to type while editing -->
+    <span v-if="problem || editing" class="hint" :class="{ bad: problem }" role="status">{{ problem ?? (offOnly ? 'Type 0, Enter to switch off' : 'Enter to set · 0 is off') }}</span>
+    <span v-else class="hint setline">{{ underText }}</span>
   </div>
 </template>
 
@@ -169,8 +175,8 @@ function toggle() {
   align-items: flex-end;
   /* room for three seven-segment digits and the degree sign */
   width: calc(var(--g) * 2.95);
-  height: calc(var(--g) + 18px);
-  padding: 16px 8px 0 6px;
+  height: calc(var(--g) + 8px);
+  padding: 4px 8px 4px 6px;
   margin: 0 0 0 -6px;
   border: 0;
   border-radius: var(--rs-radius-md);
@@ -227,6 +233,7 @@ function toggle() {
 .dots[aria-expanded='true'] { color: var(--rs-text-strong); }
 .dots:focus-visible { outline: none; box-shadow: var(--rs-focus); }
 .hint { font-size: var(--rs-text-xs); color: var(--rs-text-muted); white-space: nowrap; min-height: 1.3em; overflow: hidden; text-overflow: ellipsis; }
+.hint.setline { color: var(--rs-text); font-weight: var(--rs-weight-medium); }
 .hint.bad { color: var(--rs-text-strong); font-weight: var(--rs-weight-medium); }
 @media (max-width: 560px) {
   .cell { --g: 2.1rem; }
