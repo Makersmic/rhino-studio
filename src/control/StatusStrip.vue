@@ -183,14 +183,14 @@ const jobLabel: Record<string, string> = { standby: 'Idle', printing: 'Running',
   width: 2px;
   background: radial-gradient(var(--rs-dot-faint) 0.9px, transparent 1.1px) 50% 0 / 2px 5px repeat-y;
 }
-.k { font-size: var(--rs-text-xs); color: var(--rs-text-muted); font-weight: var(--rs-weight-medium); }
+.k { font-size: var(--rs-text-xs); line-height: 18px; height: 18px; color: var(--rs-text-muted); font-weight: var(--rs-weight-medium); }
 .k em { font-style: normal; margin-left: 6px; color: var(--rs-text); }
-.big { font-size: 3rem; line-height: 0.85; }
+.big { font-size: 3rem; line-height: 0.85; margin-top: 15px; }
 .big small { font-family: var(--rs-font-ui); font-size: 0.32em; color: var(--rs-text-muted); margin-left: -0.04em; vertical-align: top; }
 .sub { font-size: var(--rs-text-xs); color: var(--rs-text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* toolhead */
-.tool { flex-direction: row; align-items: center; gap: var(--rs-space-4); }
+.tool { flex-direction: row; align-items: flex-start; gap: var(--rs-space-4); } /* label on the same top line as the others */
 .emblem {
   position: relative;
   display: grid;

@@ -51,7 +51,7 @@ const setText = computed(() => {
 const underText = computed(() => {
   if (!props.editable) return props.lockedReason ?? ''
   if (props.target == null) return ''
-  return props.target > 0 ? `Set ${props.target.toFixed(0)}°` : 'Off'
+  return props.target > 0 ? `${props.target.toFixed(0)}°` : 'Off'
 })
 const canEdit = computed(() => props.editable && machine.klippyReady)
 
@@ -164,9 +164,9 @@ function toggle() {
 
 <style scoped>
 .cell { display: flex; flex-direction: column; gap: 4px; min-width: 0; --g: 2.4rem; }
-.k { font-size: var(--rs-text-xs); color: var(--rs-text-muted); font-weight: var(--rs-weight-medium); white-space: nowrap; align-self: flex-start; }
+.k { font-size: var(--rs-text-xs); line-height: 18px; height: 18px; color: var(--rs-text-muted); font-weight: var(--rs-weight-medium); white-space: nowrap; align-self: flex-start; }
 .k.alert { background: var(--rs-ink); color: var(--rs-on-ink); padding: 0 6px; border-radius: var(--rs-radius-sm); }
-.row { display: flex; align-items: flex-end; gap: 10px; margin-top: auto; }
+.row { display: flex; align-items: flex-end; gap: 10px; }
 
 /* the "imaginary rectangle" around the reading */
 .box {
@@ -233,7 +233,7 @@ function toggle() {
 .dots[aria-expanded='true'] { color: var(--rs-text-strong); }
 .dots:focus-visible { outline: none; box-shadow: var(--rs-focus); }
 .hint { font-size: var(--rs-text-xs); color: var(--rs-text-muted); white-space: nowrap; min-height: 1.3em; overflow: hidden; text-overflow: ellipsis; }
-.hint.setline { color: var(--rs-text); font-weight: var(--rs-weight-medium); }
+.hint.setline { font-size: 11px; font-weight: var(--rs-weight-medium); color: var(--rs-text-muted); } /* same as the old corner label */
 .hint.bad { color: var(--rs-text-strong); font-weight: var(--rs-weight-medium); }
 @media (max-width: 560px) {
   .cell { --g: 2.1rem; }

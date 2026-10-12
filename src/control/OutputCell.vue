@@ -28,10 +28,10 @@ defineProps<{
 
 <style scoped>
 .cell { display: flex; flex-direction: column; gap: 4px; min-width: 0; height: 100%; }
-.k { font-size: var(--rs-text-xs); color: var(--rs-text-muted); font-weight: var(--rs-weight-medium); white-space: nowrap; display: flex; align-items: center; gap: 6px; }
-.k em { font-style: normal; color: var(--rs-text-strong); padding: 0 6px; border-radius: var(--rs-radius-sm); box-shadow: inset 0 0 0 1px var(--rs-line-strong); }
+.k { font-size: var(--rs-text-xs); line-height: 18px; height: 18px; color: var(--rs-text-muted); font-weight: var(--rs-weight-medium); white-space: nowrap; display: flex; align-items: center; gap: 6px; }
+.k em { font-style: normal; color: var(--rs-text-strong); padding: 0 6px; line-height: 16px; border-radius: var(--rs-radius-sm); box-shadow: inset 0 0 0 1px var(--rs-line-strong); }
 .k em.live { background: var(--rs-ink); color: var(--rs-on-ink); box-shadow: none; }
-.big { font-size: 2.4rem; line-height: 0.9; margin-top: 6px; white-space: nowrap; }
+.big { font-size: 2.4rem; line-height: 0.9; margin-top: 18px; white-space: nowrap; } /* top lines up with the temperatures */
 .big small { font-family: var(--rs-font-ui); font-size: 0.4em; color: var(--rs-text-muted); margin-left: -0.04em; vertical-align: top; }
 .sub { font-size: var(--rs-text-xs); color: var(--rs-text-muted); white-space: nowrap; min-height: 1.3em; }
 @media (max-width: 560px) { .big { font-size: 2.1rem; } }
