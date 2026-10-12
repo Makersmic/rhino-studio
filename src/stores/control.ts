@@ -144,7 +144,7 @@ export const useControlStore = defineStore('control', () => {
    */
   async function send(
     script: string,
-    opts: { label?: string; confirmBody?: string; confirmTitle?: string; confirmFeature?: string } = {},
+    opts: { label?: string; confirmBody?: string; confirmTitle?: string; confirmFeature?: string; confirmLabel?: string } = {},
   ): Promise<boolean> {
     // Stops always go; a restart may go while Klipper is shut down (that's how you recover)
     const recovery = /^\s*(FIRMWARE_RESTART|RESTART)\s*$/i.test(script) && machine.online
@@ -168,7 +168,7 @@ export const useControlStore = defineStore('control', () => {
           (jobActive.value ? 'A job is running. ' : '') + 'Check the machine is clear and you are ready to stop it.',
         lines: c.lines.map((l) => ({ text: l.line, reason: l.reason })),
         feature: opts.confirmFeature,
-        confirmLabel: 'Run it',
+        confirmLabel: opts.confirmLabel ?? 'Run it',
         tone: c.risk === 'tool-state' || c.risk === 'restart' || jobActive.value ? 'danger' : 'motion',
       })
       if (!confirmed) {
@@ -345,7 +345,8 @@ export const useControlStore = defineStore('control', () => {
   async function swapTo(slot: number, name: string) {
     return send(`SWAP_TOOL TOOL=${slot}`, {
       label: `Swap to ${name}`,
-      confirmTitle: 'Tool Swap Initialized',
+      confirmTitle: 'Tool Swap Ready',
+      confirmLabel: 'Start',
       confirmFeature: name,
       confirmBody: `The machine cools down and lowers the bed, then asks you to fit ${name}. Follow its questions here or in Mainsail.`,
     })
