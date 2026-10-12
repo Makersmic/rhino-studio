@@ -57,13 +57,13 @@ const secondary: NavItem[] = [
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  padding: var(--rs-space-5) var(--rs-space-2) var(--rs-space-4);
+  padding: var(--rs-space-4) var(--rs-space-2) var(--rs-space-4);
   background: var(--rs-bg);
   position: sticky;
   top: var(--rs-topbar-h);
   height: calc(100vh - var(--rs-topbar-h));
 }
-.group { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--rs-space-2); }
+.group { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
 .item {
   display: flex;
   flex-direction: column;
@@ -71,42 +71,42 @@ const secondary: NavItem[] = [
   gap: 4px;
   color: var(--rs-text-muted);
   text-decoration: none;
-  font-size: var(--rs-text-xs);
+  font-size: 11px;
   font-weight: var(--rs-weight-medium);
   border-radius: var(--rs-radius-md);
-  padding: 2px 0 4px;
+  padding: 6px 0;
 }
 .well {
   position: relative;
   display: grid;
   place-items: center;
-  width: 52px;
-  height: 36px;
-  border-radius: var(--rs-radius-pill);
+  width: 44px;
+  height: 34px;
+  border-radius: var(--rs-radius-md);
   transition: background var(--rs-dur) var(--rs-ease);
 }
 .count {
   position: absolute;
-  top: -4px;
-  right: 2px;
+  top: -5px;
+  right: -4px;
   min-width: 18px;
   height: 18px;
   padding: 0 5px;
-  border-radius: var(--rs-radius-pill);
-  background: var(--rs-warn-fill);
-  color: var(--th-ink);
+  border-radius: var(--rs-radius-sm);
+  background: var(--rs-surface);
+  color: var(--rs-text-strong);
+  box-shadow: inset 0 0 0 1px var(--rs-line-strong);
   font-size: 11px;
   font-weight: var(--rs-weight-bold);
   line-height: 18px;
   text-align: center;
 }
-.count.overdue { box-shadow: 0 0 0 2px var(--rs-bg), 0 0 0 3.5px var(--rs-warn-fill); }
+.count.overdue { background: var(--rs-ink); color: var(--rs-on-ink); box-shadow: none; }
 .item:hover { color: var(--rs-text-strong); }
 .item:hover .well { background: var(--rs-surface); }
 .item.router-link-active { color: var(--rs-text-strong); }
-.item.router-link-active .well { background: var(--rs-active); color: var(--th-ink); }
+.item.router-link-active .well { background: var(--rs-ink); color: var(--rs-on-ink); }
 
-/* Phones: rail becomes a bottom bar */
 @media (max-width: 720px) {
   .rail {
     position: fixed;
@@ -120,9 +120,7 @@ const secondary: NavItem[] = [
     overflow-x: auto;
   }
   .group { flex-direction: row; gap: 0; }
-  .item { min-width: 54px; font-size: 11px; }
-  .well { width: 46px; }
-  /* The style guide is a desk reference; keep the phone bar to what you use at the machine */
+  .item { min-width: 54px; }
   .bottom li:first-child { display: none; }
 }
 </style>

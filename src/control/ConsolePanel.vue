@@ -53,7 +53,7 @@ const fmtTime = (t: number) => new Date(t * 1000).toLocaleTimeString(undefined, 
 </script>
 
 <template>
-  <RsPanel title="Console" index="06">
+  <RsPanel title="Console" :status="control.running ? `Running ${control.running}…` : undefined">
       <div class="console">
         <div ref="logEl" class="log" role="log" aria-live="polite" @scroll="onScroll">
           <div v-for="l in control.lines" :key="l.id" class="line" :class="l.kind">
@@ -78,10 +78,7 @@ const fmtTime = (t: number) => new Date(t * 1000).toLocaleTimeString(undefined, 
           <datalist id="rs-commands"><option v-for="s in suggestions" :key="s" :value="s" /></datalist>
           <RsButton type="submit" :disabled="!machine.online || !input.trim()">Send</RsButton>
         </form>
-        <p class="note">
-          <span v-if="control.running">Running {{ control.running }}… </span>
-          Moves, tool power, tool-state changes and restarts ask before they're sent. The ↑ key recalls earlier commands.
-        </p>
+        <p class="note">Moves, tool power, tool-state changes and restarts ask before they're sent. ↑ recalls earlier commands.</p>
       </div>
   </RsPanel>
 </template>
@@ -89,11 +86,11 @@ const fmtTime = (t: number) => new Date(t * 1000).toLocaleTimeString(undefined, 
 <style scoped>
 .console { display: flex; flex-direction: column; gap: var(--rs-space-2); min-width: 0; }
 .log {
-  height: 420px;
+  height: 380px;
   overflow: auto;
   padding: var(--rs-space-3) var(--rs-space-4);
   border-radius: var(--rs-radius-md);
-  background: var(--rs-bg);
+  background: var(--rs-surface-2);
   font-family: var(--rs-font-code);
   font-size: 12.5px;
   line-height: 1.55;
@@ -102,11 +99,11 @@ const fmtTime = (t: number) => new Date(t * 1000).toLocaleTimeString(undefined, 
 .line time { color: var(--rs-text-muted); opacity: 0.7; }
 .line span { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--rs-text); }
 .line.sent span { color: var(--rs-text-strong); }
-.line.action span { color: var(--rs-active); }
+.line.action span { color: var(--rs-text-strong); font-weight: 700; }
 .line.error span { color: var(--rs-danger-strong); }
 .line.note span { color: var(--rs-text-muted); font-style: italic; }
 .input { display: flex; gap: var(--rs-space-2); }
-.input input { flex: 1; min-width: 0; height: 44px; padding: 0 var(--rs-space-4); border-radius: var(--rs-radius-pill); border: 1.5px solid var(--rs-line-strong); background: var(--rs-bg); color: var(--rs-text-strong); font-family: var(--rs-font-code); }
+.input input { flex: 1; min-width: 0; height: 40px; padding: 0 var(--rs-space-4); border-radius: var(--rs-radius-md); border: 1px solid var(--rs-line-strong); background: var(--rs-surface-2); color: var(--rs-text-strong); font-family: var(--rs-font-code); }
 .input input:focus-visible { border-color: var(--rs-text-strong); }
 .note { font-size: var(--rs-text-xs); color: var(--rs-text-muted); }
 .small { font-size: var(--rs-text-sm); }

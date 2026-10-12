@@ -33,7 +33,7 @@ h3 {
   letter-spacing: -0.01em;
   margin: 0;
 }
-h1 { font-size: var(--rs-text-xl); font-weight: var(--rs-weight-body); letter-spacing: -0.025em; }
+h1 { font-size: var(--rs-text-xl); font-weight: var(--rs-weight-body); letter-spacing: -0.02em; }
 h2 { font-size: var(--rs-text-lg); }
 h3 { font-size: var(--rs-text-md); }
 
@@ -83,9 +83,25 @@ textarea {
 .view {
   display: flex;
   flex-direction: column;
-  gap: var(--rs-space-5);
-  padding: var(--rs-space-6) var(--rs-space-6) var(--rs-space-7);
-  max-width: 1320px;
+  gap: var(--rs-gap);
+  padding: var(--rs-space-5) var(--rs-space-5) var(--rs-space-7);
+  max-width: 1440px;
+}
+.view-head { margin-bottom: var(--rs-space-3); }
+
+/* Dot-matrix readout numerals */
+.rs-num {
+  font-family: var(--rs-font-display);
+  font-variation-settings: 'ROND' 100;
+  font-weight: 900;
+  letter-spacing: 0.01em;
+  line-height: 0.9;
+  color: var(--rs-text-strong);
+}
+/* A one-row dotted rule */
+.rs-rule {
+  height: 2px;
+  background: radial-gradient(var(--rs-dot-faint) 0.9px, transparent 1.1px) 0 50% / 5px 2px repeat-x;
 }
 .view-head { display: flex; flex-direction: column; gap: var(--rs-space-2); padding: 0 var(--rs-space-1); }
 .view-head p { color: var(--rs-text-muted); }
@@ -98,3 +114,6 @@ textarea {
 @media (max-width: 720px) {
   .view { padding: var(--rs-space-4) var(--rs-space-3) 104px; }
 }
+
+/* No data: a plain dash in the interface font, never dotted */
+.rs-num.empty, .rs-num:empty { font-family: var(--rs-font-ui); font-weight: var(--rs-weight-light); color: var(--rs-text-muted); }

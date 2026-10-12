@@ -38,31 +38,25 @@ const iconPx = computed(() => ({ sm: 20, md: 26, lg: 40 })[props.size])
 <style scoped>
 .badge { display: inline-flex; align-items: center; gap: 10px; min-width: 0; }
 .disc {
+  position: relative;
   display: grid;
   place-items: center;
   flex: none;
-  border-radius: 50%;
-  background: var(--accent);
-  color: var(--th-ink);
+  border-radius: var(--rs-radius-md);
+  background: var(--rs-surface-2);
+  color: var(--rs-text-strong);
+  box-shadow: inset 0 0 0 1px var(--rs-line);
+  overflow: hidden;
 }
+/* The tool's colour: a tab on the tile's edge */
+.disc::after { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--accent); }
 .size-sm .disc { width: 32px; height: 32px; }
 .size-md .disc { width: 44px; height: 44px; }
-.size-lg .disc { width: 64px; height: 64px; }
-
-.unverified .disc {
-  background: repeating-linear-gradient(135deg, transparent 0 4px, var(--rs-hatch) 4px 8px);
-  color: var(--rs-text-muted);
-  box-shadow: inset 0 0 0 1.5px var(--rs-line-strong);
-}
-
+.size-lg .disc { width: 60px; height: 60px; border-radius: var(--rs-radius-lg); }
+.unverified .disc { background: var(--rs-dither-faint), var(--rs-surface-2); color: var(--rs-text-muted); }
+.unverified .disc::after { display: none; }
 .text { display: flex; flex-direction: column; min-width: 0; line-height: 1.2; }
-.name {
-  font-weight: var(--rs-weight-medium);
-  color: var(--rs-text-strong);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
+.name { font-weight: var(--rs-weight-medium); color: var(--rs-text-strong); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .size-lg .name { font-size: var(--rs-text-lg); }
 .meta, .summary { font-size: var(--rs-text-xs); color: var(--rs-text-muted); }
 .summary { margin-top: 2px; }

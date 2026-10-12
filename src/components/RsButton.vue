@@ -1,23 +1,19 @@
 <script setup lang="ts">
 /**
- * The one button. Pill-shaped. Variants:
- *   primary  - the main action on a screen (fills with the mounted tool's accent)
- *   default  - outlined
- *   quiet    - text only
- *   danger   - stops or destroys something (red is reserved for this)
+ * The one button.
+ *   primary  inverted ink: the main action on a card
+ *   default  ink outline
+ *   quiet    text only
+ *   danger   red: stops or destroys something (red is reserved for this)
  */
 withDefaults(
-  defineProps<{
-    variant?: 'primary' | 'default' | 'quiet' | 'danger'
-    type?: 'button' | 'submit'
-    disabled?: boolean
-  }>(),
-  { variant: 'default', type: 'button', disabled: false },
+  defineProps<{ variant?: 'primary' | 'default' | 'quiet' | 'danger'; type?: 'button' | 'submit'; disabled?: boolean; size?: 'md' | 'sm' }>(),
+  { variant: 'default', type: 'button', disabled: false, size: 'md' },
 )
 </script>
 
 <template>
-  <button :type="type" class="btn" :class="variant" :disabled="disabled">
+  <button :type="type" class="btn" :class="[variant, size]" :disabled="disabled">
     <slot />
   </button>
 </template>
@@ -28,26 +24,25 @@ withDefaults(
   align-items: center;
   justify-content: center;
   gap: var(--rs-space-2);
-  min-height: 42px;
-  padding: 0 var(--rs-space-5);
-  border-radius: var(--rs-radius-pill);
-  border: 1.5px solid var(--rs-line-strong);
+  min-height: 38px;
+  padding: 0 var(--rs-space-4);
+  border-radius: var(--rs-radius-md);
+  border: 1px solid var(--rs-line-strong);
   background: transparent;
   color: var(--rs-text-strong);
   font-weight: var(--rs-weight-medium);
+  font-size: var(--rs-text-sm);
   cursor: pointer;
-  transition: background var(--rs-dur) var(--rs-ease), border-color var(--rs-dur) var(--rs-ease), color var(--rs-dur) var(--rs-ease);
+  white-space: nowrap;
+  transition: background var(--rs-dur) var(--rs-ease), color var(--rs-dur) var(--rs-ease);
 }
-.btn:hover:not(:disabled) { border-color: var(--rs-text-strong); }
-
-.primary { background: var(--rs-active); border-color: transparent; color: var(--th-ink); }
-.primary:hover:not(:disabled) { background: color-mix(in srgb, var(--rs-active) 85%, white); border-color: transparent; }
-
-.quiet { border-color: transparent; color: var(--rs-text); padding: 0 var(--rs-space-3); }
-.quiet:hover:not(:disabled) { border-color: transparent; color: var(--rs-text-strong); text-decoration: underline; text-underline-offset: 4px; }
-
-.danger { background: var(--rs-danger); border-color: transparent; color: var(--rs-on-danger); }
-.danger:hover:not(:disabled) { background: var(--rs-danger-strong); border-color: transparent; }
-
-.btn:disabled { cursor: not-allowed; opacity: 0.4; }
+.btn.sm { min-height: 32px; padding: 0 var(--rs-space-3); }
+.btn:hover:not(:disabled) { background: var(--rs-surface-2); }
+.primary { background: var(--rs-ink); border-color: var(--rs-ink); color: var(--rs-on-ink); }
+.primary:hover:not(:disabled) { background: var(--rs-text); }
+.quiet { border-color: transparent; color: var(--rs-text); padding: 0 var(--rs-space-2); }
+.quiet:hover:not(:disabled) { background: transparent; color: var(--rs-text-strong); text-decoration: underline; text-underline-offset: 4px; }
+.danger { background: var(--rs-danger); border-color: var(--rs-danger); color: var(--rs-on-danger); }
+.danger:hover:not(:disabled) { background: var(--rs-danger-strong); }
+.btn:disabled { cursor: not-allowed; opacity: 0.35; }
 </style>

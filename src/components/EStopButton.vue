@@ -56,9 +56,9 @@ async function stop() {
   display: inline-flex;
   align-items: center;
   gap: 10px;
-  height: 44px;
+  height: 42px;
   padding: 0 var(--rs-space-5) 0 6px;
-  border-radius: var(--rs-radius-pill);
+  border-radius: var(--rs-radius-md);
   border: 0;
   background: var(--rs-danger);
   color: var(--rs-on-danger);
@@ -70,11 +70,11 @@ async function stop() {
 .estop:active:not(:disabled) { transform: translateY(1px); }
 /* Mushroom-head stop button: a ring around a solid cap */
 .cap {
-  width: 32px;
-  height: 32px;
+  width: 30px;
+  height: 30px;
   border-radius: 50%;
-  border: 2.5px solid currentColor;
-  background: radial-gradient(circle, currentColor 0 7px, transparent 7.5px);
+  border: 2px solid currentColor;
+  background: radial-gradient(circle, currentColor 0 6px, transparent 6.5px);
 }
 .estop:disabled {
   cursor: not-allowed;
@@ -88,11 +88,11 @@ async function stop() {
   top: calc(100% + 8px);
   white-space: nowrap;
   padding: 6px 12px;
-  border-radius: var(--rs-radius-pill);
+  border-radius: var(--rs-radius-md);
   font-size: var(--rs-text-sm);
   font-weight: var(--rs-weight-medium);
 }
-.result.sent { background: var(--rs-paper); color: var(--rs-paper-ink); }
+.result.sent { background: var(--rs-ink); color: var(--rs-on-ink); }
 .result.failed { background: var(--rs-danger); color: var(--rs-on-danger); }
 @media (max-width: 560px) { .label { display: none; } .estop { padding: 0 6px; } }
 </style>

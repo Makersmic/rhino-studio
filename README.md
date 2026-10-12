@@ -101,17 +101,20 @@ docs/           testing on the machine
 | Components | Our own, no library | Keeps one visual identity; nothing to fight |
 | State | Pinia | Vue's official store; machine state is shared by many screens |
 | Routing | Hash URLs (`#/prepare`) | Runs from any static folder without server rewrite rules |
-| Fonts | Archivo (variable weight and width) and JetBrains Mono, bundled | One family does big light readouts, labels and the wide wordmark; works offline on the shop network |
+| Fonts | Archivo, Doto (dot-matrix readouts) and JetBrains Mono, bundled | Clean interface, one futuristic touch for numbers you read from across the shop; works offline |
 | Slicing (from Phase 3) | Kiri:Moto engine in the browser | Keeps CPU load off the Pi 3B so Klipper's timing isn't disturbed |
 
 ## Design system
 
-Open **Style** in the app for the live guide. The direction is a workshop instrument panel: a black frame, solid colour blocks with big rounded corners, cream "paper" tiles carrying large light numerals (Braun dials, retro control panels), pill-shaped controls, and thin geometric line art with technical-drawing touches (crop marks, index numbers, dotted rules).
+Open **Style** in the app for the live guide. The direction is an **e-paper instrument**: every card is a small e-paper display, the whole app is one consistent set of modules (in the spirit of Mainsail's dashboard), and almost everything is drawn with two colours.
 
-- Each toolhead owns one colour from a retro palette and one emblem: BlockOne slate blue, SwitchFly sea teal, LightSaber lilac, HotJoe signal orange, DragKnife sage, user-added tools tan.
-- Red is never a tool colour; it means stop. Danger controls also differ in shape and wording, since HotJoe's orange is the nearest hue.
-- The app takes the mounted toolhead's colour (band under the top bar, primary buttons, active nav). When Klipper hasn't confirmed the tool, the band is hatched.
-- Emblems are drawn once on a 48-unit grid with non-scaling strokes, so they work from 20px to full tiles. Dashed construction lines (tool axis, motion, planned path) appear at 32px and up.
+- **Ink and paper** do the work. Night theme is inverted e-ink (charcoal paper, light ink); day theme is warm matte paper with black ink.
+- **Red means stop**, and nothing else is red.
+- **Toolhead colours** appear only as a small tab on a tool's tile or badge and the thin band under the top bar.
+- **Dither patterns** do the shading, the way e-ink displays do: progress bars, locked jog keys, care that's coming due. Overdue is solid ink.
+- **Inverted ink** (an ink block with paper text) means live or selected: the armed jog keys, the held Hold button, the chosen step size, the current screen in the nav.
+- **Type**: Archivo for the interface; **Doto**, a dot-matrix face, only for big readouts (temperatures, position, progress); JetBrains Mono for G-code and the console. All bundled.
+- Every card is an `RsPanel` module: title on the left, a short live status on the right, a dotted rule, then the body.
 - Components use `--rs-*` variables only, never raw colours.
 
 ## Safety model
@@ -138,5 +141,5 @@ Third-party pieces in use:
 | Package | Licence |
 |---|---|
 | Vue, Vue Router, Pinia, Vite | MIT |
-| Archivo, JetBrains Mono (via Fontsource) | SIL Open Font License 1.1 |
+| Archivo, Doto, JetBrains Mono (via Fontsource) | SIL Open Font License 1.1 |
 | Kiri:Moto engine (from Phase 3) | MIT |

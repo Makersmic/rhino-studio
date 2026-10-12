@@ -1,34 +1,49 @@
 <script setup lang="ts">
-/** Charcoal panel. Optional index number ("01") sits top-right, like a drawing sheet. */
-defineProps<{ title?: string; index?: string }>()
+/**
+ * The e-paper module: every card in the app.
+ * Header: title on the left, a short live status or actions on the right,
+ * then a dotted rule. `index` is accepted for older callers and ignored.
+ */
+withDefaults(defineProps<{ title?: string; index?: string; status?: string; flush?: boolean }>(), {
+  title: undefined,
+  index: undefined,
+  status: undefined,
+  flush: false,
+})
 </script>
 
 <template>
-  <section class="panel">
-    <header v-if="title || index || $slots.actions" class="head">
+  <section class="module" :class="{ flush }">
+    <header v-if="title || status || $slots.actions" class="head">
       <h2 v-if="title">{{ title }}</h2>
-      <div class="actions"><slot name="actions" /></div>
-      <span v-if="index" class="index">{{ index }}</span>
+      <span v-if="status" class="status">{{ status }}</span>
+      <div v-if="$slots.actions" class="actions"><slot name="actions" /></div>
     </header>
-    <slot />
+    <div class="body"><slot /></div>
   </section>
 </template>
 
 <style scoped>
-.panel {
+.module {
   background: var(--rs-surface);
+  border: 1px solid var(--rs-line);
   border-radius: var(--rs-radius-lg);
-  padding: var(--rs-space-5);
   min-width: 0;
+  display: flex;
+  flex-direction: column;
 }
 .head {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: var(--rs-space-3);
-  margin-bottom: var(--rs-space-4);
+  min-height: 48px;
+  padding: 0 var(--rs-space-4) 0 var(--rs-space-5);
+  background: radial-gradient(var(--rs-dot-faint) 0.9px, transparent 1.1px) 0 100% / 5px 2px repeat-x;
 }
-.actions { display: flex; gap: var(--rs-space-2); margin-left: auto; }
-.actions:empty { display: none; }
-.index { margin-left: auto; font-family: var(--rs-font-code); font-size: var(--rs-text-xs); color: var(--rs-text-muted); }
-.actions:not(:empty) + .index { margin-left: var(--rs-space-3); }
+h2 { font-size: var(--rs-text-md); font-weight: var(--rs-weight-medium); }
+.status { font-size: var(--rs-text-sm); color: var(--rs-text-muted); margin-left: auto; white-space: nowrap; }
+.actions { display: flex; align-items: center; gap: var(--rs-space-2); margin-left: auto; }
+.status + .actions { margin-left: var(--rs-space-3); }
+.body { padding: var(--rs-space-4) var(--rs-space-5) var(--rs-space-5); flex: 1; min-width: 0; }
+.flush .body { padding: 0; }
 </style>

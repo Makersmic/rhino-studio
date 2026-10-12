@@ -37,19 +37,15 @@ const title = computed(() => {
   align-items: center;
   gap: 6px;
   height: 30px;
-  padding: 0 12px 0 9px;
-  border-radius: var(--rs-radius-pill);
-  background: var(--rs-paper);
-  color: var(--rs-paper-ink);
+  padding: 0 11px 0 8px;
+  border-radius: var(--rs-radius-md);
+  border: 1px solid var(--rs-line-strong);
+  background: var(--rs-surface);
+  color: var(--rs-text-strong);
   font-size: var(--rs-text-sm);
   font-weight: var(--rs-weight-medium);
   text-decoration: none;
   white-space: nowrap;
 }
-.care-chip.overdue {
-  background: var(--rs-warn-fill);
-  color: var(--th-ink);
-  font-weight: var(--rs-weight-bold);
-  box-shadow: 0 0 0 2px var(--rs-bg), 0 0 0 3.5px var(--rs-warn-fill);
-}
+.care-chip.overdue { background: var(--rs-ink); border-color: var(--rs-ink); color: var(--rs-on-ink); }
 </style>

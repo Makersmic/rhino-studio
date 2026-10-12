@@ -1,5 +1,5 @@
 <script setup lang="ts">
-/** The running job (pause, resume, cancel), or recent files ready to start. */
+/** The running job (pause, resume, cancel), or where to start one. */
 import { computed } from 'vue'
 import RsButton from '@/components/RsButton.vue'
 import RsPanel from '@/components/RsPanel.vue'
@@ -16,13 +16,12 @@ const label: Record<string, string> = { standby: 'Idle', printing: 'Running', pa
 </script>
 
 <template>
-  <RsPanel title="Job" index="02">
+  <RsPanel title="Job" :status="state ? label[state] ?? state : '—'">
     <template v-if="active">
-      <div class="job">
-        <span class="state" :class="state">{{ label[state!] }}</span>
-        <strong class="file">{{ machine.job.filename }}</strong>
-        <span class="pct">{{ pct }}<small>%</small></span>
-        <div class="bar" role="progressbar" :aria-valuenow="pct" aria-valuemin="0" aria-valuemax="100"><span :style="{ width: `${pct}%` }" /></div>
+      <p class="file">{{ machine.job.filename }}</p>
+      <div class="progress">
+        <span class="bar" role="progressbar" :aria-valuenow="pct" aria-valuemin="0" aria-valuemax="100"><span :style="{ width: `${pct}%` }" /></span>
+        <span class="rs-num pct">{{ pct }}<small>%</small></span>
       </div>
       <div class="row">
         <RsButton v-if="state === 'printing'" @click="control.pauseJob()">Pause</RsButton>
@@ -31,21 +30,21 @@ const label: Record<string, string> = { standby: 'Idle', printing: 'Running', pa
       </div>
     </template>
     <template v-else>
-      <p class="muted">{{ state ? label[state] ?? state : 'Waiting for Klipper' }}<template v-if="machine.job.filename">: {{ machine.job.filename }}</template>.</p>
-      <p class="muted small">Start jobs from <RouterLink to="/files">Files</RouterLink>. Studio checks the file's toolhead against the mounted one, and laser, spindle and knife jobs start through their Rhino setup wizard.</p>
+      <p class="muted small">
+        <template v-if="machine.job.filename">Last: {{ machine.job.filename }}. </template>
+        Start a job from <RouterLink to="/files">Files</RouterLink>: Studio checks the file's toolhead against the mounted one first.
+      </p>
     </template>
   </RsPanel>
 </template>
 
 <style scoped>
-.job { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: var(--rs-space-2) var(--rs-space-3); margin-bottom: var(--rs-space-4); }
-.state { font-size: var(--rs-text-xs); font-weight: var(--rs-weight-medium); padding: 3px 10px; border-radius: var(--rs-radius-pill); background: var(--rs-active); color: var(--th-ink); }
-.state.paused { background: var(--rs-warn-fill); }
 .file { color: var(--rs-text-strong); font-weight: var(--rs-weight-medium); overflow-wrap: anywhere; }
-.bar { grid-column: 1 / -1; height: 8px; border-radius: var(--rs-radius-pill); background: var(--rs-surface-2); overflow: hidden; }
-.bar span { display: block; height: 100%; background: var(--rs-active); border-radius: inherit; }
-.pct small { font-size: 0.5em; }
-.pct { font-size: var(--rs-text-xl); font-weight: var(--rs-weight-light); color: var(--rs-text-strong); }
+.progress { display: flex; align-items: center; gap: var(--rs-space-4); margin: var(--rs-space-3) 0 var(--rs-space-4); }
+.bar { flex: 1; height: 10px; border-radius: 2px; background: var(--rs-dither-faint); box-shadow: inset 0 0 0 1px var(--rs-line); overflow: hidden; }
+.bar span { display: block; height: 100%; background: var(--rs-ink); }
+.pct { font-size: 2rem; }
+.pct small { font-family: var(--rs-font-ui); font-size: 0.4em; color: var(--rs-text-muted); }
 .row { display: flex; gap: var(--rs-space-2); }
-.small { font-size: var(--rs-text-sm); margin-top: var(--rs-space-2); }
+.small { font-size: var(--rs-text-sm); }
 </style>

@@ -41,69 +41,59 @@ withDefaults(
 
 <style scoped>
 .tile {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: var(--rs-space-3);
   padding: var(--rs-space-4) var(--rs-space-5) var(--rs-space-5);
-  border-radius: var(--rs-radius-xl);
-  background: var(--accent);
-  color: var(--th-ink);
+  border-radius: var(--rs-radius-lg);
+  border: 1px solid var(--rs-line);
+  background: var(--rs-surface);
+  color: var(--rs-text);
   min-width: 0;
+  overflow: hidden;
 }
+/* The tool's colour: one tab along the top edge */
+.tile::before { content: ''; position: absolute; left: 0; right: 0; top: 0; height: 4px; background: var(--accent); }
 .top { display: flex; align-items: baseline; justify-content: space-between; gap: var(--rs-space-2); }
-.name { color: inherit; font-size: var(--rs-text-lg); font-weight: var(--rs-weight-medium); }
-.index { font-family: var(--rs-font-code); font-size: var(--rs-text-xs); opacity: 0.7; }
-
+.name { color: var(--rs-text-strong); font-size: var(--rs-text-lg); font-weight: var(--rs-weight-medium); }
+.index { font-size: var(--rs-text-xs); color: var(--rs-text-muted); }
 .frame {
   position: relative;
   display: grid;
   place-items: center;
   padding: var(--rs-space-4) 0;
-  /* faint dot grid, like drafting paper */
-  background-image: radial-gradient(color-mix(in srgb, var(--th-ink) 22%, transparent) 0.8px, transparent 1.2px);
-  background-size: 12px 12px;
-  background-position: center;
+  color: var(--rs-text-strong);
+  background: var(--rs-dither-faint);
 }
-.crop { position: absolute; width: 12px; height: 12px; border: 0 solid var(--th-ink); }
-.tl { top: 0; left: 0; border-top-width: 1.5px; border-left-width: 1.5px; }
-.tr { top: 0; right: 0; border-top-width: 1.5px; border-right-width: 1.5px; }
-.bl { bottom: 0; left: 0; border-bottom-width: 1.5px; border-left-width: 1.5px; }
-.br { bottom: 0; right: 0; border-bottom-width: 1.5px; border-right-width: 1.5px; }
-
+.crop { position: absolute; width: 10px; height: 10px; border: 0 solid var(--rs-line-strong); }
+.tl { top: 0; left: 0; border-top-width: 1px; border-left-width: 1px; }
+.tr { top: 0; right: 0; border-top-width: 1px; border-right-width: 1px; }
+.bl { bottom: 0; left: 0; border-bottom-width: 1px; border-left-width: 1px; }
+.br { bottom: 0; right: 0; border-bottom-width: 1px; border-right-width: 1px; }
 .foot { display: flex; flex-direction: column; gap: 2px; font-size: var(--rs-text-sm); line-height: 1.35; }
-.caption { opacity: 0.72; font-size: var(--rs-text-xs); }
+.caption { color: var(--rs-text-muted); font-size: var(--rs-text-xs); }
+.mounted {
+  align-self: flex-start;
+  margin-top: var(--rs-space-2);
+  padding: 2px 9px;
+  border-radius: var(--rs-radius-sm);
+  background: var(--rs-ink);
+  color: var(--rs-on-ink);
+  font-size: var(--rs-text-xs);
+  font-weight: var(--rs-weight-medium);
+}
 .care {
   display: flex;
   flex-direction: column;
   gap: 6px;
   margin-top: auto;
   padding-top: var(--rs-space-3);
-  border-top: 1.5px dashed color-mix(in srgb, var(--th-ink) 35%, transparent);
-  color: var(--th-ink);
+  color: var(--rs-text);
   text-decoration: none;
   font-size: var(--rs-text-xs);
+  background: radial-gradient(var(--rs-dot-faint) 0.9px, transparent 1.1px) 0 0 / 5px 2px repeat-x;
 }
 .care-text { font-weight: var(--rs-weight-medium); }
-.care.due_soon .care-text::before, .care.overdue .care-text::before {
-  content: '';
-  display: inline-block;
-  width: 7px;
-  height: 7px;
-  margin-right: 6px;
-  background: currentColor;
-  transform: rotate(45deg) translateY(-1px);
-}
-.care :deep(.fill) { background: var(--th-ink); }
-.care.due_soon :deep(.fill), .care.overdue :deep(.fill) {
-  background: repeating-linear-gradient(135deg, var(--th-ink) 0 4px, transparent 4px 7px);
-}
-.mounted {
-  align-self: flex-start;
-  margin-top: var(--rs-space-2);
-  padding: 2px 10px;
-  border-radius: var(--rs-radius-pill);
-  border: 1.5px solid var(--th-ink);
-  font-size: var(--rs-text-xs);
-  font-weight: var(--rs-weight-medium);
-}
+.care.due_soon .care-text, .care.overdue .care-text { color: var(--rs-text-strong); }
 </style>

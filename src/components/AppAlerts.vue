@@ -63,19 +63,24 @@ const alerts = computed(() => {
 </template>
 
 <style scoped>
-.alerts { display: flex; flex-direction: column; gap: 6px; padding: var(--rs-space-3) var(--rs-space-4) 0; }
+.alerts { display: flex; flex-direction: column; gap: 6px; padding: var(--rs-space-3) var(--rs-space-5) 0; }
 .alert {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   flex-wrap: wrap;
-  gap: 4px 8px;
-  padding: 10px var(--rs-space-4);
+  gap: 4px 10px;
+  min-height: 44px;
+  padding: 8px var(--rs-space-4);
   border-radius: var(--rs-radius-md);
   font-size: var(--rs-text-sm);
+  border: 1px solid var(--rs-line-strong);
+  background: var(--rs-surface);
+  color: var(--rs-text);
 }
-.alert.danger { background: var(--rs-danger); color: var(--rs-on-danger); }
-.alert.warn { background: var(--rs-paper); color: var(--rs-paper-ink); }
-.act { margin-left: auto; height: 32px; padding: 0 14px; border-radius: var(--rs-radius-pill); border: 1.5px solid currentColor; background: transparent; color: inherit; font-weight: var(--rs-weight-medium); cursor: pointer; }
-.mark { width: 9px; height: 9px; flex: none; align-self: center; background: currentColor; }
-.warn .mark { transform: rotate(45deg); }
+.alert strong { color: var(--rs-text-strong); }
+.alert.danger { background: var(--rs-danger); border-color: var(--rs-danger); color: var(--rs-on-danger); }
+.alert.danger strong { color: inherit; }
+.act { margin-left: auto; height: 30px; padding: 0 12px; border-radius: var(--rs-radius-md); border: 1px solid currentColor; background: transparent; color: inherit; font-weight: var(--rs-weight-medium); cursor: pointer; }
+.mark { width: 10px; height: 10px; flex: none; background: var(--rs-dither-dense); box-shadow: inset 0 0 0 1px var(--rs-ink); }
+.danger .mark { background: currentColor; box-shadow: none; }
 </style>

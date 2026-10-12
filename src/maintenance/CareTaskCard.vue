@@ -48,29 +48,25 @@ const showPriority = computed(() => props.task.priority === 'high' || props.task
   gap: var(--rs-space-3);
   padding: var(--rs-space-4) var(--rs-space-5) var(--rs-space-5);
   border-radius: var(--rs-radius-lg);
+  border: 1px solid var(--rs-line);
   background: var(--rs-surface);
   color: var(--rs-text);
   min-width: 0;
 }
-.card.compact { padding: var(--rs-space-4); gap: var(--rs-space-2); background: var(--rs-surface-2); }
+.card.compact { padding: var(--rs-space-3) var(--rs-space-4); gap: var(--rs-space-2); background: var(--rs-surface-2); border-color: transparent; }
 .top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--rs-space-2) var(--rs-space-3); min-height: 32px; }
 .area { font-size: var(--rs-text-sm); font-weight: var(--rs-weight-medium); color: var(--rs-text-strong); }
 .state {
   font-size: var(--rs-text-xs);
   font-weight: var(--rs-weight-medium);
-  padding: 3px 10px;
-  border-radius: var(--rs-radius-pill);
-  border: 1.5px solid var(--rs-line-strong);
+  padding: 2px 8px;
+  border-radius: var(--rs-radius-sm);
+  border: 1px solid var(--rs-line);
+  color: var(--rs-text);
   white-space: nowrap;
 }
-.state.due_soon { background: var(--rs-warn-fill); border-color: transparent; color: var(--th-ink); }
-.state.overdue {
-  background: var(--rs-warn-fill);
-  border-color: transparent;
-  color: var(--th-ink);
-  font-weight: var(--rs-weight-bold);
-  box-shadow: 0 0 0 2px var(--rs-surface), 0 0 0 3.5px var(--rs-warn-fill);
-}
+.state.due_soon { border-color: var(--rs-ink); color: var(--rs-text-strong); }
+.state.overdue { background: var(--rs-ink); border-color: var(--rs-ink); color: var(--rs-on-ink); }
 .title { font-size: var(--rs-text-lg); font-weight: var(--rs-weight-medium); line-height: 1.25; }
 .compact .title { font-size: var(--rs-text-md); }
 .card { color: var(--rs-text-muted); }

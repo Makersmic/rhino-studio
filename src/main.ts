@@ -5,6 +5,7 @@ import { createPinia } from 'pinia'
 // Archivo is variable in weight (100-900) and width (62-125%).
 import '@fontsource-variable/archivo/wdth.css'
 import '@fontsource/jetbrains-mono/400.css'
+import '@fontsource-variable/doto/full.css'
 
 import './styles/tokens.css'
 import './styles/base.css'

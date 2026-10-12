@@ -31,16 +31,14 @@ const pct = computed(() => Math.round(Math.min(1, Math.max(0, props.fraction)) *
 .bar {
   display: block;
   position: relative;
-  height: 6px;
-  border-radius: var(--rs-radius-pill);
-  background: color-mix(in srgb, currentColor 16%, transparent);
+  height: 8px;
+  border-radius: 2px;
+  background: var(--rs-dither-faint);
+  box-shadow: inset 0 0 0 1px var(--rs-line);
   overflow: hidden;
 }
-.fill { position: absolute; inset: 0 auto 0 0; border-radius: inherit; background: currentColor; opacity: 0.55; }
-.due_soon .fill { background: var(--rs-warn-fill); opacity: 1; }
-.overdue .fill {
-  background: repeating-linear-gradient(135deg, var(--rs-warn-fill) 0 5px, color-mix(in srgb, var(--rs-warn-fill) 45%, transparent) 5px 9px);
-  opacity: 1;
-}
-.held .fill { opacity: 0.3; }
+.fill { position: absolute; inset: 0 auto 0 0; background: var(--rs-dither); }
+.due_soon .fill { background: var(--rs-dither-dense); box-shadow: inset 0 0 0 1px var(--rs-ink); }
+.overdue .fill { background: var(--rs-ink); }
+.held .fill { background: var(--rs-dither-faint); }
 </style>

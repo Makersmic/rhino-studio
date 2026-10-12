@@ -51,23 +51,22 @@ const answer = (ok: boolean) => control.pendingConfirm?.resolve(ok)
 
 <style scoped>
 .dlg {
-  width: min(540px, calc(100vw - 24px));
+  width: min(520px, calc(100vw - 24px));
   padding: 0;
-  border: 0;
-  border-radius: var(--rs-radius-xl);
+  border: 2px solid var(--rs-ink);
+  border-radius: var(--rs-radius-lg);
   background: var(--rs-surface);
   color: var(--rs-text);
-  box-shadow: 0 0 0 4px var(--rs-warn-fill);
 }
-.dlg.danger { box-shadow: 0 0 0 4px var(--rs-danger); }
-.dlg.normal { box-shadow: none; }
-.dlg::backdrop { background: rgb(0 0 0 / 0.65); }
+.dlg.danger { border-color: var(--rs-danger); }
+.dlg.normal { border-color: var(--rs-line-strong); }
+.dlg::backdrop { background: rgb(0 0 0 / 0.55); }
 .body { display: flex; flex-direction: column; gap: var(--rs-space-4); padding: var(--rs-space-5); }
-.mark { width: 14px; height: 14px; background: var(--rs-warn-fill); transform: rotate(45deg); }
-.danger .mark { background: var(--rs-danger); transform: none; }
+.mark { width: 14px; height: 14px; background: var(--rs-dither-dense); box-shadow: inset 0 0 0 1.5px var(--rs-ink); }
+.danger .mark { background: var(--rs-danger); box-shadow: none; }
 h2 { font-size: var(--rs-text-xl); font-weight: var(--rs-weight-body); letter-spacing: -0.02em; }
 .text { white-space: pre-line; }
-.lines { list-style: none; margin: 0; padding: var(--rs-space-3) var(--rs-space-4); border-radius: var(--rs-radius-md); background: var(--rs-bg); display: flex; flex-direction: column; gap: var(--rs-space-2); }
+.lines { list-style: none; margin: 0; padding: var(--rs-space-3) var(--rs-space-4); border-radius: var(--rs-radius-md); background: var(--rs-surface-2); display: flex; flex-direction: column; gap: var(--rs-space-2); }
 .lines li { display: flex; flex-direction: column; gap: 2px; }
 .lines code { color: var(--rs-text-strong); overflow-wrap: anywhere; }
 .lines span { font-size: var(--rs-text-sm); color: var(--rs-text-muted); }

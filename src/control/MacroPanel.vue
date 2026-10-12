@@ -23,7 +23,7 @@ const runMacro = (name: string, label: string) => control.send(name, { label })
 </script>
 
 <template>
-  <RsPanel title="Macros" index="05">
+  <RsPanel title="Macros" :status="machine.mountedName ? `for ${machine.mountedName}` : undefined">
     <div class="macros">
       <section v-for="g in groups" :key="g.title" class="group">
         <h3>{{ g.title }}</h3>
@@ -51,22 +51,26 @@ const runMacro = (name: string, label: string) => control.send(name, { label })
 <style scoped>
 .macros { display: flex; flex-direction: column; gap: var(--rs-space-4); }
 h3 { font-size: var(--rs-text-xs); font-weight: var(--rs-weight-medium); color: var(--rs-text-muted); margin-bottom: var(--rs-space-2); }
-.buttons { display: flex; flex-wrap: wrap; gap: 6px; }
+.buttons { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 6px; }
 .macro {
   min-height: 38px;
-  padding: 0 14px;
-  border-radius: var(--rs-radius-pill);
-  border: 1.5px solid var(--rs-line-strong);
-  background: transparent;
+  padding: 0 12px;
+  border-radius: var(--rs-radius-md);
+  border: 1px solid var(--rs-line);
+  background: var(--rs-surface-2);
   color: var(--rs-text-strong);
   font-size: var(--rs-text-sm);
   font-weight: var(--rs-weight-medium);
+  text-align: left;
   cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.macro:hover:not(:disabled) { border-color: var(--rs-text-strong); }
-.macro.suggested { background: var(--rs-warn-fill); border-color: transparent; color: var(--th-ink); }
-.macro:disabled { opacity: 0.4; cursor: not-allowed; }
-.dense .macro { min-height: 30px; font-family: var(--rs-font-code); font-size: var(--rs-text-xs); font-weight: 400; }
+.macro:hover:not(:disabled) { background: var(--rs-ink); border-color: var(--rs-ink); color: var(--rs-on-ink); }
+.macro.suggested { border: 2px solid var(--rs-ink); }
+.macro:disabled { opacity: 0.35; cursor: not-allowed; }
+.dense .macro { min-height: 32px; font-family: var(--rs-font-code); font-size: 11px; font-weight: 400; background: transparent; }
 .note { margin-top: var(--rs-space-4); font-size: var(--rs-text-xs); color: var(--rs-text-muted); }
 .small { font-size: var(--rs-text-sm); }
 </style>

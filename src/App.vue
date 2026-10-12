@@ -27,6 +27,9 @@ useMaintenanceStore().start(portalBase(settings.portalUrl))
 // has verified which tool is on. Otherwise it stays neutral steel.
 watchEffect(() => {
   const v = machine.mountedVerified ? machine.mountedLook.accentVar : '--th-unknown'
+  // --rs-tool: the mounted tool's accent, used only as small tabs and the top band.
+  // --rs-active is the old name for the same thing.
+  document.documentElement.style.setProperty('--rs-tool', `var(${v})`)
   document.documentElement.style.setProperty('--rs-active', `var(${v})`)
 })
 

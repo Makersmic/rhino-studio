@@ -63,38 +63,41 @@ const caption = computed(() => {
   height: var(--rs-topbar-h);
   display: flex;
   align-items: center;
-  gap: var(--rs-space-5);
+  gap: var(--rs-space-4);
   padding: 0 var(--rs-space-4) 0 var(--rs-space-5);
   background: var(--rs-bg);
-  /* The mounted toolhead's accent runs along the bottom of the whole app. */
-  border-bottom: 4px solid var(--rs-active);
+  /* The mounted tool's tab colour runs under the bar: the only tool colour on screen */
+  box-shadow: inset 0 -3px 0 var(--rs-tool);
 }
 .topbar.unverified {
-  border-bottom-color: transparent;
-  border-image: repeating-linear-gradient(135deg, var(--rs-line-strong) 0 6px, transparent 6px 12px) 4;
+  box-shadow: none;
+  background:
+    radial-gradient(var(--rs-dot) 0.9px, transparent 1.15px) 0 100% / 4px 3px repeat-x,
+    var(--rs-bg);
 }
-.home { text-decoration: none; display: inline-flex; border-radius: var(--rs-radius-pill); }
+.home { text-decoration: none; display: inline-flex; border-radius: var(--rs-radius-md); }
 .mounted {
   display: flex;
   align-items: center;
   gap: var(--rs-space-2);
-  height: 44px;
-  padding: 0 14px 0 6px;
-  border-radius: var(--rs-radius-pill);
-  border: 1.5px solid var(--rs-line);
+  height: 40px;
+  padding: 0 12px 0 4px;
+  border-radius: var(--rs-radius-md);
+  border: 1px solid var(--rs-line);
+  background: var(--rs-surface);
   min-width: 0;
   text-decoration: none;
 }
 .mounted:hover { border-color: var(--rs-line-strong); }
 .caption { font-size: var(--rs-text-xs); color: var(--rs-text-muted); }
-.right { margin-left: auto; display: flex; align-items: center; gap: var(--rs-space-3); }
+.right { margin-left: auto; display: flex; align-items: center; gap: var(--rs-space-2); }
 @media (max-width: 720px) {
   .topbar { gap: var(--rs-space-3); padding-left: var(--rs-space-3); }
   .caption { display: none; }
   .right :deep(.chip) { display: none; }
 }
 @media (max-width: 560px) {
-  .mounted { padding-right: 6px; }
+  .mounted { padding-right: 4px; }
   .mounted :deep(.text) { display: none; }
 }
 </style>

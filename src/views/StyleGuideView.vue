@@ -58,27 +58,38 @@ const isUnknown = (t: ToolheadLook) => t.icon === 'unknown'
       <p>The parts every screen is built from. Colours live in <code>src/styles/tokens.css</code>, icons in <code>src/icons/</code>, name and logo in <code>src/brand/brand.ts</code>.</p>
     </div>
 
-    <!-- Hero: the palette as solid blocks, like a colour reference card -->
+    <!-- Hero: the whole palette is ink, paper and one signal colour -->
     <div class="palette">
-      <div
-        v-for="(t, i) in allTools"
-        :key="t.name"
-        class="swatch"
-        :class="{ wide: i === 0 }"
-        :style="{ background: `var(${t.accentVar})` }"
-      >
-        <span class="sw-name">{{ t.name }}</span>
-        <span class="sw-hex">{{ values[t.accentVar] }}</span>
+      <div class="swatch paper">
+        <span class="sw-name">Paper</span>
+        <span class="sw-big rs-num">24<small>°</small></span>
+        <span class="sw-hex">Every card. Matte, no shadows.</span>
       </div>
-      <div class="swatch danger">
-        <span class="sw-name">Stop</span>
-        <span class="sw-hex">{{ values['--rs-danger'] }}</span>
+      <div class="swatch ink">
+        <span class="sw-name">Ink</span>
+        <span class="sw-big rs-num">ON</span>
+        <span class="sw-hex">Text, lines, and inverted when live or selected.</span>
+      </div>
+      <div class="swatch dither">
+        <span class="sw-name">Dither</span>
+        <span class="sw-hex">E-ink shading: progress, locked, due. No extra colours.</span>
+      </div>
+      <div class="swatch signal">
+        <span class="sw-name">Signal</span>
+        <span class="sw-hex">Red means stop. Nothing else is red.</span>
+      </div>
+      <div class="tabs-row">
+        <span class="sw-name">Toolhead tabs</span>
+        <div class="tabs">
+          <span v-for="t in allTools" :key="t.name" class="tab" :style="{ '--accent': `var(${t.accentVar})` }">{{ t.name }}</span>
+        </div>
+        <span class="sw-hex">A tool's colour appears only as a small tab and the band under the top bar.</span>
       </div>
     </div>
 
     <SectionRule label="Mounted-tool accent" />
     <RsPanel>
-      <p class="muted lead">The app takes on the colour of the toolhead Klipper reports as mounted: the band under the top bar, primary buttons and the active nav item. When the tool isn't verified, the band is hatched and nothing borrows a tool colour. Pick a tool to preview (this doesn't change the machine state).</p>
+      <p class="muted lead">The mounted toolhead's colour shows only as a thin band under the top bar and a tab on its tile. When Klipper hasn't confirmed the tool, the band turns into a dotted line. Pick a tool to preview (this doesn't change the machine state).</p>
       <div class="picker" role="radiogroup" aria-label="Preview toolhead accent">
         <button
           v-for="t in allTools"
@@ -112,7 +123,7 @@ const isUnknown = (t: ToolheadLook) => t.icon === 'unknown'
     </div>
     <RsPanel title="One drawing, every size" index="A">
       <div class="sizes">
-        <div v-for="t in allTools" :key="t.name" class="size-row" :style="{ color: `var(${t.accentVar})` }">
+        <div v-for="t in allTools" :key="t.name" class="size-row">
           <Icon :tool="t.icon" :size="64" />
           <Icon :tool="t.icon" :size="32" />
           <Icon :tool="t.icon" :size="20" />
@@ -142,7 +153,7 @@ const isUnknown = (t: ToolheadLook) => t.icon === 'unknown'
     <SectionRule label="Type" />
     <RsPanel>
       <div class="type">
-        <div class="type-big">19:53</div>
+        <div class="type-big rs-num">19:53</div>
         <div class="type-stack">
           <p class="t-xl">Prepare a job</p>
           <p class="t-lg">Mounted toolhead</p>
@@ -151,7 +162,7 @@ const isUnknown = (t: ToolheadLook) => t.icon === 'unknown'
           <code class="t-code">SWAP_TOOL TOOL=3</code>
         </div>
       </div>
-      <p class="muted note">One family, Archivo, with a width axis: light and large for numbers, medium for labels, extra-wide for the wordmark. JetBrains Mono for G-code and index numbers only. Both are bundled, so the app works offline on the shop network.</p>
+      <p class="muted note">Archivo for the interface, Doto (a dot-matrix face) for big readouts only, JetBrains Mono for G-code and the console. All bundled, so the app works offline on the shop network.</p>
     </RsPanel>
 
     <SectionRule label="Surfaces and signals" />
@@ -200,7 +211,7 @@ const isUnknown = (t: ToolheadLook) => t.icon === 'unknown'
           <span class="muted">{{ c.text }}</span>
         </div>
       </div>
-      <p class="muted note">Maintenance uses mustard (<code>--rs-warn-fill</code>), never red: overdue care is a reminder, not a stop. Nothing is blocked by maintenance.</p>
+      <p class="muted note">Care states are shades of ink (dither density, then solid), never red: overdue care is a reminder, not a stop. Nothing is blocked by maintenance.</p>
     </RsPanel>
 
     <SectionRule label="Brand" />
@@ -233,46 +244,44 @@ const isUnknown = (t: ToolheadLook) => t.icon === 'unknown'
 .row { display: flex; flex-wrap: wrap; gap: var(--rs-space-3); align-items: center; }
 .brandrow { gap: var(--rs-space-7); }
 
-.palette {
-  display: grid;
-  gap: var(--rs-gap);
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  grid-auto-rows: 132px;
-}
-.swatch {
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  padding: var(--rs-space-4) var(--rs-space-5);
-  border-radius: var(--rs-radius-xl);
-  color: var(--th-ink);
-}
-.swatch.wide { grid-column: span 2; grid-row: span 2; }
-.swatch.wide .sw-name { font-size: var(--rs-text-2xl); font-weight: var(--rs-weight-light); letter-spacing: -0.04em; line-height: 1; }
-.swatch.danger { grid-column: span 2; background: var(--rs-danger); color: var(--rs-on-danger); }
-.sw-name { font-size: var(--rs-text-lg); font-weight: var(--rs-weight-medium); }
-.sw-hex { font-family: var(--rs-font-code); font-size: var(--rs-text-xs); }
-@media (max-width: 720px) {
-  .palette { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: 110px; }
-}
+.palette { display: grid; gap: var(--rs-gap); grid-template-columns: 1.3fr 1fr 1fr 1fr; }
+.swatch { display: flex; flex-direction: column; gap: var(--rs-space-2); min-height: 200px; padding: var(--rs-space-4) var(--rs-space-5); border-radius: var(--rs-radius-lg); border: 1px solid var(--rs-line); }
+.sw-name { font-size: var(--rs-text-sm); font-weight: var(--rs-weight-medium); }
+.sw-big { font-size: 4.5rem; margin-top: auto; color: inherit; }
+.sw-big small { font-family: var(--rs-font-ui); font-size: 0.3em; }
+.sw-hex { font-size: var(--rs-text-xs); opacity: 0.75; }
+.swatch .sw-hex:only-of-type { margin-top: auto; }
+.paper { background: var(--rs-surface); color: var(--rs-text-strong); }
+.ink { background: var(--rs-ink); color: var(--rs-on-ink); border-color: var(--rs-ink); }
+.ink .rs-num { color: var(--rs-on-ink); }
+.dither { background: var(--rs-dither), var(--rs-surface); color: var(--rs-text-strong); }
+.dither .sw-name, .dither .sw-hex { background: var(--rs-surface); align-self: flex-start; padding: 2px 6px; border-radius: 4px; }
+.dither .sw-hex { margin-top: auto; }
+.signal { background: var(--rs-danger); color: var(--rs-on-danger); border-color: var(--rs-danger); }
+.signal .sw-hex { margin-top: auto; }
+.tabs-row { grid-column: 1 / -1; display: flex; align-items: center; flex-wrap: wrap; gap: var(--rs-space-3) var(--rs-space-5); padding: var(--rs-space-4) var(--rs-space-5); border-radius: var(--rs-radius-lg); border: 1px solid var(--rs-line); background: var(--rs-surface); }
+.tabs { display: flex; flex-wrap: wrap; gap: 6px; }
+.tab { position: relative; padding: 6px 12px 6px 16px; border-radius: var(--rs-radius-md); background: var(--rs-surface-2); font-size: var(--rs-text-sm); color: var(--rs-text-strong); overflow: hidden; }
+.tab::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--accent); }
+@media (max-width: 900px) { .palette { grid-template-columns: 1fr 1fr; } }
 
 .picker { display: flex; flex-wrap: wrap; gap: var(--rs-space-2); margin-bottom: var(--rs-space-4); }
 .pick {
   display: inline-flex; align-items: center; gap: 6px;
-  height: 38px; padding: 0 var(--rs-space-4) 0 var(--rs-space-3);
-  border-radius: var(--rs-radius-pill);
-  border: 1.5px solid var(--rs-line-strong);
+  height: 34px; padding: 0 var(--rs-space-3);
+  border-radius: var(--rs-radius-md);
+  border: 1px solid var(--rs-line-strong);
   background: transparent;
   color: var(--rs-text);
   cursor: pointer;
 }
-.pick :deep(svg) { color: var(--accent); }
-.pick[aria-checked='true'] { background: var(--accent); border-color: transparent; color: var(--th-ink); }
-.pick[aria-checked='true'] :deep(svg) { color: var(--th-ink); }
+
+.pick[aria-checked='true'] { background: var(--rs-ink); border-color: var(--rs-ink); color: var(--rs-on-ink); }
+
 
 .demo { border-radius: var(--rs-radius-lg); overflow: hidden; background: var(--rs-bg); }
-.demo-bar { display: flex; align-items: center; gap: var(--rs-space-5); height: 60px; padding: 0 var(--rs-space-5); border-bottom: 4px solid var(--rs-active); }
-.demo.unverified .demo-bar { border-bottom-color: transparent; border-image: repeating-linear-gradient(135deg, var(--rs-line-strong) 0 6px, transparent 6px 12px) 4; }
+.demo-bar { display: flex; align-items: center; gap: var(--rs-space-5); height: 60px; padding: 0 var(--rs-space-5); box-shadow: inset 0 -3px 0 var(--rs-active); }
+.demo.unverified .demo-bar { box-shadow: none; background: radial-gradient(var(--rs-dot) 0.9px, transparent 1.15px) 0 100% / 4px 3px repeat-x; }
 .demo-body { display: flex; gap: var(--rs-space-3); padding: var(--rs-space-5); }
 
 .tiles { display: grid; gap: var(--rs-gap); grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); }
@@ -286,7 +295,7 @@ const isUnknown = (t: ToolheadLook) => t.icon === 'unknown'
 .readouts { display: grid; gap: var(--rs-gap); grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); }
 
 .type { display: grid; grid-template-columns: auto 1fr; gap: var(--rs-space-7); align-items: center; }
-.type-big { font-size: 7.5rem; font-weight: var(--rs-weight-light); letter-spacing: -0.05em; line-height: 0.85; color: var(--rs-text-strong); }
+.type-big { font-size: 7rem; }
 .type-stack { display: flex; flex-direction: column; gap: var(--rs-space-2); }
 .t-xl { font-size: var(--rs-text-xl); letter-spacing: -0.025em; color: var(--rs-text-strong); }
 .t-lg { font-size: var(--rs-text-lg); font-weight: var(--rs-weight-medium); color: var(--rs-text-strong); }
