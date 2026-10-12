@@ -170,6 +170,9 @@ const fullscreen = () => document.documentElement.requestFullscreen?.().catch(()
       <RouterLink to="/control" class="exit" aria-label="Leave pendant mode"><BrandMark :size="26" :show-name="false" /></RouterLink>
       <ToolheadBadge :look="machine.mountedLook" :verified="machine.mountedVerified" size="sm" />
       <span class="conn" :class="machine.klippyReady ? 'ok' : 'bad'">{{ machine.klippyReady ? 'Ready' : machine.connection === 'online' ? `Klipper ${machine.klippy}` : 'Offline' }}</span>
+      <button type="button" class="fs hand" :aria-pressed="lefty" :title="lefty ? 'Left-handed layout (on)' : 'Left-handed layout'" aria-label="Left-handed layout" @click="lefty = !lefty">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 7H4l3-3M4 7l3 3M16 17h4l-3-3M20 17l-3 3M4 7h16M20 17H4" /></svg>
+      </button>
       <button type="button" class="fs" aria-label="Full screen" @click="fullscreen">⤢</button>
     </header>
 
@@ -186,7 +189,7 @@ const fullscreen = () => document.documentElement.requestFullscreen?.().catch(()
     <!-- ===== Jog: two-hand control ===== -->
     <template v-if="screen === 'jog'">
       <section class="strip" aria-label="Position">
-        <span v-for="(a, i) in ['X', 'Y', 'Z']" :key="a" :class="{ unhomed: !homed.includes(a.toLowerCase()) }"><b>{{ a }}</b><span class="rs-num">{{ fmt(shown?.[i]) }}</span></span>
+        <span v-for="(a, i) in ['X', 'Y', 'Z']" :key="a" :class="{ unhomed: !homed.includes(a.toLowerCase()) }"><b>{{ a }}</b><span class="coord">{{ fmt(shown?.[i]) }}</span></span>
       </section>
 
       <section class="steps">
@@ -233,7 +236,6 @@ const fullscreen = () => document.documentElement.requestFullscreen?.().catch(()
         </button>
         <div class="enable-help">
           <p v-if="!control.motionBlock">{{ control.enableHeld ? 'Tap a key to jog one step.' : `Hold with your ${lefty ? 'right' : 'left'} thumb, jog with the other.` }}</p>
-          <label class="lefty-toggle"><input v-model="lefty" type="checkbox" /> Left-handed</label>
         </div>
       </section>
     </template>
@@ -247,7 +249,7 @@ const fullscreen = () => document.documentElement.requestFullscreen?.().catch(()
         </div>
         <div v-for="(a, i) in ['X', 'Y', 'Z']" :key="a" class="axis" :class="{ unhomed: !homed.includes(a.toLowerCase()) }">
           <span class="a">{{ a }}</span>
-          <span class="v rs-num">{{ fmt(shown?.[i]) }}</span>
+          <span class="v coord">{{ fmt(shown?.[i]) }}</span>
         </div>
       </section>
       <section class="actions">
@@ -310,8 +312,9 @@ const fullscreen = () => document.documentElement.requestFullscreen?.().catch(()
 .strip > span { display: flex; flex-direction: column; gap: 2px; padding: 10px 14px; }
 .strip > span + span { background: radial-gradient(var(--rs-dot-faint) 0.9px, transparent 1.1px) 0 50% / 2px 5px repeat-y; }
 .strip b { font-size: var(--rs-text-xs); font-weight: var(--rs-weight-medium); color: var(--rs-text-muted); }
-.strip .rs-num { font-size: 1.45rem; }
-.strip .unhomed .rs-num { color: var(--rs-text-muted); }
+.coord { font-family: var(--rs-font-code); font-variant-numeric: tabular-nums; color: var(--rs-text-strong); letter-spacing: -0.02em; }
+.strip .coord { font-size: 1.3rem; }
+.strip .unhomed .coord { color: var(--rs-text-muted); }
 
 .steps { display: flex; flex-direction: column; gap: 6px; }
 .seg { display: flex; align-items: stretch; }
@@ -366,8 +369,9 @@ const fullscreen = () => document.documentElement.requestFullscreen?.().catch(()
 .enable.held .ring span { background: currentColor; }
 .enable:disabled { color: var(--rs-text-muted); border-style: dashed; }
 .enable-help { flex: 1; display: flex; flex-direction: column; justify-content: space-between; gap: 8px; font-size: var(--rs-text-sm); color: var(--rs-text-muted); padding: 4px 0; }
-.lefty-toggle { display: flex; align-items: center; gap: 8px; color: var(--rs-text); }
-.lefty-toggle input { width: 18px; height: 18px; accent-color: var(--rs-ink); }
+.hand { display: grid; place-items: center; padding: 0; }
+.hand svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.hand[aria-pressed='true'] { background: var(--rs-ink); color: var(--rs-on-ink); border-color: var(--rs-ink); }
 
 /* ---- status screen ---- */
 .pos { border: 1px solid var(--rs-line); border-radius: var(--rs-radius-lg); background: var(--rs-surface); padding: 12px 18px 16px; }
@@ -377,7 +381,7 @@ const fullscreen = () => document.documentElement.requestFullscreen?.().catch(()
 .axis { display: flex; align-items: baseline; justify-content: space-between; line-height: 1.1; padding: 4px 0; }
 .axis + .axis { background: radial-gradient(var(--rs-dot-faint) 0.9px, transparent 1.1px) 0 0 / 5px 2px repeat-x; }
 .axis .a { font-weight: var(--rs-weight-medium); color: var(--rs-text-muted); }
-.axis .v { font-size: 2.9rem; }
+.axis .v { font-size: 2.6rem; }
 .axis.unhomed .v { color: var(--rs-text-muted); }
 .actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .actions button { flex: 1; min-height: 48px; border-radius: var(--rs-radius-md); border: 1px solid var(--rs-line-strong); background: var(--rs-surface); color: var(--rs-text-strong); font-weight: var(--rs-weight-medium); }

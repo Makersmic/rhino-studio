@@ -157,7 +157,7 @@ function toggle() {
 </template>
 
 <style scoped>
-.cell { display: flex; flex-direction: column; gap: 6px; min-width: 0; --g: 3.1rem; }
+.cell { display: flex; flex-direction: column; gap: 6px; min-width: 0; --g: 2.4rem; }
 .k { font-size: var(--rs-text-xs); color: var(--rs-text-muted); font-weight: var(--rs-weight-medium); white-space: nowrap; align-self: flex-start; }
 .k.alert { background: var(--rs-ink); color: var(--rs-on-ink); padding: 0 6px; border-radius: var(--rs-radius-sm); }
 .row { display: flex; align-items: flex-end; gap: 10px; margin-top: auto; }
@@ -167,7 +167,7 @@ function toggle() {
   position: relative;
   display: flex;
   align-items: flex-end;
-  width: 6.4rem;
+  width: 5.4rem;
   height: calc(var(--g) + 18px);
   padding: 16px 8px 0 6px;
   margin: 0 0 0 -6px;
@@ -194,7 +194,7 @@ function toggle() {
   white-space: nowrap;
 }
 .now { font-size: var(--g); line-height: 0.9; white-space: nowrap; }
-.now small { font-family: var(--rs-font-ui); font-size: 0.34em; color: var(--rs-text-muted); margin-left: 2px; vertical-align: top; }
+.now small { font-family: var(--rs-font-ui); font-size: 0.4em; color: var(--rs-text-muted); margin-left: -0.04em; vertical-align: top; }
 .field {
   width: 100%;
   height: var(--g);
@@ -228,7 +228,7 @@ function toggle() {
 .hint { font-size: var(--rs-text-xs); color: var(--rs-text-muted); white-space: nowrap; min-height: 1.3em; overflow: hidden; text-overflow: ellipsis; }
 .hint.bad { color: var(--rs-text-strong); font-weight: var(--rs-weight-medium); }
 @media (max-width: 560px) {
-  .cell { --g: 2.4rem; }
-  .box { width: 5rem; }
+  .cell { --g: 2.1rem; }
+  .box { width: 4.6rem; }
 }
 </style>

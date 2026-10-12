@@ -6,7 +6,7 @@ Status: **Phase 2b** (machine control), on top of 2a (live status) and Care (mai
 
 ### What it can do
 
-- **Dashboard** (the home screen): a landscape "lock screen" for the machine. The camera fills the background; the mounted tool, temperatures (body temperature for tools without a hotend), position, the clock and what the machine is doing (Idle, Busy, Printing, Paused…) run along the top; the job, time left and finish time along the bottom; and a short stack of notices says what the tool is doing, with anything that needs you in red. It's look-only: values link to the screen with the details, and the only control is the top bar's Stop.
+- **Dashboard** (the home screen): a landscape "lock screen" for the machine. The camera fills the background. The mounted tool sits top-left and the machine state (Idle, Busy, Printing, Paused…) top-right. One big number bottom-left: the job % with its file, time left and finish time while a job runs, the clock otherwise. Every other reading (the mounted tool's temperatures or outputs, position, care) sits on one rail along the bottom, and a short stack of notices says what needs you, in red. It's look-only: values link to the screen with the details, and the only control is the top bar's Stop.
 - **Cameras**: every camera Moonraker knows (the same list Mainsail uses), shown on Control in a Camera panel with gallery arrows and dots, and behind the Dashboard. Add, edit, turn, mirror, switch off and delete cameras in Settings → Cameras, with a live preview. MJPEG streams, MJPEG snapshots, IP-camera video and web-page cameras work; WebRTC and HLS come later.
 - **Control** screen: temperatures set right in the status strip (click the reading, type, Enter), each with a small history graph (last 5 minutes; the dots widen it to 20), a camera, jog (locked until you unlock it, relocks after 60 s idle), home, motors off, the running job (pause, resume, cancel), the mounted toolhead with Swap and Confirm, and a console with your macros arranged beside it.
 - **Pendant mode** (Control → Pendant mode, or `#/pendant`): the phone as a pendant at the machine, with Stop always on screen.
@@ -133,7 +133,9 @@ Open **Style** in the app for the live guide. The direction is an **e-paper inst
 - **Toolhead colours** appear only as a small tab on a tool's tile or badge and the thin band under the top bar.
 - **Dither patterns** do the shading, the way e-ink displays do: progress bars, locked jog keys, care that's coming due. Overdue is solid ink.
 - **Inverted ink** (an ink block with paper text) means live or selected: the armed jog keys, the held Hold button, the chosen step size, the current screen in the nav.
-- **Type**: Archivo for the interface; **Doto**, a dot-matrix face, only for big readouts (temperatures, position, progress); JetBrains Mono for G-code and the console. All bundled.
+- **Type**: Archivo for the interface; **Doto**, a dot-matrix face, only for big readouts (temperatures, tool outputs, job %, the Dashboard clock); **JetBrains Mono** for positions (read to two decimals, so they get a plain, exact face), G-code and the console. All bundled.
+- **Hierarchy in the Control status box**: the job % is the biggest number, temperatures and tool outputs next, position smallest.
+- **Buttons**: outlined = actions; filled ink = the one primary on a module; quiet text = minor (Snooze, Refresh); filled tiles = macro keys only; red = stop or destroy (Cancel job is outlined red, set apart from Pause).
 - Every card is an `RsPanel` module: title on the left, a short live status on the right, a dotted rule, then the body.
 - Components use `--rs-*` variables only, never raw colours.
 

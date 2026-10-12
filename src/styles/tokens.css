@@ -94,6 +94,7 @@
   --rs-dot-faint: rgb(232 230 224 / 0.16);
   --rs-graph-temp: #ff5c4d;
   --rs-graph-target: #8d8f93;
+  --rs-graph-grid: rgb(232 230 224 / 0.13);
   --rs-edit-fill: rgb(232 230 224 / 0.09);
 }
 
@@ -119,6 +120,7 @@
   --rs-dot-faint: rgb(21 22 24 / 0.16);
   --rs-graph-temp: #d0301f;
   --rs-graph-target: #8a8b8e;
+  --rs-graph-grid: rgb(21 22 24 / 0.2);
   --rs-edit-fill: rgb(21 22 24 / 0.07);
 }
 
@@ -144,6 +146,8 @@
     --rs-dot-faint: rgb(21 22 24 / 0.16);
     --rs-graph-temp: #d0301f;
     --rs-graph-target: #8a8b8e;
+    --rs-graph-grid: rgb(21 22 24 / 0.2);
+  --rs-graph-grid: rgb(21 22 24 / 0.2);
     --rs-edit-fill: rgb(21 22 24 / 0.07);
   }
 }

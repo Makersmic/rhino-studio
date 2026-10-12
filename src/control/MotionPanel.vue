@@ -25,21 +25,21 @@ const zStep = ref(1)
 const homed = computed(() => machine.position.homed.toLowerCase())
 const armed = computed(() => control.motionUnlocked && !control.motionBlock)
 const canJog = (a: Axis) => armed.value && homed.value.includes(a.toLowerCase())
-const status = computed(() => (control.motionBlock ? 'Locked' : armed.value ? `Unlocked · ${control.unlockSecondsLeft} s` : 'Locked'))
 const busy = computed(() => !machine.klippyReady || control.jobActive)
 
 onBeforeUnmount(() => control.lockMotion())
 </script>
 
 <template>
-  <RsPanel title="Motion" :status="status">
+  <RsPanel title="Motion">
     <template #actions>
-      <RsButton v-if="armed" size="sm" @click="control.lockMotion()">Lock</RsButton>
+      <!-- one toggle: Unlock, or the time left with Lock -->
+      <RsButton v-if="armed" size="sm" :aria-label="`Unlocked, locks in ${control.unlockSecondsLeft} seconds. Lock now`" @click="control.lockMotion()">
+        <span class="live-dot" aria-hidden="true" />Unlocked · {{ control.unlockSecondsLeft }} s · Lock
+      </RsButton>
       <RsButton v-else size="sm" variant="primary" :disabled="!!control.motionBlock" @click="control.unlockMotion()">Unlock</RsButton>
     </template>
 
-    <!-- countdown: a dotted bar that empties as the unlock runs out -->
-    <div class="countdown" :class="{ on: armed }" aria-hidden="true"><span :style="{ width: `${(control.unlockSecondsLeft / 60) * 100}%` }" /></div>
 
     <div class="layout">
       <div class="pad" :class="{ armed }">
@@ -82,9 +82,9 @@ onBeforeUnmount(() => control.lockMotion())
 </template>
 
 <style scoped>
-.countdown { height: 3px; margin: -4px 0 var(--rs-space-4); border-radius: 2px; background: var(--rs-dither-faint); overflow: hidden; visibility: hidden; }
-.countdown.on { visibility: visible; }
-.countdown span { display: block; height: 100%; background: var(--rs-ink); transition: width 1s linear; }
+.live-dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; animation: blink 1.2s ease-in-out infinite; }
+@keyframes blink { 50% { opacity: 0.2; } }
+@media (prefers-reduced-motion: reduce) { .live-dot { animation: none; } }
 
 .layout { display: grid; grid-template-columns: auto 1fr; gap: var(--rs-space-5); align-items: start; }
 .pad { display: flex; gap: var(--rs-space-3); }

@@ -26,7 +26,7 @@ const label: Record<string, string> = { standby: 'Idle', printing: 'Running', pa
       <div class="row">
         <RsButton v-if="state === 'printing'" @click="control.pauseJob()">Pause</RsButton>
         <RsButton v-else variant="primary" @click="control.resumeJob()">Resume</RsButton>
-        <RsButton variant="danger" @click="control.cancelJob()">Cancel job</RsButton>
+        <RsButton class="cancel" variant="danger-outline" @click="control.cancelJob()">Cancel job</RsButton>
       </div>
     </template>
     <template v-else>
@@ -46,5 +46,7 @@ const label: Record<string, string> = { standby: 'Idle', printing: 'Running', pa
 .pct { font-size: 2rem; }
 .pct small { font-family: var(--rs-font-ui); font-size: 0.4em; color: var(--rs-text-muted); }
 .row { display: flex; gap: var(--rs-space-2); }
+/* away from Pause/Resume, so it's never hit by habit */
+.cancel { margin-left: auto; }
 .small { font-size: var(--rs-text-sm); }
 </style>

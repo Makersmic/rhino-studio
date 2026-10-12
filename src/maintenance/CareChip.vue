@@ -47,5 +47,7 @@ const title = computed(() => {
   text-decoration: none;
   white-space: nowrap;
 }
-.care-chip.overdue { background: var(--rs-ink); border-color: var(--rs-ink); color: var(--rs-on-ink); }
+/* overdue: a stronger outline and a solid mark, not a solid block (Stop stays the loudest thing up here) */
+.care-chip.overdue { border-width: 1.5px; border-color: var(--rs-ink); }
+.care-chip.overdue::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--rs-ink); order: -1; }
 </style>

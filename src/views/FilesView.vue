@@ -24,8 +24,30 @@ const control = useControlStore()
 const files = ref<FileEntry[]>([])
 const loading = ref(false)
 const error = ref<string | null>(null)
-/** path@modified -> toolhead name, null = not declared, 'error' = couldn't read */
-const heads = ref<Record<string, string | null>>({})
+/**
+ * path@modified -> toolhead name, null = not declared, 'error' = couldn't read.
+ * Kept in this browser too, so the toolhead column is filled in even when the
+ * page opens during a job (when Studio doesn't read files, to spare the Pi).
+ */
+const CACHE_KEY = 'rs.fileHeads'
+function loadHeads(): Record<string, string | null> {
+  try {
+    const v = JSON.parse(localStorage.getItem(CACHE_KEY) ?? '{}')
+    return v && typeof v === 'object' ? v : {}
+  } catch {
+    return {}
+  }
+}
+const heads = ref<Record<string, string | null>>(loadHeads())
+watch(heads, (h) => {
+  try {
+    // keep the newest 300 entries, and never cache read errors
+    const entries = Object.entries(h).filter(([, v]) => v !== 'error').slice(-300)
+    localStorage.setItem(CACHE_KEY, JSON.stringify(Object.fromEntries(entries)))
+  } catch {
+    /* storage blocked */
+  }
+})
 let abort: AbortController | null = null
 
 const key = (f: FileEntry) => `${f.path}@${f.modified}`
@@ -201,6 +223,10 @@ const fmtSize = (b: number) => (b > 1048576 ? `${(b / 1048576).toFixed(1)} MB` :
       </p>
       <p v-else-if="uploadMsg" class="upl" role="status">{{ uploadMsg }}</p>
       <p v-else class="muted small hint">Drop a G-code file here to upload it. Uploading never starts it.</p>
+      <p v-if="control.jobActive" class="busy" role="status">
+        Start is off while <strong>{{ machine.job.filename }}</strong> {{ machine.job.state === 'paused' ? 'is paused' : 'runs' }}.
+        <template v-if="jobRunning">Files not read yet are checked once it finishes, to keep the Pi free for the job.</template>
+      </p>
 
       <p v-if="error" class="error">Couldn't list files: {{ error }}</p>
       <p v-else-if="!loading && !files.length" class="muted">No G-code files in the gcodes folder yet.</p>
@@ -209,7 +235,7 @@ const fmtSize = (b: number) => (b > 1048576 ? `${(b / 1048576).toFixed(1)} MB` :
         <li v-for="r in rows" :key="r.f.path" class="file">
           <span class="tool">
             <ToolheadBadge v-if="r.look" :look="r.look" size="sm" />
-            <span v-else class="muted small">{{ r.pending ? (jobRunning ? 'After the job' : 'Reading…') : r.unreadable ? "Couldn't read" : 'Not declared' }}</span>
+            <span v-else class="muted small">{{ r.pending ? (jobRunning ? 'Not read yet' : 'Reading…') : r.unreadable ? "Couldn't read" : 'Not declared' }}</span>
           </span>
           <span class="name">{{ r.f.path }}</span>
           <span class="meta">{{ fmtDate(r.f.modified) }} · {{ fmtSize(r.f.size) }}</span>
@@ -245,6 +271,8 @@ const fmtSize = (b: number) => (b > 1048576 ? `${(b / 1048576).toFixed(1)} MB` :
 </template>
 
 <style scoped>
+.busy { margin: 0 0 var(--rs-space-3); padding: 8px 12px; font-size: var(--rs-text-sm); color: var(--rs-text); border-left: 3px solid var(--rs-ink); background: var(--rs-dither-faint); }
+.busy strong { font-weight: var(--rs-weight-medium); color: var(--rs-text-strong); }
 .list { list-style: none; margin: 0; padding: 0; }
 .file {
   display: grid;

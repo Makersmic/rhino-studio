@@ -17,7 +17,6 @@ const main: NavItem[] = [
   { to: '/care', label: 'Care', icon: 'care' },
 ]
 const secondary: NavItem[] = [
-  { to: '/style', label: 'Style', icon: 'style' },
   { to: '/settings', label: 'Settings', icon: 'settings' },
 ]
 </script>
@@ -123,6 +122,5 @@ const secondary: NavItem[] = [
   .group { flex-direction: row; gap: 0; }
   .group:first-child { flex: 1; justify-content: space-between; }
   .item { min-width: 44px; font-size: 10px; letter-spacing: -0.01em; }
-  .bottom li:first-child { display: none; }
 }
 </style>

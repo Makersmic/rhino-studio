@@ -5,9 +5,15 @@
  *   default  ink outline
  *   quiet    text only
  *   danger   red: stops or destroys something (red is reserved for this)
+ *   danger-outline  red outline: a destructive action sitting near everyday
+ *                   ones (Cancel job), loud enough to find, not to hit by habit
+ *
+ * Button rule for the app: outlined = actions, filled ink = the one primary
+ * on a module, quiet = minor (Snooze, Refresh), filled tiles = macro keys
+ * only (MacroPanel), red = stop/destroy.
  */
 withDefaults(
-  defineProps<{ variant?: 'primary' | 'default' | 'quiet' | 'danger'; type?: 'button' | 'submit'; disabled?: boolean; size?: 'md' | 'sm' }>(),
+  defineProps<{ variant?: 'primary' | 'default' | 'quiet' | 'danger' | 'danger-outline'; type?: 'button' | 'submit'; disabled?: boolean; size?: 'md' | 'sm' }>(),
   { variant: 'default', type: 'button', disabled: false, size: 'md' },
 )
 </script>
@@ -44,5 +50,7 @@ withDefaults(
 .quiet:hover:not(:disabled) { background: transparent; color: var(--rs-text-strong); text-decoration: underline; text-underline-offset: 4px; }
 .danger { background: var(--rs-danger); border-color: var(--rs-danger); color: var(--rs-on-danger); }
 .danger:hover:not(:disabled) { background: var(--rs-danger-strong); }
+.danger-outline { border-color: var(--rs-danger); color: var(--rs-danger); }
+.danger-outline:hover:not(:disabled) { background: var(--rs-danger); color: var(--rs-on-danger); }
 .btn:disabled { cursor: not-allowed; opacity: 0.35; }
 </style>

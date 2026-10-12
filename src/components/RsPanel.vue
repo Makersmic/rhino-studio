@@ -44,6 +44,6 @@ h2 { font-size: var(--rs-text-md); font-weight: var(--rs-weight-medium); }
 .status { font-size: var(--rs-text-sm); color: var(--rs-text-muted); margin-left: auto; white-space: nowrap; }
 .actions { display: flex; align-items: center; gap: var(--rs-space-2); margin-left: auto; }
 .status + .actions { margin-left: var(--rs-space-3); }
-.body { padding: var(--rs-space-4) var(--rs-space-5) var(--rs-space-5); flex: 1; min-width: 0; }
+.body { padding: var(--rs-space-3) var(--rs-space-5) var(--rs-space-5); flex: 1; min-width: 0; }
 .flush .body { padding: 0; }
 </style>

@@ -39,7 +39,7 @@ const homed = computed(() => machine.position.homed.toLowerCase())
 const f2 = (n: number | undefined) => (n == null ? '—' : n.toFixed(2))
 const f1 = (n: number | undefined) => (n == null ? '—' : n.toFixed(1))
 
-const columns = computed(() => `minmax(240px, 1.3fr) ${'auto '.repeat(readouts.value.length)}minmax(200px, 1fr) minmax(170px, 1fr)`)
+const columns = computed(() => `minmax(250px, 1.2fr) ${'auto '.repeat(readouts.value.length)}minmax(200px, 1fr) minmax(170px, 1fr)`)
 
 const toolState = computed(() => {
   switch (machine.toolState.kind) {
@@ -66,24 +66,25 @@ const jobLabel: Record<string, string> = { standby: 'Idle', printing: 'Running',
         <span class="k">Toolhead</span>
         <strong class="tool-name">{{ machine.mountedVerified ? machine.mountedName : 'Unknown' }}</strong>
         <span class="sub">{{ toolState }}</span>
-        <RouterLink v-if="care.mountedCare && (care.mountedCare.overdue || care.mountedCare.dueSoon)" to="/care" class="care" :class="{ overdue: care.mountedCare.overdue }">
-          Care: {{ careText(care.mountedCare) }}
-        </RouterLink>
-      </div>
-      <div class="tool-actions">
-        <button
-          v-if="machine.toolState.kind === 'none-confirmed' && control.macros.has('RESTORE_TOOL')"
-          type="button"
-          class="mini primary"
-          @click="control.send('RESTORE_TOOL', { label: 'Confirm mounted tool' })"
-        >Confirm tool</button>
-        <button
-          v-else-if="control.macros.has('SWAP_TOOL')"
-          type="button"
-          class="mini"
-          :disabled="!machine.klippyReady || control.jobActive"
-          @click="control.send('SWAP_TOOL', { label: 'Swap toolhead' })"
-        >Swap</button>
+        <div class="tool-row">
+          <button
+            v-if="machine.toolState.kind === 'none-confirmed' && control.macros.has('RESTORE_TOOL')"
+            type="button"
+            class="mini primary"
+            @click="control.send('RESTORE_TOOL', { label: 'Confirm mounted tool' })"
+          >Confirm tool</button>
+          <button
+            v-else-if="control.macros.has('SWAP_TOOL')"
+            type="button"
+            class="mini"
+            :disabled="!machine.klippyReady || control.jobActive"
+            :title="control.jobActive ? 'Not while a job is running' : undefined"
+            @click="control.send('SWAP_TOOL', { label: 'Swap toolhead' })"
+          >Swap</button>
+          <RouterLink v-if="care.mountedCare && (care.mountedCare.overdue || care.mountedCare.dueSoon)" to="/care" class="care" :class="{ overdue: care.mountedCare.overdue }">
+            Care: {{ careText(care.mountedCare) }}
+          </RouterLink>
+        </div>
       </div>
     </div>
 
@@ -144,7 +145,7 @@ const jobLabel: Record<string, string> = { standby: 'Idle', printing: 'Running',
       <span class="k">{{ work ? 'Work position' : 'Position' }} <em>{{ homed ? `homed ${homed.toUpperCase()}` : 'not homed' }}</em></span>
       <div class="xyz">
         <span v-for="(a, i) in ['X', 'Y', 'Z']" :key="a" :class="{ unhomed: !homed.includes(a.toLowerCase()) }">
-          <b>{{ a }}</b><span class="rs-num" :class="{ empty: pos?.[i] == null }">{{ f2(pos?.[i]) }}</span>
+          <b>{{ a }}</b><span class="coord" :class="{ empty: pos?.[i] == null }">{{ f2(pos?.[i]) }}</span>
         </span>
       </div>
       <span v-if="work" class="sub machine">
@@ -191,8 +192,8 @@ const jobLabel: Record<string, string> = { standby: 'Idle', printing: 'Running',
 }
 .k { font-size: var(--rs-text-xs); color: var(--rs-text-muted); font-weight: var(--rs-weight-medium); }
 .k em { font-style: normal; margin-left: 6px; color: var(--rs-text); }
-.big { font-size: 3.1rem; margin-top: auto; }
-.big small { font-family: var(--rs-font-ui); font-size: 0.34em; color: var(--rs-text-muted); margin-left: 2px; vertical-align: top; }
+.big { font-size: 3.6rem; line-height: 0.85; margin-top: auto; }
+.big small { font-family: var(--rs-font-ui); font-size: 0.32em; color: var(--rs-text-muted); margin-left: -0.04em; vertical-align: top; }
 .sub { font-size: var(--rs-text-xs); color: var(--rs-text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* toolhead */
@@ -213,12 +214,11 @@ const jobLabel: Record<string, string> = { standby: 'Idle', printing: 'Running',
 .unverified .emblem { background: var(--rs-dither-faint), var(--rs-surface-2); color: var(--rs-text-muted); }
 .unverified .emblem::after { display: none; }
 .tool-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
-.tool-text .sub { white-space: normal; }
+.tool-row { display: flex; align-items: center; gap: var(--rs-space-2); margin-top: 6px; flex-wrap: wrap; }
 .tool-name { font-size: var(--rs-text-lg); font-weight: var(--rs-weight-medium); color: var(--rs-text-strong); }
-.care { align-self: flex-start; margin-top: 4px; font-size: var(--rs-text-xs); font-weight: var(--rs-weight-medium); color: var(--rs-text-strong); text-decoration: none; padding: 1px 7px; border-radius: var(--rs-radius-sm); box-shadow: inset 0 0 0 1px var(--rs-line-strong); }
+.care { font-size: var(--rs-text-xs); font-weight: var(--rs-weight-medium); color: var(--rs-text-strong); text-decoration: none; padding: 1px 7px; border-radius: var(--rs-radius-sm); box-shadow: inset 0 0 0 1px var(--rs-line-strong); }
 .care.overdue { background: var(--rs-ink); color: var(--rs-on-ink); box-shadow: none; }
-.tool-actions { align-self: flex-start; }
-.mini { height: 30px; padding: 0 12px; border-radius: var(--rs-radius-md); border: 1px solid var(--rs-line-strong); background: transparent; color: var(--rs-text-strong); font-size: var(--rs-text-sm); font-weight: var(--rs-weight-medium); cursor: pointer; }
+.mini { height: 26px; padding: 0 10px; border-radius: var(--rs-radius-md); border: 1px solid var(--rs-line-strong); background: transparent; color: var(--rs-text-strong); font-size: var(--rs-text-sm); font-weight: var(--rs-weight-medium); cursor: pointer; }
 .mini.primary { background: var(--rs-ink); border-color: var(--rs-ink); color: var(--rs-on-ink); }
 .mini:disabled { opacity: 0.35; cursor: not-allowed; }
 
@@ -226,8 +226,9 @@ const jobLabel: Record<string, string> = { standby: 'Idle', printing: 'Running',
 .xyz { display: flex; flex-direction: column; gap: 3px; margin-top: auto; }
 .xyz > span { display: flex; align-items: baseline; justify-content: space-between; gap: var(--rs-space-3); }
 .xyz b { font-size: var(--rs-text-xs); font-weight: var(--rs-weight-medium); color: var(--rs-text-muted); }
-.xyz .rs-num { font-size: 1.6rem; }
-.xyz .unhomed .rs-num { color: var(--rs-text-muted); }
+.coord { font-family: var(--rs-font-code); font-size: 1.15rem; font-variant-numeric: tabular-nums; color: var(--rs-text-strong); letter-spacing: -0.01em; }
+.coord.empty { color: var(--rs-text-muted); }
+.xyz .unhomed .coord { color: var(--rs-text-muted); }
 .machine { font-family: var(--rs-font-code); font-size: 11px; }
 
 /* job */
@@ -245,6 +246,6 @@ const jobLabel: Record<string, string> = { standby: 'Idle', printing: 'Running',
 @media (max-width: 560px) {
   .strip { grid-template-columns: 1fr 1fr; }
   .position, .job { grid-column: span 1; }
-  .big { font-size: 2.4rem; }
+  .big { font-size: 2.8rem; }
 }
 </style>

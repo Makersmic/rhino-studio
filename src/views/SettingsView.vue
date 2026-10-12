@@ -79,6 +79,7 @@ const options: { value: ThemePref; label: string }[] = [
       <RsPanel title="About" index="03">
         <p>{{ brand.name }} {{ brand.version }}</p>
         <p class="muted small">For the {{ brand.machine }}. Free software under GPL-3.0-or-later.</p>
+        <p class="small"><RouterLink to="/style">Style guide</RouterLink> <span class="muted">· colours, type, icons and components</span></p>
       </RsPanel>
     </div>
   </div>

@@ -104,7 +104,7 @@ const log = computed(() => care.history.slice(0, 15))
 
       <SectionRule label="Machine" />
       <div class="tiles">
-        <AssetCareTile v-for="a in care.areas" :key="a.asset" :care="a" />
+        <AssetCareTile v-for="a in care.areas.filter((x) => x.total > 0)" :key="a.asset" :care="a" />
       </div>
 
       <SectionRule label="Coming up" />

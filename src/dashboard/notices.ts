@@ -49,7 +49,7 @@ export function operationName(type: string | null | undefined): string {
 export const isPrintTool = (type: string | null | undefined) => type === 'DEPOSITION'
 
 /** The safety line for a running job, specific to the tool. */
-function runningDetail(type: string | null | undefined): string {
+export function runningDetail(type: string | null | undefined): string {
   switch (type) {
     case 'LASER': return 'Laser can fire: enclosure closed, eye protection on, stay within reach of Stop.'
     case 'CNC': return 'Spindle running: keep hands clear, eyes and ears protected.'
