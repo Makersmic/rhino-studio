@@ -62,25 +62,9 @@ const jobLabel: Record<string, string> = { standby: 'Idle', printing: 'Running',
         <span class="k">Toolhead</span>
         <strong class="tool-name">{{ machine.mountedVerified ? machine.mountedName : 'Unknown' }}</strong>
         <span class="sub">{{ toolState }}</span>
-        <div class="tool-row">
-          <button
-            v-if="machine.toolState.kind === 'none-confirmed' && control.macros.has('RESTORE_TOOL')"
-            type="button"
-            class="mini primary"
-            @click="control.send('RESTORE_TOOL', { label: 'Confirm mounted tool' })"
-          >Confirm tool</button>
-          <button
-            v-else-if="control.macros.has('SWAP_TOOL')"
-            type="button"
-            class="mini"
-            :disabled="!machine.klippyReady || control.jobActive"
-            :title="control.jobActive ? 'Not while a job is running' : undefined"
-            @click="control.send('SWAP_TOOL', { label: 'Swap toolhead' })"
-          >Swap</button>
-          <RouterLink v-if="care.mountedCare && (care.mountedCare.overdue || care.mountedCare.dueSoon)" to="/care" class="care" :class="{ overdue: care.mountedCare.overdue }">
-            Care: {{ careText(care.mountedCare) }}
-          </RouterLink>
-        </div>
+        <RouterLink v-if="care.mountedCare && (care.mountedCare.overdue || care.mountedCare.dueSoon)" to="/care" class="care" :class="{ overdue: care.mountedCare.overdue }">
+          Care: {{ careText(care.mountedCare) }}
+        </RouterLink>
       </div>
     </div>
 
@@ -208,9 +192,8 @@ const jobLabel: Record<string, string> = { standby: 'Idle', printing: 'Running',
 .unverified .emblem::after { display: none; }
 .tool-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
 .tool-text .sub { font-size: 11px; }
-.tool-row { display: flex; align-items: center; gap: var(--rs-space-2); margin-top: 6px; flex-wrap: wrap; }
 .tool-name { font-size: 1.35rem; line-height: 1.15; font-weight: var(--rs-weight-medium); color: var(--rs-text-strong); }
-.care { font-size: var(--rs-text-xs); font-weight: var(--rs-weight-medium); color: var(--rs-text-strong); text-decoration: none; padding: 1px 7px; border-radius: var(--rs-radius-sm); box-shadow: inset 0 0 0 1px var(--rs-line-strong); }
+.care { align-self: flex-start; margin-top: 6px; font-size: var(--rs-text-xs); font-weight: var(--rs-weight-medium); color: var(--rs-text-strong); text-decoration: none; padding: 1px 7px; border-radius: var(--rs-radius-sm); box-shadow: inset 0 0 0 1px var(--rs-line-strong); }
 .care.overdue { background: var(--rs-ink); color: var(--rs-on-ink); box-shadow: none; }
 .mini { height: 26px; padding: 0 10px; border-radius: var(--rs-radius-md); border: 1px solid var(--rs-line-strong); background: transparent; color: var(--rs-text-strong); font-size: var(--rs-text-sm); font-weight: var(--rs-weight-medium); cursor: pointer; }
 .mini.primary { background: var(--rs-ink); border-color: var(--rs-ink); color: var(--rs-on-ink); }

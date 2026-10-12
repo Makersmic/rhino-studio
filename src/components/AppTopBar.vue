@@ -6,8 +6,14 @@ import StatusChip from './StatusChip.vue'
 import EStopButton from './EStopButton.vue'
 import CareChip from '@/maintenance/CareChip.vue'
 import { useMachineStore } from '@/stores/machine'
+import { useControlStore } from '@/stores/control'
+import { useRoute } from 'vue-router'
 
 const machine = useMachineStore()
+const control = useControlStore()
+const route = useRoute()
+// The Dashboard is look-only (wizard questions don't open there), so Swap isn't offered on it
+const canOfferSwap = computed(() => !route.meta.lookOnly)
 
 const connection = computed(() => {
   switch (machine.connection) {
@@ -46,6 +52,22 @@ const caption = computed(() => {
       />
       <span class="caption">{{ caption }}</span>
     </RouterLink>
+    <template v-if="canOfferSwap">
+      <button
+        v-if="machine.toolState.kind === 'none-confirmed' && control.macros.has('RESTORE_TOOL')"
+        type="button"
+        class="tool-btn primary"
+        @click="control.send('RESTORE_TOOL', { label: 'Confirm mounted tool' })"
+      >Confirm tool</button>
+      <button
+        v-else-if="control.macros.has('SWAP_TOOL')"
+        type="button"
+        class="tool-btn"
+        :disabled="!machine.klippyReady || control.jobActive"
+        :title="control.jobActive ? 'Not while a job is running' : 'Swap the toolhead (the Rhino wizard walks you through it)'"
+        @click="control.send('SWAP_TOOL', { label: 'Swap toolhead' })"
+      >Swap</button>
+    </template>
 
     <div class="right">
       <CareChip />
@@ -77,6 +99,7 @@ const caption = computed(() => {
 }
 .home { text-decoration: none; display: inline-flex; border-radius: var(--rs-radius-md); }
 .mounted {
+  flex: none;
   display: flex;
   align-items: center;
   gap: var(--rs-space-2);
@@ -90,13 +113,24 @@ const caption = computed(() => {
 }
 .mounted:hover { border-color: var(--rs-line-strong); }
 .caption { font-size: var(--rs-text-xs); color: var(--rs-text-muted); }
+.tool-btn {
+  height: 32px; padding: 0 12px; margin-left: calc(-1 * var(--rs-space-2));
+  border-radius: var(--rs-radius-md); border: 1px solid var(--rs-line-strong); background: transparent;
+  color: var(--rs-text-strong); font-size: var(--rs-text-sm); font-weight: var(--rs-weight-medium); cursor: pointer;
+}
+.tool-btn:hover:not(:disabled) { background: var(--rs-surface-2); }
+.tool-btn.primary { background: var(--rs-ink); border-color: var(--rs-ink); color: var(--rs-on-ink); }
+.tool-btn:disabled { opacity: 0.35; cursor: not-allowed; }
 .right { margin-left: auto; display: flex; align-items: center; gap: var(--rs-space-2); }
 @media (max-width: 720px) {
   .topbar { gap: var(--rs-space-3); padding-left: var(--rs-space-3); }
   .caption { display: none; }
   .right :deep(.chip) { display: none; }
+  .tool-btn { margin-left: 0; padding: 0 10px; }
 }
 @media (max-width: 560px) {
+  /* phone: the logo alone, so the tool, Swap, care and Stop all fit */
+  .home :deep(.name) { display: none; }
   .mounted { padding-right: 4px; }
   .mounted :deep(.text) { display: none; }
 }
