@@ -85,7 +85,7 @@ const log = computed(() => care.history.slice(0, 15))
         <Readout label="On hold" :value="String(care.counts.held + care.counts.snoozed)" :detail="`${care.counts.snoozed} snoozed`" />
         <Readout
           label="Production hours"
-          :value="prodH ? fmtMeter(prodH.value, '') : null"
+          :value="prodH ? String(Math.round(prodH.value)) : null"
           unit="h"
           :detail="prodH?.per_day ? `About ${prodH.per_day.toFixed(1)} h a day` : ''"
         />

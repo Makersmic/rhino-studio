@@ -67,16 +67,16 @@ const isUnknown = (t: ToolheadLook) => t.icon === 'unknown'
       </div>
       <div class="swatch ink">
         <span class="sw-name">Ink</span>
-        <span class="sw-big rs-num">ON</span>
+        <span class="sw-big rs-num">80<small>%</small></span>
         <span class="sw-hex">Text, lines, and inverted when live or selected.</span>
       </div>
       <div class="swatch dither">
         <span class="sw-name">Dither</span>
-        <span class="sw-hex">E-ink shading: progress, locked, due. No extra colours.</span>
+        <span class="sw-hex">E-ink shading: progress and care. Dead keys are solid grey. No extra colours.</span>
       </div>
       <div class="swatch signal">
         <span class="sw-name">Signal</span>
-        <span class="sw-hex">Red means stop. Nothing else is red.</span>
+        <span class="sw-hex">Red means stop. Only graph lines and the Dashboard's alerts share it.</span>
       </div>
       <div class="tabs-row">
         <span class="sw-name">Toolhead tabs</span>
@@ -144,25 +144,41 @@ const isUnknown = (t: ToolheadLook) => t.icon === 'unknown'
 
     <SectionRule label="Readouts" />
     <div class="readouts">
-      <Readout label="Hotend" value="215" unit="°" detail="Target 215°" />
-      <Readout label="Spindle" value="12k" detail="rpm" />
-      <Readout label="Laser power" value="40" unit="%" detail="Capped at s_max" />
+      <Readout label="Hotend" value="215" unit="°" detail="215°" />
+      <Readout label="Spindle" note="Running" value="60" unit="%" detail="Throttle" />
+      <Readout label="Laser" note="Armed" value="40" unit="%" detail="Power" />
+      <Readout label="Job" note="Running" value="42" unit="%" detail="benchy_PLA_0.4.gcode" />
     </div>
-    <p class="muted note pad">Sample values. On live screens a readout with no data shows "—", never a made-up number.</p>
+    <p class="muted note pad">Sample values. Label on top, number right under it, small line under that, all left-aligned, and every label in a row on one top line. On live screens a readout with no data shows "—", never a made-up number.</p>
+
+    <SectionRule label="Layout rules" />
+    <RsPanel>
+      <ol class="rules">
+        <li><strong>Read like the Control status box.</strong> A 12px muted label on one 18px line, the value right under it, an 11px muted line under that. Left-aligned. Labels across a row share one top line, and so do the values.</li>
+        <li><strong>One biggest number per box.</strong> On Control the job % leads (3rem), temperatures and tool outputs next (2.4rem), positions smallest (mono). Units (°, %) are small, top-aligned and tight to the number.</li>
+        <li><strong>Positions are plain monospace</strong>, never seven-segment, and live under the jog keys in Motion. Work position comes first for tools that cut from a work zero.</li>
+        <li><strong>Show what the mounted tool uses.</strong> Print heads: hotend, bed, part fan. Laser: rail and power. Spindle: relay and throttle. A warm bed or a hotend heater left on always shows, so it can be switched off.</li>
+        <li><strong>Edit in place.</strong> Click a temperature, type, Enter. The set temperature sits small under the reading; the graph sits beside it with its dots above.</li>
+        <li><strong>Tool actions live in the top bar.</strong> Swap (or Confirm tool) sits next to the mounted tool, on every screen but the look-only Dashboard.</li>
+        <li><strong>Keys:</strong> solid light grey when dead, inverted ink when live. Pendant keys are squares.</li>
+        <li><strong>Dashboard:</strong> white over the camera, red for what needs you, no clock; the job % only while a job runs.</li>
+      </ol>
+    </RsPanel>
 
     <SectionRule label="Type" />
     <RsPanel>
       <div class="type">
-        <div class="type-big rs-num">19:53</div>
+        <div class="type-big rs-num">215</div>
         <div class="type-stack">
           <p class="t-xl">Prepare a job</p>
           <p class="t-lg">Mounted toolhead</p>
           <p>Body text. The laser fires only after you confirm the job.</p>
           <p class="t-sm muted">Secondary. Slots come from Klipper once connected.</p>
+          <code class="t-code">X 120.00  Y 85.50  Z 12.30</code>
           <code class="t-code">SWAP_TOOL TOOL=3</code>
         </div>
       </div>
-      <p class="muted note">Archivo for the interface, DSEG7 Classic (a seven-segment, alarm-clock face) for big readouts only, JetBrains Mono for positions, JetBrains Mono for G-code and the console. All bundled, so the app works offline on the shop network.</p>
+      <p class="muted note">Archivo for the interface; DSEG7 Classic (seven-segment, alarm-clock) only for big readouts: temperatures, tool outputs and job %; JetBrains Mono for positions (read to two decimals), G-code and the console. All bundled, so the app works offline on the shop network.</p>
     </RsPanel>
 
     <SectionRule label="Surfaces and signals" />
@@ -181,10 +197,11 @@ const isUnknown = (t: ToolheadLook) => t.icon === 'unknown'
           <RsButton variant="primary">Primary</RsButton>
           <RsButton>Default</RsButton>
           <RsButton variant="quiet">Quiet</RsButton>
-          <RsButton variant="danger">Cancel job</RsButton>
+          <RsButton variant="danger">Stop</RsButton>
+          <RsButton variant="danger-outline">Cancel print</RsButton>
           <RsButton disabled>Disabled</RsButton>
         </div>
-        <p class="muted note">One primary per screen; it takes the mounted tool's accent. Danger is for stopping or deleting, and always says what it stops.</p>
+        <p class="muted note">Outlined for actions, filled ink for the one primary on a module, quiet text for minor ones, filled tiles only for macro keys. Red is for stopping or destroying and says what it stops; next to everyday buttons it's outlined (Cancel print sits top-right of the job, Pause under it).</p>
       </RsPanel>
       <RsPanel title="Status" index="C">
         <div class="row">
@@ -292,7 +309,8 @@ const isUnknown = (t: ToolheadLook) => t.icon === 'unknown'
 .navset { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--rs-space-5); grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); }
 .navset li { display: flex; flex-direction: column; align-items: flex-start; gap: var(--rs-space-2); color: var(--rs-text-strong); font-size: var(--rs-text-sm); }
 
-.readouts { display: grid; gap: var(--rs-gap); grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); }
+.readouts {
+  /* four samples across */ display: grid; gap: var(--rs-gap); grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); }
 
 .type { display: grid; grid-template-columns: auto 1fr; gap: var(--rs-space-7); align-items: center; }
 .type-big { font-size: 7rem; }
