@@ -157,6 +157,11 @@
 
 /* Derived tokens (same formula in every theme) */
 :root {
+  /* The swap list: the one orange thing in the app, so a tool change in
+     progress of being chosen can't be mistaken for anything else. Same in
+     both themes; dark ink on it. */
+  --rs-swap-menu: #f0892a;
+  --rs-on-swap-menu: #141516;
   /* Older names kept so every component speaks the same language */
   --rs-paper: var(--rs-surface-2);
   --rs-paper-ink: var(--rs-text-strong);

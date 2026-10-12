@@ -3,8 +3,8 @@
  *
  *   - Tool panel: macros for the mounted toolhead only. It changes when the
  *     tool changes, so it carries the tool's name and accent.
- *   - Shared panel: system macros that work whatever is mounted (backups,
- *     care, toolhead lists, and the machine's own hardware such as lights or
+ *   - System panel: macros that work whatever is mounted (backups,
+ *     care, and the machine's own hardware such as lights or
  *     an exhaust fan). It never changes, so its buttons stay in one place.
  *
  * Not here on purpose:
@@ -115,7 +115,6 @@ function ownedByMounted(name: string, toolType: string | null, toolName: string 
 
 /** Shared panel, in this order. */
 const SHARED_KNOWN: { title: string; names: string[] }[] = [
-  { title: 'Toolheads', names: ['LIST_TOOLHEADS', 'CHECK_TOOLHEADS'] },
   { title: 'Machine', names: ['BACKUP_CFG', 'SHOW_BACKUP_LOCATION', 'PM_STATUS'] },
 ]
 
@@ -131,8 +130,8 @@ const HIDDEN = new Set([
   'G0', 'G1', 'G28', 'M0', 'M3', 'M4', 'M5', 'PAUSE', 'RESUME', 'CANCEL_PRINT', 'END_PRINT', 'START_JOB', 'START_SEQUENCE',
   'VARIABLES', 'CUSTOM_TOOLS', 'RHINO_POSITIONS', 'EMERGENCY_STOP', 'CONFIRM_TOOL_INSTALL', 'CONFIRM_TOOLHEAD',
   'LASER_JOB_SETUP', 'CNC_JOB_SETUP', 'DRAGKNIFE_JOB_SETUP', 'TOOL_JOB_SETUP',
-  // in the top bar, beside the mounted tool
-  'SWAP_TOOL', 'RESTORE_TOOL',
+  // in the top bar, beside the mounted tool (Swap lists the toolheads itself)
+  'SWAP_TOOL', 'RESTORE_TOOL', 'LIST_TOOLHEADS', 'CHECK_TOOLHEADS',
 ])
 
 const label = (n: string) => LABELS[n] ?? n.replace(/_/g, ' ').toLowerCase().replace(/^\w/, (c) => c.toUpperCase())

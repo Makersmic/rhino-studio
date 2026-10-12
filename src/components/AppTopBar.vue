@@ -5,6 +5,7 @@ import ToolheadBadge from '@/toolheads/ToolheadBadge.vue'
 import StatusChip from './StatusChip.vue'
 import EStopButton from './EStopButton.vue'
 import CareChip from '@/maintenance/CareChip.vue'
+import SwapMenu from './SwapMenu.vue'
 import { useMachineStore } from '@/stores/machine'
 import { useControlStore } from '@/stores/control'
 import { useRoute } from 'vue-router'
@@ -59,14 +60,7 @@ const caption = computed(() => {
         class="tool-btn primary"
         @click="control.send('RESTORE_TOOL', { label: 'Confirm mounted tool' })"
       >Confirm tool</button>
-      <button
-        v-else-if="control.macros.has('SWAP_TOOL')"
-        type="button"
-        class="tool-btn"
-        :disabled="!machine.klippyReady || control.jobActive"
-        :title="control.jobActive ? 'Not while a job is running' : 'Swap the toolhead (the Rhino wizard walks you through it)'"
-        @click="control.send('SWAP_TOOL', { label: 'Swap toolhead' })"
-      >Swap</button>
+      <SwapMenu v-else-if="control.macros.has('SWAP_TOOL')" />
     </template>
 
     <div class="right">

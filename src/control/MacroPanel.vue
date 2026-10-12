@@ -29,8 +29,8 @@ const groups = computed<MacroGroup[]>(() => {
   return g
 })
 
-const title = computed(() => (props.kind === 'shared' ? 'Every tool' : toolName.value ? `For ${toolName.value}` : 'Tool macros'))
-const status = computed(() => (props.kind === 'shared' ? 'System' : toolName.value ? 'Changes with the tool' : undefined))
+const title = computed(() => (props.kind === 'shared' ? 'System' : toolName.value ? `For ${toolName.value}` : 'Tool macros'))
+const status = computed(() => (props.kind === 'tool' && toolName.value ? 'Changes with the tool' : undefined))
 const accent = computed(() => (props.kind === 'tool' && machine.mountedVerified ? `var(${machine.mountedLook.accentVar})` : undefined))
 
 const runMacro = (name: string, label: string) => control.send(name, { label })
@@ -69,7 +69,7 @@ const runMacro = (name: string, label: string) => control.send(name, { label })
         Wizard macros ask their own questions. Macros that move the machine or power a tool ask first.
         <button v-if="hidden" type="button" class="more" @click="showAll = !showAll">{{ showAll ? 'Hide' : 'Show' }} {{ hidden }} for other tools</button>
       </template>
-      <template v-else>Swap and Confirm tool are in the top bar. Pause and Cancel are with the job.</template>
+      <template v-else>Swap (with the list of toolheads) and Confirm tool are in the top bar. Pause and Cancel are with the job.</template>
     </p>
   </RsPanel>
 </template>

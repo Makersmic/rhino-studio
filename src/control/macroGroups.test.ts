@@ -36,7 +36,7 @@ describe('macroPanels', () => {
     const c = macroPanels(rhino, { toolType: null, toolName: null }).shared
     expect(a).toEqual(b)
     expect(a).toEqual(c)
-    expect(a.map((g) => g.title)).toEqual(['Toolheads', 'Machine', 'Lights and air', 'Other macros'])
+    expect(a.map((g) => g.title)).toEqual(['Machine', 'Lights and air', 'Other macros'])
     expect(names(a.find((g) => g.title === 'Lights and air')!.buttons)).toEqual(['LEDMAX', 'LEDMIN', 'LEDOFF', 'LEDFLASH'])
   })
 
@@ -47,9 +47,9 @@ describe('macroPanels', () => {
     for (const n of ['EXHAUST_ON', 'EXHAUST_OFF', 'CHAMBER_LIGHT_ON', 'NEVERMORE_ON']) expect(air).toContain(n)
   })
 
-  it('leaves Swap, Confirm tool, Pause, Resume and Cancel out of the macro panels', () => {
+  it('leaves Swap, the toolhead lists, Confirm tool, Pause, Resume and Cancel out of the macro panels', () => {
     const p = macroPanels(rhino, { toolType: 'DEPOSITION', toolName: 'BlockOne', showAll: true })
-    for (const n of ['SWAP_TOOL', 'RESTORE_TOOL', 'PAUSE', 'RESUME', 'CANCEL_PRINT']) expect(allNames(p)).not.toContain(n)
+    for (const n of ['SWAP_TOOL', 'LIST_TOOLHEADS', 'CHECK_TOOLHEADS', 'RESTORE_TOOL', 'PAUSE', 'RESUME', 'CANCEL_PRINT']) expect(allNames(p)).not.toContain(n)
   })
 
   it('never offers internal macros, job wizards or motion overrides as buttons', () => {
