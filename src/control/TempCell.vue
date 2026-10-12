@@ -157,7 +157,7 @@ function toggle() {
 </template>
 
 <style scoped>
-.cell { display: flex; flex-direction: column; gap: 6px; min-width: 0; --g: 2.4rem; }
+.cell { display: flex; flex-direction: column; gap: 4px; min-width: 0; --g: 2.4rem; }
 .k { font-size: var(--rs-text-xs); color: var(--rs-text-muted); font-weight: var(--rs-weight-medium); white-space: nowrap; align-self: flex-start; }
 .k.alert { background: var(--rs-ink); color: var(--rs-on-ink); padding: 0 6px; border-radius: var(--rs-radius-sm); }
 .row { display: flex; align-items: flex-end; gap: 10px; margin-top: auto; }

@@ -57,7 +57,7 @@ const jobLabel: Record<string, string> = { standby: 'Idle', printing: 'Running',
   <section class="strip" aria-label="Machine status" :style="{ '--cols': columns }">
     <!-- Toolhead -->
     <div class="seg tool" :style="{ '--accent': `var(${machine.mountedLook.accentVar})` }" :class="{ unverified: !machine.mountedVerified }">
-      <span class="emblem"><Icon :tool="machine.mountedLook.icon" :size="40" /></span>
+      <span class="emblem"><Icon :tool="machine.mountedLook.icon" :size="50" /></span>
       <div class="tool-text">
         <span class="k">Toolhead</span>
         <strong class="tool-name">{{ machine.mountedVerified ? machine.mountedName : 'Unknown' }}</strong>
@@ -136,19 +136,22 @@ const jobLabel: Record<string, string> = { standby: 'Idle', printing: 'Running',
       />
     </div>
 
-    <!-- Job -->
+    <!-- Job: progress on the left, its controls stacked in the top-right corner -->
     <div class="seg job">
-      <span class="k">Job <em>{{ job.state ? jobLabel[job.state] ?? job.state : '—' }}</em></span>
-      <span class="big rs-num" :class="{ empty: !jobActive }">{{ jobActive ? jobPct : '—' }}<small v-if="jobActive">%</small></span>
-      <span class="sub file">{{ job.filename || 'No file loaded' }}</span>
-      <span v-if="jobActive" class="bar" role="progressbar" :aria-valuenow="jobPct" aria-valuemin="0" aria-valuemax="100"><span :style="{ width: `${jobPct}%` }" /></span>
-      <!-- the job's controls live here (no separate Job panel); Cancel sits apart from Pause -->
+      <div class="job-main">
+        <span class="k">Job <em>{{ job.state ? jobLabel[job.state] ?? job.state : '—' }}</em></span>
+        <span class="big rs-num" :class="{ empty: !jobActive }">{{ jobActive ? jobPct : '—' }}<small v-if="jobActive">%</small></span>
+      </div>
       <div v-if="jobActive" class="job-acts">
+        <button type="button" class="mini cancel" @click="control.cancelJob()">{{ machine.toolKind === 'print' ? 'Cancel print' : 'Cancel job' }}</button>
         <button v-if="job.state === 'printing'" type="button" class="mini" @click="control.pauseJob()">Pause</button>
         <button v-else type="button" class="mini primary" @click="control.resumeJob()">Resume</button>
-        <button type="button" class="mini cancel" @click="control.cancelJob()">Cancel job</button>
       </div>
-      <RouterLink v-else to="/files" class="sub start">Start a job from Files</RouterLink>
+      <div class="job-foot">
+        <span class="sub file">{{ job.filename || 'No file loaded' }}</span>
+        <span v-if="jobActive" class="bar" role="progressbar" :aria-valuenow="jobPct" aria-valuemin="0" aria-valuemax="100"><span :style="{ width: `${jobPct}%` }" /></span>
+        <RouterLink v-else to="/files" class="sub start">Start a job from Files</RouterLink>
+      </div>
     </div>
   </section>
 </template>
@@ -167,7 +170,7 @@ const jobLabel: Record<string, string> = { standby: 'Idle', printing: 'Running',
   display: flex;
   flex-direction: column;
   gap: 6px;
-  padding: var(--rs-space-4) var(--rs-space-5);
+  padding: var(--rs-space-3) var(--rs-space-5);
   min-width: 0;
 }
 /* dotted divider between segments */
@@ -182,7 +185,7 @@ const jobLabel: Record<string, string> = { standby: 'Idle', printing: 'Running',
 }
 .k { font-size: var(--rs-text-xs); color: var(--rs-text-muted); font-weight: var(--rs-weight-medium); }
 .k em { font-style: normal; margin-left: 6px; color: var(--rs-text); }
-.big { font-size: 3.6rem; line-height: 0.85; margin-top: auto; }
+.big { font-size: 3rem; line-height: 0.85; }
 .big small { font-family: var(--rs-font-ui); font-size: 0.32em; color: var(--rs-text-muted); margin-left: -0.04em; vertical-align: top; }
 .sub { font-size: var(--rs-text-xs); color: var(--rs-text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
@@ -192,8 +195,8 @@ const jobLabel: Record<string, string> = { standby: 'Idle', printing: 'Running',
   position: relative;
   display: grid;
   place-items: center;
-  width: 72px;
-  height: 72px;
+  width: 70px;
+  height: 70px;
   flex: none;
   border-radius: var(--rs-radius-md);
   background: var(--rs-surface-2);
@@ -214,12 +217,16 @@ const jobLabel: Record<string, string> = { standby: 'Idle', printing: 'Running',
 
 
 /* job */
-.job-acts { display: flex; gap: var(--rs-space-2); margin-top: 6px; }
-.job-acts .cancel { margin-left: auto; border-color: var(--rs-danger); color: var(--rs-danger); }
+.job { display: grid; grid-template-columns: 1fr auto; grid-template-rows: 1fr auto; column-gap: var(--rs-space-3); row-gap: 6px; }
+.job-main { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+/* Cancel in the top-right corner, Pause/Resume under it, both right-aligned */
+.job-acts { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+.job-foot { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.job-acts .cancel { border-color: var(--rs-danger); color: var(--rs-danger); }
 .job-acts .cancel:hover { background: var(--rs-danger); color: var(--rs-on-danger); }
 .start { color: var(--rs-text-strong); text-decoration: underline; text-underline-offset: 3px; }
-.file { margin-top: 2px; }
-.bar { display: block; height: 6px; border-radius: 2px; background: var(--rs-dither-faint); box-shadow: inset 0 0 0 1px var(--rs-line); overflow: hidden; }
+.file { margin-top: 0; }
+.bar { display: block; height: 5px; border-radius: 2px; background: var(--rs-dither-faint); box-shadow: inset 0 0 0 1px var(--rs-line); overflow: hidden; }
 .bar span { display: block; height: 100%; background: var(--rs-ink); }
 
 @media (max-width: 1180px) {
@@ -228,10 +235,11 @@ const jobLabel: Record<string, string> = { standby: 'Idle', printing: 'Running',
   .seg + .seg::before { display: none; }
   .seg { border-top: 1px solid var(--rs-line); }
   .tool { border-top: 0; }
+  /* the job needs room for its number and the two buttons beside it */
+  .job { grid-column: 1 / -1; }
 }
 @media (max-width: 560px) {
   .strip { grid-template-columns: 1fr 1fr; }
-  .position, .job { grid-column: span 1; }
-  .big { font-size: 2.8rem; }
+  .big { font-size: 2.6rem; }
 }
 </style>

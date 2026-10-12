@@ -27,7 +27,7 @@ defineProps<{
 </template>
 
 <style scoped>
-.cell { display: flex; flex-direction: column; gap: 6px; min-width: 0; height: 100%; }
+.cell { display: flex; flex-direction: column; gap: 4px; min-width: 0; height: 100%; }
 .k { font-size: var(--rs-text-xs); color: var(--rs-text-muted); font-weight: var(--rs-weight-medium); white-space: nowrap; display: flex; align-items: center; gap: 6px; }
 .k em { font-style: normal; color: var(--rs-text-strong); padding: 0 6px; border-radius: var(--rs-radius-sm); box-shadow: inset 0 0 0 1px var(--rs-line-strong); }
 .k em.live { background: var(--rs-ink); color: var(--rs-on-ink); box-shadow: none; }
