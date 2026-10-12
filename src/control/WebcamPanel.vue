@@ -30,7 +30,7 @@ function onKey(e: KeyboardEvent) {
 </script>
 
 <template>
-  <RsPanel title="Camera" :status="status" flush>
+  <RsPanel title="Camera" panel-id="control.camera" :status="status" flush>
     <div v-if="webcams.current" class="gallery" tabindex="0" aria-roledescription="carousel" :aria-label="`Cameras, showing ${webcams.current.name}`" @keydown="onKey">
       <WebcamView :key="webcams.current.uid" :cam="webcams.current">
         <span class="name">{{ webcams.current.name }}</span>

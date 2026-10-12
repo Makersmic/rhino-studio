@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { MoonrakerClient, READ_ONLY_METHODS, ACTION_METHODS, CAMERA_METHODS, type Status } from './client'
+import { MoonrakerClient, READ_ONLY_METHODS, ACTION_METHODS, CAMERA_METHODS, SETTINGS_METHODS, type Status } from './client'
 import { approve, check } from '@/control/commands'
 
 /** A stand-in for the browser WebSocket that answers like Moonraker. */
@@ -164,6 +164,15 @@ describe('MoonrakerClient', () => {
     await expect(configure('printer.gcode.script', { script: 'G28' })).rejects.toThrow(/not an allowed camera change/)
     await expect(configure('server.database.post_item', {})).rejects.toThrow(/not an allowed camera change/)
     expect([...CAMERA_METHODS].every((m) => m.startsWith('server.webcams.'))).toBe(true)
+  })
+
+  it("keeps Studio's settings in its own database namespace", async () => {
+    const { c } = make()
+    const studio = (c as unknown as { studioSetting: (m: string, p: Record<string, unknown>) => Promise<unknown> }).studioSetting.bind(c)
+    await expect(studio('server.database.post_item', { namespace: 'moonraker', key: 'x', value: 1 })).rejects.toThrow(/rhino_studio/)
+    await expect(studio('server.database.delete_item', { namespace: 'rhino_studio', key: 'x' })).rejects.toThrow(/not an allowed settings call/)
+    await expect(studio('printer.gcode.script', { namespace: 'rhino_studio', script: 'G28' })).rejects.toThrow(/not an allowed settings call/)
+    expect([...SETTINGS_METHODS].every((m) => m.startsWith('server.database.'))).toBe(true)
   })
 
   it('resolves camera paths against the machine address', () => {

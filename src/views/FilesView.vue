@@ -204,6 +204,7 @@ const fmtSize = (b: number) => (b > 1048576 ? `${(b / 1048576).toFixed(1)} MB` :
 
     <RsPanel
       v-else
+      panel-id="files.list"
       :title="`${files.length} files`"
       class="drop"
       :class="{ dragging }"

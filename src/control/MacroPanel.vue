@@ -37,7 +37,7 @@ const runMacro = (name: string, label: string) => control.send(name, { label })
 </script>
 
 <template>
-  <RsPanel :title="title" :status="status" class="macro-panel" :class="[kind, { tabbed: !!accent }]" :style="accent ? { '--accent': accent } : undefined">
+  <RsPanel :panel-id="kind === 'shared' ? 'control.macros.system' : 'control.macros.tool'" :title="title" :status="status" class="macro-panel" :class="[kind, { tabbed: !!accent }]" :style="accent ? { '--accent': accent } : undefined">
     <div class="macros">
       <section v-for="g in groups" :key="g.title" class="group">
         <h3 v-if="g.title">{{ g.title }}</h3>

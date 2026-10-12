@@ -6,6 +6,7 @@ import AppRail from '@/components/AppRail.vue'
 import AppAlerts from '@/components/AppAlerts.vue'
 import ConfirmDialog from '@/control/ConfirmDialog.vue'
 import PromptDialog from '@/control/PromptDialog.vue'
+import PanelColorDialog from '@/components/PanelColorDialog.vue'
 import { useMachineStore } from '@/stores/machine'
 import { useThemeStore } from '@/stores/theme'
 import { useSettingsStore, portalBase } from '@/stores/settings'
@@ -57,6 +58,7 @@ watchEffect(() => {
   <!-- The Dashboard is look-only: wizard questions are answered on Control (its notice says so) -->
   <PromptDialog v-if="!route.meta.lookOnly" />
   <ConfirmDialog />
+  <PanelColorDialog />
 </template>
 
 <style scoped>

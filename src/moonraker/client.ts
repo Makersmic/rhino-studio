@@ -9,6 +9,8 @@ import type { CheckedScript } from '@/control/commands'
  *   out only as a CheckedScript (src/control/commands.ts), so every script
  *   has been through the safety check and any confirmation it needed.
  * - Camera settings go through configure(), which only sends CAMERA_METHODS.
+ * - Studio's own settings (panel colours) go through studioSetting(), which
+ *   only reads and writes Moonraker's database in the 'rhino_studio' namespace.
  *   They change Moonraker's camera list (shared with Mainsail), never the
  *   machine.
  * The emergency stop needs none of them.
@@ -46,6 +48,14 @@ export const READ_ONLY_METHODS: ReadonlySet<string> = new Set([
  * Mainsail and Fluidd use). They never touch Klipper or the machine.
  */
 export const CAMERA_METHODS: ReadonlySet<string> = new Set(['server.webcams.post_item', 'server.webcams.delete_item'])
+
+/**
+ * Studio's own settings in Moonraker's database, so every screen (PC, phone,
+ * pendant) shows the same theme and it's backed up with the config. Only the
+ * STUDIO_NAMESPACE is ever read or written; nothing here reaches Klipper.
+ */
+export const SETTINGS_METHODS: ReadonlySet<string> = new Set(['server.database.get_item', 'server.database.post_item'])
+export const STUDIO_NAMESPACE = 'rhino_studio'
 
 /** Methods that change the machine. Each has its own public function below. */
 export const ACTION_METHODS: ReadonlySet<string> = new Set([
@@ -219,6 +229,23 @@ export class MoonrakerClient {
     return this.configure('server.webcams.delete_item', { uid })
   }
 
+  /** Read one of Studio's settings; null when it was never saved. */
+  async getStudioSetting(key: string): Promise<unknown> {
+    try {
+      const r = (await this.studioSetting('server.database.get_item', { namespace: STUDIO_NAMESPACE, key })) as { value?: unknown }
+      return r?.value ?? null
+    } catch (e) {
+      // Moonraker answers "not found" for a key (or namespace) that was never written
+      if (/not found|does not exist|404/i.test((e as Error).message)) return null
+      throw e
+    }
+  }
+
+  /** Save one of Studio's settings. */
+  setStudioSetting(key: string, value: unknown): Promise<unknown> {
+    return this.studioSetting('server.database.post_item', { namespace: STUDIO_NAMESPACE, key, value })
+  }
+
   // ---- actions ---------------------------------------------------------
 
   /**
@@ -279,6 +306,12 @@ export class MoonrakerClient {
 
   private configure(method: string, params: Record<string, unknown>): Promise<unknown> {
     if (!CAMERA_METHODS.has(method)) return Promise.reject(new Error(`Blocked: "${method}" is not an allowed camera change`))
+    return this.send(method, params)
+  }
+
+  private studioSetting(method: string, params: Record<string, unknown>): Promise<unknown> {
+    if (!SETTINGS_METHODS.has(method)) return Promise.reject(new Error(`Blocked: "${method}" is not an allowed settings call`))
+    if (params.namespace !== STUDIO_NAMESPACE) return Promise.reject(new Error(`Blocked: settings stay in the "${STUDIO_NAMESPACE}" namespace`))
     return this.send(method, params)
   }
 

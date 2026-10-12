@@ -21,11 +21,14 @@ import { useControlStore } from '@/stores/control'
 import { useMaintenanceStore } from '@/stores/maintenance'
 import { careText } from '@/maintenance/summary'
 import { useToolMacros } from './useToolMacros'
+import PanelMenu from '@/components/PanelMenu.vue'
+import { usePanelThemeStore } from '@/stores/panelTheme'
 
 const machine = useMachineStore()
 const control = useControlStore()
 const care = useMaintenanceStore()
 const toolMacros = useToolMacros()
+const themes = usePanelThemeStore()
 
 
 // Only a confirmed print head can heat the hotend; other tools show their
@@ -56,7 +59,9 @@ const jobLabel: Record<string, string> = { standby: 'Idle', printing: 'Running',
 </script>
 
 <template>
-  <section class="strip" aria-label="Machine status" :style="{ '--cols': columns }">
+  <section class="strip" aria-label="Machine status" :style="[{ '--cols': columns }, themes.styleFor('control.status')]">
+    <!-- ⋮ settings, in the right-hand gutter so it never sits on Cancel print -->
+    <PanelMenu panel-id="control.status" title="Status box" class="strip-menu" />
     <!-- Toolhead -->
     <div class="seg tool" :style="{ '--accent': `var(${machine.mountedLook.accentVar})` }" :class="{ unverified: !machine.mountedVerified }">
       <!-- The tile spans the same height as the other cells (label line to
@@ -181,6 +186,7 @@ const jobLabel: Record<string, string> = { standby: 'Idle', printing: 'Running',
 
 <style scoped>
 .strip {
+  position: relative;
   display: grid;
   grid-template-columns: var(--cols);
   border: 1px solid var(--rs-line);
@@ -254,6 +260,10 @@ const jobLabel: Record<string, string> = { standby: 'Idle', printing: 'Running',
 .file { margin-top: 0; }
 .bar { display: block; height: 5px; border-radius: 2px; background: var(--rs-dither-faint); box-shadow: inset 0 0 0 1px var(--rs-line); overflow: hidden; }
 .bar span { display: block; height: 100%; background: var(--rs-ink); }
+
+/* ⋮ in the top-right corner, in the 20px gutter right of the job's buttons */
+.strip-menu { position: absolute; top: 6px; right: 0; z-index: 2; }
+.strip-menu :deep(.dots) { width: 18px; }
 
 /* Tool macro row: spans the box under the readouts, buttons two thirds the
    size of the macro panel's (38 -> 25px tall, 132 -> 88px wide), from the left. */

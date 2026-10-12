@@ -89,7 +89,7 @@ async function toggle(cam: Webcam) {
 </script>
 
 <template>
-  <RsPanel title="Cameras" :status="machine.online ? `${webcams.all.length} set up` : 'Not connected'">
+  <RsPanel title="Cameras" panel-id="settings.cameras" :status="machine.online ? `${webcams.all.length} set up` : 'Not connected'">
     <template #actions>
       <RsButton v-if="!form" size="sm" :disabled="!machine.online" @click="add">Add camera</RsButton>
     </template>

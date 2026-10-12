@@ -243,6 +243,8 @@ export const useMachineStore = defineStore('machine', () => {
   }
   const saveWebcam = (item: Record<string, unknown>) => need().saveWebcam(item)
   const deleteWebcam = (uid: string) => need().deleteWebcam(uid)
+  const getStudioSetting = (key: string) => need().getStudioSetting(key)
+  const setStudioSetting = (key: string, value: unknown) => need().setStudioSetting(key, value)
 
   // Actions. Only the control store calls these.
   function need(): MoonrakerClient {
@@ -291,6 +293,8 @@ export const useMachineStore = defineStore('machine', () => {
     webcamUrl,
     saveWebcam,
     deleteWebcam,
+    getStudioSetting,
+    setStudioSetting,
     runChecked,
     startPrint,
     pausePrint,

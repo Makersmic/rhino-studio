@@ -410,6 +410,8 @@ function runLine(raw: string) {
   }
 }
 
+const database: Record<string, Record<string, unknown>> = {}
+
 function handle(method: string, params: Record<string, unknown> | undefined): unknown {
   switch (method) {
     case 'printer.gcode.script': {
@@ -423,6 +425,18 @@ function handle(method: string, params: Record<string, unknown> | undefined): un
     }
     case 'server.temperature_store': return tempStore
     case 'server.webcams.list': return { webcams }
+    // Moonraker's database, only as much as Studio uses (its own namespace)
+    case 'server.database.get_item': {
+      const ns = String(params?.namespace ?? ''), key = String(params?.key ?? '')
+      const v = database[ns]?.[key]
+      if (v === undefined) throw new Error(`Key '${key}' in namespace '${ns}' not found`)
+      return { namespace: ns, key, value: v }
+    }
+    case 'server.database.post_item': {
+      const ns = String(params?.namespace ?? ''), key = String(params?.key ?? '')
+      ;(database[ns] ??= {})[key] = params?.value
+      return { namespace: ns, key, value: params?.value }
+    }
     case 'server.webcams.post_item': {
       const p = { ...(params ?? {}) } as Record<string, unknown>
       const i = webcams.findIndex((w) => w.uid === p.uid)

@@ -8,8 +8,10 @@ import { useMaintenanceStore } from '@/stores/maintenance'
 import { useMachineStore } from '@/stores/machine'
 import { brand } from '@/brand/brand'
 import CamerasPanel from '@/webcams/CamerasPanel.vue'
+import { usePanelThemeStore } from '@/stores/panelTheme'
 
 const theme = useThemeStore()
+const panelTheme = usePanelThemeStore()
 const settings = useSettingsStore()
 const machine = useMachineStore()
 const address = ref(settings.moonrakerUrl)
@@ -40,7 +42,7 @@ const options: { value: ThemePref; label: string }[] = [
     </div>
 
     <div class="grid">
-      <RsPanel title="Appearance" index="01">
+      <RsPanel title="Appearance" index="01" panel-id="settings.appearance">
         <fieldset class="segmented">
           <legend class="visually-hidden">Theme</legend>
           <label v-for="o in options" :key="o.value" class="seg">
@@ -48,10 +50,20 @@ const options: { value: ThemePref; label: string }[] = [
             <span>{{ o.label }}</span>
           </label>
         </fieldset>
-        <p class="muted small">Saved in this browser only.</p>
+        <p class="muted small">Day or night is saved in this browser only.</p>
+        <div class="theme-row">
+          <div>
+            <strong>Panel colours</strong>
+            <p class="muted small">
+              {{ panelTheme.customCount ? `${panelTheme.customCount} panel${panelTheme.customCount === 1 ? '' : 's'} with your own colours.` : 'All panels use the default colours.' }}
+              Change a panel from the ⋮ in its top-right corner. Saved on the machine, so every screen shows the same theme.
+            </p>
+          </div>
+          <RsButton v-if="panelTheme.customCount" variant="quiet" @click="panelTheme.resetAll()">Reset all panels</RsButton>
+        </div>
       </RsPanel>
 
-      <RsPanel title="Machine" index="02">
+      <RsPanel title="Machine" index="02" panel-id="settings.machine">
         <form class="stack" @submit.prevent="save">
           <label class="field">
             <span>Moonraker address</span>
@@ -76,7 +88,7 @@ const options: { value: ThemePref; label: string }[] = [
 
       <CamerasPanel class="wide" />
 
-      <RsPanel title="About" index="03">
+      <RsPanel title="About" index="03" panel-id="settings.about">
         <p>{{ brand.name }} {{ brand.version }}</p>
         <p class="muted small">For the {{ brand.machine }}. Free software under GPL-3.0-or-later.</p>
         <p class="small"><RouterLink to="/style">Style guide</RouterLink> <span class="muted">· colours, type, icons and components</span></p>
@@ -101,4 +113,6 @@ const options: { value: ThemePref; label: string }[] = [
 .check { display: flex; align-items: center; gap: var(--rs-space-2); cursor: pointer; }
 .check input { width: 18px; height: 18px; accent-color: var(--rs-text-strong); }
 .row { display: flex; align-items: center; gap: var(--rs-space-3); }
+.theme-row { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--rs-space-4); margin-top: var(--rs-space-5); padding-top: var(--rs-space-4); border-top: 1px solid var(--rs-line); }
+.theme-row p { margin-top: 2px; }
 </style>

@@ -97,6 +97,9 @@
   --rs-graph-grid: rgb(232 230 224 / 0.13);
   --rs-edit-fill: rgb(232 230 224 / 0.09);
   --rs-key-fill: #2e3034; /* jog keys at rest: solid grey */
+  /* menus that open from inside a panel keep the app's own colours */
+  --rs-menu-bg: #1a1b1d;
+  --rs-menu-text: #ecebe6;
 }
 
 /* Day: e-paper. Grey housing, warm matte paper, black ink. */
@@ -124,6 +127,8 @@
   --rs-graph-grid: rgb(21 22 24 / 0.2);
   --rs-edit-fill: rgb(21 22 24 / 0.07);
   --rs-key-fill: #d6d5d0;
+  --rs-menu-bg: #f5f4f0;
+  --rs-menu-text: #111214;
 }
 
 @media (prefers-color-scheme: light) {
@@ -152,6 +157,8 @@
   --rs-graph-grid: rgb(21 22 24 / 0.2);
     --rs-edit-fill: rgb(21 22 24 / 0.07);
     --rs-key-fill: #d6d5d0;
+    --rs-menu-bg: #f5f4f0;
+    --rs-menu-text: #111214;
   }
 }
 

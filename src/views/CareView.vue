@@ -120,7 +120,7 @@ const log = computed(() => care.history.slice(0, 15))
       </template>
 
       <div class="grid two">
-        <RsPanel title="Work log" index="L">
+        <RsPanel title="Work log" index="L" panel-id="care.worklog">
           <ul class="log">
             <li v-for="r in log" :key="r.id">
               <span class="date">{{ fmtDay(r.at) }}</span>
@@ -132,7 +132,7 @@ const log = computed(() => care.history.slice(0, 15))
             </li>
           </ul>
         </RsPanel>
-        <RsPanel title="Usage meters" index="M">
+        <RsPanel title="Usage meters" index="M" panel-id="care.meters">
           <dl class="meters">
             <template v-for="m in machineMeters" :key="m.meter">
               <dt>{{ m.label }}</dt>

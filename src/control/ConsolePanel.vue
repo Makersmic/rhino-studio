@@ -53,7 +53,7 @@ const fmtTime = (t: number) => new Date(t * 1000).toLocaleTimeString(undefined, 
 </script>
 
 <template>
-  <RsPanel title="Console" :status="control.running ? `Running ${control.running}…` : undefined">
+  <RsPanel title="Console" panel-id="control.console" :status="control.running ? `Running ${control.running}…` : undefined">
       <div class="console">
         <div ref="logEl" class="log" role="log" aria-live="polite" @scroll="onScroll">
           <div v-for="l in control.lines" :key="l.id" class="line" :class="l.kind">
