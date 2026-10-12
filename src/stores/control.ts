@@ -168,7 +168,7 @@ export const useControlStore = defineStore('control', () => {
           (jobActive.value ? 'A job is running. ' : '') + 'Check the machine is clear and you are ready to stop it.',
         lines: c.lines.map((l) => ({ text: l.line, reason: l.reason })),
         feature: opts.confirmFeature,
-        confirmLabel: opts.confirmLabel ?? 'Run it',
+        confirmLabel: opts.confirmLabel ?? 'Proceed',
         tone: c.risk === 'tool-state' || c.risk === 'restart' || jobActive.value ? 'danger' : 'motion',
       })
       if (!confirmed) {
