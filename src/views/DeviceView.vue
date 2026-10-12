@@ -7,9 +7,19 @@ import Readout from '@/components/Readout.vue'
 import ToolheadBadge from '@/toolheads/ToolheadBadge.vue'
 import { useMachineStore } from '@/stores/machine'
 import { useSettingsStore } from '@/stores/settings'
+import { useMaintenanceStore } from '@/stores/maintenance'
+import CareTaskCard from '@/maintenance/CareTaskCard.vue'
+import { careText } from '@/maintenance/summary'
 
 const machine = useMachineStore()
 const settings = useSettingsStore()
+const care = useMaintenanceStore()
+
+/** The mounted tool's due tasks, then the machine's: what to look at before the next job. */
+const careNow = computed(() => {
+  const tool = machine.mountedName ? `tool:${machine.mountedName}` : null
+  return care.due.filter((t) => t.asset === tool || t.asset.startsWith('machine:')).slice(0, 4)
+})
 
 const f0 = (n: number | null) => (n == null ? null : n.toFixed(0))
 const f1 = (n: number | undefined) => (n == null ? '—' : n.toFixed(1))
@@ -67,7 +77,23 @@ const chip = computed(() => {
         </div>
       </RsPanel>
 
-      <RsPanel title="Connection" index="02">
+      <RsPanel title="Care before the next job" index="02">
+        <div class="stack">
+          <p v-if="care.source === 'unavailable'" class="muted">Maintenance isn't available: the Rhino Portal can't be reached.</p>
+          <template v-else>
+            <p class="muted">
+              <template v-if="care.mountedCare">{{ machine.mountedName }}: {{ careText(care.mountedCare) }}.</template>
+              Machine: {{ care.areas.filter((a) => a.level !== 'ok').length ? `${care.areas.filter((a) => a.level !== 'ok').length} areas need care` : 'up to date' }}.
+            </p>
+            <div v-if="careNow.length" class="care-list">
+              <CareTaskCard v-for="t in careNow" :key="t.id" :task="t" compact />
+            </div>
+            <RouterLink to="/care" class="link">Open Care</RouterLink>
+          </template>
+        </div>
+      </RsPanel>
+
+      <RsPanel title="Connection" index="03">
         <div class="stack">
           <StatusChip :tone="chip.tone">{{ chip.text }}</StatusChip>
           <dl class="facts">
@@ -86,7 +112,7 @@ const chip = computed(() => {
 </template>
 
 <style scoped>
-.readouts { display: grid; gap: var(--rs-gap); grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); }
+.readouts { display: grid; gap: var(--rs-gap); grid-template-columns: repeat(auto-fill, minmax(min(230px, 45%), 1fr)); }
 .grid { grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
 .stack { display: flex; flex-direction: column; align-items: flex-start; gap: var(--rs-space-4); }
 .small { font-size: var(--rs-text-sm); }
@@ -95,4 +121,5 @@ const chip = computed(() => {
 .facts dd { margin: 0; overflow-wrap: anywhere; }
 .row { display: flex; align-items: center; gap: var(--rs-space-4); }
 .link { font-size: var(--rs-text-sm); color: var(--rs-text); }
+.care-list { display: flex; flex-direction: column; gap: var(--rs-space-2); align-self: stretch; }
 </style>

@@ -5,10 +5,12 @@
  */
 import Icon from '@/icons/Icon.vue'
 import type { ToolheadLook } from './registry'
+import CareBar from '@/maintenance/CareBar.vue'
+import { careText, type AssetCare } from '@/maintenance/summary'
 
 withDefaults(
-  defineProps<{ look: ToolheadLook; slot?: number | null; caption?: string; mounted?: boolean }>(),
-  { slot: null, caption: undefined, mounted: false },
+  defineProps<{ look: ToolheadLook; slot?: number | null; caption?: string; mounted?: boolean; care?: AssetCare | null }>(),
+  { slot: null, caption: undefined, mounted: false, care: null },
 )
 </script>
 
@@ -29,6 +31,11 @@ withDefaults(
       <span v-if="caption" class="caption">{{ caption }}</span>
       <span v-if="mounted" class="mounted">Mounted</span>
     </footer>
+
+    <RouterLink v-if="care && care.total" to="/care" class="care" :class="care.level" :title="care.next?.title">
+      <span class="care-text">{{ careText(care) }}</span>
+      <CareBar :fraction="care.worstFraction" :level="care.level" :label="`${look.name} care`" />
+    </RouterLink>
   </article>
 </template>
 
@@ -65,6 +72,31 @@ withDefaults(
 
 .foot { display: flex; flex-direction: column; gap: 2px; font-size: var(--rs-text-sm); line-height: 1.35; }
 .caption { opacity: 0.72; font-size: var(--rs-text-xs); }
+.care {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: auto;
+  padding-top: var(--rs-space-3);
+  border-top: 1.5px dashed color-mix(in srgb, var(--th-ink) 35%, transparent);
+  color: var(--th-ink);
+  text-decoration: none;
+  font-size: var(--rs-text-xs);
+}
+.care-text { font-weight: var(--rs-weight-medium); }
+.care.due_soon .care-text::before, .care.overdue .care-text::before {
+  content: '';
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 6px;
+  background: currentColor;
+  transform: rotate(45deg) translateY(-1px);
+}
+.care :deep(.fill) { background: var(--th-ink); }
+.care.due_soon :deep(.fill), .care.overdue :deep(.fill) {
+  background: repeating-linear-gradient(135deg, var(--th-ink) 0 4px, transparent 4px 7px);
+}
 .mounted {
   align-self: flex-start;
   margin-top: var(--rs-space-2);

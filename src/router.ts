@@ -11,6 +11,7 @@ export const router = createRouter({
     { path: '/device', component: () => import('./views/DeviceView.vue'), meta: { title: 'Device' } },
     { path: '/toolheads', component: () => import('./views/ToolheadsView.vue'), meta: { title: 'Toolheads' } },
     { path: '/files', component: () => import('./views/FilesView.vue'), meta: { title: 'Files' } },
+    { path: '/care', component: () => import('./views/CareView.vue'), meta: { title: 'Care' } },
     { path: '/style', component: () => import('./views/StyleGuideView.vue'), meta: { title: 'Style guide' } },
     { path: '/settings', component: () => import('./views/SettingsView.vue'), meta: { title: 'Settings' } },
     { path: '/:pathMatch(.*)*', redirect: '/prepare' },

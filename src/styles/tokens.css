@@ -78,6 +78,10 @@
   --th-custom: #c9b28a;     /* tan           - user-added tools, slot 6+ */
   --th-unknown: #8f8b82;    /* warm grey     - mounted tool not verified */
   --th-ink: #141413;
+
+  /* Caution fill (maintenance due): one bright mustard in both themes so dark
+     ink on top stays readable. --rs-warn is the text/line version. */
+  --rs-warn-fill: #e9b44c;
 }
 
 /* Dark theme (default): black frame, charcoal panels, cream paper tiles */

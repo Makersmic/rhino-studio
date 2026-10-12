@@ -13,6 +13,7 @@ import BrandMark from '@/brand/BrandMark.vue'
 import ToolheadBadge from '@/toolheads/ToolheadBadge.vue'
 import ToolTile from '@/toolheads/ToolTile.vue'
 import Icon from '@/icons/Icon.vue'
+import CareBar from '@/maintenance/CareBar.vue'
 import { NAV_ICONS, type NavIconId } from '@/icons/nav'
 import { BUILT_IN_TOOLHEADS, UNKNOWN_LOOK, lookFor, type ToolheadLook } from '@/toolheads/registry'
 import { brand } from '@/brand/brand'
@@ -185,6 +186,23 @@ const isUnknown = (t: ToolheadLook) => t.icon === 'unknown'
       </RsPanel>
     </div>
 
+    <SectionRule label="Care states" />
+    <RsPanel>
+      <div class="carestates">
+        <div v-for="c in [
+          { level: 'ok', f: 0.45, label: 'Scheduled', text: 'Bar fills as the interval is used' },
+          { level: 'due_soon', f: 0.88, label: 'Due soon', text: 'Inside the early alarm: solid mustard' },
+          { level: 'overdue', f: 1, label: 'Overdue', text: 'Full and hatched, chip gets a ring' },
+          { level: 'held', f: 0.3, label: 'On hold', text: 'Waiting on parts, faded' },
+        ]" :key="c.level" class="carestate">
+          <strong>{{ c.label }}</strong>
+          <CareBar :fraction="c.f" :level="c.level" :label="c.label" />
+          <span class="muted">{{ c.text }}</span>
+        </div>
+      </div>
+      <p class="muted note">Maintenance uses mustard (<code>--rs-warn-fill</code>), never red: overdue care is a reminder, not a stop. Nothing is blocked by maintenance.</p>
+    </RsPanel>
+
     <SectionRule label="Brand" />
     <RsPanel>
       <div class="row brandrow">
@@ -281,5 +299,7 @@ const isUnknown = (t: ToolheadLook) => t.icon === 'unknown'
 .chipsw .dot { width: 28px; height: 28px; border-radius: 50%; box-shadow: inset 0 0 0 1.5px var(--rs-line-strong); }
 .chipsw code { color: var(--rs-text-muted); font-size: var(--rs-text-xs); }
 
+.carestates { display: grid; gap: var(--rs-space-5); grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
+.carestate { display: flex; flex-direction: column; gap: var(--rs-space-2); font-size: var(--rs-text-sm); color: var(--rs-text-strong); }
 .rules { margin: 0; padding-left: 1.4em; display: flex; flex-direction: column; gap: var(--rs-space-2); max-width: 80ch; }
 </style>

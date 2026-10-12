@@ -4,6 +4,7 @@ import BrandMark from '@/brand/BrandMark.vue'
 import ToolheadBadge from '@/toolheads/ToolheadBadge.vue'
 import StatusChip from './StatusChip.vue'
 import EStopButton from './EStopButton.vue'
+import CareChip from '@/maintenance/CareChip.vue'
 import { useMachineStore } from '@/stores/machine'
 
 const machine = useMachineStore()
@@ -47,6 +48,7 @@ const caption = computed(() => {
     </RouterLink>
 
     <div class="right">
+      <CareChip />
       <StatusChip :tone="connection.tone" :title="machine.connectionDetail ?? undefined">{{ connection.text }}</StatusChip>
       <EStopButton />
     </div>
@@ -90,5 +92,9 @@ const caption = computed(() => {
   .topbar { gap: var(--rs-space-3); padding-left: var(--rs-space-3); }
   .caption { display: none; }
   .right :deep(.chip) { display: none; }
+}
+@media (max-width: 560px) {
+  .mounted { padding-right: 6px; }
+  .mounted :deep(.text) { display: none; }
 }
 </style>

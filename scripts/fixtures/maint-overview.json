@@ -1,0 +1,4257 @@
+{
+ "ok": true,
+ "areas": [
+  {
+   "id": "motion_xy",
+   "label": "Motion X/Y"
+  },
+  {
+   "id": "motion_z",
+   "label": "Motion Z"
+  },
+  {
+   "id": "frame",
+   "label": "Frame and enclosure"
+  },
+  {
+   "id": "electronics",
+   "label": "Electronics"
+  },
+  {
+   "id": "umbilical",
+   "label": "Umbilical and tool connector"
+  },
+  {
+   "id": "other",
+   "label": "Other"
+  }
+ ],
+ "settings": {
+  "boot_reminder": true
+ },
+ "tasks": [
+  {
+   "anchor": "completion",
+   "asset": "tool:HotJoe",
+   "created": 1758997802.6684186,
+   "enabled": true,
+   "last": {
+    "action": "done",
+    "at": 1783305007.9399772,
+    "meters": {
+     "machine.filament_m": 4199.95259672045,
+     "machine.jobs": 374.0,
+     "machine.prod_h": 834.0043387862859,
+     "machine.shutdowns": 2.0,
+     "machine.swaps": 165.0,
+     "machine.up_h": 1962.2430847015135,
+     "tool.active_h": 44.97651552377354,
+     "tool.filament_m": 0.0,
+     "tool.jobs": 51.0,
+     "tool.mounted_h": 204.3943914655868,
+     "tool.mounts": 26.0,
+     "tool.prod_h": 48.635495587352395
+    }
+   },
+   "link": {
+    "book": "b_spindle",
+    "template": "tool:cnc_chips"
+   },
+   "links": [],
+   "minutes": 10,
+   "notes": "",
+   "parts": [],
+   "priority": "normal",
+   "remind_boot": true,
+   "rules": [
+    {
+     "every": 10,
+     "kind": "meter",
+     "lead": 2,
+     "meter": "jobs",
+     "scope": "tool"
+    }
+   ],
+   "safety": "",
+   "start": {
+    "at": 1758997802.6684186,
+    "meters": {
+     "machine.filament_m": 0.0,
+     "machine.jobs": 0.0,
+     "machine.prod_h": 0.0,
+     "machine.shutdowns": 0.0,
+     "machine.swaps": 0.0,
+     "machine.up_h": 0.0,
+     "tool.active_h": 0.0,
+     "tool.filament_m": 0.0,
+     "tool.jobs": 0.0,
+     "tool.mounted_h": 0.0,
+     "tool.mounts": 0.0,
+     "tool.prod_h": 0.0
+    }
+   },
+   "steps": [],
+   "title": "Clear chips from the spindle mount and Z axis",
+   "tools_needed": "",
+   "type": "clean",
+   "id": "t07824b7f",
+   "asset_label": "HotJoe",
+   "status": {
+    "state": "due_soon",
+    "rules": [
+     {
+      "summary": "every 10 jobs",
+      "due_ts": null,
+      "due_value": 61.0,
+      "eta_ts": 1793159116.1611648,
+      "unit": "",
+      "noun": "jobs",
+      "kind": "meter",
+      "event": false,
+      "state": "due_soon",
+      "fraction": 0.9,
+      "remaining": 1.0,
+      "text": "1 left (due at 61), about 2 weeks at your usual rate",
+      "lead": 2.0
+     }
+    ],
+    "next": {
+     "summary": "every 10 jobs",
+     "due_ts": null,
+     "due_value": 61.0,
+     "eta_ts": 1793159116.1611648,
+     "unit": "",
+     "noun": "jobs",
+     "kind": "meter",
+     "event": false,
+     "state": "due_soon",
+     "fraction": 0.9,
+     "remaining": 1.0,
+     "text": "1 left (due at 61), about 2 weeks at your usual rate",
+     "lead": 2.0
+    },
+    "fraction": 0.9,
+    "snoozed": false,
+    "eta_ts": 1793159116.1611648
+   },
+   "link_info": {
+    "template": "tool:cnc_chips",
+    "template_title": "Clear chips from the spindle mount and Z axis",
+    "book": "b_spindle",
+    "book_name": "CNC spindle",
+    "uses": 1
+   }
+  },
+  {
+   "anchor": "completion",
+   "asset": "tool:BlockOne",
+   "created": 1758997802.6684186,
+   "enabled": true,
+   "last": {
+    "action": "done",
+    "at": 1790562610.0346751,
+    "meters": {
+     "machine.filament_m": 5907.477717847561,
+     "machine.jobs": 502.0,
+     "machine.prod_h": 1152.476994606136,
+     "machine.shutdowns": 2.0,
+     "machine.swaps": 216.0,
+     "machine.up_h": 2630.9109954149867,
+     "tool.active_h": 755.9890687423742,
+     "tool.filament_m": 4938.028152545634,
+     "tool.jobs": 243.0,
+     "tool.mounted_h": 1104.8549674013345,
+     "tool.mounts": 76.0,
+     "tool.prod_h": 824.0541381695922
+    }
+   },
+   "link": {
+    "book": "b_printhead",
+    "template": "tool:hotend_check"
+   },
+   "links": [],
+   "minutes": 15,
+   "notes": "",
+   "parts": [],
+   "priority": "normal",
+   "remind_boot": true,
+   "rules": [
+    {
+     "every": 200,
+     "kind": "meter",
+     "lead": 20,
+     "meter": "active_h",
+     "scope": "tool"
+    },
+    {
+     "every": 6,
+     "kind": "time",
+     "lead": 14,
+     "lead_unit": "days",
+     "unit": "months"
+    }
+   ],
+   "safety": "",
+   "start": {
+    "at": 1758997802.6684186,
+    "meters": {
+     "machine.filament_m": 0.0,
+     "machine.jobs": 0.0,
+     "machine.prod_h": 0.0,
+     "machine.shutdowns": 0.0,
+     "machine.swaps": 0.0,
+     "machine.up_h": 0.0,
+     "tool.active_h": 0.0,
+     "tool.filament_m": 0.0,
+     "tool.jobs": 0.0,
+     "tool.mounted_h": 0.0,
+     "tool.mounts": 0.0,
+     "tool.prod_h": 0.0
+    }
+   },
+   "steps": [],
+   "title": "Check the hotend screws, heater and thermistor wiring",
+   "tools_needed": "",
+   "type": "inspect",
+   "id": "t0a9c2268",
+   "asset_label": "BlockOne",
+   "status": {
+    "state": "ok",
+    "rules": [
+     {
+      "summary": "every 200 working hours",
+      "due_ts": null,
+      "due_value": 955.9890687423742,
+      "eta_ts": 1795793475.0314732,
+      "unit": "h",
+      "noun": "working hours",
+      "kind": "meter",
+      "event": false,
+      "state": "ok",
+      "fraction": 0.20277338572273493,
+      "remaining": 159.445322855453,
+      "text": "159 h left (due at 956 h), about 7 weeks at your usual rate",
+      "lead": 20.0
+     },
+     {
+      "summary": "every 6 months",
+      "due_ts": 1806201010.034675,
+      "due_value": null,
+      "eta_ts": 1806201010.034675,
+      "unit": "days",
+      "noun": "",
+      "kind": "time",
+      "event": false,
+      "state": "ok",
+      "fraction": 0.08920835167495189,
+      "remaining": 166.33332477536192,
+      "text": "due 28 Mar 2027, in 5 months",
+      "lead": 14.0
+     }
+    ],
+    "next": {
+     "summary": "every 200 working hours",
+     "due_ts": null,
+     "due_value": 955.9890687423742,
+     "eta_ts": 1795793475.0314732,
+     "unit": "h",
+     "noun": "working hours",
+     "kind": "meter",
+     "event": false,
+     "state": "ok",
+     "fraction": 0.20277338572273493,
+     "remaining": 159.445322855453,
+     "text": "159 h left (due at 956 h), about 7 weeks at your usual rate",
+     "lead": 20.0
+    },
+    "fraction": 0.20277338572273493,
+    "snoozed": false,
+    "eta_ts": 1795793475.0314732
+   },
+   "link_info": {
+    "template": "tool:hotend_check",
+    "template_title": "Check the hotend screws, heater and thermistor wiring",
+    "book": "b_printhead",
+    "book_name": "3D print head",
+    "uses": 2
+   }
+  },
+  {
+   "anchor": "completion",
+   "asset": "machine:motion_z",
+   "created": 1758997802.6684186,
+   "enabled": true,
+   "last": {
+    "action": "done",
+    "at": 1785033008.3690867,
+    "meters": {
+     "machine.filament_m": 4579.361792998997,
+     "machine.jobs": 404.0,
+     "machine.prod_h": 906.457626502544,
+     "machine.shutdowns": 2.0,
+     "machine.swaps": 180.0,
+     "machine.up_h": 2131.1545483541436
+    }
+   },
+   "link": {
+    "book": "b_rhino",
+    "template": "machine:z_belt"
+   },
+   "links": [],
+   "minutes": 30,
+   "notes": "",
+   "parts": [
+    "Spare closed-loop belt for the Z drive"
+   ],
+   "priority": "normal",
+   "remind_boot": true,
+   "rules": [
+    {
+     "every": 500,
+     "kind": "meter",
+     "lead": 50,
+     "meter": "prod_h",
+     "scope": "machine"
+    },
+    {
+     "every": 6,
+     "kind": "time",
+     "lead": 14,
+     "lead_unit": "days",
+     "unit": "months"
+    }
+   ],
+   "safety": "",
+   "start": {
+    "at": 1758997802.6684186,
+    "meters": {
+     "machine.filament_m": 0.0,
+     "machine.jobs": 0.0,
+     "machine.prod_h": 0.0,
+     "machine.shutdowns": 0.0,
+     "machine.swaps": 0.0,
+     "machine.up_h": 0.0
+    }
+   },
+   "steps": [
+    "Belt tension and condition",
+    "Pulley set screws on the motor and all three leadscrews",
+    "Turn the drive by hand: all three screws must move together",
+    "Run Z_TILT_ADJUST afterwards"
+   ],
+   "title": "Check the Z belt drive (2:1 reduction)",
+   "tools_needed": "",
+   "type": "inspect",
+   "id": "t0cd287ef",
+   "asset_label": "Motion Z",
+   "status": {
+    "state": "ok",
+    "rules": [
+     {
+      "summary": "every 500 production hours",
+      "due_ts": null,
+      "due_value": 1406.457626502544,
+      "eta_ts": 1796005956.3679993,
+      "unit": "h",
+      "noun": "production hours",
+      "kind": "meter",
+      "event": false,
+      "state": "ok",
+      "fraction": 0.5932752140296828,
+      "remaining": 203.36239298515852,
+      "text": "203 h left (due at 1406 h), about 7 weeks at your usual rate",
+      "lead": 50.0
+     },
+     {
+      "summary": "every 6 months",
+      "due_ts": 1800930608.369087,
+      "due_value": null,
+      "eta_ts": 1800930608.369087,
+      "unit": "days",
+      "noun": "",
+      "kind": "time",
+      "event": false,
+      "state": "ok",
+      "fraction": 0.4232262532636597,
+      "remaining": 105.33330549772415,
+      "text": "due 26 Jan 2027, in 3 months",
+      "lead": 14.0
+     }
+    ],
+    "next": {
+     "summary": "every 500 production hours",
+     "due_ts": null,
+     "due_value": 1406.457626502544,
+     "eta_ts": 1796005956.3679993,
+     "unit": "h",
+     "noun": "production hours",
+     "kind": "meter",
+     "event": false,
+     "state": "ok",
+     "fraction": 0.5932752140296828,
+     "remaining": 203.36239298515852,
+     "text": "203 h left (due at 1406 h), about 7 weeks at your usual rate",
+     "lead": 50.0
+    },
+    "fraction": 0.5932752140296828,
+    "snoozed": false,
+    "eta_ts": 1796005956.3679993
+   },
+   "link_info": {
+    "template": "machine:z_belt",
+    "template_title": "Check the Z belt drive (2:1 reduction)",
+    "book": "b_rhino",
+    "book_name": "Rhino motion system and frame",
+    "uses": 1
+   }
+  },
+  {
+   "anchor": "completion",
+   "asset": "tool:LightSaber",
+   "created": 1758997802.6684186,
+   "enabled": true,
+   "last": {
+    "action": "done",
+    "at": 1778639406.7408907,
+    "meters": {
+     "machine.filament_m": 3481.9029003504625,
+     "machine.jobs": 314.0,
+     "machine.prod_h": 693.816786970091,
+     "machine.shutdowns": 1.0,
+     "machine.swaps": 138.0,
+     "machine.up_h": 1635.5425788746602,
+     "tool.active_h": 48.65292940878159,
+     "tool.filament_m": 0.0,
+     "tool.jobs": 71.0,
+     "tool.mounted_h": 304.2442845171109,
+     "tool.mounts": 35.0,
+     "tool.prod_h": 53.25466522386362
+    }
+   },
+   "link": {
+    "book": "b_laser",
+    "template": "tool:laser_focus"
+   },
+   "links": [],
+   "minutes": 15,
+   "notes": "",
+   "parts": [],
+   "priority": "normal",
+   "remind_boot": true,
+   "rules": [
+    {
+     "every": 50,
+     "kind": "meter",
+     "lead": 5,
+     "meter": "active_h",
+     "scope": "tool"
+    }
+   ],
+   "safety": "Laser goggles on for the test burn.",
+   "start": {
+    "at": 1758997802.6684186,
+    "meters": {
+     "machine.filament_m": 0.0,
+     "machine.jobs": 0.0,
+     "machine.prod_h": 0.0,
+     "machine.shutdowns": 0.0,
+     "machine.swaps": 0.0,
+     "machine.up_h": 0.0,
+     "tool.active_h": 0.0,
+     "tool.filament_m": 0.0,
+     "tool.jobs": 0.0,
+     "tool.mounted_h": 0.0,
+     "tool.mounts": 0.0,
+     "tool.prod_h": 0.0
+    }
+   },
+   "steps": [],
+   "title": "Check laser focus and alignment",
+   "tools_needed": "",
+   "type": "calibrate",
+   "id": "t0ef21a1d",
+   "asset_label": "LightSaber",
+   "status": {
+    "state": "ok",
+    "rules": [
+     {
+      "summary": "every 50 working hours",
+      "due_ts": null,
+      "due_value": 98.65292940878159,
+      "eta_ts": 1803069027.3212507,
+      "unit": "h",
+      "noun": "working hours",
+      "kind": "meter",
+      "event": false,
+      "state": "ok",
+      "fraction": 0.4438409523845797,
+      "remaining": 27.807952380771013,
+      "text": "28 h left (due at 99 h), about 4 months at your usual rate",
+      "lead": 5.0
+     }
+    ],
+    "next": {
+     "summary": "every 50 working hours",
+     "due_ts": null,
+     "due_value": 98.65292940878159,
+     "eta_ts": 1803069027.3212507,
+     "unit": "h",
+     "noun": "working hours",
+     "kind": "meter",
+     "event": false,
+     "state": "ok",
+     "fraction": 0.4438409523845797,
+     "remaining": 27.807952380771013,
+     "text": "28 h left (due at 99 h), about 4 months at your usual rate",
+     "lead": 5.0
+    },
+    "fraction": 0.4438409523845797,
+    "snoozed": false,
+    "eta_ts": 1803069027.3212507
+   },
+   "link_info": {
+    "template": "tool:laser_focus",
+    "template_title": "Check laser focus and alignment",
+    "book": "b_laser",
+    "book_name": "Laser module",
+    "uses": 1
+   }
+  },
+  {
+   "anchor": "completion",
+   "asset": "tool:DragKnife",
+   "created": 1758997802.6684186,
+   "enabled": true,
+   "last": null,
+   "link": {
+    "book": "b_knife",
+    "template": "tool:blade"
+   },
+   "links": [],
+   "minutes": 5,
+   "notes": "",
+   "parts": [
+    "Replacement blades"
+   ],
+   "priority": "normal",
+   "remind_boot": true,
+   "rules": [
+    {
+     "every": 20,
+     "kind": "meter",
+     "lead": 3,
+     "meter": "prod_h",
+     "scope": "tool"
+    }
+   ],
+   "safety": "The blade is sharp.",
+   "start": {
+    "at": 1758997802.6684186,
+    "meters": {
+     "machine.filament_m": 0.0,
+     "machine.jobs": 0.0,
+     "machine.prod_h": 0.0,
+     "machine.shutdowns": 0.0,
+     "machine.swaps": 0.0,
+     "machine.up_h": 0.0,
+     "tool.active_h": 0.0,
+     "tool.filament_m": 0.0,
+     "tool.jobs": 0.0,
+     "tool.mounted_h": 0.0,
+     "tool.mounts": 0.0,
+     "tool.prod_h": 0.0
+    }
+   },
+   "steps": [],
+   "title": "Inspect or replace the drag-knife blade",
+   "tools_needed": "",
+   "type": "replace",
+   "id": "t214c2ed1",
+   "asset_label": "DragKnife",
+   "status": {
+    "state": "ok",
+    "rules": [
+     {
+      "summary": "every 20 production hours",
+      "due_ts": null,
+      "due_value": 20.0,
+      "eta_ts": 1844392040.8656807,
+      "unit": "h",
+      "noun": "production hours",
+      "kind": "meter",
+      "event": false,
+      "state": "ok",
+      "fraction": 0.5514754826536487,
+      "remaining": 8.970490346927027,
+      "text": "9.0 h left (due at 20 h), about 20 months at your usual rate",
+      "lead": 3.0
+     }
+    ],
+    "next": {
+     "summary": "every 20 production hours",
+     "due_ts": null,
+     "due_value": 20.0,
+     "eta_ts": 1844392040.8656807,
+     "unit": "h",
+     "noun": "production hours",
+     "kind": "meter",
+     "event": false,
+     "state": "ok",
+     "fraction": 0.5514754826536487,
+     "remaining": 8.970490346927027,
+     "text": "9.0 h left (due at 20 h), about 20 months at your usual rate",
+     "lead": 3.0
+    },
+    "fraction": 0.5514754826536487,
+    "snoozed": false,
+    "eta_ts": 1844392040.8656807
+   },
+   "link_info": {
+    "template": "tool:blade",
+    "template_title": "Inspect or replace the drag-knife blade",
+    "book": "b_knife",
+    "book_name": "Drag knife",
+    "uses": 1
+   }
+  },
+  {
+   "anchor": "completion",
+   "asset": "tool:SwitchFly",
+   "created": 1758997802.6684186,
+   "enabled": true,
+   "last": {
+    "action": "done",
+    "at": 1788661809.5137167,
+    "meters": {
+     "machine.filament_m": 5326.390350957975,
+     "machine.jobs": 465.0,
+     "machine.prod_h": 1051.096301502402,
+     "machine.shutdowns": 2.0,
+     "machine.swaps": 208.0,
+     "machine.up_h": 2442.275581311986,
+     "tool.active_h": 167.6705790605242,
+     "tool.filament_m": 923.8040106688821,
+     "tool.jobs": 69.0,
+     "tool.mounted_h": 310.1270521665341,
+     "tool.mounts": 36.0,
+     "tool.prod_h": 184.74795170832752
+    }
+   },
+   "link": {
+    "book": "b_printhead",
+    "template": "tool:extruder_gears"
+   },
+   "links": [],
+   "minutes": 10,
+   "notes": "",
+   "parts": [],
+   "priority": "normal",
+   "remind_boot": true,
+   "rules": [
+    {
+     "every": 1000,
+     "kind": "meter",
+     "lead": 100,
+     "meter": "filament_m",
+     "scope": "tool"
+    }
+   ],
+   "safety": "",
+   "start": {
+    "at": 1758997802.6684186,
+    "meters": {
+     "machine.filament_m": 0.0,
+     "machine.jobs": 0.0,
+     "machine.prod_h": 0.0,
+     "machine.shutdowns": 0.0,
+     "machine.swaps": 0.0,
+     "machine.up_h": 0.0,
+     "tool.active_h": 0.0,
+     "tool.filament_m": 0.0,
+     "tool.jobs": 0.0,
+     "tool.mounted_h": 0.0,
+     "tool.mounts": 0.0,
+     "tool.prod_h": 0.0
+    }
+   },
+   "steps": [
+    "Unload filament",
+    "Brush filament dust out of the gear teeth"
+   ],
+   "title": "Clean the extruder drive gears",
+   "tools_needed": "",
+   "type": "clean",
+   "id": "t3e97cc22",
+   "asset_label": "SwitchFly",
+   "status": {
+    "state": "ok",
+    "rules": [
+     {
+      "summary": "every 1000 m of filament",
+      "due_ts": null,
+      "due_value": 1923.8040106688823,
+      "eta_ts": 1975426725.950801,
+      "unit": "m",
+      "noun": "of filament",
+      "kind": "meter",
+      "event": false,
+      "state": "ok",
+      "fraction": 0.014273996773580962,
+      "remaining": 985.7260032264192,
+      "text": "986 m left (due at 1924 m), about 70 months at your usual rate",
+      "lead": 100.0
+     }
+    ],
+    "next": {
+     "summary": "every 1000 m of filament",
+     "due_ts": null,
+     "due_value": 1923.8040106688823,
+     "eta_ts": 1975426725.950801,
+     "unit": "m",
+     "noun": "of filament",
+     "kind": "meter",
+     "event": false,
+     "state": "ok",
+     "fraction": 0.014273996773580962,
+     "remaining": 985.7260032264192,
+     "text": "986 m left (due at 1924 m), about 70 months at your usual rate",
+     "lead": 100.0
+    },
+    "fraction": 0.014273996773580962,
+    "snoozed": false,
+    "eta_ts": 1975426725.950801
+   },
+   "link_info": {
+    "template": "tool:extruder_gears",
+    "template_title": "Clean the extruder drive gears",
+    "book": "b_printhead",
+    "book_name": "3D print head",
+    "uses": 2
+   }
+  },
+  {
+   "anchor": "completion",
+   "asset": "tool:BlockOne",
+   "created": 1758997802.6684186,
+   "enabled": true,
+   "last": {
+    "action": "done",
+    "at": 1778380206.6783242,
+    "meters": {
+     "machine.filament_m": 3431.6972917717903,
+     "machine.jobs": 309.0,
+     "machine.prod_h": 683.1241098730454,
+     "machine.shutdowns": 1.0,
+     "machine.swaps": 135.0,
+     "machine.up_h": 1610.4199900777662,
+     "tool.active_h": 431.996101666552,
+     "tool.filament_m": 2843.956140258389,
+     "tool.jobs": 138.0,
+     "tool.mounted_h": 627.9066884634176,
+     "tool.mounts": 45.0,
+     "tool.prod_h": 470.0849196979171
+    }
+   },
+   "link": {
+    "book": "b_printhead",
+    "template": "tool:tool_connector"
+   },
+   "links": [],
+   "minutes": 5,
+   "notes": "",
+   "parts": [],
+   "priority": "normal",
+   "remind_boot": true,
+   "rules": [
+    {
+     "every": 50,
+     "kind": "meter",
+     "lead": 5,
+     "meter": "mounts",
+     "scope": "tool"
+    }
+   ],
+   "safety": "",
+   "start": {
+    "at": 1758997802.6684186,
+    "meters": {
+     "machine.filament_m": 0.0,
+     "machine.jobs": 0.0,
+     "machine.prod_h": 0.0,
+     "machine.shutdowns": 0.0,
+     "machine.swaps": 0.0,
+     "machine.up_h": 0.0,
+     "tool.active_h": 0.0,
+     "tool.filament_m": 0.0,
+     "tool.jobs": 0.0,
+     "tool.mounted_h": 0.0,
+     "tool.mounts": 0.0,
+     "tool.prod_h": 0.0
+    }
+   },
+   "steps": [
+    "Look for bent or burnt pins",
+    "Check the latch and alignment pins"
+   ],
+   "title": "Inspect the tool connector pins and latch",
+   "tools_needed": "",
+   "type": "inspect",
+   "id": "t3ff63f8a",
+   "asset_label": "BlockOne",
+   "status": {
+    "state": "ok",
+    "rules": [
+     {
+      "summary": "every 50 mounts",
+      "due_ts": null,
+      "due_value": 95.0,
+      "eta_ts": 1800869087.4144487,
+      "unit": "",
+      "noun": "mounts",
+      "kind": "meter",
+      "event": false,
+      "state": "ok",
+      "fraction": 0.66,
+      "remaining": 17.0,
+      "text": "17 left (due at 95), about 3 months at your usual rate",
+      "lead": 5.0
+     }
+    ],
+    "next": {
+     "summary": "every 50 mounts",
+     "due_ts": null,
+     "due_value": 95.0,
+     "eta_ts": 1800869087.4144487,
+     "unit": "",
+     "noun": "mounts",
+     "kind": "meter",
+     "event": false,
+     "state": "ok",
+     "fraction": 0.66,
+     "remaining": 17.0,
+     "text": "17 left (due at 95), about 3 months at your usual rate",
+     "lead": 5.0
+    },
+    "fraction": 0.66,
+    "snoozed": false,
+    "eta_ts": 1800869087.4144487
+   },
+   "link_info": {
+    "template": "tool:tool_connector",
+    "template_title": "Inspect the tool connector pins and latch",
+    "book": "b_printhead",
+    "book_name": "3D print head",
+    "uses": 5
+   }
+  },
+  {
+   "anchor": "completion",
+   "asset": "machine:motion_xy",
+   "created": 1758997802.6684186,
+   "enabled": true,
+   "last": {
+    "action": "done",
+    "at": 1791081010.1963367,
+    "meters": {
+     "machine.filament_m": 6050.915123888917,
+     "machine.jobs": 509.0,
+     "machine.prod_h": 1177.5345682159316,
+     "machine.shutdowns": 2.0,
+     "machine.swaps": 218.0,
+     "machine.up_h": 2677.745212373286
+    }
+   },
+   "link": {
+    "book": "b_rhino",
+    "template": "machine:xy_belts"
+   },
+   "links": [],
+   "minutes": 20,
+   "notes": "",
+   "parts": [
+    "Spare GT2 belt (same width)"
+   ],
+   "priority": "normal",
+   "remind_boot": true,
+   "rules": [
+    {
+     "every": 100,
+     "kind": "meter",
+     "lead": 10,
+     "meter": "prod_h",
+     "scope": "machine"
+    },
+    {
+     "every": 1,
+     "kind": "time",
+     "lead": 7,
+     "lead_unit": "days",
+     "unit": "months"
+    }
+   ],
+   "safety": "",
+   "start": {
+    "at": 1758997802.6684186,
+    "meters": {
+     "machine.filament_m": 0.0,
+     "machine.jobs": 0.0,
+     "machine.prod_h": 0.0,
+     "machine.shutdowns": 0.0,
+     "machine.swaps": 0.0,
+     "machine.up_h": 0.0
+    }
+   },
+   "steps": [
+    "Motors off (M84) so the gantry moves freely",
+    "Both CoreXY belts at the same tension - pluck and compare the note",
+    "Look for frayed edges, missing teeth or a belt riding the pulley flange",
+    "Check every pulley and idler grub screw",
+    "Print or draw a square and measure the diagonals"
+   ],
+   "title": "Check and tension the X/Y belts",
+   "tools_needed": "",
+   "type": "adjust",
+   "id": "t443a3839",
+   "asset_label": "Motion X/Y",
+   "status": {
+    "state": "ok",
+    "rules": [
+     {
+      "summary": "every 100 production hours",
+      "due_ts": null,
+      "due_value": 1277.5345682159316,
+      "eta_ts": 1793358458.697192,
+      "unit": "h",
+      "noun": "production hours",
+      "kind": "meter",
+      "event": false,
+      "state": "ok",
+      "fraction": 0.2556066530145381,
+      "remaining": 74.43933469854619,
+      "text": "74 h left (due at 1278 h), about 3 weeks at your usual rate",
+      "lead": 10.0
+     },
+     {
+      "summary": "every month",
+      "due_ts": 1793759410.196337,
+      "due_value": null,
+      "eta_ts": 1793759410.196337,
+      "unit": "days",
+      "noun": "",
+      "kind": "time",
+      "event": false,
+      "state": "ok",
+      "fraction": 0.2662562087408281,
+      "remaining": 22.333326646451045,
+      "text": "due 4 Nov 2026, in 3 weeks",
+      "lead": 7.0
+     }
+    ],
+    "next": {
+     "summary": "every month",
+     "due_ts": 1793759410.196337,
+     "due_value": null,
+     "eta_ts": 1793759410.196337,
+     "unit": "days",
+     "noun": "",
+     "kind": "time",
+     "event": false,
+     "state": "ok",
+     "fraction": 0.2662562087408281,
+     "remaining": 22.333326646451045,
+     "text": "due 4 Nov 2026, in 3 weeks",
+     "lead": 7.0
+    },
+    "fraction": 0.2662562087408281,
+    "snoozed": false,
+    "eta_ts": 1793358458.697192
+   },
+   "link_info": {
+    "template": "machine:xy_belts",
+    "template_title": "Check and tension the X/Y belts",
+    "book": "b_rhino",
+    "book_name": "Rhino motion system and frame",
+    "uses": 1
+   }
+  },
+  {
+   "anchor": "completion",
+   "asset": "tool:LightSaber",
+   "created": 1758997802.6684186,
+   "enabled": true,
+   "last": {
+    "action": "done",
+    "at": 1785637808.5364163,
+    "meters": {
+     "machine.filament_m": 4721.326793434455,
+     "machine.jobs": 413.0,
+     "machine.prod_h": 931.2865767784473,
+     "machine.shutdowns": 2.0,
+     "machine.swaps": 183.0,
+     "machine.up_h": 2176.087847045235,
+     "tool.active_h": 61.18430802966066,
+     "tool.filament_m": 0.0,
+     "tool.jobs": 89.0,
+     "tool.mounted_h": 392.477202385446,
+     "tool.mounts": 45.0,
+     "tool.prod_h": 66.8388457042267
+    }
+   },
+   "link": {
+    "book": "b_laser",
+    "template": "tool:tool_connector"
+   },
+   "links": [],
+   "minutes": 5,
+   "notes": "",
+   "parts": [],
+   "priority": "normal",
+   "remind_boot": true,
+   "rules": [
+    {
+     "every": 50,
+     "kind": "meter",
+     "lead": 5,
+     "meter": "mounts",
+     "scope": "tool"
+    }
+   ],
+   "safety": "",
+   "start": {
+    "at": 1758997802.6684186,
+    "meters": {
+     "machine.filament_m": 0.0,
+     "machine.jobs": 0.0,
+     "machine.prod_h": 0.0,
+     "machine.shutdowns": 0.0,
+     "machine.swaps": 0.0,
+     "machine.up_h": 0.0,
+     "tool.active_h": 0.0,
+     "tool.filament_m": 0.0,
+     "tool.jobs": 0.0,
+     "tool.mounted_h": 0.0,
+     "tool.mounts": 0.0,
+     "tool.prod_h": 0.0
+    }
+   },
+   "steps": [
+    "Look for bent or burnt pins",
+    "Check the latch and alignment pins"
+   ],
+   "title": "Inspect the tool connector pins and latch",
+   "tools_needed": "",
+   "type": "inspect",
+   "id": "t51a59a65",
+   "asset_label": "LightSaber",
+   "status": {
+    "state": "ok",
+    "rules": [
+     {
+      "summary": "every 50 mounts",
+      "due_ts": null,
+      "due_value": 95.0,
+      "eta_ts": 1819745223.9297416,
+      "unit": "",
+      "noun": "mounts",
+      "kind": "meter",
+      "event": false,
+      "state": "ok",
+      "fraction": 0.16,
+      "remaining": 42.0,
+      "text": "42 left (due at 95), about 11 months at your usual rate",
+      "lead": 5.0
+     }
+    ],
+    "next": {
+     "summary": "every 50 mounts",
+     "due_ts": null,
+     "due_value": 95.0,
+     "eta_ts": 1819745223.9297416,
+     "unit": "",
+     "noun": "mounts",
+     "kind": "meter",
+     "event": false,
+     "state": "ok",
+     "fraction": 0.16,
+     "remaining": 42.0,
+     "text": "42 left (due at 95), about 11 months at your usual rate",
+     "lead": 5.0
+    },
+    "fraction": 0.16,
+    "snoozed": false,
+    "eta_ts": 1819745223.9297416
+   },
+   "link_info": {
+    "template": "tool:tool_connector",
+    "template_title": "Inspect the tool connector pins and latch",
+    "book": "b_laser",
+    "book_name": "Laser module",
+    "uses": 5
+   }
+  },
+  {
+   "anchor": "completion",
+   "asset": "tool:SwitchFly",
+   "created": 1758997802.6684186,
+   "enabled": true,
+   "hold": {
+    "meters": {
+     "machine.filament_m": 6050.915123888917,
+     "machine.jobs": 509.0,
+     "machine.prod_h": 1177.5345682159316,
+     "machine.shutdowns": 2.0,
+     "machine.swaps": 218.0,
+     "machine.up_h": 2677.745212373286,
+     "tool.active_h": 167.6705790605242,
+     "tool.filament_m": 923.8040106688821,
+     "tool.jobs": 69.0,
+     "tool.mounted_h": 310.1270521665341,
+     "tool.mounts": 36.0,
+     "tool.prod_h": 184.74795170832752
+    },
+    "note": "0.4 mm hardened nozzle on order",
+    "since": 1791081010.1963367,
+    "status": "s_parts"
+   },
+   "last": null,
+   "link": {
+    "book": "b_printhead",
+    "template": "tool:nozzle_replace"
+   },
+   "links": [],
+   "minutes": 20,
+   "notes": "",
+   "parts": [
+    "Nozzle, same size and type"
+   ],
+   "priority": "normal",
+   "remind_boot": true,
+   "rules": [
+    {
+     "every": 500,
+     "kind": "meter",
+     "lead": 50,
+     "meter": "active_h",
+     "scope": "tool"
+    }
+   ],
+   "safety": "Hot-tighten with the right wrench; the heater block is hot.",
+   "start": {
+    "at": 1758997802.6684186,
+    "meters": {
+     "machine.filament_m": 0.0,
+     "machine.jobs": 0.0,
+     "machine.prod_h": 0.0,
+     "machine.shutdowns": 0.0,
+     "machine.swaps": 0.0,
+     "machine.up_h": 0.0,
+     "tool.active_h": 0.0,
+     "tool.filament_m": 0.0,
+     "tool.jobs": 0.0,
+     "tool.mounted_h": 0.0,
+     "tool.mounts": 0.0,
+     "tool.prod_h": 0.0
+    }
+   },
+   "steps": [
+    "Heat to printing temperature",
+    "Swap the nozzle and hot-tighten it",
+    "Re-check the Z offset"
+   ],
+   "title": "Replace the nozzle",
+   "tools_needed": "",
+   "type": "replace",
+   "id": "t5510071f",
+   "asset_label": "SwitchFly",
+   "status": {
+    "state": "ok",
+    "rules": [
+     {
+      "summary": "every 500 working hours",
+      "due_ts": null,
+      "due_value": 500.0,
+      "eta_ts": 2110747644.2174268,
+      "unit": "h",
+      "noun": "working hours",
+      "kind": "meter",
+      "event": false,
+      "state": "ok",
+      "fraction": 0.34083617864157306,
+      "remaining": 329.5819106792135,
+      "text": "330 h left (due at 500 h), about 121 months at your usual rate",
+      "lead": 50.0
+     }
+    ],
+    "next": {
+     "summary": "every 500 working hours",
+     "due_ts": null,
+     "due_value": 500.0,
+     "eta_ts": 2110747644.2174268,
+     "unit": "h",
+     "noun": "working hours",
+     "kind": "meter",
+     "event": false,
+     "state": "ok",
+     "fraction": 0.34083617864157306,
+     "remaining": 329.5819106792135,
+     "text": "330 h left (due at 500 h), about 121 months at your usual rate",
+     "lead": 50.0
+    },
+    "fraction": 0.34083617864157306,
+    "snoozed": false,
+    "eta_ts": 2110747644.2174268,
+    "hold": {
+     "id": "s_parts",
+     "label": "Pending - Waiting on parts",
+     "hex": "#8e24aa",
+     "list": "own",
+     "since": 1791081010.1963367,
+     "note": "0.4 mm hardened nozzle on order",
+     "clock": "none",
+     "boot_prompt": false,
+     "until": null,
+     "expiry": "never"
+    }
+   },
+   "link_info": {
+    "template": "tool:nozzle_replace",
+    "template_title": "Replace the nozzle",
+    "book": "b_printhead",
+    "book_name": "3D print head",
+    "uses": 2
+   }
+  },
+  {
+   "anchor": "completion",
+   "asset": "machine:motion_z",
+   "created": 1758997802.6684186,
+   "enabled": true,
+   "last": {
+    "action": "done",
+    "at": 1789266609.675936,
+    "meters": {
+     "machine.filament_m": 5450.520887318716,
+     "machine.jobs": 475.0,
+     "machine.prod_h": 1074.6405283631782,
+     "machine.shutdowns": 2.0,
+     "machine.swaps": 210.0,
+     "machine.up_h": 2500.6438906860526
+    }
+   },
+   "link": {
+    "book": "b_rhino",
+    "template": "machine:z_tilt"
+   },
+   "links": [],
+   "minutes": 15,
+   "notes": "",
+   "parts": [],
+   "priority": "normal",
+   "remind_boot": true,
+   "rules": [
+    {
+     "every": 1,
+     "kind": "time",
+     "lead": 5,
+     "lead_unit": "days",
+     "unit": "months"
+    }
+   ],
+   "safety": "",
+   "start": {
+    "at": 1758997802.6684186,
+    "meters": {
+     "machine.filament_m": 0.0,
+     "machine.jobs": 0.0,
+     "machine.prod_h": 0.0,
+     "machine.shutdowns": 0.0,
+     "machine.swaps": 0.0,
+     "machine.up_h": 0.0
+    }
+   },
+   "steps": [
+    "Home all axes",
+    "Run Z_TILT_ADJUST",
+    "Print or cut a test and check it"
+   ],
+   "title": "Level the gantry (Z_TILT_ADJUST) and check the first layer",
+   "tools_needed": "",
+   "type": "calibrate",
+   "id": "t5a43e2fe",
+   "asset_label": "Motion Z",
+   "status": {
+    "state": "due_soon",
+    "rules": [
+     {
+      "summary": "every month",
+      "due_ts": 1791858609.675936,
+      "due_value": null,
+      "eta_ts": 1791858609.675936,
+      "unit": "days",
+      "noun": "",
+      "kind": "time",
+      "event": false,
+      "state": "due_soon",
+      "fraction": 0.9890490144298543,
+      "remaining": 0.33332062329131146,
+      "text": "due 13 Oct 2026, in 8 h",
+      "lead": 5.0
+     }
+    ],
+    "next": {
+     "summary": "every month",
+     "due_ts": 1791858609.675936,
+     "due_value": null,
+     "eta_ts": 1791858609.675936,
+     "unit": "days",
+     "noun": "",
+     "kind": "time",
+     "event": false,
+     "state": "due_soon",
+     "fraction": 0.9890490144298543,
+     "remaining": 0.33332062329131146,
+     "text": "due 13 Oct 2026, in 8 h",
+     "lead": 5.0
+    },
+    "fraction": 0.9890490144298543,
+    "snoozed": false,
+    "eta_ts": 1791858609.675936
+   },
+   "link_info": {
+    "template": "machine:z_tilt",
+    "template_title": "Level the gantry (Z_TILT_ADJUST) and check the first layer",
+    "book": "b_rhino",
+    "book_name": "Rhino motion system and frame",
+    "uses": 1
+   }
+  },
+  {
+   "anchor": "completion",
+   "asset": "machine:electronics",
+   "created": 1758997802.6684186,
+   "enabled": true,
+   "last": {
+    "action": "done",
+    "at": 1791685810.3353403,
+    "meters": {
+     "machine.filament_m": 6176.588701937794,
+     "machine.jobs": 517.0,
+     "machine.prod_h": 1200.475867771797,
+     "machine.shutdowns": 2.0,
+     "machine.swaps": 221.0,
+     "machine.up_h": 2718.1488895597486
+    }
+   },
+   "link": {
+    "book": "b_rhino",
+    "template": "machine:backup"
+   },
+   "links": [],
+   "minutes": 5,
+   "notes": "",
+   "parts": [],
+   "priority": "low",
+   "remind_boot": true,
+   "rules": [
+    {
+     "every": 1,
+     "kind": "time",
+     "lead": 3,
+     "lead_unit": "days",
+     "unit": "months"
+    }
+   ],
+   "safety": "",
+   "start": {
+    "at": 1758997802.6684186,
+    "meters": {
+     "machine.filament_m": 0.0,
+     "machine.jobs": 0.0,
+     "machine.prod_h": 0.0,
+     "machine.shutdowns": 0.0,
+     "machine.swaps": 0.0,
+     "machine.up_h": 0.0
+    }
+   },
+   "steps": [
+    "Run BACKUP_CFG in the console",
+    "Check the commit arrived on GitHub"
+   ],
+   "title": "Back up the Klipper config (BACKUP_CFG)",
+   "tools_needed": "",
+   "type": "other",
+   "id": "t62723499",
+   "asset_label": "Electronics",
+   "status": {
+    "state": "ok",
+    "rules": [
+     {
+      "summary": "every month",
+      "due_ts": 1794364210.33534,
+      "due_value": null,
+      "eta_ts": 1794364210.33534,
+      "unit": "days",
+      "noun": "",
+      "kind": "time",
+      "event": false,
+      "state": "ok",
+      "fraction": 0.03627668976484577,
+      "remaining": 29.33332825528251,
+      "text": "due 11 Nov 2026, in 4 weeks",
+      "lead": 3.0
+     }
+    ],
+    "next": {
+     "summary": "every month",
+     "due_ts": 1794364210.33534,
+     "due_value": null,
+     "eta_ts": 1794364210.33534,
+     "unit": "days",
+     "noun": "",
+     "kind": "time",
+     "event": false,
+     "state": "ok",
+     "fraction": 0.03627668976484577,
+     "remaining": 29.33332825528251,
+     "text": "due 11 Nov 2026, in 4 weeks",
+     "lead": 3.0
+    },
+    "fraction": 0.03627668976484577,
+    "snoozed": false,
+    "eta_ts": 1794364210.33534
+   },
+   "link_info": {
+    "template": "machine:backup",
+    "template_title": "Back up the Klipper config (BACKUP_CFG)",
+    "book": "b_rhino",
+    "book_name": "Rhino motion system and frame",
+    "uses": 1
+   }
+  },
+  {
+   "anchor": "completion",
+   "asset": "machine:other",
+   "created": 1758997802.6684186,
+   "enabled": true,
+   "last": {
+    "action": "done",
+    "at": 1779244206.910218,
+    "meters": {
+     "machine.filament_m": 3538.5824548632377,
+     "machine.jobs": 321.0,
+     "machine.prod_h": 705.0611130591371,
+     "machine.shutdowns": 2.0,
+     "machine.swaps": 143.0,
+     "machine.up_h": 1670.7314129208612
+    }
+   },
+   "link": {
+    "book": "b_rhino",
+    "template": "machine:estop"
+   },
+   "links": [],
+   "minutes": 10,
+   "notes": "",
+   "parts": [],
+   "priority": "high",
+   "remind_boot": true,
+   "rules": [
+    {
+     "event": true,
+     "every": 1,
+     "kind": "meter",
+     "lead": 0,
+     "meter": "shutdowns",
+     "scope": "machine"
+    }
+   ],
+   "safety": "",
+   "start": {
+    "at": 1758997802.6684186,
+    "meters": {
+     "machine.filament_m": 0.0,
+     "machine.jobs": 0.0,
+     "machine.prod_h": 0.0,
+     "machine.shutdowns": 0.0,
+     "machine.swaps": 0.0,
+     "machine.up_h": 0.0
+    }
+   },
+   "steps": [
+    "Find out why it stopped (Mainsail console, klippy.log)",
+    "Check nothing crashed into the bed or a clamp",
+    "Home and check the axes move freely before the next job"
+   ],
+   "title": "Inspect the machine after an emergency stop or shutdown",
+   "tools_needed": "",
+   "type": "inspect",
+   "id": "t651eb9c5",
+   "asset_label": "Other",
+   "status": {
+    "state": "ok",
+    "rules": [
+     {
+      "summary": "after an emergency stop or Klipper shutdown",
+      "due_ts": null,
+      "due_value": 3.0,
+      "eta_ts": null,
+      "unit": "",
+      "noun": "shutdowns",
+      "kind": "meter",
+      "event": true,
+      "state": "ok",
+      "fraction": 0.0,
+      "remaining": 1.0,
+      "text": "not needed until the next one",
+      "lead": 0.0
+     }
+    ],
+    "next": {
+     "summary": "after an emergency stop or Klipper shutdown",
+     "due_ts": null,
+     "due_value": 3.0,
+     "eta_ts": null,
+     "unit": "",
+     "noun": "shutdowns",
+     "kind": "meter",
+     "event": true,
+     "state": "ok",
+     "fraction": 0.0,
+     "remaining": 1.0,
+     "text": "not needed until the next one",
+     "lead": 0.0
+    },
+    "fraction": 0.0,
+    "snoozed": false,
+    "eta_ts": null
+   },
+   "link_info": {
+    "template": "machine:estop",
+    "template_title": "Inspect the machine after an emergency stop or shutdown",
+    "book": "b_rhino",
+    "book_name": "Rhino motion system and frame",
+    "uses": 1
+   }
+  },
+  {
+   "anchor": "completion",
+   "asset": "tool:DragKnife",
+   "created": 1758997802.6684186,
+   "enabled": true,
+   "last": null,
+   "link": {
+    "book": "b_knife",
+    "template": "tool:knife_bearing"
+   },
+   "links": [],
+   "minutes": 10,
+   "notes": "",
+   "parts": [],
+   "priority": "normal",
+   "remind_boot": true,
+   "rules": [
+    {
+     "every": 50,
+     "kind": "meter",
+     "lead": 5,
+     "meter": "prod_h",
+     "scope": "tool"
+    }
+   ],
+   "safety": "",
+   "start": {
+    "at": 1758997802.6684186,
+    "meters": {
+     "machine.filament_m": 0.0,
+     "machine.jobs": 0.0,
+     "machine.prod_h": 0.0,
+     "machine.shutdowns": 0.0,
+     "machine.swaps": 0.0,
+     "machine.up_h": 0.0,
+     "tool.active_h": 0.0,
+     "tool.filament_m": 0.0,
+     "tool.jobs": 0.0,
+     "tool.mounted_h": 0.0,
+     "tool.mounts": 0.0,
+     "tool.prod_h": 0.0
+    }
+   },
+   "steps": [],
+   "title": "Clean the drag-knife bearing",
+   "tools_needed": "",
+   "type": "clean",
+   "id": "t747ffb25",
+   "asset_label": "DragKnife",
+   "status": {
+    "state": "ok",
+    "rules": [
+     {
+      "summary": "every 50 production hours",
+      "due_ts": null,
+      "due_value": 50.0,
+      "eta_ts": 2020175843.3321204,
+      "unit": "h",
+      "noun": "production hours",
+      "kind": "meter",
+      "event": false,
+      "state": "ok",
+      "fraction": 0.22059019306145944,
+      "remaining": 38.97049034692703,
+      "text": "39 h left (due at 50 h), about 87 months at your usual rate",
+      "lead": 5.0
+     }
+    ],
+    "next": {
+     "summary": "every 50 production hours",
+     "due_ts": null,
+     "due_value": 50.0,
+     "eta_ts": 2020175843.3321204,
+     "unit": "h",
+     "noun": "production hours",
+     "kind": "meter",
+     "event": false,
+     "state": "ok",
+     "fraction": 0.22059019306145944,
+     "remaining": 38.97049034692703,
+     "text": "39 h left (due at 50 h), about 87 months at your usual rate",
+     "lead": 5.0
+    },
+    "fraction": 0.22059019306145944,
+    "snoozed": false,
+    "eta_ts": 2020175843.3321204
+   },
+   "link_info": {
+    "template": "tool:knife_bearing",
+    "template_title": "Clean the drag-knife bearing",
+    "book": "b_knife",
+    "book_name": "Drag knife",
+    "uses": 1
+   }
+  },
+  {
+   "anchor": "completion",
+   "asset": "tool:HotJoe",
+   "created": 1758997802.6684186,
+   "enabled": true,
+   "last": null,
+   "link": {
+    "book": "b_spindle",
+    "template": "tool:tool_connector"
+   },
+   "links": [],
+   "minutes": 5,
+   "notes": "",
+   "parts": [],
+   "priority": "normal",
+   "remind_boot": true,
+   "rules": [
+    {
+     "every": 50,
+     "kind": "meter",
+     "lead": 5,
+     "meter": "mounts",
+     "scope": "tool"
+    }
+   ],
+   "safety": "",
+   "start": {
+    "at": 1758997802.6684186,
+    "meters": {
+     "machine.filament_m": 0.0,
+     "machine.jobs": 0.0,
+     "machine.prod_h": 0.0,
+     "machine.shutdowns": 0.0,
+     "machine.swaps": 0.0,
+     "machine.up_h": 0.0,
+     "tool.active_h": 0.0,
+     "tool.filament_m": 0.0,
+     "tool.jobs": 0.0,
+     "tool.mounted_h": 0.0,
+     "tool.mounts": 0.0,
+     "tool.prod_h": 0.0
+    }
+   },
+   "steps": [
+    "Look for bent or burnt pins",
+    "Check the latch and alignment pins"
+   ],
+   "title": "Inspect the tool connector pins and latch",
+   "tools_needed": "",
+   "type": "inspect",
+   "id": "t760e5325",
+   "asset_label": "HotJoe",
+   "status": {
+    "state": "ok",
+    "rules": [
+     {
+      "summary": "every 50 mounts",
+      "due_ts": null,
+      "due_value": 50.0,
+      "eta_ts": 1842343415.5381925,
+      "unit": "",
+      "noun": "mounts",
+      "kind": "meter",
+      "event": false,
+      "state": "ok",
+      "fraction": 0.62,
+      "remaining": 19.0,
+      "text": "19 left (due at 50), about 19 months at your usual rate",
+      "lead": 5.0
+     }
+    ],
+    "next": {
+     "summary": "every 50 mounts",
+     "due_ts": null,
+     "due_value": 50.0,
+     "eta_ts": 1842343415.5381925,
+     "unit": "",
+     "noun": "mounts",
+     "kind": "meter",
+     "event": false,
+     "state": "ok",
+     "fraction": 0.62,
+     "remaining": 19.0,
+     "text": "19 left (due at 50), about 19 months at your usual rate",
+     "lead": 5.0
+    },
+    "fraction": 0.62,
+    "snoozed": false,
+    "eta_ts": 1842343415.5381925
+   },
+   "link_info": {
+    "template": "tool:tool_connector",
+    "template_title": "Inspect the tool connector pins and latch",
+    "book": "b_spindle",
+    "book_name": "CNC spindle",
+    "uses": 5
+   }
+  },
+  {
+   "anchor": "completion",
+   "asset": "tool:SwitchFly",
+   "created": 1758997802.6684186,
+   "enabled": true,
+   "last": {
+    "action": "done",
+    "at": 1776220206.1330407,
+    "meters": {
+     "machine.filament_m": 3064.372876714694,
+     "machine.jobs": 275.0,
+     "machine.prod_h": 608.1373012049479,
+     "machine.shutdowns": 1.0,
+     "machine.swaps": 119.0,
+     "machine.up_h": 1437.6143387392594,
+     "tool.active_h": 92.56760223713059,
+     "tool.filament_m": 515.7481912344388,
+     "tool.jobs": 39.0,
+     "tool.mounted_h": 170.4686702088687,
+     "tool.mounts": 19.0,
+     "tool.prod_h": 101.89861375835672
+    }
+   },
+   "link": {
+    "book": "b_printhead",
+    "template": "tool:nozzle_clean"
+   },
+   "links": [],
+   "minutes": 10,
+   "notes": "",
+   "parts": [
+    "Brass brush"
+   ],
+   "priority": "normal",
+   "remind_boot": true,
+   "rules": [
+    {
+     "every": 100,
+     "kind": "meter",
+     "lead": 10,
+     "meter": "active_h",
+     "scope": "tool"
+    }
+   ],
+   "safety": "The nozzle is hot.",
+   "start": {
+    "at": 1758997802.6684186,
+    "meters": {
+     "machine.filament_m": 0.0,
+     "machine.jobs": 0.0,
+     "machine.prod_h": 0.0,
+     "machine.shutdowns": 0.0,
+     "machine.swaps": 0.0,
+     "machine.up_h": 0.0,
+     "tool.active_h": 0.0,
+     "tool.filament_m": 0.0,
+     "tool.jobs": 0.0,
+     "tool.mounted_h": 0.0,
+     "tool.mounts": 0.0,
+     "tool.prod_h": 0.0
+    }
+   },
+   "steps": [
+    "Heat the nozzle",
+    "Brush the outside clean",
+    "Check the tip for wear or a widened hole"
+   ],
+   "title": "Clean the nozzle and check it for wear",
+   "tools_needed": "",
+   "type": "clean",
+   "id": "t8088c37c",
+   "asset_label": "SwitchFly",
+   "status": {
+    "state": "ok",
+    "rules": [
+     {
+      "summary": "every 100 working hours",
+      "due_ts": null,
+      "due_value": 192.5676022371306,
+      "eta_ts": 1813262645.656979,
+      "unit": "h",
+      "noun": "working hours",
+      "kind": "meter",
+      "event": false,
+      "state": "ok",
+      "fraction": 0.7785048708365594,
+      "remaining": 22.149512916344065,
+      "text": "22 h left (due at 193 h), about 8 months at your usual rate",
+      "lead": 10.0
+     }
+    ],
+    "next": {
+     "summary": "every 100 working hours",
+     "due_ts": null,
+     "due_value": 192.5676022371306,
+     "eta_ts": 1813262645.656979,
+     "unit": "h",
+     "noun": "working hours",
+     "kind": "meter",
+     "event": false,
+     "state": "ok",
+     "fraction": 0.7785048708365594,
+     "remaining": 22.149512916344065,
+     "text": "22 h left (due at 193 h), about 8 months at your usual rate",
+     "lead": 10.0
+    },
+    "fraction": 0.7785048708365594,
+    "snoozed": false,
+    "eta_ts": 1813262645.656979
+   },
+   "link_info": {
+    "template": "tool:nozzle_clean",
+    "template_title": "Clean the nozzle and check it for wear",
+    "book": "b_printhead",
+    "book_name": "3D print head",
+    "uses": 2
+   }
+  },
+  {
+   "anchor": "completion",
+   "asset": "tool:LightSaber",
+   "created": 1758997802.6684186,
+   "enabled": true,
+   "last": {
+    "action": "done",
+    "at": 1790130609.8996553,
+    "meters": {
+     "machine.filament_m": 5672.312596033857,
+     "machine.jobs": 493.0,
+     "machine.prod_h": 1115.627122042684,
+     "machine.shutdowns": 2.0,
+     "machine.swaps": 215.0,
+     "machine.up_h": 2590.8939654944975,
+     "tool.active_h": 69.86939840491141,
+     "tool.filament_m": 0.0,
+     "tool.jobs": 102.0,
+     "tool.mounted_h": 456.27541167368963,
+     "tool.mounts": 52.0,
+     "tool.prod_h": 76.33770566650932
+    }
+   },
+   "link": {
+    "book": "b_laser",
+    "template": "tool:laser_lens"
+   },
+   "links": [],
+   "minutes": 5,
+   "notes": "",
+   "parts": [
+    "Lens tissue",
+    "Isopropyl alcohol"
+   ],
+   "priority": "high",
+   "remind_boot": true,
+   "rules": [
+    {
+     "every": 10,
+     "kind": "meter",
+     "lead": 2,
+     "meter": "active_h",
+     "scope": "tool"
+    }
+   ],
+   "safety": "Laser off and LASER_INITIALIZE off before touching the module. Wear laser goggles for any test fire.",
+   "start": {
+    "at": 1758997802.6684186,
+    "meters": {
+     "machine.filament_m": 0.0,
+     "machine.jobs": 0.0,
+     "machine.prod_h": 0.0,
+     "machine.shutdowns": 0.0,
+     "machine.swaps": 0.0,
+     "machine.up_h": 0.0,
+     "tool.active_h": 0.0,
+     "tool.filament_m": 0.0,
+     "tool.jobs": 0.0,
+     "tool.mounted_h": 0.0,
+     "tool.mounts": 0.0,
+     "tool.prod_h": 0.0
+    }
+   },
+   "steps": [
+    "Laser and power rail off",
+    "Wipe the lens with lens tissue and isopropyl alcohol",
+    "Check for burn marks or pitting"
+   ],
+   "title": "Clean the laser lens / protective window",
+   "tools_needed": "",
+   "type": "clean",
+   "id": "t905eb2ae",
+   "asset_label": "LightSaber",
+   "status": {
+    "state": "ok",
+    "rules": [
+     {
+      "summary": "every 10 working hours",
+      "due_ts": null,
+      "due_value": 79.86939840491141,
+      "eta_ts": 1795477235.96785,
+      "unit": "h",
+      "noun": "working hours",
+      "kind": "meter",
+      "event": false,
+      "state": "ok",
+      "fraction": 0.09755786230991674,
+      "remaining": 9.024421376900833,
+      "text": "9.0 h left (due at 80 h), about 6 weeks at your usual rate",
+      "lead": 2.0
+     }
+    ],
+    "next": {
+     "summary": "every 10 working hours",
+     "due_ts": null,
+     "due_value": 79.86939840491141,
+     "eta_ts": 1795477235.96785,
+     "unit": "h",
+     "noun": "working hours",
+     "kind": "meter",
+     "event": false,
+     "state": "ok",
+     "fraction": 0.09755786230991674,
+     "remaining": 9.024421376900833,
+     "text": "9.0 h left (due at 80 h), about 6 weeks at your usual rate",
+     "lead": 2.0
+    },
+    "fraction": 0.09755786230991674,
+    "snoozed": false,
+    "eta_ts": 1795477235.96785
+   },
+   "link_info": {
+    "template": "tool:laser_lens",
+    "template_title": "Clean the laser lens / protective window",
+    "book": "b_laser",
+    "book_name": "Laser module",
+    "uses": 1
+   }
+  },
+  {
+   "anchor": "completion",
+   "asset": "machine:electronics",
+   "created": 1758997802.6684186,
+   "enabled": true,
+   "last": {
+    "action": "done",
+    "at": 1788143409.328561,
+    "meters": {
+     "machine.filament_m": 5263.122573618732,
+     "machine.jobs": 453.0,
+     "machine.prod_h": 1034.0011866557331,
+     "machine.shutdowns": 2.0,
+     "machine.swaps": 203.0,
+     "machine.up_h": 2389.4522738839896
+    }
+   },
+   "link": {
+    "book": "b_rhino",
+    "template": "machine:wiring"
+   },
+   "links": [],
+   "minutes": 30,
+   "notes": "",
+   "parts": [],
+   "priority": "normal",
+   "remind_boot": true,
+   "rules": [
+    {
+     "every": 6,
+     "kind": "time",
+     "lead": 14,
+     "lead_unit": "days",
+     "unit": "months"
+    }
+   ],
+   "safety": "Machine powered off.",
+   "start": {
+    "at": 1758997802.6684186,
+    "meters": {
+     "machine.filament_m": 0.0,
+     "machine.jobs": 0.0,
+     "machine.prod_h": 0.0,
+     "machine.shutdowns": 0.0,
+     "machine.swaps": 0.0,
+     "machine.up_h": 0.0
+    }
+   },
+   "steps": [
+    "Look for rubbing, cracked insulation or loose crimps",
+    "Check the screw terminals for tightness"
+   ],
+   "title": "Inspect wiring, connectors and cable chains",
+   "tools_needed": "",
+   "type": "inspect",
+   "id": "t98061851",
+   "asset_label": "Electronics",
+   "status": {
+    "state": "ok",
+    "rules": [
+     {
+      "summary": "every 6 months",
+      "due_ts": 1803781809.328561,
+      "due_value": null,
+      "eta_ts": 1803781809.328561,
+      "unit": "days",
+      "noun": "",
+      "kind": "time",
+      "event": false,
+      "state": "ok",
+      "fraction": 0.24252804050514276,
+      "remaining": 138.3333166027483,
+      "text": "due 28 Feb 2027, in 5 months",
+      "lead": 14.0
+     }
+    ],
+    "next": {
+     "summary": "every 6 months",
+     "due_ts": 1803781809.328561,
+     "due_value": null,
+     "eta_ts": 1803781809.328561,
+     "unit": "days",
+     "noun": "",
+     "kind": "time",
+     "event": false,
+     "state": "ok",
+     "fraction": 0.24252804050514276,
+     "remaining": 138.3333166027483,
+     "text": "due 28 Feb 2027, in 5 months",
+     "lead": 14.0
+    },
+    "fraction": 0.24252804050514276,
+    "snoozed": false,
+    "eta_ts": 1803781809.328561
+   },
+   "link_info": {
+    "template": "machine:wiring",
+    "template_title": "Inspect wiring, connectors and cable chains",
+    "book": "b_rhino",
+    "book_name": "Rhino motion system and frame",
+    "uses": 1
+   }
+  },
+  {
+   "anchor": "completion",
+   "asset": "machine:motion_xy",
+   "created": 1758997802.6684186,
+   "enabled": true,
+   "last": {
+    "action": "done",
+    "at": 1790908210.1500754,
+    "meters": {
+     "machine.filament_m": 6020.550058879327,
+     "machine.jobs": 508.0,
+     "machine.prod_h": 1172.6882706779998,
+     "machine.shutdowns": 2.0,
+     "machine.swaps": 218.0,
+     "machine.up_h": 2666.81356596568
+    }
+   },
+   "link": {
+    "book": "b_rhino",
+    "template": "machine:xy_guides"
+   },
+   "links": [],
+   "minutes": 20,
+   "notes": "",
+   "parts": [
+    "Rail grease or light machine oil",
+    "Lint-free cloths"
+   ],
+   "priority": "normal",
+   "remind_boot": true,
+   "rules": [
+    {
+     "every": 200,
+     "kind": "meter",
+     "lead": 20,
+     "meter": "prod_h",
+     "scope": "machine"
+    },
+    {
+     "every": 3,
+     "kind": "time",
+     "lead": 14,
+     "lead_unit": "days",
+     "unit": "months"
+    }
+   ],
+   "safety": "",
+   "start": {
+    "at": 1758997802.6684186,
+    "meters": {
+     "machine.filament_m": 0.0,
+     "machine.jobs": 0.0,
+     "machine.prod_h": 0.0,
+     "machine.shutdowns": 0.0,
+     "machine.swaps": 0.0,
+     "machine.up_h": 0.0
+    }
+   },
+   "steps": [
+    "Wipe old grease and dust off the rails",
+    "Apply a thin film of lubricant along the rails",
+    "Run each axis end to end a few times",
+    "Wipe off the excess"
+   ],
+   "title": "Clean and lubricate the X/Y linear guides",
+   "tools_needed": "",
+   "type": "lubricate",
+   "id": "t9ad3bc8b",
+   "asset_label": "Motion X/Y",
+   "status": {
+    "state": "ok",
+    "rules": [
+     {
+      "summary": "every 200 production hours",
+      "due_ts": null,
+      "due_value": 1372.6882706779998,
+      "eta_ts": 1795312486.2324572,
+      "unit": "h",
+      "noun": "production hours",
+      "kind": "meter",
+      "event": false,
+      "state": "ok",
+      "fraction": 0.15203481419692821,
+      "remaining": 169.59303716061436,
+      "text": "170 h left (due at 1373 h), about 6 weeks at your usual rate",
+      "lead": 20.0
+     },
+     {
+      "summary": "every 3 months",
+      "due_ts": 1798857010.150075,
+      "due_value": null,
+      "eta_ts": 1798857010.150075,
+      "unit": "days",
+      "noun": "",
+      "kind": "time",
+      "event": false,
+      "state": "ok",
+      "fraction": 0.10928595634758731,
+      "remaining": 81.33332611101093,
+      "text": "due 2 Jan 2027, in 3 months",
+      "lead": 14.0
+     }
+    ],
+    "next": {
+     "summary": "every 200 production hours",
+     "due_ts": null,
+     "due_value": 1372.6882706779998,
+     "eta_ts": 1795312486.2324572,
+     "unit": "h",
+     "noun": "production hours",
+     "kind": "meter",
+     "event": false,
+     "state": "ok",
+     "fraction": 0.15203481419692821,
+     "remaining": 169.59303716061436,
+     "text": "170 h left (due at 1373 h), about 6 weeks at your usual rate",
+     "lead": 20.0
+    },
+    "fraction": 0.15203481419692821,
+    "snoozed": false,
+    "eta_ts": 1795312486.2324572
+   },
+   "link_info": {
+    "template": "machine:xy_guides",
+    "template_title": "Clean and lubricate the X/Y linear guides",
+    "book": "b_rhino",
+    "book_name": "Rhino motion system and frame",
+    "uses": 1
+   }
+  },
+  {
+   "anchor": "completion",
+   "asset": "tool:HotJoe",
+   "created": 1758997802.6684186,
+   "enabled": true,
+   "last": {
+    "action": "done",
+    "at": 1779157806.8764095,
+    "meters": {
+     "machine.filament_m": 3538.5824548632377,
+     "machine.jobs": 321.0,
+     "machine.prod_h": 705.0611130591371,
+     "machine.shutdowns": 2.0,
+     "machine.swaps": 143.0,
+     "machine.up_h": 1670.7314129208612,
+     "tool.active_h": 37.882297769970464,
+     "tool.filament_m": 0.0,
+     "tool.jobs": 43.0,
+     "tool.mounted_h": 168.78934287126071,
+     "tool.mounts": 22.0,
+     "tool.prod_h": 41.175173070520636
+    }
+   },
+   "link": {
+    "book": "b_spindle",
+    "template": "tool:collet"
+   },
+   "links": [],
+   "minutes": 10,
+   "notes": "",
+   "parts": [],
+   "priority": "normal",
+   "remind_boot": true,
+   "rules": [
+    {
+     "every": 20,
+     "kind": "meter",
+     "lead": 2,
+     "meter": "active_h",
+     "scope": "tool"
+    }
+   ],
+   "safety": "Spindle relay off (Spindle_power) before touching the bit.",
+   "start": {
+    "at": 1758997802.6684186,
+    "meters": {
+     "machine.filament_m": 0.0,
+     "machine.jobs": 0.0,
+     "machine.prod_h": 0.0,
+     "machine.shutdowns": 0.0,
+     "machine.swaps": 0.0,
+     "machine.up_h": 0.0,
+     "tool.active_h": 0.0,
+     "tool.filament_m": 0.0,
+     "tool.jobs": 0.0,
+     "tool.mounted_h": 0.0,
+     "tool.mounts": 0.0,
+     "tool.prod_h": 0.0
+    }
+   },
+   "steps": [
+    "Remove the bit",
+    "Clean resin and chips out of the collet and nut"
+   ],
+   "title": "Clean the collet and collet nut",
+   "tools_needed": "",
+   "type": "clean",
+   "id": "ta3dfaa13",
+   "asset_label": "HotJoe",
+   "status": {
+    "state": "ok",
+    "rules": [
+     {
+      "summary": "every 20 working hours",
+      "due_ts": null,
+      "due_value": 57.882297769970464,
+      "eta_ts": 1798825855.2112527,
+      "unit": "h",
+      "noun": "working hours",
+      "kind": "meter",
+      "event": false,
+      "state": "ok",
+      "fraction": 0.7839137626554414,
+      "remaining": 4.321724746891171,
+      "text": "4.3 h left (due at 58 h), about 3 months at your usual rate",
+      "lead": 2.0
+     }
+    ],
+    "next": {
+     "summary": "every 20 working hours",
+     "due_ts": null,
+     "due_value": 57.882297769970464,
+     "eta_ts": 1798825855.2112527,
+     "unit": "h",
+     "noun": "working hours",
+     "kind": "meter",
+     "event": false,
+     "state": "ok",
+     "fraction": 0.7839137626554414,
+     "remaining": 4.321724746891171,
+     "text": "4.3 h left (due at 58 h), about 3 months at your usual rate",
+     "lead": 2.0
+    },
+    "fraction": 0.7839137626554414,
+    "snoozed": false,
+    "eta_ts": 1798825855.2112527
+   },
+   "link_info": {
+    "template": "tool:collet",
+    "template_title": "Clean the collet and collet nut",
+    "book": "b_spindle",
+    "book_name": "CNC spindle",
+    "uses": 1
+   }
+  },
+  {
+   "anchor": "completion",
+   "asset": "tool:LightSaber",
+   "created": 1758997802.6684186,
+   "enabled": true,
+   "last": {
+    "action": "done",
+    "at": 1789698609.806594,
+    "meters": {
+     "machine.filament_m": 5580.083192679185,
+     "machine.jobs": 484.0,
+     "machine.prod_h": 1097.0905873866661,
+     "machine.shutdowns": 2.0,
+     "machine.swaps": 214.0,
+     "machine.up_h": 2545.5421835679476,
+     "tool.active_h": 66.46643894404026,
+     "tool.filament_m": 0.0,
+     "tool.jobs": 97.0,
+     "tool.mounted_h": 443.7724623996568,
+     "tool.mounts": 51.0,
+     "tool.prod_h": 72.56950295516252
+    }
+   },
+   "link": {
+    "book": "b_laser",
+    "template": "tool:laser_fan"
+   },
+   "links": [],
+   "minutes": 10,
+   "notes": "",
+   "parts": [],
+   "priority": "normal",
+   "remind_boot": true,
+   "rules": [
+    {
+     "every": 25,
+     "kind": "meter",
+     "lead": 3,
+     "meter": "active_h",
+     "scope": "tool"
+    },
+    {
+     "every": 1,
+     "kind": "time",
+     "lead": 5,
+     "lead_unit": "days",
+     "unit": "months"
+    }
+   ],
+   "safety": "",
+   "start": {
+    "at": 1758997802.6684186,
+    "meters": {
+     "machine.filament_m": 0.0,
+     "machine.jobs": 0.0,
+     "machine.prod_h": 0.0,
+     "machine.shutdowns": 0.0,
+     "machine.swaps": 0.0,
+     "machine.up_h": 0.0,
+     "tool.active_h": 0.0,
+     "tool.filament_m": 0.0,
+     "tool.jobs": 0.0,
+     "tool.mounted_h": 0.0,
+     "tool.mounts": 0.0,
+     "tool.prod_h": 0.0
+    }
+   },
+   "steps": [],
+   "title": "Clean the laser module fan and air assist",
+   "tools_needed": "",
+   "type": "clean",
+   "id": "ta64d5475",
+   "asset_label": "LightSaber",
+   "status": {
+    "state": "ok",
+    "rules": [
+     {
+      "summary": "every 25 working hours",
+      "due_ts": null,
+      "due_value": 91.46643894404026,
+      "eta_ts": 1800164443.7208292,
+      "unit": "h",
+      "noun": "working hours",
+      "kind": "meter",
+      "event": false,
+      "state": "ok",
+      "fraction": 0.1751415233588125,
+      "remaining": 20.621461916029688,
+      "text": "21 h left (due at 91 h), about 3 months at your usual rate",
+      "lead": 3.0
+     },
+     {
+      "summary": "every month",
+      "due_ts": 1792290609.806594,
+      "due_value": null,
+      "eta_ts": 1792290609.806594,
+      "unit": "days",
+      "noun": "",
+      "kind": "time",
+      "event": false,
+      "state": "ok",
+      "fraction": 0.8247779175183357,
+      "remaining": 5.3333221355356555,
+      "text": "due 18 Oct 2026, in 5 days",
+      "lead": 5.0
+     }
+    ],
+    "next": {
+     "summary": "every month",
+     "due_ts": 1792290609.806594,
+     "due_value": null,
+     "eta_ts": 1792290609.806594,
+     "unit": "days",
+     "noun": "",
+     "kind": "time",
+     "event": false,
+     "state": "ok",
+     "fraction": 0.8247779175183357,
+     "remaining": 5.3333221355356555,
+     "text": "due 18 Oct 2026, in 5 days",
+     "lead": 5.0
+    },
+    "fraction": 0.8247779175183357,
+    "snoozed": false,
+    "eta_ts": 1792290609.806594
+   },
+   "link_info": {
+    "template": "tool:laser_fan",
+    "template_title": "Clean the laser module fan and air assist",
+    "book": "b_laser",
+    "book_name": "Laser module",
+    "uses": 1
+   }
+  },
+  {
+   "anchor": "completion",
+   "asset": "tool:DragKnife",
+   "created": 1758997802.6684186,
+   "enabled": true,
+   "last": null,
+   "link": {
+    "book": "b_knife",
+    "template": "tool:tool_connector"
+   },
+   "links": [],
+   "minutes": 5,
+   "notes": "",
+   "parts": [],
+   "priority": "normal",
+   "remind_boot": true,
+   "rules": [
+    {
+     "every": 50,
+     "kind": "meter",
+     "lead": 5,
+     "meter": "mounts",
+     "scope": "tool"
+    }
+   ],
+   "safety": "",
+   "start": {
+    "at": 1758997802.6684186,
+    "meters": {
+     "machine.filament_m": 0.0,
+     "machine.jobs": 0.0,
+     "machine.prod_h": 0.0,
+     "machine.shutdowns": 0.0,
+     "machine.swaps": 0.0,
+     "machine.up_h": 0.0,
+     "tool.active_h": 0.0,
+     "tool.filament_m": 0.0,
+     "tool.jobs": 0.0,
+     "tool.mounted_h": 0.0,
+     "tool.mounts": 0.0,
+     "tool.prod_h": 0.0
+    }
+   },
+   "steps": [
+    "Look for bent or burnt pins",
+    "Check the latch and alignment pins"
+   ],
+   "title": "Inspect the tool connector pins and latch",
+   "tools_needed": "",
+   "type": "inspect",
+   "id": "taffe8f2f",
+   "asset_label": "DragKnife",
+   "status": {
+    "state": "ok",
+    "rules": [
+     {
+      "summary": "every 50 mounts",
+      "due_ts": null,
+      "due_value": 50.0,
+      "eta_ts": 1866270912.5457234,
+      "unit": "",
+      "noun": "mounts",
+      "kind": "meter",
+      "event": false,
+      "state": "ok",
+      "fraction": 0.44,
+      "remaining": 28.0,
+      "text": "28 left (due at 50), about 28 months at your usual rate",
+      "lead": 5.0
+     }
+    ],
+    "next": {
+     "summary": "every 50 mounts",
+     "due_ts": null,
+     "due_value": 50.0,
+     "eta_ts": 1866270912.5457234,
+     "unit": "",
+     "noun": "mounts",
+     "kind": "meter",
+     "event": false,
+     "state": "ok",
+     "fraction": 0.44,
+     "remaining": 28.0,
+     "text": "28 left (due at 50), about 28 months at your usual rate",
+     "lead": 5.0
+    },
+    "fraction": 0.44,
+    "snoozed": false,
+    "eta_ts": 1866270912.5457234
+   },
+   "link_info": {
+    "template": "tool:tool_connector",
+    "template_title": "Inspect the tool connector pins and latch",
+    "book": "b_knife",
+    "book_name": "Drag knife",
+    "uses": 5
+   }
+  },
+  {
+   "anchor": "completion",
+   "asset": "tool:BlockOne",
+   "created": 1758997802.6684186,
+   "enabled": true,
+   "last": {
+    "action": "done",
+    "at": 1779762607.0858922,
+    "meters": {
+     "machine.filament_m": 3626.497177854562,
+     "machine.jobs": 327.0,
+     "machine.prod_h": 720.9734102850877,
+     "machine.shutdowns": 2.0,
+     "machine.swaps": 145.0,
+     "machine.up_h": 1704.22372228567,
+     "tool.active_h": 460.36609967442587,
+     "tool.filament_m": 3023.159033313327,
+     "tool.jobs": 148.0,
+     "tool.mounted_h": 668.1067634613142,
+     "tool.mounts": 49.0,
+     "tool.prod_h": 501.40276364628124
+    }
+   },
+   "link": {
+    "book": "b_printhead",
+    "template": "tool:nozzle_replace"
+   },
+   "links": [],
+   "minutes": 20,
+   "notes": "",
+   "parts": [
+    "Nozzle, same size and type"
+   ],
+   "priority": "normal",
+   "remind_boot": true,
+   "rules": [
+    {
+     "every": 500,
+     "kind": "meter",
+     "lead": 50,
+     "meter": "active_h",
+     "scope": "tool"
+    }
+   ],
+   "safety": "Hot-tighten with the right wrench; the heater block is hot.",
+   "start": {
+    "at": 1758997802.6684186,
+    "meters": {
+     "machine.filament_m": 0.0,
+     "machine.jobs": 0.0,
+     "machine.prod_h": 0.0,
+     "machine.shutdowns": 0.0,
+     "machine.swaps": 0.0,
+     "machine.up_h": 0.0,
+     "tool.active_h": 0.0,
+     "tool.filament_m": 0.0,
+     "tool.jobs": 0.0,
+     "tool.mounted_h": 0.0,
+     "tool.mounts": 0.0,
+     "tool.prod_h": 0.0
+    }
+   },
+   "steps": [
+    "Heat to printing temperature",
+    "Swap the nozzle and hot-tighten it",
+    "Re-check the Z offset"
+   ],
+   "title": "Replace the nozzle",
+   "tools_needed": "",
+   "type": "replace",
+   "id": "tc15ff115",
+   "asset_label": "BlockOne",
+   "status": {
+    "state": "ok",
+    "rules": [
+     {
+      "summary": "every 500 working hours",
+      "due_ts": null,
+      "due_value": 960.3660996744259,
+      "eta_ts": 1795902284.0021787,
+      "unit": "h",
+      "noun": "working hours",
+      "kind": "meter",
+      "event": false,
+      "state": "ok",
+      "fraction": 0.6723552924249907,
+      "remaining": 163.82235378750465,
+      "text": "164 h left (due at 960 h), about 7 weeks at your usual rate",
+      "lead": 50.0
+     }
+    ],
+    "next": {
+     "summary": "every 500 working hours",
+     "due_ts": null,
+     "due_value": 960.3660996744259,
+     "eta_ts": 1795902284.0021787,
+     "unit": "h",
+     "noun": "working hours",
+     "kind": "meter",
+     "event": false,
+     "state": "ok",
+     "fraction": 0.6723552924249907,
+     "remaining": 163.82235378750465,
+     "text": "164 h left (due at 960 h), about 7 weeks at your usual rate",
+     "lead": 50.0
+    },
+    "fraction": 0.6723552924249907,
+    "snoozed": false,
+    "eta_ts": 1795902284.0021787
+   },
+   "link_info": {
+    "template": "tool:nozzle_replace",
+    "template_title": "Replace the nozzle",
+    "book": "b_printhead",
+    "book_name": "3D print head",
+    "uses": 2
+   }
+  },
+  {
+   "anchor": "completion",
+   "asset": "machine:frame",
+   "created": 1758997802.6684186,
+   "enabled": true,
+   "last": {
+    "action": "done",
+    "at": 1788575409.4811764,
+    "meters": {
+     "machine.filament_m": 5296.788929940416,
+     "machine.jobs": 463.0,
+     "machine.prod_h": 1046.0159722309165,
+     "machine.shutdowns": 2.0,
+     "machine.swaps": 208.0,
+     "machine.up_h": 2431.7763250941234
+    }
+   },
+   "link": {
+    "book": "b_rhino",
+    "template": "machine:frame"
+   },
+   "links": [],
+   "minutes": 30,
+   "notes": "",
+   "parts": [],
+   "priority": "normal",
+   "remind_boot": true,
+   "rules": [
+    {
+     "every": 6,
+     "kind": "time",
+     "lead": 14,
+     "lead_unit": "days",
+     "unit": "months"
+    }
+   ],
+   "safety": "",
+   "start": {
+    "at": 1758997802.6684186,
+    "meters": {
+     "machine.filament_m": 0.0,
+     "machine.jobs": 0.0,
+     "machine.prod_h": 0.0,
+     "machine.shutdowns": 0.0,
+     "machine.swaps": 0.0,
+     "machine.up_h": 0.0
+    }
+   },
+   "steps": [
+    "Check the frame and gantry bolts",
+    "Check the frame is square and does not rock"
+   ],
+   "title": "Check frame bolts and squareness",
+   "tools_needed": "",
+   "type": "inspect",
+   "id": "tc7ae7106",
+   "asset_label": "Frame and enclosure",
+   "status": {
+    "state": "ok",
+    "rules": [
+     {
+      "summary": "every 6 months",
+      "due_ts": 1804213809.481176,
+      "due_value": null,
+      "eta_ts": 1804213809.481176,
+      "unit": "days",
+      "noun": "",
+      "kind": "time",
+      "event": false,
+      "state": "ok",
+      "fraction": 0.21514952296167733,
+      "remaining": 143.33331836912367,
+      "text": "due 5 Mar 2027, in 5 months",
+      "lead": 14.0
+     }
+    ],
+    "next": {
+     "summary": "every 6 months",
+     "due_ts": 1804213809.481176,
+     "due_value": null,
+     "eta_ts": 1804213809.481176,
+     "unit": "days",
+     "noun": "",
+     "kind": "time",
+     "event": false,
+     "state": "ok",
+     "fraction": 0.21514952296167733,
+     "remaining": 143.33331836912367,
+     "text": "due 5 Mar 2027, in 5 months",
+     "lead": 14.0
+    },
+    "fraction": 0.21514952296167733,
+    "snoozed": false,
+    "eta_ts": 1804213809.481176
+   },
+   "link_info": {
+    "template": "machine:frame",
+    "template_title": "Check frame bolts and squareness",
+    "book": "b_rhino",
+    "book_name": "Rhino motion system and frame",
+    "uses": 1
+   }
+  },
+  {
+   "anchor": "completion",
+   "asset": "tool:BlockOne",
+   "created": 1758997802.6684186,
+   "enabled": true,
+   "last": {
+    "action": "done",
+    "at": 1790735410.1025736,
+    "meters": {
+     "machine.filament_m": 5932.311680627585,
+     "machine.jobs": 504.0,
+     "machine.prod_h": 1158.4024075136783,
+     "machine.shutdowns": 2.0,
+     "machine.swaps": 218.0,
+     "machine.up_h": 2649.668174297661,
+     "tool.active_h": 760.1777127737598,
+     "tool.filament_m": 4965.727583908578,
+     "tool.jobs": 244.0,
+     "tool.mounted_h": 1112.1046811758733,
+     "tool.mounts": 77.0,
+     "tool.prod_h": 828.9195453589008
+    }
+   },
+   "link": {
+    "book": "b_printhead",
+    "template": "tool:nozzle_clean"
+   },
+   "links": [],
+   "minutes": 10,
+   "notes": "",
+   "parts": [
+    "Brass brush"
+   ],
+   "priority": "normal",
+   "remind_boot": true,
+   "rules": [
+    {
+     "every": 100,
+     "kind": "meter",
+     "lead": 10,
+     "meter": "active_h",
+     "scope": "tool"
+    }
+   ],
+   "safety": "The nozzle is hot.",
+   "start": {
+    "at": 1758997802.6684186,
+    "meters": {
+     "machine.filament_m": 0.0,
+     "machine.jobs": 0.0,
+     "machine.prod_h": 0.0,
+     "machine.shutdowns": 0.0,
+     "machine.swaps": 0.0,
+     "machine.up_h": 0.0,
+     "tool.active_h": 0.0,
+     "tool.filament_m": 0.0,
+     "tool.jobs": 0.0,
+     "tool.mounted_h": 0.0,
+     "tool.mounts": 0.0,
+     "tool.prod_h": 0.0
+    }
+   },
+   "steps": [
+    "Heat the nozzle",
+    "Brush the outside clean",
+    "Check the tip for wear or a widened hole"
+   ],
+   "title": "Clean the nozzle and check it for wear",
+   "tools_needed": "",
+   "type": "clean",
+   "id": "tc8d90c79",
+   "asset_label": "BlockOne",
+   "status": {
+    "state": "ok",
+    "rules": [
+     {
+      "summary": "every 100 working hours",
+      "due_ts": null,
+      "due_value": 860.1777127737598,
+      "eta_ts": 1793411692.7368472,
+      "unit": "h",
+      "noun": "working hours",
+      "kind": "meter",
+      "event": false,
+      "state": "ok",
+      "fraction": 0.36366033113161395,
+      "remaining": 63.63396688683861,
+      "text": "64 h left (due at 860 h), about 3 weeks at your usual rate",
+      "lead": 10.0
+     }
+    ],
+    "next": {
+     "summary": "every 100 working hours",
+     "due_ts": null,
+     "due_value": 860.1777127737598,
+     "eta_ts": 1793411692.7368472,
+     "unit": "h",
+     "noun": "working hours",
+     "kind": "meter",
+     "event": false,
+     "state": "ok",
+     "fraction": 0.36366033113161395,
+     "remaining": 63.63396688683861,
+     "text": "64 h left (due at 860 h), about 3 weeks at your usual rate",
+     "lead": 10.0
+    },
+    "fraction": 0.36366033113161395,
+    "snoozed": false,
+    "eta_ts": 1793411692.7368472
+   },
+   "link_info": {
+    "template": "tool:nozzle_clean",
+    "template_title": "Clean the nozzle and check it for wear",
+    "book": "b_printhead",
+    "book_name": "3D print head",
+    "uses": 2
+   }
+  },
+  {
+   "anchor": "completion",
+   "asset": "tool:HotJoe",
+   "created": 1758997802.6684186,
+   "enabled": true,
+   "last": null,
+   "link": {
+    "book": "b_spindle",
+    "template": "tool:runout"
+   },
+   "links": [],
+   "minutes": 20,
+   "notes": "",
+   "parts": [
+    "Spare collet set"
+   ],
+   "priority": "normal",
+   "remind_boot": true,
+   "rules": [
+    {
+     "every": 100,
+     "kind": "meter",
+     "lead": 10,
+     "meter": "active_h",
+     "scope": "tool"
+    }
+   ],
+   "safety": "",
+   "start": {
+    "at": 1758997802.6684186,
+    "meters": {
+     "machine.filament_m": 0.0,
+     "machine.jobs": 0.0,
+     "machine.prod_h": 0.0,
+     "machine.shutdowns": 0.0,
+     "machine.swaps": 0.0,
+     "machine.up_h": 0.0,
+     "tool.active_h": 0.0,
+     "tool.filament_m": 0.0,
+     "tool.jobs": 0.0,
+     "tool.mounted_h": 0.0,
+     "tool.mounts": 0.0,
+     "tool.prod_h": 0.0
+    }
+   },
+   "steps": [],
+   "title": "Check spindle runout and bearing noise",
+   "tools_needed": "",
+   "type": "inspect",
+   "id": "tcb1b3b70",
+   "asset_label": "HotJoe",
+   "status": {
+    "state": "ok",
+    "rules": [
+     {
+      "summary": "every 100 working hours",
+      "due_ts": null,
+      "due_value": 100.0,
+      "eta_ts": 1867006346.4954023,
+      "unit": "h",
+      "noun": "working hours",
+      "kind": "meter",
+      "event": false,
+      "state": "ok",
+      "fraction": 0.5356057302307929,
+      "remaining": 46.43942697692071,
+      "text": "46 h left (due at 100 h), about 29 months at your usual rate",
+      "lead": 10.0
+     }
+    ],
+    "next": {
+     "summary": "every 100 working hours",
+     "due_ts": null,
+     "due_value": 100.0,
+     "eta_ts": 1867006346.4954023,
+     "unit": "h",
+     "noun": "working hours",
+     "kind": "meter",
+     "event": false,
+     "state": "ok",
+     "fraction": 0.5356057302307929,
+     "remaining": 46.43942697692071,
+     "text": "46 h left (due at 100 h), about 29 months at your usual rate",
+     "lead": 10.0
+    },
+    "fraction": 0.5356057302307929,
+    "snoozed": false,
+    "eta_ts": 1867006346.4954023
+   },
+   "link_info": {
+    "template": "tool:runout",
+    "template_title": "Check spindle runout and bearing noise",
+    "book": "b_spindle",
+    "book_name": "CNC spindle",
+    "uses": 1
+   }
+  },
+  {
+   "anchor": "completion",
+   "asset": "tool:SwitchFly",
+   "created": 1758997802.6684186,
+   "enabled": true,
+   "last": {
+    "action": "done",
+    "at": 1788143409.328561,
+    "meters": {
+     "machine.filament_m": 5263.122573618732,
+     "machine.jobs": 453.0,
+     "machine.prod_h": 1034.0011866557331,
+     "machine.shutdowns": 2.0,
+     "machine.swaps": 203.0,
+     "machine.up_h": 2389.4522738839896,
+     "tool.active_h": 162.24265152884183,
+     "tool.filament_m": 893.5697028587699,
+     "tool.jobs": 67.0,
+     "tool.mounted_h": 304.7282872736558,
+     "tool.mounts": 35.0,
+     "tool.prod_h": 178.81793606028404
+    }
+   },
+   "link": {
+    "book": "b_printhead",
+    "template": "tool:hotend_check"
+   },
+   "links": [],
+   "minutes": 15,
+   "notes": "",
+   "parts": [],
+   "priority": "normal",
+   "remind_boot": true,
+   "rules": [
+    {
+     "every": 200,
+     "kind": "meter",
+     "lead": 20,
+     "meter": "active_h",
+     "scope": "tool"
+    },
+    {
+     "every": 6,
+     "kind": "time",
+     "lead": 14,
+     "lead_unit": "days",
+     "unit": "months"
+    }
+   ],
+   "safety": "",
+   "start": {
+    "at": 1758997802.6684186,
+    "meters": {
+     "machine.filament_m": 0.0,
+     "machine.jobs": 0.0,
+     "machine.prod_h": 0.0,
+     "machine.shutdowns": 0.0,
+     "machine.swaps": 0.0,
+     "machine.up_h": 0.0,
+     "tool.active_h": 0.0,
+     "tool.filament_m": 0.0,
+     "tool.jobs": 0.0,
+     "tool.mounted_h": 0.0,
+     "tool.mounts": 0.0,
+     "tool.prod_h": 0.0
+    }
+   },
+   "steps": [],
+   "title": "Check the hotend screws, heater and thermistor wiring",
+   "tools_needed": "",
+   "type": "inspect",
+   "id": "td9811528",
+   "asset_label": "SwitchFly",
+   "status": {
+    "state": "ok",
+    "rules": [
+     {
+      "summary": "every 200 working hours",
+      "due_ts": null,
+      "due_value": 362.24265152884186,
+      "eta_ts": 1977447624.805437,
+      "unit": "h",
+      "noun": "working hours",
+      "kind": "meter",
+      "event": false,
+      "state": "ok",
+      "fraction": 0.04087718895972344,
+      "remaining": 191.82456220805534,
+      "text": "192 h left (due at 362 h), about 71 months at your usual rate",
+      "lead": 20.0
+     },
+     {
+      "summary": "every 6 months",
+      "due_ts": 1803781809.328561,
+      "due_value": null,
+      "eta_ts": 1803781809.328561,
+      "unit": "days",
+      "noun": "",
+      "kind": "time",
+      "event": false,
+      "state": "ok",
+      "fraction": 0.24252804050514276,
+      "remaining": 138.3333166027483,
+      "text": "due 28 Feb 2027, in 5 months",
+      "lead": 14.0
+     }
+    ],
+    "next": {
+     "summary": "every 6 months",
+     "due_ts": 1803781809.328561,
+     "due_value": null,
+     "eta_ts": 1803781809.328561,
+     "unit": "days",
+     "noun": "",
+     "kind": "time",
+     "event": false,
+     "state": "ok",
+     "fraction": 0.24252804050514276,
+     "remaining": 138.3333166027483,
+     "text": "due 28 Feb 2027, in 5 months",
+     "lead": 14.0
+    },
+    "fraction": 0.24252804050514276,
+    "snoozed": false,
+    "eta_ts": 1803781809.328561
+   },
+   "link_info": {
+    "template": "tool:hotend_check",
+    "template_title": "Check the hotend screws, heater and thermistor wiring",
+    "book": "b_printhead",
+    "book_name": "3D print head",
+    "uses": 2
+   }
+  },
+  {
+   "anchor": "completion",
+   "asset": "machine:electronics",
+   "created": 1758997802.6684186,
+   "enabled": true,
+   "last": {
+    "action": "done",
+    "at": 1786242608.7333143,
+    "meters": {
+     "machine.filament_m": 4823.261040200494,
+     "machine.jobs": 425.0,
+     "machine.prod_h": 953.293450235311,
+     "machine.shutdowns": 2.0,
+     "machine.swaps": 189.0,
+     "machine.up_h": 2228.9427251773204
+    }
+   },
+   "link": {
+    "book": "b_rhino",
+    "template": "machine:dust"
+   },
+   "links": [],
+   "minutes": 15,
+   "notes": "",
+   "parts": [
+    "Can of compressed air"
+   ],
+   "priority": "normal",
+   "remind_boot": true,
+   "rules": [
+    {
+     "every": 1000,
+     "kind": "meter",
+     "lead": 100,
+     "meter": "up_h",
+     "scope": "machine"
+    },
+    {
+     "every": 3,
+     "kind": "time",
+     "lead": 14,
+     "lead_unit": "days",
+     "unit": "months"
+    }
+   ],
+   "safety": "Unplug the machine and wait for the PSU to discharge before opening the bay.",
+   "start": {
+    "at": 1758997802.6684186,
+    "meters": {
+     "machine.filament_m": 0.0,
+     "machine.jobs": 0.0,
+     "machine.prod_h": 0.0,
+     "machine.shutdowns": 0.0,
+     "machine.swaps": 0.0,
+     "machine.up_h": 0.0
+    }
+   },
+   "steps": [
+    "Power everything off and unplug it",
+    "Blow dust off the Octopus, the Pi and the PSU",
+    "Check every electronics fan spins freely"
+   ],
+   "title": "Clean dust from the electronics bay and fans",
+   "tools_needed": "",
+   "type": "clean",
+   "id": "tda695bab",
+   "asset_label": "Electronics",
+   "status": {
+    "state": "ok",
+    "rules": [
+     {
+      "summary": "every 1000 machine up hours",
+      "due_ts": null,
+      "due_value": 3228.9427251773204,
+      "eta_ts": 1797351007.7032888,
+      "unit": "h",
+      "noun": "machine up hours",
+      "kind": "meter",
+      "event": false,
+      "state": "ok",
+      "fraction": 0.49701986747737054,
+      "remaining": 502.98013252262945,
+      "text": "503 h left (due at 3229 h), about 2 months at your usual rate",
+      "lead": 100.0
+     },
+     {
+      "summary": "every 3 months",
+      "due_ts": 1794191408.733314,
+      "due_value": null,
+      "eta_ts": 1794191408.733314,
+      "unit": "days",
+      "noun": "",
+      "kind": "time",
+      "event": false,
+      "state": "ok",
+      "fraction": 0.7006619059458992,
+      "remaining": 27.33330971331508,
+      "text": "due 9 Nov 2026, in 4 weeks",
+      "lead": 14.0
+     }
+    ],
+    "next": {
+     "summary": "every 3 months",
+     "due_ts": 1794191408.733314,
+     "due_value": null,
+     "eta_ts": 1794191408.733314,
+     "unit": "days",
+     "noun": "",
+     "kind": "time",
+     "event": false,
+     "state": "ok",
+     "fraction": 0.7006619059458992,
+     "remaining": 27.33330971331508,
+     "text": "due 9 Nov 2026, in 4 weeks",
+     "lead": 14.0
+    },
+    "fraction": 0.7006619059458992,
+    "snoozed": false,
+    "eta_ts": 1794191408.733314
+   },
+   "link_info": {
+    "template": "machine:dust",
+    "template_title": "Clean dust from the electronics bay and fans",
+    "book": "b_rhino",
+    "book_name": "Rhino motion system and frame",
+    "uses": 1
+   }
+  },
+  {
+   "anchor": "completion",
+   "asset": "tool:SwitchFly",
+   "created": 1758997802.6684186,
+   "enabled": true,
+   "last": null,
+   "link": {
+    "book": "b_printhead",
+    "template": "tool:tool_connector"
+   },
+   "links": [],
+   "minutes": 5,
+   "notes": "",
+   "parts": [],
+   "priority": "normal",
+   "remind_boot": true,
+   "rules": [
+    {
+     "every": 50,
+     "kind": "meter",
+     "lead": 5,
+     "meter": "mounts",
+     "scope": "tool"
+    }
+   ],
+   "safety": "",
+   "start": {
+    "at": 1758997802.6684186,
+    "meters": {
+     "machine.filament_m": 0.0,
+     "machine.jobs": 0.0,
+     "machine.prod_h": 0.0,
+     "machine.shutdowns": 0.0,
+     "machine.swaps": 0.0,
+     "machine.up_h": 0.0,
+     "tool.active_h": 0.0,
+     "tool.filament_m": 0.0,
+     "tool.jobs": 0.0,
+     "tool.mounted_h": 0.0,
+     "tool.mounts": 0.0,
+     "tool.prod_h": 0.0
+    }
+   },
+   "steps": [
+    "Look for bent or burnt pins",
+    "Check the latch and alignment pins"
+   ],
+   "title": "Inspect the tool connector pins and latch",
+   "tools_needed": "",
+   "type": "inspect",
+   "id": "tdbfc0c3f",
+   "asset_label": "SwitchFly",
+   "status": {
+    "state": "ok",
+    "rules": [
+     {
+      "summary": "every 50 mounts",
+      "due_ts": null,
+      "due_value": 50.0,
+      "eta_ts": 1826391750.8876946,
+      "unit": "",
+      "noun": "mounts",
+      "kind": "meter",
+      "event": false,
+      "state": "ok",
+      "fraction": 0.74,
+      "remaining": 13.0,
+      "text": "13 left (due at 50), about 13 months at your usual rate",
+      "lead": 5.0
+     }
+    ],
+    "next": {
+     "summary": "every 50 mounts",
+     "due_ts": null,
+     "due_value": 50.0,
+     "eta_ts": 1826391750.8876946,
+     "unit": "",
+     "noun": "mounts",
+     "kind": "meter",
+     "event": false,
+     "state": "ok",
+     "fraction": 0.74,
+     "remaining": 13.0,
+     "text": "13 left (due at 50), about 13 months at your usual rate",
+     "lead": 5.0
+    },
+    "fraction": 0.74,
+    "snoozed": false,
+    "eta_ts": 1826391750.8876946
+   },
+   "link_info": {
+    "template": "tool:tool_connector",
+    "template_title": "Inspect the tool connector pins and latch",
+    "book": "b_printhead",
+    "book_name": "3D print head",
+    "uses": 5
+   }
+  },
+  {
+   "anchor": "completion",
+   "asset": "machine:umbilical",
+   "created": 1758997802.6684186,
+   "enabled": true,
+   "last": {
+    "action": "done",
+    "at": 1786501808.8171637,
+    "meters": {
+     "machine.filament_m": 4823.261040200494,
+     "machine.jobs": 427.0,
+     "machine.prod_h": 954.3491677121866,
+     "machine.shutdowns": 2.0,
+     "machine.swaps": 191.0,
+     "machine.up_h": 2249.919046944335
+    }
+   },
+   "link": {
+    "book": "b_rhino",
+    "template": "machine:umbilical"
+   },
+   "links": [],
+   "minutes": 15,
+   "notes": "",
+   "parts": [
+    "Spare connector pins / housing"
+   ],
+   "priority": "normal",
+   "remind_boot": true,
+   "rules": [
+    {
+     "every": 100,
+     "kind": "meter",
+     "lead": 10,
+     "meter": "swaps",
+     "scope": "machine"
+    },
+    {
+     "every": 3,
+     "kind": "time",
+     "lead": 14,
+     "lead_unit": "days",
+     "unit": "months"
+    }
+   ],
+   "safety": "",
+   "start": {
+    "at": 1758997802.6684186,
+    "meters": {
+     "machine.filament_m": 0.0,
+     "machine.jobs": 0.0,
+     "machine.prod_h": 0.0,
+     "machine.shutdowns": 0.0,
+     "machine.swaps": 0.0,
+     "machine.up_h": 0.0
+    }
+   },
+   "steps": [
+    "Look into both halves for bent, pushed-back or burnt pins",
+    "Check the latch holds firmly",
+    "Flex the cable along its length and watch the thermistor reading for drop-outs"
+   ],
+   "title": "Inspect the 21-pin umbilical connector and cable",
+   "tools_needed": "",
+   "type": "inspect",
+   "id": "te791de5b",
+   "asset_label": "Umbilical and tool connector",
+   "status": {
+    "state": "ok",
+    "rules": [
+     {
+      "summary": "every 100 tool swaps",
+      "due_ts": null,
+      "due_value": 291.0,
+      "eta_ts": 1807338373.6458776,
+      "unit": "",
+      "noun": "tool swaps",
+      "kind": "meter",
+      "event": false,
+      "state": "ok",
+      "fraction": 0.3,
+      "remaining": 70.0,
+      "text": "70 left (due at 291), about 6 months at your usual rate",
+      "lead": 10.0
+     },
+     {
+      "summary": "every 3 months",
+      "due_ts": 1794450608.817164,
+      "due_value": null,
+      "eta_ts": 1794450608.817164,
+      "unit": "days",
+      "noun": "",
+      "kind": "time",
+      "event": false,
+      "state": "ok",
+      "fraction": 0.6678076858721411,
+      "remaining": 30.333310683800114,
+      "text": "due 12 Nov 2026, in 4 weeks",
+      "lead": 14.0
+     }
+    ],
+    "next": {
+     "summary": "every 3 months",
+     "due_ts": 1794450608.817164,
+     "due_value": null,
+     "eta_ts": 1794450608.817164,
+     "unit": "days",
+     "noun": "",
+     "kind": "time",
+     "event": false,
+     "state": "ok",
+     "fraction": 0.6678076858721411,
+     "remaining": 30.333310683800114,
+     "text": "due 12 Nov 2026, in 4 weeks",
+     "lead": 14.0
+    },
+    "fraction": 0.6678076858721411,
+    "snoozed": false,
+    "eta_ts": 1794450608.817164
+   },
+   "link_info": {
+    "template": "machine:umbilical",
+    "template_title": "Inspect the 21-pin umbilical connector and cable",
+    "book": "b_rhino",
+    "book_name": "Rhino motion system and frame",
+    "uses": 1
+   }
+  },
+  {
+   "anchor": "completion",
+   "asset": "tool:BlockOne",
+   "created": 1758997802.6684186,
+   "enabled": true,
+   "last": {
+    "action": "done",
+    "at": 1790130609.8996553,
+    "meters": {
+     "machine.filament_m": 5672.312596033857,
+     "machine.jobs": 493.0,
+     "machine.prod_h": 1115.627122042684,
+     "machine.shutdowns": 2.0,
+     "machine.swaps": 215.0,
+     "machine.up_h": 2590.8939654944975,
+     "tool.active_h": 721.7768903194553,
+     "tool.filament_m": 4714.8513836033535,
+     "tool.jobs": 234.0,
+     "tool.mounted_h": 1064.497954701769,
+     "tool.mounts": 75.0,
+     "tool.prod_h": 787.2042656061404
+    }
+   },
+   "link": {
+    "book": "b_printhead",
+    "template": "tool:extruder_gears"
+   },
+   "links": [],
+   "minutes": 10,
+   "notes": "",
+   "parts": [],
+   "priority": "normal",
+   "remind_boot": true,
+   "rules": [
+    {
+     "every": 1000,
+     "kind": "meter",
+     "lead": 100,
+     "meter": "filament_m",
+     "scope": "tool"
+    }
+   ],
+   "safety": "",
+   "start": {
+    "at": 1758997802.6684186,
+    "meters": {
+     "machine.filament_m": 0.0,
+     "machine.jobs": 0.0,
+     "machine.prod_h": 0.0,
+     "machine.shutdowns": 0.0,
+     "machine.swaps": 0.0,
+     "machine.up_h": 0.0,
+     "tool.active_h": 0.0,
+     "tool.filament_m": 0.0,
+     "tool.jobs": 0.0,
+     "tool.mounted_h": 0.0,
+     "tool.mounts": 0.0,
+     "tool.prod_h": 0.0
+    }
+   },
+   "steps": [
+    "Unload filament",
+    "Brush filament dust out of the gear teeth"
+   ],
+   "title": "Clean the extruder drive gears",
+   "tools_needed": "",
+   "type": "clean",
+   "id": "tf070b72a",
+   "asset_label": "BlockOne",
+   "status": {
+    "state": "ok",
+    "rules": [
+     {
+      "summary": "every 1000 m of filament",
+      "due_ts": null,
+      "due_value": 5714.8513836033535,
+      "eta_ts": 1793756070.5233672,
+      "unit": "m",
+      "noun": "of filament",
+      "kind": "meter",
+      "event": false,
+      "state": "ok",
+      "fraction": 0.4939044374093846,
+      "remaining": 506.0955625906154,
+      "text": "506 m left (due at 5715 m), about 3 weeks at your usual rate",
+      "lead": 100.0
+     }
+    ],
+    "next": {
+     "summary": "every 1000 m of filament",
+     "due_ts": null,
+     "due_value": 5714.8513836033535,
+     "eta_ts": 1793756070.5233672,
+     "unit": "m",
+     "noun": "of filament",
+     "kind": "meter",
+     "event": false,
+     "state": "ok",
+     "fraction": 0.4939044374093846,
+     "remaining": 506.0955625906154,
+     "text": "506 m left (due at 5715 m), about 3 weeks at your usual rate",
+     "lead": 100.0
+    },
+    "fraction": 0.4939044374093846,
+    "snoozed": false,
+    "eta_ts": 1793756070.5233672
+   },
+   "link_info": {
+    "template": "tool:extruder_gears",
+    "template_title": "Clean the extruder drive gears",
+    "book": "b_printhead",
+    "book_name": "3D print head",
+    "uses": 2
+   }
+  },
+  {
+   "anchor": "completion",
+   "asset": "machine:motion_z",
+   "created": 1758997802.6684186,
+   "enabled": true,
+   "last": {
+    "action": "done",
+    "at": 1790562610.0346751,
+    "meters": {
+     "machine.filament_m": 5907.477717847561,
+     "machine.jobs": 502.0,
+     "machine.prod_h": 1152.476994606136,
+     "machine.shutdowns": 2.0,
+     "machine.swaps": 216.0,
+     "machine.up_h": 2630.9109954149867
+    }
+   },
+   "link": {
+    "book": "b_rhino",
+    "template": "machine:z_screws"
+   },
+   "links": [],
+   "minutes": 20,
+   "notes": "",
+   "parts": [
+    "Leadscrew grease (PTFE or lithium)"
+   ],
+   "priority": "normal",
+   "remind_boot": true,
+   "rules": [
+    {
+     "every": 250,
+     "kind": "meter",
+     "lead": 25,
+     "meter": "prod_h",
+     "scope": "machine"
+    },
+    {
+     "every": 3,
+     "kind": "time",
+     "lead": 14,
+     "lead_unit": "days",
+     "unit": "months"
+    }
+   ],
+   "safety": "",
+   "start": {
+    "at": 1758997802.6684186,
+    "meters": {
+     "machine.filament_m": 0.0,
+     "machine.jobs": 0.0,
+     "machine.prod_h": 0.0,
+     "machine.shutdowns": 0.0,
+     "machine.swaps": 0.0,
+     "machine.up_h": 0.0
+    }
+   },
+   "steps": [
+    "Clean the three leadscrews with a dry brush or cloth",
+    "Apply leadscrew grease sparingly along the thread",
+    "Run Z through its full travel",
+    "Check the nuts for backlash"
+   ],
+   "title": "Clean and lubricate the Z leadscrews",
+   "tools_needed": "",
+   "type": "lubricate",
+   "id": "tf7c943a7",
+   "asset_label": "Motion Z",
+   "status": {
+    "state": "ok",
+    "rules": [
+     {
+      "summary": "every 250 production hours",
+      "due_ts": null,
+      "due_value": 1402.476994606136,
+      "eta_ts": 1795924212.1601474,
+      "unit": "h",
+      "noun": "production hours",
+      "kind": "meter",
+      "event": false,
+      "state": "ok",
+      "fraction": 0.20247295564499745,
+      "remaining": 199.38176108875064,
+      "text": "199 h left (due at 1402 h), about 7 weeks at your usual rate",
+      "lead": 25.0
+     },
+     {
+      "summary": "every 3 months",
+      "due_ts": 1798425010.034675,
+      "due_value": null,
+      "eta_ts": 1798425010.034675,
+      "unit": "days",
+      "noun": "",
+      "kind": "time",
+      "event": false,
+      "state": "ok",
+      "fraction": 0.16404298671746032,
+      "remaining": 76.3333247753619,
+      "text": "due 28 Dec 2026, in 3 months",
+      "lead": 14.0
+     }
+    ],
+    "next": {
+     "summary": "every 250 production hours",
+     "due_ts": null,
+     "due_value": 1402.476994606136,
+     "eta_ts": 1795924212.1601474,
+     "unit": "h",
+     "noun": "production hours",
+     "kind": "meter",
+     "event": false,
+     "state": "ok",
+     "fraction": 0.20247295564499745,
+     "remaining": 199.38176108875064,
+     "text": "199 h left (due at 1402 h), about 7 weeks at your usual rate",
+     "lead": 25.0
+    },
+    "fraction": 0.20247295564499745,
+    "snoozed": false,
+    "eta_ts": 1795924212.1601474
+   },
+   "link_info": {
+    "template": "machine:z_screws",
+    "template_title": "Clean and lubricate the Z leadscrews",
+    "book": "b_rhino",
+    "book_name": "Rhino motion system and frame",
+    "uses": 1
+   }
+  }
+ ],
+ "counts": {
+  "overdue": 0,
+  "due_soon": 2,
+  "snoozed": 0,
+  "held": 1
+ },
+ "meters": {
+  "tracking_since": 1758997802.6684186,
+  "imported_jobs": 0,
+  "machine": [
+   {
+    "meter": "up_h",
+    "label": "Machine up hours",
+    "unit": "h",
+    "help": "Klipper running and ready (counted while the portal runs)",
+    "event": "",
+    "noun": "machine up hours",
+    "value": 2725.962592654691,
+    "per_day": 7.871025794205063
+   },
+   {
+    "meter": "prod_h",
+    "label": "Production hours",
+    "unit": "h",
+    "help": "A job running. Pauses are not counted.",
+    "event": "",
+    "noun": "production hours",
+    "value": 1203.0952335173854,
+    "per_day": 4.207351095626245
+   },
+   {
+    "meter": "jobs",
+    "label": "Jobs",
+    "unit": "",
+    "help": "Finished jobs from Moonraker's history",
+    "event": "after each job",
+    "noun": "jobs",
+    "value": 519.0,
+    "per_day": 1.5274142545647875
+   },
+   {
+    "meter": "filament_m",
+    "label": "Filament used",
+    "unit": "m",
+    "help": "From Moonraker's job history",
+    "event": "",
+    "noun": "of filament",
+    "value": 6191.709264382773,
+    "per_day": 24.08727005202939
+   },
+   {
+    "meter": "swaps",
+    "label": "Tool swaps",
+    "unit": "",
+    "help": "Times a different tool was mounted (connector and dock wear)",
+    "event": "after each tool swap",
+    "noun": "tool swaps",
+    "value": 221.0,
+    "per_day": 0.3899781075484564
+   },
+   {
+    "meter": "shutdowns",
+    "label": "Emergency stops and shutdowns",
+    "unit": "",
+    "help": "Klipper entering shutdown",
+    "event": "after an emergency stop or Klipper shutdown",
+    "noun": "shutdowns",
+    "value": 2.0,
+    "per_day": 0.0
+   }
+  ],
+  "tools": {
+   "BlockOne": [
+    {
+     "meter": "mounted_h",
+     "label": "Hours mounted",
+     "unit": "h",
+     "help": "Mounted while Klipper is up",
+     "event": "",
+     "noun": "hours mounted",
+     "value": 1167.7314502533961,
+     "per_day": 4.81080488061311
+    },
+    {
+     "meter": "prod_h",
+     "label": "Production hours",
+     "unit": "h",
+     "help": "Jobs run with this tool, pauses not counted",
+     "event": "",
+     "noun": "production hours",
+     "value": 868.9295790228414,
+     "per_day": 3.805120139758832
+    },
+    {
+     "meter": "active_h",
+     "label": "Working hours",
+     "unit": "h",
+     "help": "Print heads: nozzle heater on. LightSaber: laser on. HotJoe: spindle running. Powered tools: output on. Passive tools: running a job.",
+     "event": "",
+     "noun": "working hours",
+     "value": 796.5437458869212,
+     "per_day": 3.475591015897333
+    },
+    {
+     "meter": "jobs",
+     "label": "Jobs",
+     "unit": "",
+     "help": "Finished jobs with this tool",
+     "event": "after each job with this tool",
+     "noun": "jobs",
+     "value": 256.0,
+     "per_day": 1.039941620129217
+    },
+    {
+     "meter": "mounts",
+     "label": "Times mounted",
+     "unit": "",
+     "help": "Swaps onto this tool",
+     "event": "each time this tool is mounted",
+     "noun": "mounts",
+     "value": 78.0,
+     "per_day": 0.16249087814519017
+    },
+    {
+     "meter": "filament_m",
+     "label": "Filament used",
+     "unit": "m",
+     "help": "Print heads only",
+     "event": "",
+     "noun": "of filament",
+     "value": 5208.755821012738,
+     "per_day": 22.700290873028052
+    }
+   ],
+   "SwitchFly": [
+    {
+     "meter": "mounted_h",
+     "label": "Hours mounted",
+     "unit": "h",
+     "help": "Mounted while Klipper is up",
+     "event": "",
+     "noun": "hours mounted",
+     "value": 319.44334354245177,
+     "per_day": 0.30276247334586487
+    },
+    {
+     "meter": "prod_h",
+     "label": "Production hours",
+     "unit": "h",
+     "help": "Jobs run with this tool, pauses not counted",
+     "event": "",
+     "noun": "production hours",
+     "value": 187.68746819011014,
+     "per_day": 0.09552892288942351
+    },
+    {
+     "meter": "active_h",
+     "label": "Working hours",
+     "unit": "h",
+     "help": "Print heads: nozzle heater on. LightSaber: laser on. HotJoe: spindle running. Powered tools: output on. Passive tools: running a job.",
+     "event": "",
+     "noun": "working hours",
+     "value": 170.41808932078652,
+     "per_day": 0.08928907098058876
+    },
+    {
+     "meter": "jobs",
+     "label": "Jobs",
+     "unit": "",
+     "help": "Finished jobs with this tool",
+     "event": "after each job with this tool",
+     "noun": "jobs",
+     "value": 70.0,
+     "per_day": 0.032498175629038034
+    },
+    {
+     "meter": "mounts",
+     "label": "Times mounted",
+     "unit": "",
+     "help": "Swaps onto this tool",
+     "event": "each time this tool is mounted",
+     "noun": "mounts",
+     "value": 37.0,
+     "per_day": 0.032498175629038034
+    },
+    {
+     "meter": "filament_m",
+     "label": "Filament used",
+     "unit": "m",
+     "help": "Print heads only",
+     "event": "",
+     "noun": "of filament",
+     "value": 938.0780074424631,
+     "per_day": 0.4638788540761563
+    }
+   ],
+   "LightSaber": [
+    {
+     "meter": "mounted_h",
+     "label": "Hours mounted",
+     "unit": "h",
+     "help": "Mounted while Klipper is up",
+     "event": "",
+     "noun": "hours mounted",
+     "value": 464.0908761666308,
+     "per_day": 1.265739941235896
+    },
+    {
+     "meter": "prod_h",
+     "label": "Production hours",
+     "unit": "h",
+     "help": "Jobs run with this tool, pauses not counted",
+     "event": "",
+     "noun": "production hours",
+     "value": 77.39771138474309,
+     "per_day": 0.23530336209456001
+    },
+    {
+     "meter": "active_h",
+     "label": "Working hours",
+     "unit": "h",
+     "help": "Print heads: nozzle heater on. LightSaber: laser on. HotJoe: spindle running. Powered tools: output on. Passive tools: running a job.",
+     "event": "",
+     "noun": "working hours",
+     "value": 70.84497702801058,
+     "per_day": 0.21376997888534935
+    },
+    {
+     "meter": "jobs",
+     "label": "Jobs",
+     "unit": "",
+     "help": "Finished jobs with this tool",
+     "event": "after each job with this tool",
+     "noun": "jobs",
+     "value": 103.0,
+     "per_day": 0.32498175629038034
+    },
+    {
+     "meter": "mounts",
+     "label": "Times mounted",
+     "unit": "",
+     "help": "Swaps onto this tool",
+     "event": "each time this tool is mounted",
+     "noun": "mounts",
+     "value": 53.0,
+     "per_day": 0.12999270251615214
+    },
+    {
+     "meter": "filament_m",
+     "label": "Filament used",
+     "unit": "m",
+     "help": "Print heads only",
+     "event": "",
+     "noun": "of filament",
+     "value": 0.0,
+     "per_day": 0.0
+    }
+   ],
+   "HotJoe": [
+    {
+     "meter": "mounted_h",
+     "label": "Hours mounted",
+     "unit": "h",
+     "help": "Mounted while Klipper is up",
+     "event": "",
+     "noun": "hours mounted",
+     "value": 246.27408544222354,
+     "per_day": 0.3071856255670194
+    },
+    {
+     "meter": "prod_h",
+     "label": "Production hours",
+     "unit": "h",
+     "help": "Jobs run with this tool, pauses not counted",
+     "event": "",
+     "noun": "production hours",
+     "value": 58.05096526661743,
+     "per_day": 0.05665328500262816
+    },
+    {
+     "meter": "active_h",
+     "label": "Working hours",
+     "unit": "h",
+     "help": "Print heads: nozzle heater on. LightSaber: laser on. HotJoe: spindle running. Powered tools: output on. Passive tools: running a job.",
+     "event": "",
+     "noun": "working hours",
+     "value": 53.56057302307929,
+     "per_day": 0.05337259095054164
+    },
+    {
+     "meter": "jobs",
+     "label": "Jobs",
+     "unit": "",
+     "help": "Finished jobs with this tool",
+     "event": "after each job with this tool",
+     "noun": "jobs",
+     "value": 60.0,
+     "per_day": 0.06499635125807607
+    },
+    {
+     "meter": "mounts",
+     "label": "Times mounted",
+     "unit": "",
+     "help": "Swaps onto this tool",
+     "event": "each time this tool is mounted",
+     "noun": "mounts",
+     "value": 31.0,
+     "per_day": 0.032498175629038034
+    },
+    {
+     "meter": "filament_m",
+     "label": "Filament used",
+     "unit": "m",
+     "help": "Print heads only",
+     "event": "",
+     "noun": "of filament",
+     "value": 0.0,
+     "per_day": 0.0
+    }
+   ],
+   "DragKnife": [
+    {
+     "meter": "mounted_h",
+     "label": "Hours mounted",
+     "unit": "h",
+     "help": "Mounted while Klipper is up",
+     "event": "",
+     "noun": "hours mounted",
+     "value": 175.91598331136797,
+     "per_day": 0.2564027686864018
+    },
+    {
+     "meter": "prod_h",
+     "label": "Production hours",
+     "unit": "h",
+     "help": "Jobs run with this tool, pauses not counted",
+     "event": "",
+     "noun": "production hours",
+     "value": 11.029509653072973,
+     "per_day": 0.014745385880813101
+    },
+    {
+     "meter": "active_h",
+     "label": "Working hours",
+     "unit": "h",
+     "help": "Print heads: nozzle heater on. LightSaber: laser on. HotJoe: spindle running. Powered tools: output on. Passive tools: running a job.",
+     "event": "",
+     "noun": "working hours",
+     "value": 9.890383108778558,
+     "per_day": 0.012916375214263061
+    },
+    {
+     "meter": "jobs",
+     "label": "Jobs",
+     "unit": "",
+     "help": "Finished jobs with this tool",
+     "event": "after each job with this tool",
+     "noun": "jobs",
+     "value": 30.0,
+     "per_day": 0.06499635125807607
+    },
+    {
+     "meter": "mounts",
+     "label": "Times mounted",
+     "unit": "",
+     "help": "Swaps onto this tool",
+     "event": "each time this tool is mounted",
+     "noun": "mounts",
+     "value": 22.0,
+     "per_day": 0.032498175629038034
+    },
+    {
+     "meter": "filament_m",
+     "label": "Filament used",
+     "unit": "m",
+     "help": "Print heads only",
+     "event": "",
+     "noun": "of filament",
+     "value": 0.0,
+     "per_day": 0.0
+    }
+   ]
+  },
+  "archived_tools": [],
+  "adjustments": []
+ },
+ "types": {
+  "adjust": "Adjust",
+  "calibrate": "Calibrate",
+  "clean": "Clean",
+  "inspect": "Inspect",
+  "lubricate": "Lubricate",
+  "other": "Other",
+  "replace": "Replace"
+ },
+ "priorities": {
+  "low": "Low",
+  "normal": "Normal",
+  "high": "High",
+  "critical": "Critical"
+ },
+ "statuses": [
+  {
+   "id": "overdue",
+   "label": "Overdue",
+   "color": "red",
+   "hex": "#e53935",
+   "builtin": true,
+   "help": "Past the due point."
+  },
+  {
+   "id": "due_soon",
+   "label": "Due soon",
+   "color": "amber",
+   "hex": "#f9a825",
+   "builtin": true,
+   "help": "Inside the early alarm: plan the work, get the parts."
+  },
+  {
+   "id": "ok",
+   "label": "Scheduled",
+   "color": "teal",
+   "hex": "#26a69a",
+   "builtin": true,
+   "help": "Not due yet."
+  },
+  {
+   "id": "done",
+   "label": "Done",
+   "color": "grey",
+   "hex": "#8d8f99",
+   "builtin": true,
+   "help": "A one-off task that has been done."
+  },
+  {
+   "id": "snoozed",
+   "label": "Snoozed",
+   "color": "indigo",
+   "hex": "#5c6bc0",
+   "builtin": true,
+   "help": "Due, but put off for a few days."
+  },
+  {
+   "id": "paused",
+   "label": "Paused",
+   "color": "grey",
+   "hex": "#8d8f99",
+   "builtin": true,
+   "help": "Kept, but not tracked."
+  },
+  {
+   "boot_prompt": false,
+   "clock": "none",
+   "color": "purple",
+   "expiry": "never",
+   "expiry_days": 0,
+   "help": "Parts are on order. Say what in the note. The task keeps ageing so it comes back as soon as you clear it.",
+   "id": "s_parts",
+   "label": "Pending - Waiting on parts",
+   "list": "own",
+   "log_option": true,
+   "note_required": true,
+   "hex": "#8e24aa",
+   "builtin": false
+  },
+  {
+   "boot_prompt": true,
+   "clock": "none",
+   "color": "blue",
+   "expiry": "days",
+   "expiry_days": 3,
+   "help": "Started but not finished. Clears itself after 3 days if it is not logged.",
+   "id": "s_progress",
+   "label": "In progress",
+   "list": "due",
+   "log_option": true,
+   "note_required": false,
+   "hex": "#1e88e5",
+   "builtin": false
+  },
+  {
+   "boot_prompt": false,
+   "clock": "pause",
+   "color": "orange",
+   "expiry": "meter",
+   "expiry_days": 0,
+   "help": "Waits for a planned stop. Its clock pauses until the machine runs again.",
+   "id": "s_defer",
+   "label": "Deferred to next shutdown",
+   "list": "upcoming",
+   "log_option": true,
+   "note_required": false,
+   "hex": "#fb8c00",
+   "builtin": false
+  }
+ ],
+ "colors": {
+  "teal": "#26a69a",
+  "amber": "#f9a825",
+  "red": "#e53935",
+  "indigo": "#5c6bc0",
+  "purple": "#8e24aa",
+  "blue": "#1e88e5",
+  "green": "#43a047",
+  "orange": "#fb8c00",
+  "pink": "#d81b60",
+  "grey": "#8d8f99"
+ },
+ "tools": [
+  {
+   "name": "BlockOne",
+   "type": "DEPOSITION",
+   "builtin": true,
+   "kind_code": ""
+  },
+  {
+   "name": "SwitchFly",
+   "type": "DEPOSITION",
+   "builtin": true,
+   "kind_code": ""
+  },
+  {
+   "name": "LightSaber",
+   "type": "LASER",
+   "builtin": true,
+   "kind_code": ""
+  },
+  {
+   "name": "HotJoe",
+   "type": "CNC",
+   "builtin": true,
+   "kind_code": ""
+  },
+  {
+   "name": "DragKnife",
+   "type": "DRAG_KNIFE",
+   "builtin": true,
+   "kind_code": ""
+  }
+ ],
+ "hardware": [],
+ "now": 1791829810.7740836
+}

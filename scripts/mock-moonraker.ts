@@ -12,8 +12,14 @@
  *
  * It logs every method the app sends, so you can see that Phase 2a only
  * reads. The emergency stop puts the mock Klipper into "shutdown" like M112.
+ *
+ * It also pretends to be the Rhino Portal's maintenance API, using a real
+ * overview from the Portal's year-of-use demo (scripts/fixtures). Run the
+ * dev server with PORTAL=http://localhost:7125 as well. One task (the laser
+ * lens) is made overdue so every state shows.
  */
-import { createServer } from 'node:http'
+import { createServer, type IncomingMessage } from 'node:http'
+import { readFileSync } from 'node:fs'
 import { WebSocketServer, type WebSocket } from 'ws'
 
 const PORT = Number(process.env.MOCK_PORT ?? 7125)
@@ -93,9 +99,77 @@ function handle(method: string, params: Record<string, unknown> | undefined): un
   }
 }
 
-const server = createServer((req, res) => {
+// ---- pretend Rhino Portal (maintenance) ---------------------------------
+const PORTAL_TOKEN = 'mock-token-' + Math.random().toString(36).slice(2)
+const maint = JSON.parse(readFileSync(new URL('./fixtures/maint-overview.json', import.meta.url), 'utf8'))
+const maintHistory = JSON.parse(readFileSync(new URL('./fixtures/maint-history.json', import.meta.url), 'utf8'))
+maint.now = Date.now() / 1000
+const lens = maint.tasks.find((t: { title: string }) => t.title.startsWith('Clean the laser lens'))
+if (lens) {
+  lens.status.state = 'overdue'
+  lens.status.fraction = 1.08
+  lens.status.next = { ...lens.status.next, state: 'overdue', fraction: 1.08, text: '0.6 h over (due at 71 h)' }
+}
+function recount() {
+  const c = { overdue: 0, due_soon: 0, snoozed: 0, held: 0 }
+  for (const t of maint.tasks) {
+    const st = t.status
+    if (!st) continue
+    if (st.hold) {
+      c.held++
+      if (st.hold.list !== 'due') continue
+    }
+    if (st.state === 'overdue' || st.state === 'due_soon') st.snoozed ? c.snoozed++ : (c[st.state as 'overdue' | 'due_soon'] += 1)
+  }
+  maint.counts = c
+}
+recount()
+
+const readBody = (req: IncomingMessage) =>
+  new Promise<Record<string, unknown>>((resolve) => {
+    let b = ''
+    req.on('data', (d) => (b += d))
+    req.on('end', () => resolve(b ? JSON.parse(b) : {}))
+  })
+
+function json(res: import('node:http').ServerResponse, code: number, body: unknown) {
+  res.writeHead(code, { 'content-type': 'application/json' }).end(JSON.stringify(body))
+}
+
+async function portal(req: IncomingMessage, res: import('node:http').ServerResponse, url: string): Promise<boolean> {
+  if (req.method === 'GET' && url === '/') {
+    res.writeHead(200, { 'content-type': 'text/html' }).end(
+      `<!doctype html><html><head><meta name="rhino-token" content="${PORTAL_TOKEN}"></head><body><p class="version">v1.4.1</p></body></html>`,
+    )
+    return true
+  }
+  if (req.method === 'GET' && url === '/api/maint') return json(res, 200, maint), true
+  if (req.method === 'GET' && url === '/api/maint/history') return json(res, 200, maintHistory), true
+  const m = url.match(/^\/api\/maint\/tasks\/([^/]+)\/(done|snooze)$/)
+  if (req.method === 'POST' && m) {
+    if (req.headers['x-rhino-token'] !== PORTAL_TOKEN) return json(res, 400, { ok: false, error: 'This page is out of date (the portal was restarted). Reload the page and try again.' }), true
+    const body = await readBody(req)
+    const task = maint.tasks.find((t: { id: string }) => t.id === m[1])
+    if (!task) return json(res, 400, { ok: false, error: 'No such task' }), true
+    console.log(`  PORTAL ${m[2]} ${task.title} ${JSON.stringify(body)}`)
+    if (m[2] === 'done') {
+      const now = Date.now() / 1000
+      task.last = { at: now, action: body.action }
+      task.status = { ...task.status, state: 'ok', fraction: 0, snoozed: false, hold: undefined, next: { ...task.status.next, state: 'ok', fraction: 0, text: 'Restarted from today' } }
+      maintHistory.records.unshift({ id: 'h' + now, task: task.id, title: task.title, asset: task.asset, asset_label: task.asset_label, action: body.action, at: now, notes: body.notes ?? '', was: 'due_soon', status: '' })
+    } else {
+      task.status.snoozed = Number(body.days) > 0
+    }
+    recount()
+    return json(res, 200, { ok: true }), true
+  }
+  return false
+}
+
+const server = createServer(async (req, res) => {
   const url = decodeURIComponent((req.url ?? '').split('?')[0]!)
   console.log(`HTTP ${req.method} ${url}${req.headers.range ? ` (${req.headers.range})` : ''}`)
+  if (await portal(req, res, url)) return
   if (req.method === 'POST' && url === '/printer/emergency_stop') {
     emergencyStop('http')
     res.writeHead(200, { 'content-type': 'application/json' }).end('{"result":"ok"}')

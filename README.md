@@ -2,7 +2,7 @@
 
 One interface for every Rhino Multi Motion System process: import a model, pick a toolhead, prepare, preview, send and monitor. "Rhino Studio" is a working title; the name and logo live in `src/brand/brand.ts`.
 
-Status: **Phase 2a** (read-only machine connection). The app shows live status from Klipper, the mounted toolhead, and the files on the Pi. It can't move the Rhino, heat anything, run a macro or start a job. The one thing it can send is the emergency stop.
+Status: **Phase 2a + Care** (read-only machine connection, preventive maintenance). The app shows live status from Klipper, the mounted toolhead, and the files on the Pi. It can't move the Rhino, heat anything, run a macro or start a job. The one thing it can send is the emergency stop.
 
 ## Run it on your PC
 
@@ -28,14 +28,27 @@ On Windows PowerShell: `$env:MOONRAKER="http://192.168.1.50"; npm run dev`.
 
 The checks to run on the machine are in [docs/testing.md](docs/testing.md).
 
+### Maintenance (Care)
+
+Preventive maintenance comes from the Rhino Portal that already runs on the Pi (port 5000): its schedules, usage meters, Task Books and work log. Studio shows it everywhere it matters and can log work and snooze; the Portal stays the engine and keeps the records, so there's only ever one set of maintenance data.
+
+- **Care** screen: due now, every toolhead and machine area, coming up, on hold, the work log and usage meters.
+- **Top bar and nav**: what's due, one tap away.
+- **Toolhead tiles** (Prepare, Toolheads): each tool's care status.
+- **Device**: care for the mounted tool and the machine before the next job.
+- **Files**: "Care due" next to files whose toolhead needs attention.
+- **Alert**: overdue care on the mounted tool.
+
+Maintenance never blocks a job; it informs. Creating and editing tasks and Task Books stays in the Portal until Phase 5. The dev server forwards `/portal` to `<MOONRAKER host>:5000`; set `PORTAL=http://192.168.1.50:5000` to change it.
+
 ### Work without the machine
 
 ```bash
 npm run mock                                      # pretend Moonraker on port 7125
-MOONRAKER=http://localhost:7125 npm run dev       # in a second terminal
+MOONRAKER=http://localhost:7125 PORTAL=http://localhost:7125 npm run dev   # second terminal
 ```
 
-`MOCK_SCENARIO=restart`, `swap` or `custom` changes what the mock reports. It prints every request the app makes.
+`MOCK_SCENARIO=restart`, `swap` or `custom` changes what the mock reports. It prints every request the app makes. The mock also serves the Portal's maintenance API with real data from the Portal's own year-of-use demo (`scripts/fixtures/`).
 
 Other commands:
 
@@ -59,6 +72,8 @@ src/
   styles/       tokens.css (every colour, size, font) and base.css
   toolheads/    look of each toolhead: accent, icon, summary
   moonraker/    websocket client, tool-state rules, G-code header reader (+ tests)
+  portal/       Rhino Portal client (maintenance API)
+  maintenance/  care rules (+ tests), task cards, log-work dialog, care tiles
   stores/       machine state, connection settings, theme
   components/   shell (top bar, rail, E-stop) and shared parts
   views/        one file per screen
@@ -96,6 +111,7 @@ Open **Style** in the app for the live guide. The direction is a workshop instru
 - In Phase 2a the Moonraker client only sends methods on a read-only allowlist (`READ_ONLY_METHODS` in `src/moonraker/client.ts`), plus the emergency stop. Anything else is refused before it leaves the browser, and a unit test checks it.
 - Anything that moves the machine or powers the laser or spindle will ask for confirmation. The E-stop never asks.
 - The on-screen E-stop depends on the browser, network, Pi and Moonraker. It does not replace a physical E-stop or power switch.
+- The Portal client may only read maintenance and log work or snooze (`PORTAL_WRITES` in `src/portal/client.ts`). Those change maintenance records, never the machine.
 - Generated jobs call the existing macros (START_JOB, SWAP_TOOL, END_PRINT) instead of raw tool-change or power G-code.
 
 ## Licence

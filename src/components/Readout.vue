@@ -45,4 +45,9 @@ defineProps<{ label: string; value?: string | null; unit?: string; detail?: stri
 }
 .unit { font-size: 0.5em; margin-left: 2px; letter-spacing: 0; }
 .detail { font-size: var(--rs-text-sm); color: var(--rs-paper-muted); text-align: right; white-space: pre-line; }
+@media (max-width: 560px) {
+  .readout { min-height: 120px; padding: var(--rs-space-3) var(--rs-space-4); }
+  .value { font-size: 2.5rem; }
+  .detail { display: none; }
+}
 </style>

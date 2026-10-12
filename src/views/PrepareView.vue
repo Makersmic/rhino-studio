@@ -5,6 +5,9 @@ import SectionRule from '@/components/SectionRule.vue'
 import Icon from '@/icons/Icon.vue'
 import ToolTile from '@/toolheads/ToolTile.vue'
 import { BUILT_IN_TOOLHEADS } from '@/toolheads/registry'
+import { useMaintenanceStore } from '@/stores/maintenance'
+
+const care = useMaintenanceStore()
 
 const processLabel = { fdm: 'Kiri:Moto FDM', laser: 'Kiri:Moto Laser', cnc: 'Kiri:Moto CAM', dragknife: 'Kiri:Moto Drag knife', other: 'Not set' } as const
 </script>
@@ -31,6 +34,7 @@ const processLabel = { fdm: 'Kiri:Moto FDM', laser: 'Kiri:Moto Laser', cnc: 'Kir
         :look="t"
         :slot="t.defaultSlot"
         :caption="processLabel[t.process]"
+        :care="care.forTool(t.name)"
       />
     </div>
   </div>

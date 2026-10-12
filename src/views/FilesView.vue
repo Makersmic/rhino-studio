@@ -13,8 +13,10 @@ import { lookFor } from '@/toolheads/registry'
 import { fetchFileToolhead } from '@/moonraker/gcodeHeader'
 import type { FileEntry } from '@/moonraker/client'
 import { useMachineStore } from '@/stores/machine'
+import { useMaintenanceStore } from '@/stores/maintenance'
 
 const machine = useMachineStore()
+const care = useMaintenanceStore()
 const files = ref<FileEntry[]>([])
 const loading = ref(false)
 const error = ref<string | null>(null)
@@ -89,6 +91,7 @@ const rows = computed(() =>
       look: tool ? lookFor(tool, machine.knownTools.find((t) => t.name === tool)?.type ?? undefined) : null,
       needsSwap: !!tool && machine.mountedVerified && tool !== machine.mountedName,
       matches: !!tool && machine.mountedVerified && tool === machine.mountedName,
+      care: tool ? care.forTool(tool) : null,
     }
   }),
 )
@@ -126,6 +129,12 @@ const fmtSize = (b: number) => (b > 1048576 ? `${(b / 1048576).toFixed(1)} MB` :
           <span class="name">{{ r.f.path }}</span>
           <span class="meta">{{ fmtDate(r.f.modified) }} · {{ fmtSize(r.f.size) }}</span>
           <span class="fit">
+            <RouterLink
+              v-if="r.care && (r.care.overdue || r.care.dueSoon)"
+              to="/care"
+              class="tag care"
+              :title="r.care.next?.title"
+            >{{ r.care.overdue ? 'Care overdue' : 'Care due' }}</RouterLink>
             <span v-if="r.needsSwap" class="tag swap">Needs {{ r.tool }}</span>
             <span v-else-if="r.matches" class="tag ok">Fits mounted tool</span>
           </span>
@@ -149,10 +158,11 @@ const fmtSize = (b: number) => (b > 1048576 ? `${(b / 1048576).toFixed(1)} MB` :
 .file:first-child { border-top: 0; }
 .name { overflow-wrap: anywhere; color: var(--rs-text-strong); }
 .meta { font-size: var(--rs-text-xs); color: var(--rs-text-muted); white-space: nowrap; }
-.fit { min-width: 130px; display: flex; justify-content: flex-end; }
+.fit { min-width: 130px; display: flex; justify-content: flex-end; gap: 6px; }
 .tag { font-size: var(--rs-text-xs); font-weight: var(--rs-weight-medium); padding: 3px 10px; border-radius: var(--rs-radius-pill); white-space: nowrap; }
 .tag.swap { background: var(--rs-paper); color: var(--rs-paper-ink); }
 .tag.ok { border: 1.5px solid var(--rs-line-strong); }
+.tag.care { background: var(--rs-warn-fill); color: var(--th-ink); text-decoration: none; }
 .small { font-size: var(--rs-text-sm); }
 .note { margin-top: var(--rs-space-3); }
 .error { color: var(--rs-danger); }

@@ -3,7 +3,7 @@
  * toolhead emblems (see toolheads.ts for the class names).
  */
 
-export type NavIconId = 'prepare' | 'preview' | 'device' | 'toolheads' | 'files' | 'style' | 'settings'
+export type NavIconId = 'prepare' | 'preview' | 'device' | 'toolheads' | 'files' | 'care' | 'style' | 'settings'
 
 export const NAV_ICONS: Record<NavIconId, { title: string; body: string }> = {
   // Isometric block: the model you bring in
@@ -46,6 +46,13 @@ export const NAV_ICONS: Record<NavIconId, { title: string; body: string }> = {
       <path d="M5.5 2.5h9l4 4v15h-13z"/>
       <path d="M14.5 2.5v4h4"/>
       <path d="M8.5 11.5h7M8.5 14.5h7M8.5 17.5h4"/>`,
+  },
+  // An open-end wrench with a tick: preventive maintenance
+  care: {
+    title: 'Care',
+    body: `
+      <path d="M14.8 3.2a4.8 4.8 0 0 0-4.5 6.4l-6.6 6.6a1.9 1.9 0 0 0 2.7 2.7l6.6-6.6a4.8 4.8 0 0 0 6.4-4.5l-2.9 2.9-2.7-.6-.6-2.7z"/>
+      <path class="c" d="M16 17.5l1.8 1.8 3.4-3.6"/>`,
   },
   // Three overlapping circles: colour and type
   style: {

@@ -19,6 +19,12 @@ import { fileURLToPath, URL } from 'node:url'
  */
 const target = process.env.MOONRAKER ?? 'http://mainsailos.local'
 
+/**
+ * The Rhino Portal (maintenance engine) runs on the same Pi, port 5000.
+ * The app reaches it at /portal; set PORTAL to point somewhere else.
+ */
+const portalTarget = process.env.PORTAL ?? target.replace(/(:\d+)?\/?$/, ':5000')
+
 // Moonraker accepts a websocket only when the Origin header matches its host
 // (or cors_domains). Rewrite Origin to the target so the forwarded request
 // looks like it came from Mainsail's own site.
@@ -48,6 +54,15 @@ export default defineConfig({
       '/printer': originFix,
       '/machine': originFix,
       '/access': originFix,
+      '/portal': {
+        target: portalTarget,
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/portal/, '') || '/',
+        configure(proxy) {
+          // The Portal refuses writes whose Origin isn't its own host
+          proxy.on('proxyReq', (req) => req.setHeader('origin', portalTarget))
+        },
+      },
     },
   },
   test: {

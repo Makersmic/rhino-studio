@@ -2,8 +2,10 @@
 /** Machine conditions that need attention, shown under the top bar on every screen. */
 import { computed } from 'vue'
 import { useMachineStore } from '@/stores/machine'
+import { useMaintenanceStore } from '@/stores/maintenance'
 
 const machine = useMachineStore()
+const care = useMaintenanceStore()
 
 const alerts = computed(() => {
   const out: { tone: 'danger' | 'warn'; title: string; body: string }[] = []
@@ -25,6 +27,15 @@ const alerts = computed(() => {
     })
   } else if (t.kind === 'unmapped') {
     out.push({ tone: 'warn', title: 'Unknown slot', body: machine.toolStateText })
+  }
+  // Overdue care on the mounted tool: say so where you'll see it. Nothing is blocked.
+  const mc = care.mountedCare
+  if (mc?.overdue && mc.next) {
+    out.push({
+      tone: 'warn',
+      title: `${machine.mountedName} care overdue`,
+      body: `${mc.next.title}${mc.overdue > 1 ? ` and ${mc.overdue - 1} more` : ''}. See Care to log it or snooze.`,
+    })
   }
   return out
 })

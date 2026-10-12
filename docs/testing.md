@@ -25,6 +25,18 @@ Open http://localhost:5173 and keep Mainsail open in another tab to compare.
 | A7 | Run `FIRMWARE_RESTART` in Mainsail after A6 | App reconnects to Klipper on its own; banner clears | Note what the app shows. |
 | A8 | Unplug the Pi's network, or stop Moonraker, for 10 s, then restore it | App shows "Can't reach machine", tool goes unknown, then reconnects by itself | Note what the app shows. |
 
+## Care (maintenance)
+
+Needs the Portal running on the Pi (it normally is: `http://mainsailos.local:5000`). Start the dev server as above; it forwards `/portal` to port 5000 on the same host.
+
+| # | Do this | Pass when | If it fails |
+|---|---|---|---|
+| C1 | Open Care | Counts match the Portal's Due & upcoming page; the Portal version shows in the intro | If "Can't reach the Rhino Portal": check the Portal is running, or run with `PORTAL=http://<pi-ip>:5000` |
+| C2 | Compare a few tasks with the Portal | Same title, state, and "x left (due at y)" text | Note the task |
+| C3 | Toolheads screen | Each tile's care line matches that tool in the Portal | Note the tool |
+| C4 | Log work on a task that is safe to log (e.g. one you've just done), with a note | It leaves Due now; the Portal's work log shows the entry with your note and today's date | Stop. Check the Portal's work log before logging anything else. |
+| C5 | Snooze a due task, then check the Portal | Shown as snoozed in both | Note it |
+
 What the app sent is visible in the browser's developer tools (Network → WS → messages): only `server.*`, `printer.objects.*` and, in A6, `printer.emergency_stop`.
 
 The checks above were run against the mock Moonraker, not the real machine. A1 to A8 are the first run on hardware.

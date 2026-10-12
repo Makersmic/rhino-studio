@@ -15,16 +15,28 @@ const KEY = 'rs.connection'
 interface Saved {
   moonrakerUrl: string
   autoConnect: boolean
+  /** Rhino Portal (maintenance engine). '' = /portal on this app's address. */
+  portalUrl: string
 }
 
 function load(): Saved {
   try {
     const v = JSON.parse(localStorage.getItem(KEY) ?? 'null') as Partial<Saved> | null
-    if (v) return { moonrakerUrl: typeof v.moonrakerUrl === 'string' ? v.moonrakerUrl : '', autoConnect: v.autoConnect !== false }
+    if (v)
+      return {
+        moonrakerUrl: typeof v.moonrakerUrl === 'string' ? v.moonrakerUrl : '',
+        autoConnect: v.autoConnect !== false,
+        portalUrl: typeof v.portalUrl === 'string' ? v.portalUrl : '',
+      }
   } catch {
     /* storage blocked or bad JSON */
   }
-  return { moonrakerUrl: '', autoConnect: true }
+  return { moonrakerUrl: '', autoConnect: true, portalUrl: '' }
+}
+
+/** Where to reach the Portal: the setting, or /portal on this app's address. */
+export function portalBase(portalUrl: string): string {
+  return normalizeAddress(portalUrl) || '/portal'
 }
 
 /** Accepts "192.168.1.50", "mainsailos.local", "http://host:7125". Returns '' for blank. */
@@ -38,14 +50,15 @@ export const useSettingsStore = defineStore('settings', () => {
   const saved = load()
   const moonrakerUrl = ref(saved.moonrakerUrl)
   const autoConnect = ref(saved.autoConnect)
+  const portalUrl = ref(saved.portalUrl)
 
-  watch([moonrakerUrl, autoConnect], () => {
+  watch([moonrakerUrl, autoConnect, portalUrl], () => {
     try {
-      localStorage.setItem(KEY, JSON.stringify({ moonrakerUrl: moonrakerUrl.value, autoConnect: autoConnect.value }))
+      localStorage.setItem(KEY, JSON.stringify({ moonrakerUrl: moonrakerUrl.value, autoConnect: autoConnect.value, portalUrl: portalUrl.value }))
     } catch {
       /* ignore */
     }
   })
 
-  return { moonrakerUrl, autoConnect }
+  return { moonrakerUrl, autoConnect, portalUrl }
 })

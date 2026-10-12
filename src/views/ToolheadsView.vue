@@ -4,8 +4,10 @@ import ToolTile from '@/toolheads/ToolTile.vue'
 import SectionRule from '@/components/SectionRule.vue'
 import { BUILT_IN_TOOLHEADS, lookFor } from '@/toolheads/registry'
 import { useMachineStore } from '@/stores/machine'
+import { useMaintenanceStore } from '@/stores/maintenance'
 
 const machine = useMachineStore()
+const care = useMaintenanceStore()
 const live = computed(() => machine.knownTools.length > 0)
 const builtInNames = new Set(BUILT_IN_TOOLHEADS.map((t) => t.name))
 const builtIn = computed(() =>
@@ -36,6 +38,7 @@ const addLook = { ...lookFor('Add a toolhead', 'CUSTOM'), summary: 'Slot 6 and u
         :slot="t.slot"
         :caption="`Klipper type ${t.type ?? 'unknown'}`"
         :mounted="machine.mountedName === t.name"
+        :care="care.forTool(t.name)"
       />
     </div>
 
@@ -48,6 +51,7 @@ const addLook = { ...lookFor('Add a toolhead', 'CUSTOM'), summary: 'Slot 6 and u
         :slot="t.slot"
         :caption="`Klipper type ${t.type ?? 'unknown'}`"
         :mounted="machine.mountedName === t.name"
+        :care="care.forTool(t.name)"
       />
       <ToolTile :look="addLook" caption="Arrives in Phase 5" />
     </div>
