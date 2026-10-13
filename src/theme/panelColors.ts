@@ -176,3 +176,57 @@ export function baseVars(mode: Mode): Record<string, string> {
     '--rs-dot-faint': `color-mix(in srgb, ${d.border} 45%, transparent)`,
   }
 }
+
+// ---- named themes and theme files --------------------------------------------
+
+/** A saved theme: every panel's colours, day and night. */
+export interface SavedTheme {
+  panels: ThemeMap
+  savedAt: number
+}
+export type ThemeLibrary = Record<string, SavedTheme>
+
+export const THEME_FILE_FORMAT = 'rhino-studio-theme'
+
+/** Theme names: short, printable, no leading/trailing spaces. */
+export function cleanName(name: unknown): string | null {
+  if (typeof name !== 'string') return null
+  const n = name.replace(/\s+/g, ' ').trim().slice(0, 40)
+  return n && !/[<>]/.test(n) && n.toLowerCase() !== 'default' ? n : null
+}
+
+export function cleanLibrary(input: unknown): ThemeLibrary {
+  const out: ThemeLibrary = {}
+  if (!input || typeof input !== 'object') return out
+  for (const [k, v] of Object.entries(input as Record<string, unknown>)) {
+    const name = cleanName(k)
+    if (!name || !v || typeof v !== 'object') continue
+    const savedAt = Number((v as { savedAt?: unknown }).savedAt)
+    out[name] = { panels: cleanTheme((v as { panels?: unknown }).panels), savedAt: Number.isFinite(savedAt) ? savedAt : 0 }
+  }
+  return out
+}
+
+/** The JSON written to a theme file. */
+export function themeFile(name: string, panels: ThemeMap): string {
+  return JSON.stringify({ format: THEME_FILE_FORMAT, version: 1, name, panels }, null, 2)
+}
+
+/** Reads a theme file; throws a plain-language error if it isn't one. */
+export function readThemeFile(text: string): { name: string | null; panels: ThemeMap } {
+  let data: unknown
+  try {
+    data = JSON.parse(text)
+  } catch {
+    throw new Error("That file isn't a theme file (it isn't JSON).")
+  }
+  const d = data as { format?: unknown; name?: unknown; panels?: unknown }
+  if (!d || d.format !== THEME_FILE_FORMAT) throw new Error("That file isn't a Rhino Studio theme.")
+  return { name: cleanName(d.name), panels: cleanTheme(d.panels) }
+}
+
+/** A name not already in the library: "Shop", "Shop 2", "Shop 3"... */
+export function uniqueName(base: string, library: ThemeLibrary): string {
+  if (!library[base]) return base
+  for (let i = 2; ; i++) if (!library[`${base} ${i}`]) return `${base} ${i}`
+}

@@ -55,3 +55,38 @@ describe('panel colours', () => {
     expect(toHex('transparent')).toBeNull()
   })
 })
+
+import { cleanLibrary, cleanName, readThemeFile, themeFile, uniqueName } from './panelColors'
+
+describe('saved themes and theme files', () => {
+  const panels = { 'control.console': { day: { bg: '#1b2430', text: '#ffffff' } } }
+
+  it('round-trips a theme file', () => {
+    const back = readThemeFile(themeFile('Shop night', panels))
+    expect(back).toEqual({ name: 'Shop night', panels })
+  })
+
+  it('refuses files that are not themes, in plain words', () => {
+    expect(() => readThemeFile('not json')).toThrow(/isn't a theme file/)
+    expect(() => readThemeFile('{"panels":{}}')).toThrow(/isn't a Rhino Studio theme/)
+  })
+
+  it('drops bad colours from a loaded file', () => {
+    const t = readThemeFile(JSON.stringify({ format: 'rhino-studio-theme', name: 'X', panels: { a: { day: { bg: 'url(evil)', text: '#000000' } } } }))
+    expect(t.panels).toEqual({ a: { day: { text: '#000000' } } })
+  })
+
+  it('keeps theme names short and sensible', () => {
+    expect(cleanName('  Shop   night ')).toBe('Shop night')
+    expect(cleanName('Default')).toBeNull()
+    expect(cleanName('')).toBeNull()
+    expect(cleanName('<script>')).toBeNull()
+    expect(cleanName('x'.repeat(60))).toHaveLength(40)
+  })
+
+  it('never overwrites a saved theme on load', () => {
+    const lib = cleanLibrary({ Shop: { panels, savedAt: 1 }, 'Shop 2': { panels, savedAt: 2 } })
+    expect(uniqueName('Shop', lib)).toBe('Shop 3')
+    expect(uniqueName('Garage', lib)).toBe('Garage')
+  })
+})

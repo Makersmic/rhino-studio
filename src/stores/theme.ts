@@ -25,6 +25,12 @@ export const useThemeStore = defineStore('theme', () => {
   }
 
   apply(pref.value)
+
+  /** Show a look without keeping it (Appearance previews until Apply). */
+  const preview = (p: ThemePref) => apply(p)
+  /** Back to the kept look. */
+  const unpreview = () => apply(pref.value)
+
   watch(pref, (p) => {
     apply(p)
     try {
@@ -34,5 +40,5 @@ export const useThemeStore = defineStore('theme', () => {
     }
   })
 
-  return { pref }
+  return { pref, preview, unpreview }
 })
