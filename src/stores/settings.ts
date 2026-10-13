@@ -19,6 +19,8 @@ interface Saved {
   portalUrl: string
   /** How tool changes are read: 'auto' or an adapter id (src/tools/adapters) */
   toolAdapter: string
+  /** On machines that change tools themselves: confirm swaps started from Studio's Swap list */
+  confirmSwaps: boolean
 }
 
 function load(): Saved {
@@ -30,11 +32,12 @@ function load(): Saved {
         autoConnect: v.autoConnect !== false,
         portalUrl: typeof v.portalUrl === 'string' ? v.portalUrl : '',
         toolAdapter: typeof v.toolAdapter === 'string' ? v.toolAdapter : 'auto',
+        confirmSwaps: v.confirmSwaps !== false,
       }
   } catch {
     /* storage blocked or bad JSON */
   }
-  return { moonrakerUrl: '', autoConnect: true, portalUrl: '', toolAdapter: 'auto' }
+  return { moonrakerUrl: '', autoConnect: true, portalUrl: '', toolAdapter: 'auto', confirmSwaps: true }
 }
 
 /** Where to reach the Portal: the setting, or /portal on this app's address. */
@@ -55,14 +58,15 @@ export const useSettingsStore = defineStore('settings', () => {
   const autoConnect = ref(saved.autoConnect)
   const portalUrl = ref(saved.portalUrl)
   const toolAdapter = ref(saved.toolAdapter)
+  const confirmSwaps = ref(saved.confirmSwaps)
 
-  watch([moonrakerUrl, autoConnect, portalUrl, toolAdapter], () => {
+  watch([moonrakerUrl, autoConnect, portalUrl, toolAdapter, confirmSwaps], () => {
     try {
-      localStorage.setItem(KEY, JSON.stringify({ moonrakerUrl: moonrakerUrl.value, autoConnect: autoConnect.value, portalUrl: portalUrl.value, toolAdapter: toolAdapter.value }))
+      localStorage.setItem(KEY, JSON.stringify({ moonrakerUrl: moonrakerUrl.value, autoConnect: autoConnect.value, portalUrl: portalUrl.value, toolAdapter: toolAdapter.value, confirmSwaps: confirmSwaps.value }))
     } catch {
       /* ignore */
     }
   })
 
-  return { moonrakerUrl, autoConnect, portalUrl, toolAdapter }
+  return { moonrakerUrl, autoConnect, portalUrl, toolAdapter, confirmSwaps }
 })

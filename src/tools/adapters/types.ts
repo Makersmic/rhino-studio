@@ -43,6 +43,15 @@ export interface ToolAdapter {
   label: string
   /** One line about what it reads */
   about: string
+  /**
+   * Who changes tools.
+   *   manual     a person swaps the head (the Rhino): a job needs the right
+   *              tool confirmed before it starts, and every swap is confirmed
+   *   automatic  the machine changes tools itself, from the job file (a
+   *              toolchanger): a job may start with no tool and use several;
+   *              swaps started from Studio can skip the confirmation (Settings)
+   */
+  style: 'manual' | 'automatic'
   /** What the selector is called on this machine ("Slot" or "Tool") */
   slotWord: string
   detect(objects: ReadonlySet<string>): boolean

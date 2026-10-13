@@ -1,7 +1,11 @@
 /**
  * Can this file be started now, and how?
  *
- * Print heads start the file directly: its START_JOB line checks the tool
+ * On a machine that changes tools itself (a toolchanger), the file is started
+ * directly whatever is on the head: the job picks up the tools it uses, and a
+ * multi-tool file uses several. Only an unsafe tool state blocks it.
+ *
+ * On the Rhino (a person swaps the tool), print heads start the file directly: its START_JOB line checks the tool
  * again on the machine, homes and runs the start sequence.
  * Every other tool starts through its Rhino setup wizard with FILE=, because
  * the wizard does the safety checks, sets the work zero, test-fires and (for
@@ -47,6 +51,8 @@ export function checkStart(opts: {
   toolTypes: ReadonlyMap<string, string>
   toolSlots: ReadonlyMap<string, number>
   macros: ReadonlySet<string>
+  /** The machine changes tools itself (tool-change adapter style 'automatic') */
+  autoTools?: boolean
 }): StartCheck {
   const no = (block: string, swapTo: number | null = null): StartCheck => ({ ok: false, block, warnings: [], method: null, swapTo })
   if (!opts.klippyReady) return no('Klipper is not ready')
@@ -55,6 +61,15 @@ export function checkStart(opts: {
 
   const t = opts.toolState
   if (t.kind === 'swapping') return no('Finish the tool swap first')
+  if (opts.autoTools) {
+    if (t.kind === 'mismatch') return no('The tool sensor disagrees with the selected tool')
+    if (t.kind === 'unknown' || t.kind === 'unmapped') return no("The toolchanger isn't ready")
+    const warnings =
+      t.kind === 'none-confirmed' && !t.pick
+        ? ["The toolchanger isn't initialised yet. Your start macro (or the first tool change) has to initialise it."]
+        : []
+    return { ok: true, block: null, warnings, method: { kind: 'print' }, swapTo: null }
+  }
   if (t.kind !== 'mounted') return no(t.kind === 'mismatch' ? 'The tool sensor disagrees with the selected tool' : 'Confirm the mounted toolhead first')
 
   const warnings: string[] = []

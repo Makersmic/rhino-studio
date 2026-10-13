@@ -58,3 +58,29 @@ describe('checkStart', () => {
     expect(r.block).toMatch(/no LASER_JOB_SETUP/)
   })
 })
+
+describe('checkStart on a machine that changes tools itself', () => {
+  const auto = { ...base, autoTools: true, fileTool: null }
+  it('starts with no tool on the head: the job picks one up', () => {
+    const r = checkStart({ ...auto, toolState: { kind: 'none-confirmed', lastSavedSlot: null, lastSavedName: null, pick: true } })
+    expect(r).toMatchObject({ ok: true, method: { kind: 'print' }, warnings: [] })
+  })
+  it('does not demand the file match the tool on the head (multi-tool files)', () => {
+    const r = checkStart({ ...auto, fileTool: 'T1', toolState: { kind: 'mounted', name: 'T0', slot: 0, type: 'DEPOSITION' } })
+    expect(r.ok).toBe(true)
+  })
+  it('warns, but allows, an uninitialised toolchanger', () => {
+    const r = checkStart({ ...auto, toolState: { kind: 'none-confirmed', lastSavedSlot: 0, lastSavedName: 'T0' } })
+    expect(r.ok).toBe(true)
+    expect(r.warnings[0]).toMatch(/isn't initialised/)
+  })
+  it('still blocks on a sensor mismatch, a change in progress or an error', () => {
+    expect(checkStart({ ...auto, toolState: { kind: 'mismatch', expectedSlot: 0, expectedName: 'T0', detectedSlot: null, detectedName: null } }).ok).toBe(false)
+    expect(checkStart({ ...auto, toolState: { kind: 'swapping', fromSlot: 0, toSlot: -1, toName: null } }).ok).toBe(false)
+    expect(checkStart({ ...auto, toolState: { kind: 'unknown', reason: 'toolchanger-error' } }).ok).toBe(false)
+  })
+  it('keeps the Rhino rule: no confirmed tool, no start', () => {
+    const r = checkStart({ ...base, fileTool: null, toolState: { kind: 'none-confirmed', lastSavedSlot: null, lastSavedName: null, pick: true } })
+    expect(r.ok).toBe(false)
+  })
+})

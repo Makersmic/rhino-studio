@@ -22,6 +22,8 @@ export interface NoticeInput {
   klippy: string
   klippyMessage: string | null
   toolState: ToolState
+  /** The machine changes tools itself (a toolchanger): changes during a job are routine */
+  autoTools?: boolean
   /** Klipper is executing G-code (idle_timeout "Printing") */
   busy: boolean
   /** a command Studio sent that hasn't finished */
@@ -115,6 +117,7 @@ export function notices(i: NoticeInput): Notice[] {
       add({ id: 'tool', tone: 'alert', title: `Slot ${i.toolState.slot} isn't in the tool list`, to: '/toolheads' })
       break
     case 'swapping':
+      if (i.autoTools && (i.job.state === 'printing' || i.job.state === 'paused')) break
       add({ id: 'tool', tone: 'info', title: `Swapping toolhead${i.toolState.toName ? ` to ${i.toolState.toName}` : ''}`, detail: 'Follow the steps on Control.', to: '/control' })
       break
     case 'mismatch':

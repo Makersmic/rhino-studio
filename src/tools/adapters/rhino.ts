@@ -85,6 +85,7 @@ export const rhinoAdapter: ToolAdapter = {
   id: 'rhino',
   label: 'Rhino tool macros',
   about: 'Reads SWAP_TOOL.current_tool and the tool tables in VARIABLES / CUSTOM_TOOLS.',
+  style: 'manual',
   slotWord: 'Slot',
   detect: (objects) => objects.has(SWAP),
   watch: (objects) => Object.fromEntries(Object.entries(WATCH).filter(([o]) => objects.includes(o))),

@@ -12,7 +12,7 @@ import { approve, check, fromPrompt, heaterScript, jogScript, type Axis, type Ch
 import { PromptTracker, type Prompt, type PromptButton } from '@/control/prompts'
 import { checkStart, type StartCheck } from '@/control/jobs'
 import type { GcodeStoreEntry } from '@/moonraker/client'
-import { mergedToolMapping, mergedToolTypes } from '@/moonraker/toolState'
+import { useSettingsStore } from './settings'
 import { useMachineStore } from './machine'
 
 export interface ConsoleLine {
@@ -39,6 +39,7 @@ const UNLOCK_MS = 60_000
 
 export const useControlStore = defineStore('control', () => {
   const machine = useMachineStore()
+  const settings = useSettingsStore()
 
   // ---- console ------------------------------------------------------------
   const lines = ref<ConsoleLine[]>([])
@@ -305,17 +306,17 @@ export const useControlStore = defineStore('control', () => {
 
   // ---- jobs ---------------------------------------------------------------
   function startCheck(path: string, fileTool: string | null | undefined): StartCheck {
-    const st = machine.status
-    const slots = new Map([...mergedToolMapping(st).entries()].map(([slot, name]) => [name, slot]))
+    const tools = machine.knownTools
     return checkStart({
       path,
       fileTool,
       toolState: machine.toolState,
       jobState: machine.job.state,
       klippyReady: machine.klippyReady,
-      toolTypes: mergedToolTypes(st),
-      toolSlots: slots,
+      toolTypes: new Map(tools.filter((t) => t.type).map((t) => [t.name, t.type!])),
+      toolSlots: new Map(tools.map((t) => [t.name, t.slot])),
       macros: new Set(macros.value.keys()),
+      autoTools: machine.adapter.style === 'automatic',
     })
   }
 
@@ -326,7 +327,9 @@ export const useControlStore = defineStore('control', () => {
       return false
     }
     const how =
-      c.method.kind === 'print'
+      machine.adapter.style === 'automatic'
+        ? 'Moonraker starts the file. The machine picks up the tools the file uses, as your start macro and the file say.'
+        : c.method.kind === 'print'
         ? 'Moonraker starts the file. Its START_JOB line checks the toolhead again, homes and runs your start sequence.'
         : `Runs ${c.method.macro} FILE=${path}: the Rhino wizard walks you through its safety checks, work zero and test, then starts the job. Its questions appear here and in Mainsail.`
     const ok = await confirm({
@@ -356,7 +359,27 @@ export const useControlStore = defineStore('control', () => {
   }
 
   async function swapTo(slot: number, name: string) {
-    return send(machine.adapter.swapScript(slot), {
+    const script = machine.adapter.swapScript(slot)
+    // Machines that change tools themselves: the Swap list may skip the
+    // confirmation when the user turned it off (Settings). Never on the Rhino,
+    // never for the console, and the usual checks still apply.
+    if (machine.adapter.style === 'automatic' && !settings.confirmSwaps) {
+      if (!machine.klippyReady) return log('error', 'Klipper is not ready'), false
+      const c = check(script, { jobActive: jobActive.value, macros: new Set(macros.value.keys()) })
+      if (c.blocked) return log('error', c.blocked), false
+      log('sent', `Swap to ${name}`)
+      running.value = `Swap to ${name}`
+      try {
+        await machine.runChecked(approve(c, true))
+        return true
+      } catch (e) {
+        log('error', (e as Error).message)
+        return false
+      } finally {
+        running.value = null
+      }
+    }
+    return send(script, {
       label: `Swap to ${name}`,
       confirmTitle: 'Tool Swap Ready',
       confirmLabel: 'Start',

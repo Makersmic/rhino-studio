@@ -135,6 +135,7 @@ const list = computed(() =>
     klippy: machine.klippy,
     klippyMessage: machine.klippyMessage,
     toolState: machine.toolState,
+    autoTools: machine.adapter.style === 'automatic',
     busy: machine.busy,
     running: control.running,
     promptTitle: control.prompt?.title ?? null,

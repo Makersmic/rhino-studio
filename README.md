@@ -39,7 +39,18 @@ How Studio reads the mounted tool and swaps it depends on the machine, so that p
 | Rhino tool macros | the Rhino | `SWAP_TOOL.current_tool`, VARIABLES / CUSTOM_TOOLS tool tables | `SWAP_TOOL TOOL=n` (the Rhino wizard) |
 | klipper-toolchanger | Voron StealthChanger, TapChanger and similar | `printer.toolchanger`, `[tool …]` objects, tool sensors | `SELECT_TOOL T=n` |
 
-It's picked automatically (Settings > Machine > Tool changing shows what was found and lets you override it). Safety rules hold for every adapter: Studio only reads the tool state, swaps are confirmed first, and anything uncertain locks jogging, tool power and jobs. A tool sensor that disagrees with the selected tool (klipper-toolchanger) is a stop condition: Swap and Home are locked too. Tool-change commands from every family (T0…Tn, SELECT_TOOL, UNSELECT_TOOL, INITIALIZE_TOOLCHANGER, ACTIVATE_EXTRUDER, SET_DUAL_CARRIAGE…) ask before running on any machine. Try it without a machine: `MOCK_SCENARIO=toolchanger npm run mock` (`MOCK_DETECT T=n` fakes the tool sensor; `MOCK_TC=uninitialized` starts uninitialised).
+It's picked automatically (Settings > Machine > Tool changing shows what was found and lets you override it).
+
+Each adapter has a tool-change style:
+
+| | Manual (Rhino) | Automatic (toolchangers) |
+|---|---|---|
+| Who changes tools | You, guided by the wizard's prompts | The machine, from the job file |
+| Starting a job | Needs the right tool confirmed | Can start with no tool; a file may use several |
+| Swaps from the Swap list | Always confirmed | Confirmed unless you turn it off (Settings) |
+| Changes during a job | (none) | Routine: no banner or notice |
+
+Typed console commands (T1, SELECT_TOOL…) always ask, and a tool-sensor mismatch always stops everything. Safety rules hold for every adapter: Studio only reads the tool state, swaps are confirmed first, and anything uncertain locks jogging, tool power and jobs. A tool sensor that disagrees with the selected tool (klipper-toolchanger) is a stop condition: Swap and Home are locked too. Tool-change commands from every family (T0…Tn, SELECT_TOOL, UNSELECT_TOOL, INITIALIZE_TOOLCHANGER, ACTIVATE_EXTRUDER, SET_DUAL_CARRIAGE…) ask before running on any machine. Try it without a machine: `MOCK_SCENARIO=toolchanger npm run mock` (`MOCK_DETECT T=n` fakes the tool sensor; `MOCK_TC=uninitialized` starts uninitialised).
 
 ## Run it on your PC
 

@@ -77,3 +77,10 @@ describe('klipper-toolchanger', () => {
     expect(rhinoAdapter.swapScript(3)).toBe('SWAP_TOOL TOOL=3')
   })
 })
+
+describe('tool-change styles', () => {
+  it('the Rhino is manual, toolchangers are automatic', () => {
+    expect(rhinoAdapter.style).toBe('manual')
+    expect(tc.style).toBe('automatic')
+  })
+})

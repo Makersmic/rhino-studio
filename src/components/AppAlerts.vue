@@ -27,8 +27,10 @@ const alerts = computed(() => {
     })
   }
   const t = machine.toolState
+  // On machines that change tools themselves, changes during a job are normal: no banner
+  const routineChange = machine.adapter.style === 'automatic' && control.jobActive
   if (t.kind === 'swapping') {
-    out.push({ tone: 'warn', title: 'Toolhead swap in progress', body: machine.toolStateText })
+    if (!routineChange) out.push({ tone: 'warn', title: machine.adapter.style === 'automatic' ? 'Tool change in progress' : 'Toolhead swap in progress', body: machine.toolStateText })
   } else if (t.kind === 'mismatch') {
     out.push({ tone: 'danger', title: 'Tool sensor disagrees: stop and check', body: `${machine.toolStateText} Jobs, jogging and tool power stay locked until they agree.` })
   } else if (t.kind === 'none-confirmed' && t.lastSavedSlot != null) {

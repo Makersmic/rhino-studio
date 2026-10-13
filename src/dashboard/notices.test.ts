@@ -80,3 +80,14 @@ describe('dashboard notices', () => {
     expect(remainingSeconds(0.25, 300)).toBe(900)
   })
 })
+
+describe('tool changes on machines that change tools themselves', () => {
+  it('stays quiet about routine changes during a job, but not otherwise', async () => {
+    const { notices } = await import('./notices')
+    const swapping = { kind: 'swapping', fromSlot: 0, toSlot: -1, toName: null } as const
+    const running = notices({ ...base, autoTools: true, toolState: swapping, job: { ...base.job, state: "printing" } })
+    expect(running.some((n) => n.id === 'tool')).toBe(false)
+    const idle = notices({ ...base, autoTools: true, toolState: swapping })
+    expect(idle.some((n) => n.id === 'tool')).toBe(true)
+  })
+})

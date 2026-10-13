@@ -98,6 +98,7 @@ export const klipperToolchangerAdapter: ToolAdapter = {
   id: 'klipper-toolchanger',
   label: 'klipper-toolchanger',
   about: 'Reads printer.toolchanger and the [tool …] objects (StealthChanger, TapChanger and similar).',
+  style: 'automatic',
   slotWord: 'Tool',
   detect: (objects) => objects.has(TC),
   watch(objects) {
