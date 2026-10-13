@@ -12,7 +12,9 @@
 import { defineStore } from 'pinia'
 import { computed, ref, shallowRef, triggerRef } from 'vue'
 import { MoonrakerClient, type ConnectionState, type KlippyState, type Status } from '@/moonraker/client'
-import { deriveToolState, describeToolState, mergedToolMapping, mergedToolTypes } from '@/moonraker/toolState'
+import { describeToolState } from '@/moonraker/toolState'
+import { pickAdapter, type AdapterChoice } from '@/tools/adapters'
+import { useSettingsStore } from './settings'
 import { lookFor, type ToolheadLook } from '@/toolheads/registry'
 import { brand } from '@/brand/brand'
 import type { CheckedScript } from '@/control/commands'
@@ -36,6 +38,8 @@ export const useMachineStore = defineStore('machine', () => {
   const connectionDetail = ref<string | null>(null)
   const klippy = ref<KlippyState>('unknown')
   const status = shallowRef<Status>({})
+  /** Every object Klipper has, from the last subscribe */
+  const objects = shallowRef<ReadonlySet<string>>(new Set())
   let client: MoonrakerClient | null = null
 
   // ---- connection -------------------------------------------------------
@@ -59,8 +63,9 @@ export const useMachineStore = defineStore('machine', () => {
         onGcodeStore(entries) {
           useControlStore().onStore(entries)
         },
-        onObjects(objects) {
-          useControlStore().onObjects(objects)
+        onObjects(list) {
+          objects.value = new Set(list)
+          useControlStore().onObjects(list)
         },
         onHelp(help) {
           useControlStore().onHelp(help)
@@ -90,6 +95,7 @@ export const useMachineStore = defineStore('machine', () => {
     client?.disconnect()
     client = null
     status.value = {}
+    objects.value = new Set()
     klippy.value = 'unknown'
     useWebcamsStore().setFromMoonraker([])
   }
@@ -105,8 +111,19 @@ export const useMachineStore = defineStore('machine', () => {
 
   // ---- toolheads --------------------------------------------------------
 
-  const toolState = computed(() => deriveToolState(status.value, { online: online.value, klippyReady: klippyReady.value }))
-  const toolStateText = computed(() => describeToolState(toolState.value))
+  // How this machine changes tools (Rhino macros, klipper-toolchanger...): detected, or chosen in Settings
+  const settings = useSettingsStore()
+  const adapterPick = computed(() => pickAdapter(objects.value, settings.toolAdapter as AdapterChoice))
+  const adapter = computed(() => adapterPick.value.adapter)
+  const toolState = computed(() => adapter.value.state(status.value, { online: online.value, klippyReady: klippyReady.value }))
+  const toolStateText = computed(() => describeToolState(toolState.value, adapter.value.slotWord))
+  /** Swapping from Studio is possible on this machine */
+  const canSwap = computed(() => klippyReady.value && adapter.value.canSwap(objects.value))
+  /** The confirm / initialise action, when this machine has one */
+  const confirmAction = computed(() => {
+    const c = adapter.value.confirm
+    return c && objects.value.has(c.requires) ? c : null
+  })
 
   const mountedVerified = computed(() => toolState.value.kind === 'mounted')
   const mountedSlot = computed<number | null>(() => (toolState.value.kind === 'mounted' ? toolState.value.slot : null))
@@ -119,13 +136,7 @@ export const useMachineStore = defineStore('machine', () => {
   /** All toolheads Klipper knows about (built-in + custom), by slot. Empty until connected. */
   const knownTools = computed<KnownTool[]>(() => {
     if (!klippyReady.value) return []
-    const types = mergedToolTypes(status.value)
-    return [...mergedToolMapping(status.value).entries()]
-      .sort(([a], [b]) => a - b)
-      .map(([slot, name]) => {
-        const type = types.get(name) ?? null
-        return { slot, name, type, look: lookFor(name, type ?? undefined) }
-      })
+    return adapter.value.tools(status.value).map((t) => ({ ...t, look: lookFor(t.name, (t.type ?? undefined) as never) }))
   })
 
   // ---- readouts ---------------------------------------------------------
@@ -265,6 +276,11 @@ export const useMachineStore = defineStore('machine', () => {
     klippyReady,
     klippyMessage,
     online,
+    objects,
+    adapter,
+    adapterPick,
+    canSwap,
+    confirmAction,
     toolState,
     toolStateText,
     mountedVerified,

@@ -114,3 +114,22 @@ describe('heaterScript and file names', () => {
     expect(safeFileParam('../printer.cfg')).toBe(false)
   })
 })
+
+describe('tool changes on other kinds of machine', () => {
+  const ctx = { jobActive: false }
+  it('asks before any tool selection, whichever adapter is active', () => {
+    for (const s of ['T1', 'SELECT_TOOL T=2', 'UNSELECT_TOOL', 'INITIALIZE_TOOLCHANGER', 'TEST_TOOL_DOCKING', 'SET_DUAL_CARRIAGE CARRIAGE=1']) {
+      const c = check(s, ctx)
+      expect(c.needsConfirm, s).toBe(true)
+      expect(c.risk, s).toBe('motion')
+    }
+  })
+  it('treats renumbering or re-pointing a tool as a tool-state change', () => {
+    for (const s of ['ASSIGN_TOOL TOOL=T1 N=3', 'ACTIVATE_EXTRUDER EXTRUDER=extruder1', 'SET_TOOL_PARAMETER TOOL=T0 PARAMETER=params_park_x VALUE=10']) {
+      expect(check(s, ctx).risk, s).toBe('tool-state')
+    }
+  })
+  it('leaves harmless tool-parameter edits alone', () => {
+    expect(check('SET_TOOL_PARAMETER TOOL=T0 PARAMETER=params_fan_speed VALUE=1', ctx).needsConfirm).toBe(false)
+  })
+})

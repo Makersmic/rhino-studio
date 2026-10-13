@@ -77,8 +77,8 @@ onBeforeUnmount(() => control.lockMotion())
           <template v-else>Z+ opens the gap between tool and bed.</template>
         </p>
         <div class="homes">
-          <RsButton size="sm" :disabled="busy" @click="control.home('all')">Home all</RsButton>
-          <RsButton size="sm" :disabled="busy" @click="control.home('xy')">Home XY</RsButton>
+          <RsButton size="sm" :disabled="!!control.homeBlock" @click="control.home('all')">Home all</RsButton>
+          <RsButton size="sm" :disabled="!!control.homeBlock" @click="control.home('xy')">Home XY</RsButton>
           <RsButton size="sm" variant="quiet" :disabled="busy" @click="control.motorsOff()">Motors off</RsButton>
         </div>
       </div>

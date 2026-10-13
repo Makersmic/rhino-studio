@@ -4,8 +4,9 @@
  * Klipper knows (built-in and custom, from tool_mapping), minus the one
  * that's mounted.
  *
- * Picking one sends `SWAP_TOOL TOOL=<slot>`: the Rhino's own swap macro,
- * which cools down, parks and walks you through the change with its prompts.
+ * Picking one sends the machine's own swap command, from its tool-change
+ * adapter (Rhino: `SWAP_TOOL TOOL=<slot>`, which cools down, parks and walks
+ * you through the change; klipper-toolchanger: `SELECT_TOOL T=<n>`).
  * It goes through the safety check like everything else, so the confirmation
  * dialog says the machine will cool down and move before anything is sent.
  * Studio never sets the mounted tool itself: Klipper records it when the swap
@@ -26,7 +27,8 @@ const open = ref(false)
 const root = ref<HTMLElement | null>(null)
 const items = ref<HTMLButtonElement[]>([])
 
-const disabled = computed(() => !machine.klippyReady || control.jobActive)
+// Not during a job, a swap already under way, or while a tool sensor disagrees
+const disabled = computed(() => !machine.klippyReady || control.jobActive || machine.toolState.kind === 'swapping' || machine.toolState.kind === 'mismatch')
 const choices = computed(() => machine.knownTools.filter((t) => t.slot !== machine.mountedSlot))
 const typeText: Record<string, string> = {
   DEPOSITION: 'Print head',
@@ -40,8 +42,9 @@ const typeText: Record<string, string> = {
 function toggle() {
   if (disabled.value) return
   if (!choices.value.length) {
-    // nothing to list: let the macro show its own picker
-    control.send('SWAP_TOOL', { label: 'Swap toolhead' })
+    // nothing to list: let the machine's own picker ask, if it has one
+    const picker = machine.adapter.pickerScript
+    if (picker) control.send(picker, { label: 'Swap toolhead' })
     return
   }
   open.value = !open.value
@@ -99,7 +102,7 @@ onBeforeUnmount(() => {
       :disabled="disabled"
       :aria-expanded="open"
       aria-haspopup="menu"
-      :title="control.jobActive ? 'Not while a job is running' : 'Swap the toolhead'"
+      :title="control.jobActive ? 'Not while a job is running' : machine.toolState.kind === 'mismatch' ? 'Not while the tool sensor disagrees' : 'Swap the toolhead'"
       @click="toggle"
     >
       Swap
@@ -120,7 +123,7 @@ onBeforeUnmount(() => {
         <span class="ic"><Icon :tool="t.look.icon" :size="22" /></span>
         <span class="txt">
           <strong>{{ t.name }}</strong>
-          <small>Slot {{ t.slot }}<template v-if="t.type"> · {{ typeText[t.type] ?? t.type }}</template></small>
+          <small>{{ machine.adapter.slotWord }} {{ t.slot }}<template v-if="t.type"> · {{ typeText[t.type] ?? t.type }}</template></small>
         </span>
       </button>
     </div>

@@ -55,7 +55,7 @@ export function checkStart(opts: {
 
   const t = opts.toolState
   if (t.kind === 'swapping') return no('Finish the tool swap first')
-  if (t.kind !== 'mounted') return no('Confirm the mounted toolhead first (SWAP_TOOL or RESTORE_TOOL)')
+  if (t.kind !== 'mounted') return no(t.kind === 'mismatch' ? 'The tool sensor disagrees with the selected tool' : 'Confirm the mounted toolhead first')
 
   const warnings: string[] = []
   if (opts.fileTool && opts.fileTool !== t.name) {

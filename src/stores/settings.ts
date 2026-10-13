@@ -17,6 +17,8 @@ interface Saved {
   autoConnect: boolean
   /** Rhino Portal (maintenance engine). '' = /portal on this app's address. */
   portalUrl: string
+  /** How tool changes are read: 'auto' or an adapter id (src/tools/adapters) */
+  toolAdapter: string
 }
 
 function load(): Saved {
@@ -27,11 +29,12 @@ function load(): Saved {
         moonrakerUrl: typeof v.moonrakerUrl === 'string' ? v.moonrakerUrl : '',
         autoConnect: v.autoConnect !== false,
         portalUrl: typeof v.portalUrl === 'string' ? v.portalUrl : '',
+        toolAdapter: typeof v.toolAdapter === 'string' ? v.toolAdapter : 'auto',
       }
   } catch {
     /* storage blocked or bad JSON */
   }
-  return { moonrakerUrl: '', autoConnect: true, portalUrl: '' }
+  return { moonrakerUrl: '', autoConnect: true, portalUrl: '', toolAdapter: 'auto' }
 }
 
 /** Where to reach the Portal: the setting, or /portal on this app's address. */
@@ -51,14 +54,15 @@ export const useSettingsStore = defineStore('settings', () => {
   const moonrakerUrl = ref(saved.moonrakerUrl)
   const autoConnect = ref(saved.autoConnect)
   const portalUrl = ref(saved.portalUrl)
+  const toolAdapter = ref(saved.toolAdapter)
 
-  watch([moonrakerUrl, autoConnect, portalUrl], () => {
+  watch([moonrakerUrl, autoConnect, portalUrl, toolAdapter], () => {
     try {
-      localStorage.setItem(KEY, JSON.stringify({ moonrakerUrl: moonrakerUrl.value, autoConnect: autoConnect.value, portalUrl: portalUrl.value }))
+      localStorage.setItem(KEY, JSON.stringify({ moonrakerUrl: moonrakerUrl.value, autoConnect: autoConnect.value, portalUrl: portalUrl.value, toolAdapter: toolAdapter.value }))
     } catch {
       /* ignore */
     }
   })
 
-  return { moonrakerUrl, autoConnect, portalUrl }
+  return { moonrakerUrl, autoConnect, portalUrl, toolAdapter }
 })

@@ -9,6 +9,7 @@ import { useMachineStore } from '@/stores/machine'
 import { brand } from '@/brand/brand'
 import CamerasPanel from '@/webcams/CamerasPanel.vue'
 import { usePanelThemeStore } from '@/stores/panelTheme'
+import { ADAPTERS } from '@/tools/adapters'
 
 const theme = useThemeStore()
 const panelTheme = usePanelThemeStore()
@@ -211,6 +212,23 @@ const options: { value: ThemePref; label: string }[] = [
             <span v-if="saved" class="muted small" role="status">Saved</span>
           </div>
         </form>
+
+        <!-- How this machine changes tools: the tool-change adapter -->
+        <div class="adapter">
+          <label class="field">
+            <span>Tool changing</span>
+            <select v-model="settings.toolAdapter">
+              <option value="auto">Automatic{{ machine.online ? ` (found: ${machine.adapterPick.matched ? machine.adapter.label : 'nothing recognised'})` : '' }}</option>
+              <option v-for="a in ADAPTERS" :key="a.id" :value="a.id">{{ a.label }}</option>
+            </select>
+          </label>
+          <p class="muted small">
+            {{ machine.adapter.about }}
+            <template v-if="machine.online && !machine.adapterPick.matched">
+              <strong class="warn-text">This machine doesn't look like {{ settings.toolAdapter === 'auto' ? 'any kind Studio knows' : machine.adapter.label }}, so the mounted tool can't be confirmed and jogging, tool power and jobs stay locked.</strong>
+            </template>
+          </p>
+        </div>
       </RsPanel>
 
       <CamerasPanel class="wide" />
@@ -257,4 +275,7 @@ const options: { value: ThemePref; label: string }[] = [
 .push { margin-left: auto; }
 .msg { margin-top: var(--rs-space-3); padding: 8px 12px; border-radius: var(--rs-radius-md); background: var(--rs-surface-2); color: var(--rs-text-strong); font-size: var(--rs-text-sm); }
 .msg.bad { border-left: 4px solid var(--rs-text-strong); }
+.adapter { margin-top: var(--rs-space-5); padding-top: var(--rs-space-4); border-top: 1px solid var(--rs-line); }
+.adapter select { height: 38px; padding: 0 10px; border-radius: var(--rs-radius-md); border: 1px solid var(--rs-line-strong); background: var(--rs-surface); color: var(--rs-text-strong); font: inherit; }
+.warn-text { display: block; margin-top: 4px; color: var(--rs-text-strong); font-weight: var(--rs-weight-medium); }
 </style>

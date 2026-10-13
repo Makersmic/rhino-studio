@@ -30,6 +30,17 @@ Everything that applies to every tool stays put: toolhead, position, job, camera
 
 Two things come back whatever the tool, because they matter for safety: a bed that's heating or still warm (40° and up) under a laser, spindle or knife job, and the hotend heater switched on while a tool without a hotend is mounted (its output is still wired to the tool connector). Both show with a label in inverted ink and can only be switched off from there. Tool outputs (laser, spindle, fan, tool power) are read from Klipper's pins and are read only: switching a tool on stays with its wizard, or the console, which asks first. Macros for other tools are hidden from the buttons ("Show N for other tools" brings them back) and stay available in the console.
 
+## Tool-change adapters
+
+How Studio reads the mounted tool and swaps it depends on the machine, so that part lives in small adapters (`src/tools/adapters`). Each one says how to recognise its machine from Klipper's object list, which objects to watch, what's mounted, which tools exist, and the command that swaps to tool N. The rest of the app only sees one tool state (mounted, swapping, not confirmed, sensor mismatch, unknown).
+
+| Adapter | Machines | Reads | Swaps with |
+|---|---|---|---|
+| Rhino tool macros | the Rhino | `SWAP_TOOL.current_tool`, VARIABLES / CUSTOM_TOOLS tool tables | `SWAP_TOOL TOOL=n` (the Rhino wizard) |
+| klipper-toolchanger | Voron StealthChanger, TapChanger and similar | `printer.toolchanger`, `[tool …]` objects, tool sensors | `SELECT_TOOL T=n` |
+
+It's picked automatically (Settings > Machine > Tool changing shows what was found and lets you override it). Safety rules hold for every adapter: Studio only reads the tool state, swaps are confirmed first, and anything uncertain locks jogging, tool power and jobs. A tool sensor that disagrees with the selected tool (klipper-toolchanger) is a stop condition: Swap and Home are locked too. Tool-change commands from every family (T0…Tn, SELECT_TOOL, UNSELECT_TOOL, INITIALIZE_TOOLCHANGER, ACTIVATE_EXTRUDER, SET_DUAL_CARRIAGE…) ask before running on any machine. Try it without a machine: `MOCK_SCENARIO=toolchanger npm run mock` (`MOCK_DETECT T=n` fakes the tool sensor; `MOCK_TC=uninitialized` starts uninitialised).
+
 ## Run it on your PC
 
 Needs Node.js 20 or newer.

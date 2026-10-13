@@ -29,11 +29,14 @@ const alerts = computed(() => {
   const t = machine.toolState
   if (t.kind === 'swapping') {
     out.push({ tone: 'warn', title: 'Toolhead swap in progress', body: machine.toolStateText })
-  } else if (t.kind === 'none-confirmed' && t.lastSavedSlot) {
+  } else if (t.kind === 'mismatch') {
+    out.push({ tone: 'danger', title: 'Tool sensor disagrees: stop and check', body: `${machine.toolStateText} Jobs, jogging and tool power stay locked until they agree.` })
+  } else if (t.kind === 'none-confirmed' && t.lastSavedSlot != null) {
+    const c = machine.confirmAction
     out.push({
       tone: 'warn',
-      title: 'Toolhead not confirmed since restart',
-      body: `Last saved: ${t.lastSavedName ?? `slot ${t.lastSavedSlot}`}. Use Confirm mounted tool on Control (RESTORE_TOOL); until then jobs, jogging and tool colours stay locked.`,
+      title: 'Toolhead not confirmed',
+      body: `Last known: ${t.lastSavedName ?? `${machine.adapter.slotWord.toLowerCase()} ${t.lastSavedSlot}`}.${c ? ` Use ${c.button} in the top bar (${c.script}).` : ''} Until then jobs, jogging and tool colours stay locked.`,
     })
   } else if (t.kind === 'unmapped') {
     out.push({ tone: 'warn', title: 'Unknown slot', body: machine.toolStateText })

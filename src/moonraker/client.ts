@@ -26,6 +26,8 @@ import type { CheckedScript } from '@/control/commands'
  *   socket closed               -> clear everything, reconnect with back-off
  */
 
+import { watchedForAll } from '@/tools/adapters'
+
 export type ConnectionState = 'offline' | 'connecting' | 'online' | 'error'
 export type KlippyState = 'ready' | 'startup' | 'shutdown' | 'error' | 'disconnected' | 'unknown'
 export type Status = Record<string, Record<string, unknown>>
@@ -81,10 +83,7 @@ export const WATCHED_OBJECTS: Record<string, string[] | null> = {
   idle_timeout: ['state'],
   extruder: ['temperature', 'target'],
   heater_bed: ['temperature', 'target'],
-  'gcode_macro SWAP_TOOL': ['current_tool', 'pending_tool'],
-  'gcode_macro VARIABLES': ['tool_mapping', 'toolheads'],
-  'gcode_macro CUSTOM_TOOLS': ['tool_mapping', 'toolheads'],
-  save_variables: ['variables'],
+  // Tool state: whatever the tool-change adapters read (src/tools/adapters), added at subscribe time
   // Tool outputs, read only (names from the Rhino config; only those Klipper has are watched)
   fan: ['speed'],
   'output_pin LASER_INITIALIZE': ['value'], // laser power rail
@@ -416,7 +415,7 @@ export class MoonrakerClient {
     const list = (await this.call('printer.objects.list')) as { objects?: string[] }
     const present = new Set(list.objects ?? [])
     this.handlers.onObjects?.(list.objects ?? [])
-    const objects: Record<string, string[] | null> = {}
+    const objects: Record<string, string[] | null> = { ...watchedForAll(list.objects ?? []) }
     for (const [name, fields] of Object.entries(WATCHED_OBJECTS)) {
       if (present.has(name)) objects[name] = fields
     }

@@ -106,8 +106,8 @@ export function notices(i: NoticeInput): Notice[] {
       add({
         id: 'tool',
         tone: 'alert',
-        title: 'Toolhead not confirmed since restart',
-        detail: i.toolState.lastSavedName ? `Last saved: ${i.toolState.lastSavedName}. Confirm it on Control.` : 'Confirm it on Control.',
+        title: 'Toolhead not confirmed',
+        detail: i.toolState.lastSavedName ? `Last known: ${i.toolState.lastSavedName}. Confirm it from the top bar.` : 'Confirm it from the top bar.',
         to: '/control',
       })
       break
@@ -116,6 +116,9 @@ export function notices(i: NoticeInput): Notice[] {
       break
     case 'swapping':
       add({ id: 'tool', tone: 'info', title: `Swapping toolhead${i.toolState.toName ? ` to ${i.toolState.toName}` : ''}`, detail: 'Follow the steps on Control.', to: '/control' })
+      break
+    case 'mismatch':
+      add({ id: 'tool', tone: 'alert', title: 'Tool sensor disagrees: stop and check', detail: `Selected: ${i.toolState.expectedName ?? 'none'}. Sensor sees: ${i.toolState.detectedName ?? 'no tool'}.`, to: '/control' })
       break
   }
 

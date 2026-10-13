@@ -44,10 +44,11 @@ const columns = computed(() => `minmax(250px, 1.2fr) ${'auto '.repeat(readouts.v
 
 const toolState = computed(() => {
   switch (machine.toolState.kind) {
-    case 'mounted': return `Slot ${machine.toolState.slot} · confirmed`
+    case 'mounted': return `${machine.adapter.slotWord} ${machine.toolState.slot} · confirmed`
     case 'swapping': return 'Swap in progress'
-    case 'none-confirmed': return 'Not confirmed since restart'
-    case 'unmapped': return `Slot ${machine.toolState.slot} not in tool list`
+    case 'none-confirmed': return machine.toolState.pick ? 'No tool picked up' : 'Not confirmed yet'
+    case 'unmapped': return `${machine.adapter.slotWord} ${machine.toolState.slot} not in tool list`
+    case 'mismatch': return 'Tool sensor disagrees'
     default: return machine.online ? 'Waiting for Klipper' : 'Not connected'
   }
 })

@@ -55,12 +55,13 @@ const caption = computed(() => {
     </RouterLink>
     <template v-if="canOfferSwap">
       <button
-        v-if="machine.toolState.kind === 'none-confirmed' && control.macros.has('RESTORE_TOOL')"
+        v-if="machine.toolState.kind === 'none-confirmed' && !machine.toolState.pick && machine.confirmAction"
         type="button"
         class="tool-btn primary"
-        @click="control.send('RESTORE_TOOL', { label: 'Confirm mounted tool' })"
-      >Confirm tool</button>
-      <SwapMenu v-else-if="control.macros.has('SWAP_TOOL')" />
+        :disabled="!machine.klippyReady || control.jobActive"
+        @click="control.send(machine.confirmAction.script, { label: machine.confirmAction.label })"
+      >{{ machine.confirmAction.button }}</button>
+      <SwapMenu v-else-if="machine.canSwap" />
     </template>
 
     <div class="right">

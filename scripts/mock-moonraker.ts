@@ -10,6 +10,13 @@
  *   swap      a swap from slot 1 to slot 4 is under way
  *   custom    a user-added HotWire in slot 6 is mounted
  *   spindle   HotJoe (CNC) confirmed in slot 4, with a work zero set
+ *   toolchanger  NOT a Rhino: a StealthChanger-style machine running
+ *             viesturz/klipper-toolchanger with three tools (T0, T1 print
+ *             heads, Brush with no extruder) and tool sensors. SELECT_TOOL,
+ *             T0..T2, UNSELECT_TOOL and INITIALIZE_TOOLCHANGER work.
+ *             MOCK_DETECT T=n makes the sensor see tool n (-1 = none) to
+ *             test the mismatch stop. MOCK_TC=uninitialized starts it
+ *             uninitialised.
  *
  * It logs every method the app sends, so you can see that Phase 2a only
  * reads. The emergency stop puts the mock Klipper into "shutdown" like M112.
@@ -71,6 +78,21 @@ const status: Record<string, Record<string, unknown>> = {
   'output_pin SERVO_LASER': { value: 0 },
   'output_pin Spindle_power': { value: 0 },
   'output_pin SPINDLE_SPEED': { value: 0.3 },
+}
+if (scenario === 'toolchanger') {
+  // Not a Rhino: no Rhino macros or tool pins, a [toolchanger] and [tool ...] objects instead
+  for (const k of ['gcode_macro SWAP_TOOL', 'gcode_macro VARIABLES', 'gcode_macro CUSTOM_TOOLS', 'save_variables',
+    'output_pin LASER_INITIALIZE', 'output_pin SERVO_LASER', 'output_pin Spindle_power', 'output_pin SPINDLE_SPEED']) delete status[k]
+  const uninit = process.env.MOCK_TC === 'uninitialized'
+  status.toolchanger = {
+    status: uninit ? 'uninitialized' : 'ready', tool: uninit ? null : 'tool T0', tool_number: uninit ? -1 : 0,
+    detected_tool: 'tool T0', detected_tool_number: 0, has_detection: true,
+    tool_numbers: [0, 1, 2], tool_names: ['tool T0', 'tool T1', 'tool Brush'],
+  }
+  status['tool T0'] = { tool_number: 0, extruder: 'extruder', fan: 'T0_partfan', active: !uninit, detect_state: 'present' }
+  status['tool T1'] = { tool_number: 1, extruder: 'extruder1', fan: 'T1_partfan', active: false, detect_state: 'absent' }
+  status['tool Brush'] = { tool_number: 2, extruder: null, fan: null, active: false, detect_state: 'absent' }
+  status.extruder1 = { temperature: 23.8, target: 0 }
 }
 if (scenario === 'spindle') {
   // Work zero set at the corner of a block of wood
@@ -157,13 +179,16 @@ function emergencyStop(via: string) {
 }
 
 // ---- pretend Klipper: console, macros, prompts, jobs ---------------------
-const MACROS = [
+const RHINO_MACROS = [
   'SWAP_TOOL', 'RESTORE_TOOL', 'CONFIRM_TOOL_INSTALL', 'SET_Z_ZERO', 'PREHEAT', 'LASER_JOB_SETUP', 'CNC_JOB_SETUP', 'DRAGKNIFE_JOB_SETUP',
   'TOOL_JOB_SETUP', 'SET_WORK_ZERO', 'LASER_FOCUS_ALIGN', 'NOZZLE_HEIGHT_CALIBRATE', 'BACKUP_CFG', 'PM_STATUS', 'LEDMAX', 'LEDOFF',
   'LIST_TOOLHEADS', 'CALIBRATE_ESC', 'DEACTIVATE_LASER', 'SWITCH_T1', 'CANCEL_PRINT', 'PAUSE', 'RESUME', 'G28', 'SWITCH_T0', 'ACTIVATE_LASER', 'SET_TOOL_POWER', 'BED_COOLDOWN',
   '_LASER_START', '_LASER_ABORT', '_RESTORE_TOOL_CONFIRM', 'VARIABLES', 'CUSTOM_TOOLS',
 ]
-const HELP: Record<string, string> = Object.fromEntries(MACROS.map((m) => [m, `Rhino macro ${m}`]))
+const MACROS = scenario === 'toolchanger'
+  ? ['PAUSE', 'RESUME', 'CANCEL_PRINT', 'PRINT_START', 'PRINT_END', 'CLEAN_NOZZLE', 'CHAMBER_LIGHTS_ON', 'CHAMBER_LIGHTS_OFF', 'G28']
+  : RHINO_MACROS
+const HELP: Record<string, string> = Object.fromEntries(MACROS.map((m) => [m, `${scenario === 'toolchanger' ? 'Macro' : 'Rhino macro'} ${m}`]))
 Object.assign(HELP, { G1: 'Move', M105: 'Report temperatures', SET_HEATER_TEMPERATURE: 'Set a heater target', FIRMWARE_RESTART: 'Restart firmware', STATUS: 'Report status' })
 
 const gcodeStore: { message: string; time: number; type: 'command' | 'response' }[] = [
@@ -199,8 +224,52 @@ function startJob(file: string) {
   update('print_stats', { state: 'printing', filename: file, print_duration: 0 })
   update('virtual_sdcard', { progress: 0, is_active: true })
   update('idle_timeout', { state: 'Printing' })
-  if (name((status['gcode_macro SWAP_TOOL'] as { current_tool: number }).current_tool) === 'BlockOne') update('fan', { speed: 0.8 })
+  const swapNow = status['gcode_macro SWAP_TOOL'] as { current_tool: number } | undefined
+  if (swapNow ? name(swapNow.current_tool) === 'BlockOne' : status.toolchanger?.tool_number === 0) update('fan', { speed: 0.8 })
   respond(`File opened:${file}`)
+}
+
+// ---- pretend klipper-toolchanger (scenario 'toolchanger') ----------------
+const tcToolName = (n: number) => (status.toolchanger?.tool_names as string[])?.[(status.toolchanger?.tool_numbers as number[]).indexOf(n)] ?? null
+function selectTool(n: number) {
+  const tc = status.toolchanger!
+  if (tc.status === 'changing') throw new Error('Toolchanger is busy')
+  if (n >= 0 && !tcToolName(n)) throw new Error(`Select tool: T=${n} not found`)
+  const from = tc.tool_number as number
+  update('toolchanger', { status: 'changing' })
+  respond(`// Changing tool T${from} -> T${n}`)
+  setTimeout(() => {
+    for (const nm of tc.tool_names as string[]) update(nm, { active: false, detect_state: 'absent' })
+    const obj = tcToolName(n)
+    if (obj) update(obj, { active: true, detect_state: 'present' })
+    update('toolchanger', { status: 'ready', tool: obj, tool_number: n, detected_tool: obj, detected_tool_number: n })
+    respond(n >= 0 ? `// Selected T${n}` : '// Tool docked')
+  }, 2500)
+}
+function toolchangerCommand(cmd: string, line: string): boolean {
+  const t = /^T(\d+)$/.exec(cmd)
+  if (t) { selectTool(Number(t[1])); return true }
+  switch (cmd) {
+    case 'SELECT_TOOL': selectTool(Number(arg(line, 'T') ?? -1)); return true
+    case 'UNSELECT_TOOL': selectTool(-1); return true
+    case 'INITIALIZE_TOOLCHANGER': {
+      const seen = status.toolchanger!.detected_tool_number as number
+      update('toolchanger', { status: 'initializing' })
+      setTimeout(() => {
+        update('toolchanger', { status: 'ready', tool: tcToolName(seen), tool_number: seen })
+        if (tcToolName(seen)) update(tcToolName(seen)!, { active: true })
+        respond(`// Toolchanger initialised with T${seen}`)
+      }, 1500)
+      return true
+    }
+    case 'MOCK_DETECT': {
+      const n = Number(arg(line, 'T') ?? -1)
+      update('toolchanger', { detected_tool_number: n, detected_tool: tcToolName(n) })
+      respond(`// (mock) tool sensor now sees ${n >= 0 ? `T${n}` : 'no tool'}`)
+      return true
+    }
+  }
+  return false
 }
 
 function runLine(raw: string) {
@@ -209,6 +278,7 @@ function runLine(raw: string) {
   const cmd = (/^([GM]\d+(?:\.\d+)?)/i.exec(line)?.[1] ?? line.split(/\s+/)[0]!).toUpperCase()
   const th = status.toolhead as { position: number[]; homed_axes: string; axis_minimum: number[]; axis_maximum: number[] }
   const swap = status['gcode_macro SWAP_TOOL'] as { current_tool: number; pending_tool: number }
+  if (scenario === 'toolchanger' && toolchangerCommand(cmd, line)) return
   switch (cmd) {
     case 'G28': {
       const axes = /[XYZ]/i.test(line.slice(3)) ? line.slice(3).toLowerCase().replace(/[^xyz]/g, '') : 'xyz'

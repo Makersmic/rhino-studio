@@ -149,6 +149,19 @@ function checkLine(line: string): LineCheck {
     return r('tool-state', 'changes the saved toolhead, without a physical swap')
   if (command === 'CONFIRM_TOOL_INSTALL') return r('tool-state', 'records a toolhead as mounted')
 
+  // Other tool-change families (src/tools/adapters). Classified whatever adapter is active:
+  // a T1 typed on any machine might swap tools.
+  if (/^T\d+$/.test(command)) return r('motion', 'selects a tool: on a toolchanger this docks one tool and picks up another')
+  if (command === 'SELECT_TOOL') return r('motion', 'changes tools: the head docks one tool and picks up another')
+  if (command === 'UNSELECT_TOOL') return r('motion', 'docks the tool it holds: the head moves to the dock')
+  if (command === 'INITIALIZE_TOOLCHANGER') return r('motion', 'initialises the toolchanger; it may home or move to check the tool')
+  if (command === 'TEST_TOOL_DOCKING') return r('motion', 'docks and picks up the tool to test it: the head moves')
+  if (command === 'ENTER_DOCKING_MODE' || command === 'EXIT_DOCKING_MODE') return r('motion', 'switches the toolchanger in or out of docking mode')
+  if (command === 'ASSIGN_TOOL') return r('tool-state', 'changes which tool number a tool answers to')
+  if (command === 'SET_TOOL_PARAMETER' && /(PICKUP|DROPOFF|PARK|ZONE|DOCK)/i.test(line)) return r('tool-state', 'changes where a tool is docked or picked up')
+  if (command === 'ACTIVATE_EXTRUDER') return r('tool-state', 'changes which extruder (tool) Klipper drives')
+  if (command === 'SET_DUAL_CARRIAGE') return r('motion', 'switches which carriage moves')
+
   if (HEAT.has(command)) {
     const v = Number(param(line, command.startsWith('SET_') ? 'TARGET' : 'S') ?? 0)
     return v > 0 ? r('heat', `heats to ${v}°`) : r('none', 'heater off')

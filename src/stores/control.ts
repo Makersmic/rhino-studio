@@ -255,7 +255,20 @@ export const useControlStore = defineStore('control', () => {
     }
   }
 
+  /** Homing moves the head with whatever it holds; not while a tool sensor disagrees or a swap runs */
+  const homeBlock = computed(() => {
+    if (!machine.klippyReady) return 'Klipper is not ready'
+    if (jobActive.value) return 'A job is running'
+    if (machine.toolState.kind === 'swapping') return 'A tool swap is in progress'
+    if (machine.toolState.kind === 'mismatch') return 'The tool sensor disagrees with the selected tool'
+    return null
+  })
+
   async function home(axes: 'all' | 'xy') {
+    if (homeBlock.value) {
+      log('error', `Not homed: ${homeBlock.value}`)
+      return
+    }
     const tool = machine.mountedName ?? 'no confirmed toolhead'
     await send(axes === 'all' ? 'G28' : 'G28 X Y', {
       label: axes === 'all' ? 'Home all' : 'Home X Y',
@@ -343,12 +356,12 @@ export const useControlStore = defineStore('control', () => {
   }
 
   async function swapTo(slot: number, name: string) {
-    return send(`SWAP_TOOL TOOL=${slot}`, {
+    return send(machine.adapter.swapScript(slot), {
       label: `Swap to ${name}`,
       confirmTitle: 'Tool Swap Ready',
       confirmLabel: 'Start',
       confirmFeature: name,
-      confirmBody: `The machine cools down and lowers the bed, then asks you to fit ${name}. Follow its questions here or in Mainsail.`,
+      confirmBody: machine.adapter.swapNote(name),
     })
   }
 
@@ -416,6 +429,7 @@ export const useControlStore = defineStore('control', () => {
     prompt,
     promptBusy,
     pendingConfirm,
+    homeBlock,
     running,
     macros,
     jobActive,
