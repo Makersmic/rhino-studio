@@ -15,7 +15,7 @@
  * Nothing that heats, homes or switches a tool on comes from Kiri: its start
  * and end code is empty, and rhinoFile.ts writes the Rhino's own lines.
  */
-import type { MachineInfo, PartInfo, PrepareJob } from './types'
+import type { CncOp, CncSettings, MachineInfo, PartInfo, PrepareJob } from './types'
 
 export type KiriMode = 'FDM' | 'LASER' | 'DRAG' | 'CAM'
 
@@ -60,30 +60,51 @@ export function kiriJob(job: PrepareJob, part: PartInfo, m: MachineInfo): KiriJo
           sliceTopLayers: f.topLayers,
           sliceBottomLayers: f.bottomLayers,
           sliceFillSparse: f.infill,
-          sliceFillType: f.infill > 0 ? f.infillType : 'none',
+          sliceFillType: f.vase ? 'vase' : f.infill > 0 ? f.infillType : 'none',
           sliceSupportType: f.supports ? 'automatic' : 'disabled',
-          sliceLineWidth: 0,
+          sliceSupportAngle: f.supportAngle,
+          sliceSupportDensity: f.supportDensity,
+          sliceSupportOffset: f.supportGapXY,
+          sliceSupportGap: f.supportGapZ,
+          sliceSupportOutline: f.supportOutline,
+          sliceLineWidth: f.lineWidth,
+          sliceAdaptive: f.adaptive,
+          sliceMinHeight: f.adaptive ? f.minLayer : 0,
+          sliceShellOrder: f.wallOrder,
+          sliceLayerStart: f.seam,
+          sliceDetectThin: f.thinWalls,
+          sliceFillAngle: f.fillAngle,
+          sliceFillOverlap: f.fillOverlap,
           outputFeedrate: f.speed,
-          outputFinishrate: f.speed,
-          outputSeekrate: 150,
+          outputFinishrate: f.outerSpeed,
+          outputSeekrate: f.travelSpeed,
+          outputMinSpeed: f.minSpeed,
+          outputMaxFlowrate: f.maxFlow,
           firstLayerRate: f.firstLayerSpeed,
           firstLayerFillRate: f.firstLayerSpeed,
           outputRetractDist: f.retract,
-          outputRetractSpeed: 30,
+          outputRetractSpeed: f.retractSpeed,
           outputRetractDwell: 0,
+          outputRetractWipe: f.wipe,
+          outputCoastDist: f.coast,
+          outputLayerRetract: f.retractEachLayer,
+          outputAvoidGaps: f.avoidCrossing,
           outputFanSpeed: Math.round(Math.max(0, Math.min(1, f.fan)) * 255),
-          outputFanLayer: 1,
+          outputFanLayer: f.fanFromLayer,
+          outputMinLayerTime: f.minLayerTime,
           firstLayerFanSpeed: 0,
+          // On a flat (not belt) bed Kiri's "brim count" is the skirt; a 0 mm gap makes it a brim
           outputBrimCount: f.brim,
-          firstLayerBrim: f.brim,
-          outputRaft: false,
+          outputBrimOffset: f.skirtGap,
+          outputRaft: f.raft,
+          outputRaftSpacing: f.raftSpacing,
           // temperatures come from the material table through START_JOB / PREHEAT, never from the file
           outputTemp: 0,
           outputBedTemp: 0,
           firstLayerNozzleTemp: 0,
           firstLayerBedTemp: 0,
           antiBacklash: 0,
-          zHopDistance: 0,
+          zHopDistance: f.zHop,
         },
         move: [r3(job.placement.x - W / 2), r3(job.placement.y - D / 2), 0],
       }
@@ -108,11 +129,12 @@ export function kiriJob(job: PrepareJob, part: PartInfo, m: MachineInfo): KiriJo
           ctSliceSingle: true,
           ctSliceHeight: cutHeight(l.cutHeight, part),
           ctSliceKerf: l.kerf,
+          ctOutSmooth: l.smooth,
+          ctOmitInner: l.outerOnly,
           ctOriginCenter: false,
           ctOriginBounds: true,
           ctOutStack: false,
           ctOutGroup: true,
-          ctOmitInner: false,
           outputInvertX: false,
           outputInvertY: false,
         },
@@ -131,6 +153,8 @@ export function kiriJob(job: PrepareJob, part: PartInfo, m: MachineInfo): KiriJo
           ctSliceSingle: true,
           ctSliceHeight: cutHeight(k.cutHeight, part),
           ctSliceKerf: 0,
+          ctOutSmooth: k.smooth,
+          ctOmitInner: k.outerOnly,
           ctOriginCenter: false,
           ctOriginBounds: true,
           outputInvertX: false,
@@ -144,18 +168,16 @@ export function kiriJob(job: PrepareJob, part: PartInfo, m: MachineInfo): KiriJo
       const tool = {
         id: 1000,
         number: 1,
-        name: `${c.toolDiameter} mm end mill`,
-        type: 'endmill',
+        name: `${c.toolDiameter} mm ${c.toolType === 'ballmill' ? 'ball' : 'end'} mill`,
+        type: c.toolType,
         metric: true,
         shaft_diam: c.toolDiameter,
         shaft_len: 20,
         flute_diam: c.toolDiameter,
-        flute_len: Math.max(10, part.size.z + 2),
+        flute_len: c.fluteLength,
         taper_tip: 0,
       }
-      const common = { tool: 1000, spindle: 0, down: c.stepDown, rate: c.feed, plunge: c.plunge, direction: 'climb', ov_topz: 0, ov_botz: 0 }
-      const outline = { ...common, type: 'outline', step: 0.4, steps: 1, outside: true, inside: false, omitthru: false, omitvoid: false, wide: false, dogbones: false, revbones: false }
-      const rough = { ...common, type: 'rough', step: c.stepOver, leave: 0.5, leavez: 0, all: false, flats: true, inside: true, omitthru: false }
+      const ops = c.ops.filter((o) => o.on && (o.kind !== 'level' || c.extraTop > 0)).map((o) => cncOp(o, c))
       return {
         mode: 'CAM',
         device: {
@@ -191,7 +213,7 @@ export function kiriJob(job: PrepareJob, part: PartInfo, m: MachineInfo): KiriJo
           camDepthFirst: true,
           camEaseDown: false,
           camToolInit: false,
-          ops: c.operation === 'clear-and-cutout' ? [rough, outline] : [outline],
+          ops,
         },
         tools: [tool],
         stock: { ...st, center: { x: 0, y: 0, z: r3(st.z / 2) } },
@@ -204,7 +226,22 @@ export function kiriJob(job: PrepareJob, part: PartInfo, m: MachineInfo): KiriJo
 
 export function cncStock(job: PrepareJob, part: PartInfo): { x: number; y: number; z: number } {
   const m = Math.max(0, job.cnc.margin)
-  return { x: r3(part.size.x + 2 * m), y: r3(part.size.y + 2 * m), z: r3(part.size.z) }
+  return { x: r3(part.size.x + 2 * m), y: r3(part.size.y + 2 * m), z: r3(part.size.z + Math.max(0, job.cnc.extraTop ?? 0)) }
+}
+
+/** One Studio CNC step -> Kiri's operation record (field names from Kiri's own op editor) */
+export function cncOp(o: CncOp, c: CncSettings): Record<string, unknown> {
+  const rate = o.feed > 0 ? o.feed : c.feed
+  const common = { tool: 1000, spindle: 0, rate, plunge: c.plunge, direction: o.direction, ov_topz: 0, ov_botz: 0 }
+  switch (o.kind) {
+    case 'level':
+      // only the stock above the part: never deeper than the extra stock
+      return { ...common, type: 'level', step: o.stepOver, stepz: o.stepDown, down: r3(Math.min(o.depth, c.extraTop)), inset: 0.5, stock: true }
+    case 'rough':
+      return { ...common, type: 'rough', down: o.stepDown, step: o.stepOver, leave: o.leave, leavez: 0, all: false, flats: true, inside: true, omitthru: false }
+    case 'outline':
+      return { ...common, type: 'outline', down: o.stepDown, step: 0.4, steps: 1, outside: o.side === 'outside', inside: o.side === 'inside', omitthru: false, omitvoid: false, wide: false, dogbones: false, revbones: false }
+  }
 }
 
 /** Where to take the outline: inside the part, never above its top. */

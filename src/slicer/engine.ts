@@ -73,9 +73,11 @@ export async function runKiri(vertices: Float32Array, job: KiriJob, onPhase: (p:
   eng.setTopOffset(0)
   if (job.tools) eng.setTools(job.tools)
   if (job.stock) {
-    eng.setStock(job.stock)
-    // Engine.setStock guesses a centre; the part sits in the middle of the stock, bottoms level
-    eng.settings.stock = { ...eng.settings.stock, center: job.stock.center }
+    const centre = { ...job.stock.center }
+    // Engine.setStock overwrites the centre it's given (with half the stock size), so give it a copy;
+    // the part sits in the middle of the stock, bottoms level, at Kiri's world 0,0
+    eng.setStock({ ...job.stock, center: { ...centre } })
+    eng.settings.stock = { ...eng.settings.stock, center: centre }
   }
   if (job.origin) eng.setOrigin(...job.origin)
   if (job.move && job.move.some((v) => v !== 0)) eng.move(...job.move)

@@ -19,11 +19,15 @@ import Icon from '@/icons/Icon.vue'
 import BedView from '@/prepare/BedView.vue'
 import NumField from '@/prepare/NumField.vue'
 import StepBar from '@/prepare/StepBar.vue'
+import FdmAdvanced from '@/prepare/FdmAdvanced.vue'
+import FoldGroup from '@/prepare/FoldGroup.vue'
+import CncOps from '@/prepare/CncOps.vue'
 import ToolCard from '@/prepare/ToolCard.vue'
 import { PROCESS_ACTION, PROCESS_LABEL, prettyMaterial, toolFacts } from '@/prepare/facts'
 import { usePrepareStore } from '@/stores/prepare'
 import { useMachineStore } from '@/stores/machine'
 import { MODEL_TYPES } from '@/slicer/model'
+import { GCODE_TYPES } from '@/slicer/gcodeFile'
 
 const prep = usePrepareStore()
 const machine = useMachineStore()
@@ -44,7 +48,8 @@ function onDrop(e: DragEvent) {
 const job = computed(() => prep.job)
 const proc = computed(() => prep.job?.process ?? null)
 const mat = computed(() => prep.materials.list.find((m) => m.key === prep.job?.material) ?? null)
-const accepts = MODEL_TYPES.map((t) => `.${t}`).join(',')
+const accepts = [...MODEL_TYPES, ...GCODE_TYPES].map((t) => `.${t}`).join(',')
+const up = computed(() => prep.uploaded)
 const suits = computed(() => {
   if (!prep.part) return null
   if ((proc.value === 'fdm' || proc.value === 'cnc') && prep.flat) return 'This is a flat drawing (extruded 5 mm by the loader). For printing or milling, load a 3D model (STL, 3MF, OBJ).'
@@ -74,6 +79,18 @@ function goStep(s: 'file' | 'process') {
   if (s === 'file') prep.clearPart()
   else prep.changeProcess()
 }
+/** small drawing of an uploaded file's toolpath for the Process step */
+const pathPreview = computed(() => {
+  const u = prep.uploaded
+  const b = u?.info.bounds
+  if (!u || !b) return null
+  const w = Math.max(b.max[0] - b.min[0], 1)
+  const h = Math.max(b.max[1] - b.min[1], 1)
+  const pad = Math.max(w, h) * 0.06
+  const step = Math.max(1, Math.ceil(u.info.paths.length / 3000))
+  const lines = u.info.paths.filter((_, i) => i % step === 0).map((pl) => pl.map(([x, y]) => `${(x - b.min[0]).toFixed(1)},${(b.max[1] - y).toFixed(1)}`).join(' '))
+  return { view: `${-pad} ${-pad} ${w + 2 * pad} ${h + 2 * pad}`, lines, w, h }
+})
 const footprintPath = computed(() => {
   const p = prep.part
   if (!p || !p.footprint.length) return { d: '', view: '0 0 10 10' }
@@ -95,7 +112,7 @@ const summary = computed(() => {
   const r = prep.result
   if (!r || !proc.value) return []
   const time = r.kiriSeconds ?? r.stats.seconds
-  const rows: Array<{ label: string; value: string; note?: string }> = [{ label: 'Time', value: fmtTime(time), note: r.kiriSeconds ? 'estimate' : 'from feeds, no acceleration' }]
+  const rows: Array<{ label: string; value: string; note?: string }> = [{ label: 'Time', value: fmtTime(time), note: r.kiriSeconds ? (prep.uploaded ? `from ${r.kiri}` : 'estimate') : 'from feeds, no acceleration' }]
   if (proc.value === 'fdm') {
     rows.push({ label: 'Filament', value: fmtLen(r.kiriFilament ?? r.stats.filament), note: '1.75 mm' })
     rows.push({ label: 'Layers', value: String(r.stats.layers) })
@@ -132,7 +149,7 @@ function openInFiles() {
       <button type="button" class="dropzone" :class="{ dragging }" @click="picker?.click()">
         <Icon nav="prepare" :size="56" />
         <span class="big">{{ prep.loading ? 'Reading the file…' : prep.preset ? `Drop a file for ${prep.preset}, or click to choose one` : 'Drop a model or drawing here, or click to choose one' }}</span>
-        <span class="muted small">3D models: STL, 3MF, OBJ · 2D drawings: SVG, DXF</span>
+        <span class="muted small">3D models: STL, 3MF, OBJ · 2D drawings: SVG, DXF · ready-made jobs: G-code from Orca, LightBurn and others</span>
         <span v-if="prep.loadError" class="error" role="alert">{{ prep.loadError }}</span>
       </button>
 
@@ -153,6 +170,49 @@ function openInFiles() {
     </template>
 
     <!-- ============ 2. Process -->
+    <RsPanel v-else-if="prep.step === 'process' && up" panel-id="prepare.process" :title="`Which toolhead is ${up.name} for?`">
+      <template #actions>
+        <RsButton size="sm" variant="quiet" @click="prep.clearPart()">Use another file</RsButton>
+      </template>
+      <div class="procgrid">
+        <figure class="detect">
+          <svg v-if="pathPreview" :viewBox="pathPreview.view" class="fp" role="img" :aria-label="`What ${up.name} prints or cuts, seen from above`">
+            <polyline v-for="(pts, i) in pathPreview.lines" :key="i" :points="pts" class="tp" />
+          </svg>
+          <figcaption>
+            <span><strong>{{ prep.fileKind }}</strong></span>
+            <span v-if="up.info.madeBy">Made by {{ up.info.madeBy }}</span>
+            <span v-if="pathPreview">{{ fmt(pathPreview.w) }} × {{ fmt(pathPreview.h) }} mm of moves</span>
+            <span class="muted small">{{ up.info.toolhead ? `The file says it's for ${up.info.toolhead}.` : "The file doesn't say which toolhead it's for: pick the one it was made for." }} It's sent as it is; nothing is sliced again.</span>
+          </figcaption>
+        </figure>
+
+        <div class="options" role="radiogroup" aria-label="Toolhead">
+          <button
+            v-for="o in prep.options"
+            :key="o.tool.name"
+            type="button"
+            role="radio"
+            class="option"
+            :aria-checked="chosen === o.tool.name"
+            :style="{ '--accent': `var(${o.tool.look.accentVar})` }"
+            @click="choice = o.tool.name"
+            @dblclick="choice = o.tool.name; confirm()"
+          >
+            <span class="oicon"><Icon :tool="o.tool.look.icon" :size="32" /></span>
+            <span class="otext">
+              <span class="oname">{{ processWord[o.tool.process] }} · {{ o.tool.name }}</span>
+              <span class="osub">{{ o.recommended ? 'The file says it is for this tool' : 'Not named in the file' }}<template v-if="o.mounted"> · mounted now</template></span>
+            </span>
+          </button>
+          <p v-if="up.info.toolhead && !prep.options.length" class="error">The file says it's for {{ up.info.toolhead }}, which this machine doesn't have.</p>
+          <div class="ogo">
+            <RsButton variant="primary" :disabled="!chosen" @click="confirm">Continue</RsButton>
+          </div>
+        </div>
+      </div>
+    </RsPanel>
+
     <RsPanel v-else-if="prep.step === 'process' && prep.part" panel-id="prepare.process" :title="`What should the Rhino do with ${prep.part.name}?`">
       <template #actions>
         <RsButton size="sm" variant="quiet" @click="prep.clearPart()">Use another file</RsButton>
@@ -199,8 +259,8 @@ function openInFiles() {
       <!-- the bed -->
       <RsPanel
         panel-id="prepare.bed"
-        :title="prep.part ? prep.part.name : 'Model'"
-        :status="prep.part ? `${fmt(prep.part.size.x)} × ${fmt(prep.part.size.y)} × ${fmt(prep.part.size.z)} mm` : undefined"
+        :title="up ? up.name : prep.part ? prep.part.name : 'Model'"
+        :status="up ? (up.info.madeBy ? `Made by ${up.info.madeBy}` : 'G-code') : prep.part ? `${fmt(prep.part.size.x)} × ${fmt(prep.part.size.y)} × ${fmt(prep.part.size.z)} mm` : undefined"
         class="bedpanel drop"
         :class="{ dragging }"
         @dragover.prevent.stop="dragging = true"
@@ -211,7 +271,12 @@ function openInFiles() {
           <RsButton size="sm" :disabled="prep.loading" @click="picker?.click()">Replace</RsButton>
         </template>
 
-        <template v-if="job && prep.part">
+        <template v-if="job && up">
+          <BedView :machine="prep.machineInfo" :job="job" :part="null" :result="prep.result?.file.bounds ?? null" :paths="up.info.paths" />
+          <p class="muted small">Shown as it is in the file{{ proc === 'cnc' ? ', around the work zero' : ', on the bed' }}. It isn't sliced again: to change it, change it in {{ up.info.madeBy ?? 'the program that made it' }} and drop it here again.</p>
+          <p v-if="prep.loadError" class="error" role="alert">{{ prep.loadError }}</p>
+        </template>
+        <template v-else-if="job && prep.part">
           <BedView :machine="prep.machineInfo" :job="job" :part="prep.part" :result="prep.result?.file.bounds ?? null" />
           <p v-if="suits" class="notice small" role="status">{{ suits }}</p>
           <div class="place">
@@ -245,7 +310,7 @@ function openInFiles() {
             </span>
           </div>
 
-          <div v-if="job" class="mat">
+          <div v-if="job && !up" class="mat">
             <label for="prep-mat">Material</label>
             <select id="prep-mat" :value="job.material" @change="prep.pickMaterial(($event.target as HTMLSelectElement).value)">
               <option v-for="m in prep.materials.list" :key="m.key" :value="m.key">{{ prettyMaterial(m.name) }}{{ m.nozzle ? ` · ${m.nozzle} mm nozzle` : '' }}{{ m.path !== undefined ? ` · path ${m.path + 1}` : '' }}</option>
@@ -260,7 +325,7 @@ function openInFiles() {
         </RsPanel>
 
         <!-- settings -->
-        <RsPanel v-if="job" panel-id="prepare.settings" title="Settings" :status="proc ? processWord[proc] : undefined">
+        <RsPanel v-if="job && !up" panel-id="prepare.settings" title="Settings" :status="proc ? processWord[proc] : undefined">
           <div v-if="proc === 'fdm'" class="grid">
             <NumField v-model="job.fdm.layerHeight" label="Layer height" unit="mm" :min="0.04" :max="job.fdm.nozzle * 0.8" :step="0.04" />
             <NumField v-model="job.fdm.firstLayer" label="First layer" unit="mm" :min="0.08" :max="job.fdm.nozzle" :step="0.04" />
@@ -272,7 +337,6 @@ function openInFiles() {
             <NumField v-model="job.fdm.firstLayerSpeed" label="First layer speed" unit="mm/s" :min="5" :max="100" />
             <NumField v-model="job.fdm.retract" label="Retract" unit="mm" :min="0" :max="8" :step="0.1" />
             <NumField v-model="job.fdm.fan" label="Part fan" unit="%" :min="0" :max="1" :step="0.05" percent hint="From layer 2" />
-            <NumField v-model="job.fdm.brim" label="Brim" unit="loops" :min="0" :max="30" />
             <div class="field">
               <label for="prep-fill">Infill pattern</label>
               <select id="prep-fill" v-model="job.fdm.infillType">
@@ -286,6 +350,7 @@ function openInFiles() {
             <label class="check"><input v-model="job.fdm.supports" type="checkbox" /> Supports</label>
             <p v-if="job.toolhead === 'SwitchFly'" class="muted small wide">Filament path {{ job.fdm.path === 1 ? '2 (T1)' : '1 (T0)' }}, from the material.</p>
           </div>
+          <FdmAdvanced v-if="proc === 'fdm'" :fdm="job.fdm" />
 
           <div v-else-if="proc === 'laser'" class="grid">
             <NumField v-model="job.laser.power" label="Power" unit="%" :min="0.01" :max="1" :step="0.05" percent :hint="`S ${Math.round(job.laser.power * prep.machineInfo.laserSMax)} of ${prep.machineInfo.laserSMax}`" />
@@ -293,6 +358,12 @@ function openInFiles() {
             <NumField v-model="job.laser.passes" label="Passes" :min="1" :max="20" hint="The whole cut, repeated" />
             <NumField v-model="job.laser.kerf" label="Kerf" unit="mm" :min="0" :max="1" :step="0.05" hint="Beam width allowance" />
             <NumField v-if="!prep.flat" v-model="job.laser.cutHeight" label="Cut outline at" unit="mm" :min="0.01" :max="prep.part?.size.z ?? 1000" :step="0.5" hint="Height above the bed" />
+          </div>
+          <div v-if="proc === 'laser'" class="adv">
+            <FoldGroup title="Advanced" note="smoothing, outer outline only">
+              <NumField v-model="job.laser.smooth" label="Smoothing" unit="mm" :min="0" :max="2" :step="0.05" hint="Merges tiny segments; 0 = off" />
+              <label class="check"><input v-model="job.laser.outerOnly" type="checkbox" /> Outer outline only (no holes)</label>
+            </FoldGroup>
           </div>
 
           <div v-else-if="proc === 'dragknife'" class="grid">
@@ -303,30 +374,37 @@ function openInFiles() {
             <NumField v-model="job.knife.plunge" label="Plunge speed" unit="mm/min" :min="10" :max="1000" :step="10" />
             <NumField v-if="!prep.flat" v-model="job.knife.cutHeight" label="Cut outline at" unit="mm" :min="0.01" :max="prep.part?.size.z ?? 1000" :step="0.5" />
           </div>
+          <div v-if="proc === 'dragknife'" class="adv">
+            <FoldGroup title="Advanced" note="smoothing, outer outline only">
+              <NumField v-model="job.knife.smooth" label="Smoothing" unit="mm" :min="0" :max="2" :step="0.05" hint="Merges tiny segments; 0 = off" />
+              <label class="check"><input v-model="job.knife.outerOnly" type="checkbox" /> Outer outline only (no holes)</label>
+            </FoldGroup>
+          </div>
 
           <div v-else-if="proc === 'cnc'" class="grid">
-            <div class="field wide">
-              <label for="prep-op">Operation</label>
-              <select id="prep-op" v-model="job.cnc.operation">
-                <option value="cutout">Cut out (outline, outside the part)</option>
-                <option value="clear-and-cutout">Clear pockets and around, then cut out</option>
+            <div class="field">
+              <label for="prep-tool">Tool</label>
+              <select id="prep-tool" v-model="job.cnc.toolType">
+                <option value="endmill">Flat end mill</option>
+                <option value="ballmill">Ball end mill</option>
               </select>
             </div>
-            <NumField v-model="job.cnc.toolDiameter" label="End mill" unit="mm" :min="0.5" :max="12.7" :step="0.025" />
-            <NumField v-model="job.cnc.stepDown" label="Step down" unit="mm" :min="0.1" :max="10" :step="0.1" />
-            <NumField v-if="job.cnc.operation !== 'cutout'" v-model="job.cnc.stepOver" label="Step over" unit="%" :min="0.05" :max="0.9" :step="0.05" percent />
+            <NumField v-model="job.cnc.toolDiameter" label="Diameter" unit="mm" :min="0.5" :max="12.7" :step="0.025" />
+            <NumField v-model="job.cnc.fluteLength" label="Cutting length" unit="mm" :min="1" :max="60" :step="0.5" hint="Nothing cuts deeper" />
             <NumField v-model="job.cnc.feed" label="Feed" unit="mm/min" :min="10" :max="5000" :step="10" />
             <NumField v-model="job.cnc.plunge" label="Plunge" unit="mm/min" :min="10" :max="1000" :step="10" />
-            <NumField v-model="job.cnc.margin" label="Stock margin" unit="mm" :min="0" :max="100" hint="Each side of the part" />
             <NumField v-model="job.cnc.clearance" label="Clearance" unit="mm" :min="1" :max="30" hint="Above the stock between cuts" />
-            <p class="muted small wide">Stock is as thick as the model. Clamp it, then CNC_JOB_SETUP sets X0 Y0 on its front-left corner and Z0 on its top.</p>
+            <CncOps :cnc="job.cnc" />
+            <NumField v-model="job.cnc.margin" label="Stock margin" unit="mm" :min="0" :max="100" hint="Each side of the part" />
+            <NumField v-model="job.cnc.extraTop" label="Stock above the part" unit="mm" :min="0" :max="50" :step="0.5" hint="0 = stock as thick as the part" />
+            <p class="muted small wide">One tool per job: the Rhino has no tool changer. Clamp the stock, then CNC_JOB_SETUP sets X0 Y0 on its front-left corner and Z0 on its top.</p>
           </div>
         </RsPanel>
 
         <!-- the job file -->
         <RsPanel v-if="job" panel-id="prepare.file" title="Job file" :status="prep.result ? prep.result.file.name : undefined">
-          <div class="go">
-            <RsButton variant="primary" :disabled="!prep.part || !!prep.phase || !!suits" @click="prep.prepare()">{{ prep.phase ? 'Preparing…' : prep.result ? 'Prepare again' : 'Prepare' }}</RsButton>
+          <div v-if="!up" class="go">
+            <RsButton variant="primary" :disabled="!prep.part || !!prep.phase || !!suits || (proc === 'cnc' && !job.cnc.ops.some((o) => o.on))" @click="prep.prepare()">{{ prep.phase ? 'Preparing…' : prep.result ? 'Prepare again' : 'Prepare' }}</RsButton>
             <span v-if="prep.phase" class="phase" role="status">
               {{ prep.phase }}<template v-if="prep.progress != null"> {{ Math.round(prep.progress * 100) }}%</template>
               <span class="bar" :class="{ indet: prep.progress == null }"><span :style="{ width: `${(prep.progress ?? 0.3) * 100}%` }" /></span>
@@ -361,8 +439,8 @@ function openInFiles() {
               <RsButton variant="primary" :disabled="!!prep.blocked.length || !machine.online || prep.sending != null" @click="prep.send()">
                 {{ prep.sending != null ? `Sending ${Math.round(prep.sending * 100)}%` : 'Send to Rhino' }}
               </RsButton>
-              <RsButton :disabled="!!prep.blocked.length" @click="prep.download()">Download</RsButton>
-              <span v-if="!machine.online" class="muted small">Connect to send. Download works offline.</span>
+              <RsButton v-if="!up" :disabled="!!prep.blocked.length" @click="prep.download()">Download</RsButton>
+              <span v-if="!machine.online" class="muted small">Connect to send.<template v-if="!up"> Download works offline.</template></span>
             </div>
             <p v-if="prep.sendError" class="error" role="alert">{{ prep.sendError }}</p>
             <p v-if="prep.sentPath" class="sent" role="status">
@@ -396,6 +474,7 @@ function openInFiles() {
 @media (max-width: 720px) { .procgrid { grid-template-columns: minmax(0, 1fr); } }
 .detect { margin: 0; display: flex; flex-direction: column; gap: var(--rs-space-3); }
 .fp { width: 100%; max-height: 220px; background: var(--rs-dither-faint); border-radius: var(--rs-radius-md); }
+.fp .tp { fill: none; stroke: var(--rs-text-strong); stroke-width: 1; vector-effect: non-scaling-stroke; opacity: 0.8; }
 .fp path { fill: var(--rs-surface); stroke: var(--rs-text-strong); stroke-width: 1.5; vector-effect: non-scaling-stroke; stroke-linejoin: round; }
 .detect figcaption { display: flex; flex-direction: column; gap: 2px; font-size: var(--rs-text-sm); color: var(--rs-text-strong); }
 .options { display: flex; flex-direction: column; gap: 6px; }
@@ -438,7 +517,9 @@ select { height: 38px; padding: 0 10px; border: 1px solid var(--rs-line-strong);
 .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--rs-space-3) var(--rs-space-4); }
 .field { display: flex; flex-direction: column; gap: 4px; }
 .wide { grid-column: 1 / -1; }
+.adv { margin-top: var(--rs-space-4); }
 .check { display: flex; align-items: center; gap: 8px; font-size: var(--rs-text-sm); align-self: end; min-height: 38px; }
+.check input { width: 16px; height: 16px; accent-color: var(--rs-text-strong); }
 
 .go { display: flex; align-items: center; gap: var(--rs-space-4); flex-wrap: wrap; }
 .phase { display: flex; flex-direction: column; gap: 4px; font-size: var(--rs-text-xs); color: var(--rs-text-muted); flex: 1; min-width: 160px; }

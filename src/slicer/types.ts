@@ -21,7 +21,7 @@ export interface FdmSettings {
   infill: number
   infillType: 'grid' | 'gyroid' | 'hex' | 'linear' | 'triangle'
   supports: boolean
-  /** brim loops, 0 = none */
+  /** skirt loops around the first layer, 0 = none (with skirtGap 0 it's a brim) */
   brim: number
   /** mm/s for walls and infill */
   speed: number
@@ -31,6 +31,52 @@ export interface FdmSettings {
   retract: number
   /** 0..1, from layer 2 */
   fan: number
+
+  // ---- Advanced (Kiri:Moto's own names in kiriSettings.ts)
+  /** mm, 0 = the nozzle size */
+  lineWidth: number
+  /** thinner layers where the surface curves */
+  adaptive: boolean
+  minLayer: number
+  wallOrder: 'in-out' | 'out-in' | 'alternate'
+  /** where each layer starts */
+  seam: 'last' | 'center' | 'origin' | 'random' | 'spiral'
+  thinWalls: 'off' | 'basic' | 'adaptive'
+  /** degrees */
+  fillAngle: number
+  /** 0..1 of a line width */
+  fillOverlap: number
+  /** mm/s */
+  outerSpeed: number
+  travelSpeed: number
+  minSpeed: number
+  /** mm³/s */
+  maxFlow: number
+  /** mm/s */
+  retractSpeed: number
+  /** mm, 0 = off */
+  zHop: number
+  wipe: number
+  coast: number
+  retractEachLayer: boolean
+  avoidCrossing: boolean
+  supportAngle: number
+  /** 0..1 */
+  supportDensity: number
+  /** mm between support and part, sideways */
+  supportGapXY: number
+  /** a layer gap between support and part */
+  supportGapZ: boolean
+  supportOutline: boolean
+  fanFromLayer: number
+  /** seconds */
+  minLayerTime: number
+  /** mm from the part; 0 makes the skirt a brim */
+  skirtGap: number
+  raft: boolean
+  raftSpacing: number
+  /** one continuous wall, no top or infill */
+  vase: boolean
 }
 
 export interface LaserSettings {
@@ -44,6 +90,10 @@ export interface LaserSettings {
   cutHeight: number
   /** mm the outline is offset to allow for the beam's width */
   kerf: number
+  /** mm, merges tiny segments (0 = off) */
+  smooth: number
+  /** cut only the outermost outline (no holes) */
+  outerOnly: boolean
 }
 
 export interface KnifeSettings {
@@ -56,13 +106,49 @@ export interface KnifeSettings {
   /** mm/min when the blade goes into the material */
   plunge: number
   cutHeight: number
+  smooth: number
+  outerOnly: boolean
 }
 
 export type CncOperation = 'cutout' | 'clear-and-cutout'
 
+/**
+ * One step of a CNC job, run in list order with the job's one tool:
+ *   level    take the top of the stock down flat (needs stock above the part)
+ *   rough    clear material around and inside the part, leaving a little
+ *   outline  trace the part's outline, outside (cut out) or inside
+ *
+ * (Kiri:Moto's 3D contour finishing needs the browser's SharedArrayBuffer, which
+ * only works on a page served with cross-origin isolation headers; that would
+ * block cameras on other addresses, so it isn't offered yet.)
+ */
+export interface CncOp {
+  kind: 'level' | 'rough' | 'outline'
+  on: boolean
+  /** mm per pass down (level, rough, outline) */
+  stepDown: number
+  /** 0..1 of the tool diameter (level, rough) */
+  stepOver: number
+  /** mm/min, 0 = the job's feed */
+  feed: number
+  /** mm left for a finishing pass (rough) */
+  leave: number
+  /** mm to take off the stock top (level) */
+  depth: number
+  side: 'outside' | 'inside'
+  direction: 'climb' | 'conventional'
+}
+
 export interface CncSettings {
-  operation: CncOperation
+  /** older jobs: became ops */
+  operation?: CncOperation
+  ops: CncOp[]
+  toolType: 'endmill' | 'ballmill'
   toolDiameter: number
+  /** mm of cutting length: nothing cuts deeper than this */
+  fluteLength: number
+  /** mm of stock above the part's top (leveled off by a level step) */
+  extraTop: number
   /** mm per pass */
   stepDown: number
   /** 0..1 of the tool diameter, for clearing */

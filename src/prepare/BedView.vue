@@ -9,6 +9,9 @@
  *   CNC                         the stock, with X0 Y0 at its front-left corner:
  *                               CNC_JOB_SETUP sets that corner on the machine,
  *                               so there is nothing to place.
+ *   ready-made G-code           its toolpath (what prints or cuts) drawn as it is
+ *                               in the file: on the bed, or for CNC around the
+ *                               work zero (X0 Y0 marked).
  */
 import { computed, ref } from 'vue'
 import type { MachineInfo, PartInfo, PrepareJob } from '@/slicer/types'
@@ -20,6 +23,8 @@ const props = defineProps<{
   part: PartInfo | null
   /** where the prepared file's moves go (min/max X/Y), if prepared */
   result: { min: [number, number, number]; max: [number, number, number] } | null
+  /** toolpath of a ready-made file (XY polylines) */
+  paths?: Array<Array<[number, number]>> | null
 }>()
 
 const isCnc = computed(() => props.job.process === 'cnc')
@@ -27,15 +32,23 @@ const stock = computed(() => (props.part && isCnc.value ? cncStock(props.job, pr
 
 /** The drawing area in mm: the bed, or the stock with a margin */
 const area = computed(() => {
-  if (stock.value) return { w: stock.value.x, h: stock.value.y }
-  return { w: props.machine.workArea.x, h: props.machine.workArea.y }
+  if (stock.value) return { x0: 0, y0: 0, w: stock.value.x, h: stock.value.y }
+  // a ready-made CNC file: around its own moves and the work zero
+  if (isCnc.value && props.result && props.paths) {
+    const r = props.result
+    const x0 = Math.min(0, r.min[0])
+    const y0 = Math.min(0, r.min[1])
+    return { x0, y0, w: Math.max(1, Math.max(0, r.max[0]) - x0), h: Math.max(1, Math.max(0, r.max[1]) - y0) }
+  }
+  return { x0: 0, y0: 0, w: props.machine.workArea.x, h: props.machine.workArea.y }
 })
 /** dither dot spacing: about 1/180 of the drawing */
 const dot = computed(() => Math.max(area.value.w, area.value.h) / 180)
 const pad = computed(() => Math.max(area.value.w, area.value.h) * 0.04)
-const view = computed(() => `${-pad.value} ${-pad.value} ${area.value.w + 2 * pad.value} ${area.value.h + 2 * pad.value}`)
+const view = computed(() => `${area.value.x0 - pad.value} ${-pad.value} ${area.value.w + 2 * pad.value} ${area.value.h + 2 * pad.value}`)
 /** SVG y grows downwards; the machine's Y grows away from you */
-const fy = (y: number) => area.value.h - y
+const fy = (y: number) => area.value.y0 + area.value.h - y
+const toolpath = computed(() => (props.paths ?? []).map((pl) => pl.map(([x, y]) => `${x.toFixed(2)},${fy(y).toFixed(2)}`).join(' ')))
 
 const centre = computed(() => (stock.value ? { x: stock.value.x / 2, y: stock.value.y / 2 } : { x: props.job.placement.x, y: props.job.placement.y }))
 const outline = computed(() => (props.part ? props.part.footprint.map(([x, y]) => `${(centre.value.x + x).toFixed(2)},${fy(centre.value.y + y).toFixed(2)}`).join(' ') : ''))
@@ -49,8 +62,8 @@ const grid = computed(() => {
   const step = area.value.w > 200 ? 50 : area.value.w > 60 ? 10 : 5
   const xs: number[] = []
   const ys: number[] = []
-  for (let v = step; v < area.value.w; v += step) xs.push(v)
-  for (let v = step; v < area.value.h; v += step) ys.push(v)
+  for (let v = Math.ceil(area.value.x0 / step) * step; v < area.value.x0 + area.value.w; v += step) if (v !== area.value.x0) xs.push(v)
+  for (let v = Math.ceil(area.value.y0 / step) * step; v < area.value.y0 + area.value.h; v += step) if (v !== area.value.y0) ys.push(v)
   return { step, xs, ys }
 })
 
@@ -76,7 +89,7 @@ const toMm = (e: PointerEvent) => {
   const m = svg.value?.getScreenCTM()
   if (!m) return null
   const p = new DOMPoint(e.clientX, e.clientY).matrixTransform(m.inverse())
-  return { x: p.x, y: area.value.h - p.y }
+  return { x: p.x, y: area.value.y0 + area.value.h - p.y }
 }
 const clampX = (x: number) => {
   const half = (props.part?.size.x ?? 0) / 2
@@ -131,10 +144,10 @@ const fmt = (v: number) => (Math.round(v * 10) / 10).toString()
         </pattern>
       </defs>
 
-      <rect class="plate" x="0" y="0" :width="area.w" :height="area.h" rx="1.5" />
+      <rect class="plate" :x="area.x0" y="0" :width="area.w" :height="area.h" rx="1.5" />
       <g class="grid">
         <line v-for="x in grid.xs" :key="'x' + x" :x1="x" :x2="x" y1="0" :y2="area.h" />
-        <line v-for="y in grid.ys" :key="'y' + y" x1="0" :x2="area.w" :y1="fy(y)" :y2="fy(y)" />
+        <line v-for="y in grid.ys" :key="'y' + y" :x1="area.x0" :x2="area.x0 + area.w" :y1="fy(y)" :y2="fy(y)" />
       </g>
 
       <g v-if="prime" class="prime">
@@ -150,7 +163,7 @@ const fmt = (v: number) => (Math.round(v * 10) / 10).toString()
 
       <!-- origin: front-left corner -->
       <g class="origin">
-        <path :d="`M0 ${area.h} l${area.w * 0.06} 0 M0 ${area.h} l0 ${-area.h * 0.08}`" />
+        <path :d="`M0 ${fy(0)} l${area.w * 0.06} 0 M0 ${fy(0)} l0 ${-area.h * 0.08}`" />
       </g>
 
       <g v-if="part" class="part" :class="{ movable: !isCnc }" tabindex="0" :aria-label="isCnc ? `Part in the stock` : `Part at X ${fmt(job.placement.x)} Y ${fmt(job.placement.y)}. Arrow keys move it.`" @pointerdown="down" @pointermove="move" @pointerup="up" @pointercancel="up" @keydown="key">
@@ -159,12 +172,18 @@ const fmt = (v: number) => (Math.round(v * 10) / 10).toString()
         <polygon :points="outline" class="edge" />
       </g>
 
+      <g v-if="toolpath.length" class="toolpath">
+        <polyline v-for="(pts, i) in toolpath" :key="i" :points="pts" />
+      </g>
+
       <rect v-if="fileBox" class="filebox" :x="fileBox.x" :y="fileBox.y" :width="fileBox.w" :height="fileBox.h" />
     </svg>
     <figcaption>
-      <span v-if="isCnc">Stock {{ stock ? `${fmt(stock.x)} × ${fmt(stock.y)} × ${fmt(stock.z)} mm` : '' }} · X0 Y0 front-left corner · Z0 stock top</span>
+      <span v-if="isCnc && paths">Work zero X0 Y0 marked at the corner · Z0 = stock top (CNC_JOB_SETUP)</span>
+      <span v-else-if="isCnc">Stock {{ stock ? `${fmt(stock.x)} × ${fmt(stock.y)} × ${fmt(stock.z)} mm` : '' }} · X0 Y0 front-left corner · Z0 stock top</span>
       <span v-else>Bed {{ fmt(machine.workArea.x) }} × {{ fmt(machine.workArea.y) }} mm · X0 Y0 front-left<template v-if="prime || keepOut.length"> · hatched: {{ [prime ? 'prime line' : '', keepOut.length ? 'keep clear' : ''].filter(Boolean).join(', ') }}</template></span>
-      <span v-if="result" class="file">Outline: where the file's moves go</span>
+      <span v-if="paths" class="file">Lines: what the file prints or cuts</span>
+      <span v-else-if="result" class="file">Outline: where the file's moves go</span>
     </figcaption>
   </figure>
 </template>
@@ -187,6 +206,7 @@ svg { width: 100%; height: auto; max-height: 62vh; display: block; color: var(--
 .box { fill: none; stroke: var(--rs-text-muted); stroke-width: 1; stroke-dasharray: 4 3; vector-effect: non-scaling-stroke; }
 .shape { color: var(--rs-text-strong); }
 .edge { fill: none; stroke: var(--rs-text-strong); stroke-width: 1.5; vector-effect: non-scaling-stroke; stroke-linejoin: round; }
+.toolpath polyline { fill: none; stroke: var(--rs-text-strong); stroke-width: 0.8; vector-effect: non-scaling-stroke; stroke-linejoin: round; opacity: 0.85; }
 .filebox { fill: none; stroke: var(--rs-text-strong); stroke-width: 1; vector-effect: non-scaling-stroke; }
 figcaption { display: flex; flex-wrap: wrap; gap: var(--rs-space-2) var(--rs-space-4); font-size: var(--rs-text-xs); color: var(--rs-text-muted); }
 </style>

@@ -4,6 +4,10 @@
  *   load a model  ->  pick the toolhead and material  ->  place it  ->
  *   Prepare (Kiri:Moto in this browser)  ->  checks  ->  Send to the Pi
  *
+ * A ready-made G-code file (sliced in Orca, LightBurn, Fusion...) takes the same
+ * steps without the slicing: Studio reads which toolhead it's for, you confirm
+ * it, and it is checked and drawn on the bed before you send it.
+ *
  * Sending only uploads the file. Starting it stays on the Files screen, where
  * the toolhead check and the setup wizards (laser, CNC, knife) run, exactly as
  * for any other file. Any setting change throws the prepared file away, so
@@ -13,17 +17,25 @@ import { defineStore } from 'pinia'
 import { computed, ref, shallowRef, watch } from 'vue'
 import { useMachineStore } from './machine'
 import { BUILT_IN_TOOLHEADS, lookFor, type ToolheadLook } from '@/toolheads/registry'
-import { applyMaterial, materialsFor, newJob, processFor, type Material } from '@/slicer/profiles'
+import { applyMaterial, materialsFor, newJob, normalizeJob, processFor, type Material } from '@/slicer/profiles'
 import { kiriJob } from '@/slicer/kiriSettings'
 import { rhinoFile, type RhinoFile } from '@/slicer/rhinoFile'
 import { checkFile, blocking, type Check, type FileStats } from '@/slicer/check'
 import { FLAT_TYPES, extOf, merge, partInfo, transform } from '@/slicer/model'
 import { DEFAULT_MACHINE, type MachineInfo, type PartInfo, type PrepareJob, type Process } from '@/slicer/types'
 import { loadModelFile, runKiri, kiriVersion, type Phase } from '@/slicer/engine'
+import { GCODE_TYPES, readJobFile, withToolhead, type JobFileInfo } from '@/slicer/gcodeFile'
 
 /** Flat drawings (SVG, DXF) are outlines: only cut processes can use them. */
 export function suits(process: Process, flat: boolean): boolean {
   return flat ? process === 'laser' || process === 'dragknife' : true
+}
+
+/** Safe for FILE= on the setup wizards and for Moonraker: letters, digits, - _ . only */
+export function safeName(name: string): string {
+  const dot = name.lastIndexOf('.')
+  const base = (dot > 0 ? name.slice(0, dot) : name).replace(/[^A-Za-z0-9_.-]+/g, '_').replace(/^_+|_+$/g, '') || 'job'
+  return `${base}${dot > 0 ? name.slice(dot).toLowerCase() : '.gcode'}`
 }
 
 export interface PrepTool {
@@ -116,7 +128,9 @@ export const usePrepareStore = defineStore('prepare', () => {
   const confirmed = ref(false)
   /** a tool card was clicked before any file: use it straight away if the file suits it */
   const preset = ref<string | null>(null)
-  const step = computed<'file' | 'process' | 'setup'>(() => (!raw.value ? 'file' : confirmed.value ? 'setup' : 'process'))
+  /** a ready-made G-code file instead of a model */
+  const uploaded = shallowRef<{ name: string; text: string; info: JobFileInfo } | null>(null)
+  const step = computed<'file' | 'process' | 'setup'>(() => (!raw.value && !uploaded.value ? 'file' : confirmed.value ? 'setup' : 'process'))
 
   // ---- the job
   const saved = loadSaved()
@@ -131,7 +145,7 @@ export const usePrepareStore = defineStore('prepare', () => {
     const prev = saved[t.name]
     let j: PrepareJob
     if (prev && prev.schema === 1 && prev.process === t.process) {
-      j = clone(prev)
+      j = normalizeJob(clone(prev))
       if (!mats.some((m) => m.key === j.material) && mats[0]) applyMaterial(j, mats[0])
     } else j = newJob(t.name, t.process, mats)
     if (job.value) j.placement = { ...job.value.placement }
@@ -180,10 +194,26 @@ export const usePrepareStore = defineStore('prepare', () => {
     loadError.value = null
     try {
       const ext = extOf(file.name)
+      if ((GCODE_TYPES as readonly string[]).includes(ext)) {
+        const text = await file.text()
+        const info = readJobFile(text)
+        if (!info.bounds) throw new Error('No moves found in this G-code.')
+        raw.value = null
+        fileName.value = file.name
+        uploaded.value = { name: file.name, text, info }
+        confirmed.value = false
+        // Started from a tool card: use it, unless the file says it's for another tool
+        const want = preset.value ? tools.value.find((t) => t.name === preset.value) : null
+        if (want && (!info.toolhead || info.toolhead === want.name)) confirmProcess(want.name)
+        else if (info.toolhead && tools.value.some((t) => t.name === info.toolhead)) pickTool(info.toolhead)
+        preset.value = null
+        return
+      }
       const parts = await loadModelFile(file)
       const verts = merge(parts.map((p) => p.vertices).filter((v) => v && v.length >= 9))
       if (verts.length < 9) throw new Error('No triangles in this file.')
       raw.value = verts
+      uploaded.value = null
       fileName.value = file.name
       flat.value = FLAT_TYPES.has(ext)
       confirmed.value = false
@@ -208,8 +238,9 @@ export const usePrepareStore = defineStore('prepare', () => {
 
   function clearPart() {
     raw.value = null
+    uploaded.value = null
     fileName.value = null
-    result.value = null
+    modelResult.value = null
     confirmed.value = false
     preset.value = null
   }
@@ -217,7 +248,7 @@ export const usePrepareStore = defineStore('prepare', () => {
   /** Tool card: remember the tool, then the view opens the file picker */
   function startWith(tool: string) {
     preset.value = tool
-    if (raw.value) confirmProcess(tool)
+    if (raw.value || uploaded.value) confirmProcess(tool)
   }
 
   function confirmProcess(tool: string) {
@@ -236,8 +267,15 @@ export const usePrepareStore = defineStore('prepare', () => {
    * can't be printed or milled (it's only an outline).
    */
   const options = computed(() => {
-    if (!raw.value) return []
     const mounted = machine.mountedName
+    const up = uploaded.value
+    if (up) {
+      // A finished file is for one toolhead: the one it names, or (if it doesn't say) the one you pick
+      const named = up.info.toolhead ? tools.value.filter((t) => t.name === up.info.toolhead) : []
+      const list = (named.length ? named : tools.value).map((t) => ({ tool: t, recommended: named.length > 0, mounted: t.name === mounted }))
+      return list.sort((a, b) => (a.mounted ? 0 : 1) - (b.mounted ? 0 : 1))
+    }
+    if (!raw.value) return []
     const list = tools.value
       .filter((t) => suits(t.process, flat.value))
       .map((t) => ({ tool: t, recommended: flat.value ? true : t.process === 'fdm' || t.process === 'cnc', mounted: t.name === mounted }))
@@ -254,7 +292,23 @@ export const usePrepareStore = defineStore('prepare', () => {
   // ---- prepare (slice) and send
   const phase = ref<Phase | null>(null)
   const progress = ref<number | null>(null)
-  const result = shallowRef<PrepResult | null>(null)
+  const modelResult = shallowRef<PrepResult | null>(null)
+  /** an uploaded file is checked as soon as its toolhead is confirmed (nothing to slice) */
+  const uploadResult = computed<PrepResult | null>(() => {
+    const up = uploaded.value
+    if (!up || !confirmed.value || !job.value) return null
+    const { checks, stats } = checkFile(up.text, job.value, null, machineInfo.value, { upload: true })
+    const b = up.info.bounds!
+    return {
+      file: { text: withToolhead(up.text, job.value.toolhead), name: safeName(up.name), bounds: { min: [b.min[0], b.min[1], 0], max: [b.max[0], b.max[1], 0] } },
+      checks,
+      stats,
+      kiri: up.info.madeBy ?? 'another program',
+      kiriSeconds: up.info.seconds,
+      kiriFilament: up.info.filamentMm,
+    }
+  })
+  const result = computed<PrepResult | null>(() => (uploaded.value ? uploadResult.value : modelResult.value))
   const prepError = ref<string | null>(null)
   const sending = ref<number | null>(null)
   const sentPath = ref<string | null>(null)
@@ -266,7 +320,7 @@ export const usePrepareStore = defineStore('prepare', () => {
     [job, raw],
     () => {
       if (phase.value) runId++ // a newer request wins; the running one is ignored when it finishes
-      result.value = null
+      modelResult.value = null
       sentPath.value = null
       sendError.value = null
       phase.value = null
@@ -283,7 +337,7 @@ export const usePrepareStore = defineStore('prepare', () => {
     const p = part.value
     const m = machineInfo.value
     prepError.value = null
-    result.value = null
+    modelResult.value = null
     progress.value = null
     try {
       const kiri = await runKiri(vertices.value, kiriJob(j, p, m), (ph, f) => {
@@ -296,7 +350,7 @@ export const usePrepareStore = defineStore('prepare', () => {
       const { checks, stats } = checkFile(file.text, j, p, m)
       const t = /print time: (\d+)s/.exec(kiri)
       const fl = /filament used: ([\d.]+) mm/.exec(kiri)
-      result.value = { file, checks, stats, kiri: await kiriVersion(), kiriSeconds: t ? +t[1]! : null, kiriFilament: fl ? +fl[1]! : null }
+      modelResult.value = { file, checks, stats, kiri: await kiriVersion(), kiriSeconds: t ? +t[1]! : null, kiriFilament: fl ? +fl[1]! : null }
     } catch (e) {
       if (id === runId) prepError.value = (e as Error).message ?? String(e)
     } finally {
@@ -333,9 +387,10 @@ export const usePrepareStore = defineStore('prepare', () => {
   }
 
   const tool = computed(() => tools.value.find((t) => t.name === job.value?.toolhead) ?? null)
-  const fileKind = computed(() => (raw.value ? (flat.value ? '2D drawing' : '3D model') : null))
+  const fileKind = computed(() => (uploaded.value ? 'Ready-made job file (G-code)' : raw.value ? (flat.value ? '2D drawing' : '3D model') : null))
 
   return {
+    uploaded,
     step,
     confirmed,
     preset,

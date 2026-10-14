@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { applyMaterial, materialName, materialsFor, newJob, parseMaterials, processFor } from './profiles'
+import { applyMaterial, materialName, materialsFor, newJob, newOp, normalizeJob, parseMaterials, processFor } from './profiles'
 import { cncStock, cutHeight, kiriJob } from './kiriSettings'
 import { fileName, paLine, rhinoFile, shiftXY, xyBounds } from './rhinoFile'
 import { blocking, checkFile } from './check'
@@ -58,6 +58,23 @@ describe('profiles', () => {
   })
 })
 
+describe('saved jobs from older Studio versions', () => {
+  it('get the new settings, and the old CNC choice becomes steps', () => {
+    const old = newJob('HotJoe', 'cnc', materialsFor('HotJoe', null).list) as unknown as Record<string, unknown>
+    const cnc = { operation: 'clear-and-cutout', toolDiameter: 6, stepDown: 2, stepOver: 0.5, feed: 900, plunge: 150, margin: 4, clearance: 5 }
+    const fdm = { nozzle: 0.4, path: 0, layerHeight: 0.28 }
+    const j = normalizeJob({ ...old, cnc, fdm } as never)
+    expect(j.cnc.ops.map((o) => o.kind)).toEqual(['rough', 'outline'])
+    expect(j.cnc.ops[0]!.stepDown).toBe(2)
+    expect(j.cnc.toolDiameter).toBe(6)
+    expect(j.cnc.fluteLength).toBe(15)
+    expect('operation' in j.cnc).toBe(false)
+    expect(j.fdm.layerHeight).toBe(0.28)
+    expect(j.fdm.seam).toBe('last')
+    expect(j.laser.smooth).toBe(0.1)
+  })
+})
+
 describe('kiriSettings', () => {
   it('FDM: no temperatures from the file, part moved from the bed centre', () => {
     const j = newJob('BlockOne', 'fdm', materialsFor('BlockOne', null).list)
@@ -69,6 +86,22 @@ describe('kiriSettings', () => {
     expect(k.process).toMatchObject({ outputTemp: 0, outputBedTemp: 0, firstLayerNozzleTemp: 0, firstLayerBedTemp: 0, outputRetractDwell: 0 })
     expect(k.device).toMatchObject({ bedWidth: 550, bedDepth: 375, maxHeight: 295, gcodePre: [], gcodePost: [] })
     expect(k.process.outputFanSpeed).toBe(128)
+  })
+  it('FDM advanced settings reach Kiri under its own names', () => {
+    const j = newJob('BlockOne', 'fdm', materialsFor('BlockOne', null).list)
+    Object.assign(j.fdm, { seam: 'random', wallOrder: 'out-in', zHop: 0.4, supports: true, supportAngle: 40, brim: 3, skirtGap: 0, vase: true, outerSpeed: 35, travelSpeed: 200 })
+    expect(kiriJob(j, part(), M).process).toMatchObject({
+      sliceLayerStart: 'random',
+      sliceShellOrder: 'out-in',
+      zHopDistance: 0.4,
+      sliceSupportType: 'automatic',
+      sliceSupportAngle: 40,
+      outputBrimCount: 3,
+      outputBrimOffset: 0,
+      sliceFillType: 'vase',
+      outputFinishrate: 35,
+      outputSeekrate: 200,
+    })
   })
   it('laser: power as % of laser_s_max, origin at the cut, no start/end code from Kiri', () => {
     const j = newJob('LightSaber', 'laser', materialsFor('LightSaber', null).list)
@@ -91,8 +124,16 @@ describe('kiriSettings', () => {
     expect(k.process).toMatchObject({ camStockOffset: false, camOriginTop: true, camOriginCenter: false })
     expect(k.device).toMatchObject({ gcodeSpindle: [], gcodeChange: [] })
     expect((k.process.ops as Array<{ type: string }>).map((o) => o.type)).toEqual(['outline'])
-    j.cnc.operation = 'clear-and-cutout'
+    j.cnc.ops = [newOp('level'), newOp('rough'), newOp('outline'), { ...newOp('rough'), on: false }]
+    // level needs stock above the part; switched-off steps are left out
     expect((kiriJob(j, part(12), M).process.ops as Array<{ type: string }>).map((o) => o.type)).toEqual(['rough', 'outline'])
+    j.cnc.extraTop = 2
+    const k2 = kiriJob(j, part(12), M)
+    expect((k2.process.ops as Array<{ type: string }>).map((o) => o.type)).toEqual(['level', 'rough', 'outline'])
+    expect(k2.origin).toEqual([-15, 15, 14])
+    expect((k2.process.ops as Array<{ type: string; down?: number }>)[0]!.down).toBe(1)
+    j.cnc.ops[0]!.depth = 5
+    expect((kiriJob(j, part(12), M).process.ops as Array<{ down?: number }>)[0]!.down).toBe(2)
   })
 })
 
@@ -226,6 +267,13 @@ describe('check', () => {
     const t = ['; rhino_toolhead = LightSaber', 'G90', 'G0 X10 Y10', 'G1 Z2', 'M3 S1200', 'G1 X20 Y10 F600', 'END_PRINT'].join('\n')
     const bad = blocking(checkFile(t, lj, part(), M).checks).map((c) => c.id)
     expect(bad).toEqual(expect.arrayContaining(['laserpower', 'laserz', 'laseroff']))
+  })
+  it('CNC: deeper than the flutes is blocked', () => {
+    const cj = newJob('HotJoe', 'cnc', materialsFor('HotJoe', null).list)
+    cj.cnc.margin = 5
+    cj.cnc.fluteLength = 8
+    const t = ['; rhino_toolhead = HotJoe', 'G90', 'G0 Z5', 'G0 X3 Y3', 'G1 Z-10 F200', 'G1 X27 Y3 F1000', 'G0 Z5', 'M5', 'END_PRINT'].join('\n')
+    expect(blocking(checkFile(t, cj, part(10), M).checks).map((c) => c.id)).toContain('flute')
   })
   it('CNC: past the stock and below it are blocked; through-cut warns', () => {
     const cj = newJob('HotJoe', 'cnc', materialsFor('HotJoe', null).list)

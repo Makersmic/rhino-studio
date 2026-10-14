@@ -10,7 +10,7 @@
  * FDM numbers follow Mike's OrcaSlicer profiles (slicer/orca in the config
  * repo): 0.2 mm layers, 15 mm/s first layer, 60 mm/s walls and infill.
  */
-import type { CncSettings, FdmSettings, KnifeSettings, LaserSettings, PrepareJob, Process } from './types'
+import type { CncOp, CncSettings, FdmSettings, KnifeSettings, LaserSettings, PrepareJob, Process } from './types'
 
 export interface Material {
   /** key in the table, e.g. PLA_0_4 or PLYWOOD */
@@ -55,19 +55,84 @@ export const DEFAULT_FDM: FdmSettings = {
   firstLayerSpeed: 15,
   retract: 0.4,
   fan: 0.5,
+  // advanced: Kiri:Moto's defaults, except where the Orca profile says otherwise
+  lineWidth: 0,
+  adaptive: false,
+  minLayer: 0.08,
+  wallOrder: 'in-out',
+  seam: 'last',
+  thinWalls: 'basic',
+  fillAngle: 45,
+  fillOverlap: 0.35,
+  outerSpeed: 60,
+  travelSpeed: 150,
+  minSpeed: 5,
+  maxFlow: 12,
+  retractSpeed: 30,
+  zHop: 0,
+  wipe: 0,
+  coast: 0,
+  retractEachLayer: false,
+  avoidCrossing: true,
+  supportAngle: 50,
+  supportDensity: 0.1,
+  supportGapXY: 1,
+  supportGapZ: true,
+  supportOutline: true,
+  fanFromLayer: 1,
+  minLayerTime: 10,
+  skirtGap: 2,
+  raft: false,
+  raftSpacing: 0.2,
+  vase: false,
 }
 
-export const DEFAULT_LASER: LaserSettings = { power: 0.8, feed: 600, passes: 1, cutHeight: 1, kerf: 0.1 }
-export const DEFAULT_KNIFE: KnifeSettings = { feed: 1000, depth: 0.3, passes: 1, tip: 0.5, plunge: 200, cutHeight: 1 }
+export const DEFAULT_LASER: LaserSettings = { power: 0.8, feed: 600, passes: 1, cutHeight: 1, kerf: 0.1, smooth: 0.1, outerOnly: false }
+export const DEFAULT_KNIFE: KnifeSettings = { feed: 1000, depth: 0.3, passes: 1, tip: 0.5, plunge: 200, cutHeight: 1, smooth: 0.1, outerOnly: false }
+
+/** A CNC step with sensible starting numbers */
+export function newOp(kind: CncOp['kind']): CncOp {
+  return {
+    kind,
+    on: true,
+    stepDown: kind === 'level' ? 0.5 : 1,
+    stepOver: kind === 'level' ? 0.6 : 0.4,
+    feed: 0,
+    leave: kind === 'rough' ? 0.3 : 0,
+    depth: 1,
+    side: 'outside',
+    direction: 'climb',
+  }
+}
+
 export const DEFAULT_CNC: CncSettings = {
-  operation: 'cutout',
+  ops: [newOp('outline')],
+  toolType: 'endmill',
   toolDiameter: 3.175,
+  fluteLength: 15,
+  extraTop: 0,
   stepDown: 1,
   stepOver: 0.4,
   feed: 1000,
   plunge: 200,
   margin: 6,
   clearance: 5,
+}
+
+const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v)
+
+/**
+ * A job saved by an older Studio, brought up to date: settings added since get
+ * their starting values, and the old CNC "operation" choice becomes the steps list.
+ */
+export function normalizeJob(j: PrepareJob): PrepareJob {
+  const fill = <T extends object>(d: T, v: unknown): T => ({ ...d, ...(isObj(v) ? v : {}) }) as T
+  const cnc = fill(DEFAULT_CNC, j.cnc)
+  if (!Array.isArray((j.cnc as Partial<CncSettings> | undefined)?.ops)) {
+    cnc.ops = j.cnc?.operation === 'clear-and-cutout' ? [{ ...newOp('rough'), stepDown: cnc.stepDown, stepOver: cnc.stepOver }, { ...newOp('outline'), stepDown: cnc.stepDown }] : [{ ...newOp('outline'), stepDown: cnc.stepDown }]
+  } else cnc.ops = cnc.ops.filter((o) => ['level', 'rough', 'outline'].includes(o?.kind)).map((o) => fill(newOp(o.kind), o))
+  delete cnc.operation
+  return { ...j, fdm: fill(DEFAULT_FDM, j.fdm), laser: fill(DEFAULT_LASER, j.laser), knife: fill(DEFAULT_KNIFE, j.knife), cnc }
 }
 
 /** Fallback when Klipper isn't connected: the shipped variables.cfg tables, trimmed. */
@@ -153,7 +218,7 @@ export function newJob(tool: string, process: Process, materials: Material[]): P
     fdm: { ...DEFAULT_FDM },
     laser: { ...DEFAULT_LASER },
     knife: { ...DEFAULT_KNIFE },
-    cnc: { ...DEFAULT_CNC },
+    cnc: { ...DEFAULT_CNC, ops: DEFAULT_CNC.ops.map((o) => ({ ...o })) },
     placement: { x: 275, y: 187.5, rotate: 0, scale: 1 },
   }
   if (materials[0]) applyMaterial(job, materials[0])
