@@ -14,6 +14,8 @@
  *   graph lines  temperature and target     (--rs-graph-temp/target)
  */
 
+import { brand } from '@/brand/brand'
+
 export interface PanelColors {
   /** Panel background */
   bg?: string
@@ -221,7 +223,7 @@ export function readThemeFile(text: string): { name: string | null; panels: Them
     throw new Error("That file isn't a theme file (it isn't JSON).")
   }
   const d = data as { format?: unknown; name?: unknown; panels?: unknown }
-  if (!d || d.format !== THEME_FILE_FORMAT) throw new Error("That file isn't a Rhino Studio theme.")
+  if (!d || d.format !== THEME_FILE_FORMAT) throw new Error(`That file isn't a ${brand.name} theme.`)
   return { name: cleanName(d.name), panels: cleanTheme(d.panels) }
 }
 

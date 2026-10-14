@@ -27,6 +27,7 @@ import type { CheckedScript } from '@/control/commands'
  */
 
 import { watchedForAll } from '@/tools/adapters'
+import { brand } from '@/brand/brand'
 
 export type ConnectionState = 'offline' | 'connecting' | 'online' | 'error'
 export type KlippyState = 'ready' | 'startup' | 'shutdown' | 'error' | 'disconnected' | 'unknown'
@@ -377,7 +378,7 @@ export class MoonrakerClient {
   private async handshake() {
     try {
       await this.call('server.connection.identify', {
-        client_name: 'Rhino Studio',
+        client_name: brand.name,
         version: this.version,
         type: 'web',
         url: 'https://github.com/Makersmic/rhino-studio',

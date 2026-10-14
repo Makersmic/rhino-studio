@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { brand } from '@/brand/brand'
 import { cleanTheme, contrast, panelVars, reservedHue, toHex, SWATCHES } from './panelColors'
 
 describe('panel colours', () => {
@@ -68,7 +69,7 @@ describe('saved themes and theme files', () => {
 
   it('refuses files that are not themes, in plain words', () => {
     expect(() => readThemeFile('not json')).toThrow(/isn't a theme file/)
-    expect(() => readThemeFile('{"panels":{}}')).toThrow(/isn't a Rhino Studio theme/)
+    expect(() => readThemeFile('{"panels":{}}')).toThrow(new RegExp(`isn't a ${brand.name} theme`))
   })
 
   it('drops bad colours from a loaded file', () => {
