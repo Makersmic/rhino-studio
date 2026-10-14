@@ -1,7 +1,7 @@
 {
   "name": "rhino-studio",
   "private": true,
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "One interface for every Rhino Multi Motion System process: prepare, preview, send, monitor.",
   "license": "GPL-3.0-or-later",
   "type": "module",
@@ -12,7 +12,8 @@
     "typecheck": "vue-tsc --noEmit",
     "icons": "node scripts/export-icons.ts",
     "test": "vitest run",
-    "mock": "node scripts/mock-moonraker.ts"
+    "mock": "node scripts/mock-moonraker.ts",
+    "kiri": "node scripts/kiri/build.mjs"
   },
   "dependencies": {
     "@fontsource-variable/archivo": "^5.3.0",
@@ -25,6 +26,7 @@
     "@types/node": "^26.6.5",
     "@types/ws": "^8.18.2",
     "@vitejs/plugin-vue": "^6.0.9",
+    "esbuild": "^0.25.12",
     "typescript": "^5.9.3",
     "vite": "^6.4.4",
     "vitest": "^3.2.7",

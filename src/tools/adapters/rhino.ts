@@ -21,7 +21,7 @@ const CUSTOM = 'gcode_macro CUSTOM_TOOLS'
 
 const WATCH: Record<string, string[]> = {
   [SWAP]: ['current_tool', 'pending_tool'],
-  [VARS]: ['tool_mapping', 'toolheads'],
+  [VARS]: ['tool_mapping', 'toolheads', 'laser_s_max'], // laser_s_max: Prepare scales laser power to it
   [CUSTOM]: ['tool_mapping', 'toolheads'],
   save_variables: ['variables'],
 }

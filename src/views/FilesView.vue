@@ -4,7 +4,8 @@
  * Upload files, and start a job once Studio has checked the file's toolhead
  * against the mounted one (see src/control/jobs.ts). Nothing is deleted here.
  */
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import EmptyState from '@/components/EmptyState.vue'
 import RsButton from '@/components/RsButton.vue'
 import RsPanel from '@/components/RsPanel.vue'
@@ -21,6 +22,9 @@ import { careText } from '@/maintenance/summary'
 const machine = useMachineStore()
 const care = useMaintenanceStore()
 const control = useControlStore()
+const route = useRoute()
+/** Prepare links here with ?file=<name> after sending: that row is marked and scrolled to */
+const highlight = computed(() => (typeof route.query.file === 'string' ? route.query.file : null))
 const files = ref<FileEntry[]>([])
 const loading = ref(false)
 const error = ref<string | null>(null)
@@ -61,6 +65,7 @@ async function load() {
     const list = await machine.listFiles()
     files.value = list.filter((f) => /\.(gcode|gco|g|nc|ngc)$/i.test(f.path)).sort((a, b) => b.modified - a.modified)
     void readHeaders()
+    if (highlight.value) void nextTick(() => document.querySelector('.file.highlight')?.scrollIntoView({ block: 'center' }))
   } catch (e) {
     error.value = (e as Error).message
   } finally {
@@ -233,7 +238,7 @@ const fmtSize = (b: number) => (b > 1048576 ? `${(b / 1048576).toFixed(1)} MB` :
       <p v-else-if="!loading && !files.length" class="muted">No G-code files in the gcodes folder yet.</p>
 
       <ul v-else class="list">
-        <li v-for="r in rows" :key="r.f.path" class="file">
+        <li v-for="r in rows" :key="r.f.path" class="file" :class="{ highlight: r.f.path === highlight }">
           <span class="tool">
             <ToolheadBadge v-if="r.look" :look="r.look" size="sm" />
             <span v-else class="muted small">{{ r.pending ? (jobRunning ? 'Not read yet' : 'Reading…') : r.unreadable ? "Couldn't read" : 'Not declared' }}</span>
@@ -306,4 +311,5 @@ const fmtSize = (b: number) => (b > 1048576 ? `${(b / 1048576).toFixed(1)} MB` :
   .fit { min-width: 0; }
   .go { grid-column: 1 / -1; justify-content: flex-start; }
 }
+.file.highlight { outline: 2px solid var(--rs-ink); outline-offset: -2px; border-radius: var(--rs-radius-md); }
 </style>

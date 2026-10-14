@@ -114,3 +114,25 @@ Read only, nothing moves. Compare each tool's status strip with Mainsail.
 | E6 | Top bar Swap with a tool mounted and no job | An orange list drops under Swap with every other toolhead (name, slot, kind). Picking one shows "Tool Swap Ready" with the tool's name, and only after Start sends `SWAP_TOOL TOOL=<slot>`; the wizard's prompts follow. Esc or a click outside closes it. Greyed while a job runs | The list includes the mounted tool; anything is sent before the confirmation; the list opens during a job |
 | E5 | Tool macros with each tool mounted (desktop: the row along the bottom of the status box; narrower windows: the <tool> Macros panel) | Only that tool's macros (Bed cooldown only for BlockOne/SwitchFly); "Show N for other tools" lists the rest. **System Macros** is identical for every tool, and its Other macros list folds and stays folded after a reload. Neither offers Swap, List toolheads, Confirm tool, Pause, Resume or Cancel | Another tool's macro shows by default; the System Macros panel changes on a swap; Bed cooldown appears under the laser, spindle or knife |
 
+
+## Prepare (phases 3-4): job files
+
+Run A1-A4 first. Prepare itself never touches the machine: it only uploads files. The first run of each kind of file is the test, so go slowly and stay at the machine with a hand near the power switch.
+
+Before any of these: Rhino config **1.4.3 or later** (real Z travel), `zero_max_z` 290 or less.
+
+| # | Do this | Pass when | Stop if |
+|---|---|---|---|
+| P1 | Prepare, any tool, with nothing connected | Toolheads and materials still listed ("Built-in copy"); Prepare and Download work; Send says to connect | The page errors, or Send is offered while offline |
+| P2 | Connected: pick each tool | Materials match variables.cfg ("Read from Klipper"); the mounted tool is marked | A material is missing or a number differs from variables.cfg |
+| P3 | BlockOne, PLA_0_4, a 20 mm cube, Prepare | Every check ticked; X/Y on the bed view near the middle | Any check fails on a plain cube |
+| P4 | Download that file and read the top | `; rhino_toolhead = BlockOne`, `START_JOB TOOLHEAD=BlockOne MATERIAL=PLA NOZZLE_SIZE=0.4 EXTRUDER=0`, `M83`, no `M104`/`M140` with a temperature, ends `END_PRINT` | Anything else |
+| P5 | Send to Rhino, then Start it from Files | Files highlights it, says Fits mounted tool; Start runs START_JOB exactly as an Orca file (tool question, homing, preheat question, prime line), then prints the cube where the bed view showed | It moves anywhere unexpected, or heats to a temperature that isn't the material's: cancel |
+| P6 | Move the cube to the left edge over the prime line | A "Clear of the prime line" note appears (a note, not a block) | It blocks, or no note |
+| P7 | Drag a part past the bed edge, or type Centre X 560 | "Inside the bed" fails and Send/Download are greyed | The file can still be sent |
+| P8 | LightSaber, PLYWOOD, an SVG at **10 % power**, cardboard, Prepare, Send, Start from Files | Files starts it through LASER_JOB_SETUP (focus, test fire); the laser only fires inside the shape's outline, where the bed view showed it; rail off and bed parked at the end | The laser fires before the wizard's test, fires outside the outline, or stays on after the job: power off at once |
+| P9 | Download the laser file, open it, start it from Mainsail's own Print (skipping the wizard), on cardboard | Head traces the shape but the laser **doesn't fire** (rail never switched on); END_PRINT parks | It fires: power off and report it |
+| P10 | DragKnife, VINYL, an SVG, Prepare | The file plunges `G1 Z-0.3 F200` and lifts `G0 Z5`; start it from Files (DRAGKNIFE_JOB_SETUP sets Z0 on the vinyl); cuts the shape, backing uncut | The blade goes deeper than set, or the cut lands somewhere other than the bed view |
+| P11 | HotJoe, SOFT_WOOD, a small plate, **Cut out**, scrap board on a spoil board, Prepare | Checks show the stock size, depth = plate thickness, 5 mm clearance, and the through-cut note | Any check fails |
+| P12 | Send, Start from Files, CNC_JOB_SETUP: X0 Y0 on the stock's front-left corner, Z0 on top | Spindle spins up from the wizard, cuts around the part (outside it) stepping down 1 mm, never moves outside the stock, lifts 5 mm between cuts, stops the spindle at the end | It cuts inside the part, goes outside the stock or below the board: E-stop |
+| P13 | Change any setting after Prepare | The result disappears; Send needs Prepare again | An old file can still be sent |

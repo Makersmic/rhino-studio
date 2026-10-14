@@ -92,6 +92,8 @@ export const WATCHED_OBJECTS: Record<string, string[] | null> = {
   'output_pin Spindle_power': ['value'], // spindle relay
   'output_pin SPINDLE_SPEED': ['value'], // spindle ESC throttle: 0.3 = stopped, 1.0 = full
   'gcode_macro TOOL_POWER_STATE': ['active', 'level', 'suspended'], // added powered tools
+  // Rhino config 1.4+: the prime line, so Prepare can keep parts off it
+  'gcode_macro RHINO_POSITIONS': ['prime_x', 'prime_y', 'prime_length'],
 }
 
 export interface FileEntry {

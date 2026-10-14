@@ -2,6 +2,9 @@ import { defineConfig } from 'vitest/config'
 import type { ProxyOptions } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { fileURLToPath, URL } from 'node:url'
+import { readFileSync } from 'node:fs'
+
+const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')) as { version: string }
 
 /**
  * During development the app runs on your PC (localhost:5173) but Moonraker
@@ -43,6 +46,8 @@ const originFix: ProxyOptions = {
 export default defineConfig({
   base: './',
   plugins: [vue()],
+  // Written into every job file Prepare makes (; Made by Rhino Studio <version>)
+  define: { __APP_VERSION__: JSON.stringify(pkg.version) },
   resolve: {
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
   },

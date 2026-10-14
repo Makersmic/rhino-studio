@@ -2,7 +2,7 @@
 
 One interface for every Rhino Multi Motion System process: import a model, pick a toolhead, prepare, preview, send and monitor. "Rhino Studio" is a working title; the name and logo live in `src/brand/brand.ts`.
 
-Status: **Phase 2b** (machine control), on top of 2a (live status) and Care (maintenance). **This version can move the Rhino, heat it, run macros and start jobs.** Run the checks in [docs/testing.md](docs/testing.md) in order before trusting it, starting with 2a's A1-A8.
+Status: **Phases 3-4** (Prepare: print, laser, knife and CNC job files from Kiri:Moto), on top of 2b (machine control), 2a (live status) and Care (maintenance). **This version can move the Rhino, heat it, run macros and start jobs.** Run the checks in [docs/testing.md](docs/testing.md) in order before trusting it, starting with 2a's A1-A8.
 
 ### What it can do
 
@@ -13,6 +13,7 @@ Status: **Phase 2b** (machine control), on top of 2a (live status) and Care (mai
   - **Jog** screen uses two-hand control: the jog keys stay greyed out unless the **Hold** button in the bottom corner is held. Hold with one thumb, tap with the other; one tap is one step. Letting go, a cancelled touch, the screen turning off or switching apps kills the keys at once. A left-handed option mirrors the layout. On a computer, hold Shift as the Hold button.
   - **Status** screen: big work/machine position, Home, Set Z zero / Set work zero.
 - **Klipper prompts**: the Rhino wizards' questions (SWAP_TOOL, RESTORE_TOOL, the job setup wizards) pop up in Studio as well as Mainsail. A button runs only its own command.
+- **Prepare**: open a model (STL, 3MF, OBJ) or drawing (SVG, DXF), pick the toolhead and material, place it on a to-scale bed, and Prepare. Kiri:Moto's engine slices **in the browser**, never on the Pi. Print heads get a print with START_JOB (the same line as the Orca profile: tool check, homing, heat from the material table, prime) and END_PRINT; the LightSaber a cut in machine X/Y with power scaled to `laser_s_max`, repeated per pass, rail off at the end; the drag knife a cut with slow blade plunges; HotJoe a cut-out (or clear-and-cut-out) in work coordinates, X0 Y0 at the stock's front-left corner and Z0 on its top. Materials, powers and feeds come from Klipper's own `VARIABLES` tables. Every file is then **checked line by line** (tool, forbidden commands, travel limits or stock, heaters, laser power, depth, END_PRINT) and anything that fails can't be sent. **Send to Rhino** only uploads it; start it from Files.
 - **Files**: upload (button or drag and drop; never starts the file) and Start. Start checks the file's toolhead against the mounted one and blocks a mismatch (offering the swap). Print files start directly (their START_JOB checks again on the machine); laser, spindle, knife and added-tool files start through LASER_JOB_SETUP, CNC_JOB_SETUP, DRAGKNIFE_JOB_SETUP or TOOL_JOB_SETUP with `FILE=`, so the wizard's safety steps and the laser rail (config 1.4.1) aren't skipped.
 
 ### What each tool shows
@@ -123,6 +124,8 @@ src/
   control/      command safety check, prompt parser, job-start rules (+ tests); motion, heat, job, console panels; dialogs
   portal/       Rhino Portal client (maintenance API)
   maintenance/  care rules (+ tests), task cards, log-work dialog, care tiles
+  slicer/       Prepare: job settings, Kiri:Moto settings, Rhino job file writer, file checks (+ tests), engine loader
+  prepare/      the bed view and number fields
   webcams/      camera rules (+ tests), the camera viewer, Settings → Cameras
   dashboard/    Dashboard notices (+ tests)
   stores/       machine state, control (console, prompts, motion lock, confirmations), cameras, care, settings, theme
@@ -130,7 +133,8 @@ src/
   views/        one file per screen
   router.ts     screens and their URLs
 design/icons/   exported SVGs for the README, videos and the Portal
-scripts/        icon export, mock Moonraker
+scripts/        icon export, mock Moonraker, kiri/ (builds the Kiri:Moto engine into public/kiri/)
+public/kiri/    the Kiri:Moto engine, built from a pinned grid-apps commit (MIT, licence alongside)
 docs/           testing on the machine
 ```
 
@@ -179,6 +183,8 @@ Open **Style** in the app for the live guide. The direction is an **e-paper inst
 - The Dashboard is look-only: no buttons that act on the machine, and Klipper's wizard questions are answered on Control (the Dashboard shows a red notice that one is waiting). The top bar's Stop stays.
 - The Portal client may only read maintenance and log work or snooze (`PORTAL_WRITES` in `src/portal/client.ts`). Those change maintenance records, never the machine.
 - Generated jobs call the existing macros (START_JOB, SWAP_TOOL, END_PRINT) instead of raw tool-change or power G-code.
+- Prepare's files never heat (START_JOB heats from the material table), never home, swap, restart or change work zeros, and never switch a tool's power on: the laser file doesn't switch the rail on (`_LASER_START` does), and the CNC file doesn't start the spindle (CNC_JOB_SETUP does). Run on their own, outside their wizard, they can't fire the laser or spin the spindle.
+- Every prepared file is read back line by line before it may be sent (`src/slicer/check.ts`); a failed check blocks Send and Download. The machine's macros keep their own checks too.
 
 ## Licence
 
@@ -191,6 +197,6 @@ Third-party pieces in use:
 | Vue, Vue Router, Pinia, Vite | MIT |
 | Archivo, JetBrains Mono (via Fontsource) | SIL Open Font License 1.1 |
 | DSEG7 Classic by keshikan (bundled in `src/assets/fonts/`, unmodified, licence alongside) | SIL Open Font License 1.1 |
-| Kiri:Moto engine (from Phase 3) | MIT |
+| Kiri:Moto engine, GridSpace grid-apps 4.7.0 (bundled in `public/kiri/`, built by `scripts/kiri/build.mjs` with two path fixes, licence alongside) | MIT |
 
 The mock's camera frames (`scripts/fixtures/webcam/`) were rendered for this project with three.js (MIT); three.js itself isn't part of the app.
