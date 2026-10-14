@@ -171,9 +171,16 @@ describe('rhinoFile', () => {
     expect(lines[i + 1]).toBe('CALCULATE_PA BOWDEN_LENGTH=5.9 MATERIAL=PLA LAYER_HEIGHT=0.2 NOZZLE_SIZE=0.4 PRINT_SPEED=60 FILAMENT_DIAMETER=1.75 LINE_WIDTH=0.4')
     expect(blocking(checkFile(lines.join('\n'), j, part(), M).checks)).toEqual([])
   })
+  it('SwitchFly gets CALCULATE_PA with its 35 mm bowden (3.5 cm) on either path', () => {
+    const list = materialsFor('SwitchFly', null).list
+    const sf = newJob('SwitchFly', 'fdm', list)
+    expect(paLine(sf)).toMatch(/^CALCULATE_PA BOWDEN_LENGTH=3\.5 MATERIAL=PLA /)
+    applyMaterial(sf, list.find((m) => m.key === 'PLA_0_4_T1')!)
+    expect(paLine(sf)).toMatch(/^CALCULATE_PA BOWDEN_LENGTH=3\.5 /)
+  })
   it('no CALCULATE_PA for a head without a bowden length, or a material the macro does not know', () => {
-    const sf = newJob('SwitchFly', 'fdm', materialsFor('SwitchFly', null).list)
-    expect(paLine(sf)).toBeNull()
+    const hj = newJob('HotJoe', 'fdm', materialsFor('BlockOne', null).list)
+    expect(paLine(hj)).toBeNull()
     const b = newJob('BlockOne', 'fdm', materialsFor('BlockOne', null).list)
     b.material = 'WOODFILL_0_4'
     expect(paLine(b)).toBeNull()

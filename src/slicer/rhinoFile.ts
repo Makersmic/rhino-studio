@@ -30,7 +30,8 @@ export const STUDIO_FILE_VERSION = 1
  * BOWDEN_LENGTH (cm) is per print head; a head not listed here gets no CALCULATE_PA line.
  * CALCULATE_PA only knows these materials (tools/3dp_macros.cfg) and fails on any other.
  */
-export const PA_BOWDEN_CM: Record<string, number> = { BlockOne: 5.9 }
+// BlockOne 59 mm (its Orca profile); SwitchFly 35 mm, both paths (Mike, 2026-10-14)
+export const PA_BOWDEN_CM: Record<string, number> = { BlockOne: 5.9, SwitchFly: 3.5 }
 export const PA_MATERIALS = new Set(['PLA', 'PETG', 'ABS', 'TPU', 'NYLON', 'ASA', 'PVB', 'PA', 'FLEX'])
 
 export function paLine(job: PrepareJob): string | null {
