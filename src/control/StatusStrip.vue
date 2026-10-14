@@ -152,7 +152,7 @@ const jobLabel: Record<string, string> = { standby: 'Idle', printing: 'Running',
 
     <!-- The mounted tool's macros along the bottom (desktop only; on smaller
          screens they're in their own panel). Same safety check as the console. -->
-    <div class="tool-macros" :aria-label="toolMacros.toolName.value ? `Macros for ${toolMacros.toolName.value}` : 'Tool macros'" role="group">
+    <div class="tool-macros" :aria-label="toolMacros.toolName.value ? `${toolMacros.toolName.value} Macros` : 'Tool macros'" role="group">
       <template v-if="toolMacros.toolName.value">
         <button
           v-for="b in toolMacros.panels.value.tool"

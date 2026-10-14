@@ -8,7 +8,7 @@
  *
  * Each button goes through the same safety check as the console.
  */
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import RsPanel from '@/components/RsPanel.vue'
 import { useControlStore } from '@/stores/control'
 import { useMachineStore } from '@/stores/machine'
@@ -29,7 +29,19 @@ const groups = computed<MacroGroup[]>(() => {
   return g
 })
 
-const title = computed(() => (props.kind === 'shared' ? 'System' : toolName.value ? `For ${toolName.value}` : 'Tool macros'))
+const title = computed(() => (props.kind === 'shared' ? 'System Macros' : toolName.value ? `${toolName.value} Macros` : 'Tool macros'))
+
+// Folded groups ("Other macros"), remembered on this device
+const FOLD_KEY = 'rhino-studio.macros.folded'
+function loadFolded(): string[] {
+  try { return JSON.parse(localStorage.getItem(FOLD_KEY) ?? '[]') as string[] } catch { return [] }
+}
+const folded = ref<string[]>(loadFolded())
+const isFolded = (g: MacroGroup) => !!g.collapsible && folded.value.includes(g.title)
+function toggleFold(g: MacroGroup) {
+  folded.value = isFolded(g) ? folded.value.filter((t) => t !== g.title) : [...folded.value, g.title]
+  try { localStorage.setItem(FOLD_KEY, JSON.stringify(folded.value)) } catch { /* private window: not remembered */ }
+}
 const status = computed(() => (props.kind === 'tool' && toolName.value ? 'Changes with the tool' : undefined))
 const accent = computed(() => (props.kind === 'tool' && machine.mountedVerified ? `var(${machine.mountedLook.accentVar})` : undefined))
 
@@ -40,8 +52,14 @@ const runMacro = (name: string, label: string) => control.send(name, { label })
   <RsPanel :panel-id="kind === 'shared' ? 'control.macros.system' : 'control.macros.tool'" :title="title" :status="status" class="macro-panel" :class="[kind, { tabbed: !!accent }]" :style="accent ? { '--accent': accent } : undefined">
     <div class="macros">
       <section v-for="g in groups" :key="g.title" class="group">
-        <h3 v-if="g.title">{{ g.title }}</h3>
-        <div class="buttons" :class="{ dense: g.dense }">
+        <h3 v-if="g.title && g.collapsible">
+          <button type="button" class="fold" :aria-expanded="!isFolded(g)" :aria-controls="`macros-${kind}-${g.title}`" @click="toggleFold(g)">
+            <span class="chev" aria-hidden="true">{{ isFolded(g) ? '▸' : '▾' }}</span>{{ g.title }}
+            <span class="count">{{ g.buttons.length }}</span>
+          </button>
+        </h3>
+        <h3 v-else-if="g.title">{{ g.title }}</h3>
+        <div v-show="!isFolded(g)" :id="`macros-${kind}-${g.title}`" class="buttons" :class="{ dense: g.dense }">
           <button
             v-for="b in g.buttons"
             :key="b.name"
@@ -109,6 +127,10 @@ h3 { font-size: var(--rs-text-xs); font-weight: var(--rs-weight-medium); color: 
 .macro.suggested { border: 2px solid var(--rs-ink); }
 .macro:disabled { opacity: 0.35; cursor: not-allowed; }
 .dense .macro { min-height: 32px; font-family: var(--rs-font-code); font-size: 11px; font-weight: 400; background: transparent; }
+.fold { display: inline-flex; align-items: center; gap: 6px; min-height: 24px; padding: 0; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; }
+.fold:hover { color: var(--rs-text-strong); }
+.chev { display: inline-block; width: 10px; font-size: 10px; }
+.count { font-family: var(--rs-font-code); font-size: 11px; }
 .note { margin-top: var(--rs-space-4); font-size: var(--rs-text-xs); color: var(--rs-text-muted); }
 .small { font-size: var(--rs-text-sm); }
 .more { margin-left: 4px; padding: 0; border: 0; background: none; color: var(--rs-text-strong); font: inherit; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }

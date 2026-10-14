@@ -3,7 +3,7 @@
  *
  *   - Tool panel: macros for the mounted toolhead only. It changes when the
  *     tool changes, so it carries the tool's name and accent.
- *   - System panel: macros that work whatever is mounted (backups,
+ *   - System Macros panel: macros that work whatever is mounted (backups,
  *     care, and the machine's own hardware such as lights or
  *     an exhaust fan). It never changes, so its buttons stay in one place.
  *
@@ -28,6 +28,8 @@ export interface MacroGroup {
   buttons: MacroButton[]
   /** Small monospace buttons for the long tail of unsorted macros */
   dense?: boolean
+  /** Can be folded away (the long "Other macros" list) */
+  collapsible?: boolean
 }
 
 export interface MacroPanels {
@@ -174,7 +176,7 @@ export function macroPanels(
     .map(take)
   if (hardware.length) shared.push({ title: 'Lights and air', buttons: hardware })
   const rest = [...available].filter((n) => has(n) && !used.has(n) && !forOtherTool(n, toolType, toolName)).sort()
-  if (rest.length) shared.push({ title: 'Other macros', buttons: rest.map((n) => ({ name: n, label: n })), dense: true })
+  if (rest.length) shared.push({ title: 'Other macros', buttons: rest.map((n) => ({ name: n, label: n })), dense: true, collapsible: true })
 
   return { tool, toolMore, shared }
 }
