@@ -131,5 +131,11 @@ describe('tool changes on other kinds of machine', () => {
   })
   it('leaves harmless tool-parameter edits alone', () => {
     expect(check('SET_TOOL_PARAMETER TOOL=T0 PARAMETER=params_fan_speed VALUE=1', ctx).needsConfirm).toBe(false)
+    expect(check('SET_TOOL_PARAMETER TOOL=T0 PARAMETER=gcode_z_offset VALUE=-0.4', ctx)).toMatchObject({ risk: 'tool-state', needsConfirm: true })
+  })
+
+  it('confirms the Rhino job-file lines when typed by hand', () => {
+    expect(check('CNC_BIT_CHANGE BIT=2', ctx)).toMatchObject({ risk: 'motion', needsConfirm: true })
+    expect(check('REQUIRE_TOOLHEAD TOOLHEAD=LightSaber', ctx).needsConfirm).toBe(true)
   })
 })

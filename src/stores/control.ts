@@ -359,6 +359,18 @@ export const useControlStore = defineStore('control', () => {
   }
 
   async function swapTo(slot: number, name: string) {
+    // The Swap list is disabled in these states; refuse here too, whatever calls this
+    const t = machine.toolState.kind
+    const refuse = !machine.klippyReady
+      ? 'Klipper is not ready'
+      : jobActive.value
+        ? 'Not while a job is running'
+        : t === 'swapping'
+          ? 'A tool swap is already under way'
+          : t === 'mismatch'
+            ? 'The tool sensor disagrees with the selected tool'
+            : null
+    if (refuse) return log('error', `Swap to ${name}: ${refuse}`), false
     const script = machine.adapter.swapScript(slot)
     // Machines that change tools themselves: the Swap list may skip the
     // confirmation when the user turned it off (Settings). Never on the Rhino,

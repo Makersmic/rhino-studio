@@ -57,6 +57,12 @@ describe('macroPanels', () => {
     for (const n of ['_CNC_START', 'G28', 'CNC_JOB_SETUP', 'LASER_JOB_SETUP']) expect(allNames(p)).not.toContain(n)
   })
 
+  it('never offers the job-file lines (bit change, file guard) as buttons', () => {
+    const avail = new Set([...rhino, 'CNC_BIT_CHANGE', 'REQUIRE_TOOLHEAD'])
+    const p = macroPanels(avail, { toolType: 'CNC', toolName: 'HotJoe', showAll: true })
+    for (const n of ['CNC_BIT_CHANGE', 'REQUIRE_TOOLHEAD']) expect(allNames(p)).not.toContain(n)
+  })
+
   it('shows no tool macros until Klipper confirms a tool', () => {
     const p = macroPanels(rhino, { toolType: null, toolName: null })
     expect(p.tool).toEqual([])

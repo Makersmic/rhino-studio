@@ -159,6 +159,12 @@ function checkLine(line: string): LineCheck {
   if (command === 'ENTER_DOCKING_MODE' || command === 'EXIT_DOCKING_MODE') return r('motion', 'switches the toolchanger in or out of docking mode')
   if (command === 'ASSIGN_TOOL') return r('tool-state', 'changes which tool number a tool answers to')
   if (command === 'SET_TOOL_PARAMETER' && /(PICKUP|DROPOFF|PARK|ZONE|DOCK)/i.test(line)) return r('tool-state', 'changes where a tool is docked or picked up')
+  // A wrong tool offset puts the nozzle into the bed on the next pickup
+  if (command === 'SET_TOOL_PARAMETER' && /OFFSET/i.test(line)) return r('tool-state', "changes a tool's offset: the next pickup moves by it")
+
+  // Rhino 1.4.2 lines that belong in job files (Rhino Studio writes them), not the console
+  if (command === 'CNC_BIT_CHANGE') return r('motion', 'holds the job for a bit change: spindle off, the bed goes down and the head moves to the swap spot')
+  if (command === 'REQUIRE_TOOLHEAD') return r('job', 'checks the running file: if it fails, every tool is switched off and the job stops')
   if (command === 'ACTIVATE_EXTRUDER') return r('tool-state', 'changes which extruder (tool) Klipper drives')
   if (command === 'SET_DUAL_CARRIAGE') return r('motion', 'switches which carriage moves')
 
