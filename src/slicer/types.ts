@@ -110,6 +110,16 @@ export interface MachineInfo {
   laserSMax: number
   /** RHINO_POSITIONS prime line, if the config has it */
   prime: { x: number; y: number; length: number } | null
+  /** places on the bed nothing may print or cut over (machine X/Y, mm) */
+  keepOut: KeepOut[]
+}
+
+export interface KeepOut {
+  x0: number
+  y0: number
+  x1: number
+  y1: number
+  label: string
 }
 
 export const DEFAULT_MACHINE: MachineInfo = {
@@ -118,6 +128,8 @@ export const DEFAULT_MACHINE: MachineInfo = {
   workArea: { x: 550, y: 375 },
   laserSMax: 1000,
   prime: { x: 5, y: 10, length: 120 },
+  // A Z leadscrew comes up through the bed here (the Orca profile's bed exclude area 450x300 - 550x350)
+  keepOut: [{ x0: 450, y0: 300, x1: 550, y1: 350, label: 'Leadscrew' }],
 }
 
 /** The part as loaded, after rotate and scale, centred on X/Y with its bottom at Z 0. */

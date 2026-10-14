@@ -9,7 +9,7 @@ interface NavItem { to: string; label: string; icon: NavIconId }
 
 const main: NavItem[] = [
   { to: '/dashboard', label: 'Dashboard', icon: 'dashboard' },
-  { to: '/prepare', label: 'Prepare', icon: 'prepare' },
+  { to: '/setup', label: 'Job setup', icon: 'prepare' },
   { to: '/preview', label: 'Preview', icon: 'preview' },
   { to: '/control', label: 'Control', icon: 'control' },
   { to: '/toolheads', label: 'Toolheads', icon: 'toolheads' },

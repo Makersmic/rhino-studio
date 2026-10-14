@@ -83,6 +83,8 @@ export function checkFile(text: string, job: PrepareJob, part: PartInfo, m: Mach
   let relMoves = 0
   let startJob: string | null = null
   let lastCommand = ''
+  const hitKeepOut = new Set<string>()
+  const inZone = (x: number, y: number) => m.keepOut.find((k) => x >= k.x0 && x <= k.x1 && y >= k.y0 && y <= k.y1)
 
   for (const rl of raw) {
     const l = rl.replace(/;.*$/, '').trim()
@@ -136,6 +138,17 @@ export function checkFile(text: string, job: PrepareJob, part: PartInfo, m: Mach
       const e = word(l, 'E')
       const working = cmd !== 'G0' && (job.process === 'fdm' ? (e ?? 0) > 0 : job.process === 'laser' ? laserOn : true)
       if (e && e > 0) stats.filament += e
+      // Printing or cutting over a keep-out area (checked every 1 mm along the move)
+      if (working && started && job.process !== 'cnc' && m.keepOut.length && pos.x !== null && pos.y !== null && next.x !== null && next.y !== null) {
+        const steps = Math.max(1, Math.ceil(Math.hypot(next.x - pos.x, next.y - pos.y)))
+        for (let i = 0; i <= steps; i++) {
+          const k = inZone(pos.x + ((next.x - pos.x) * i) / steps, pos.y + ((next.y - pos.y) * i) / steps)
+          if (k) {
+            hitKeepOut.add(k.label)
+            break
+          }
+        }
+      }
       if (dist > 0) {
         stats.moves++
         if (working) stats.workLength += dist
@@ -167,6 +180,7 @@ export function checkFile(text: string, job: PrepareJob, part: PartInfo, m: Mach
   if (has && job.process !== 'cnc') {
     const okX = min[0]! >= Math.max(0, m.travelMin[0]) - 1e-6 && max[0]! <= Math.min(m.workArea.x, m.travelMax[0]) + 1e-6
     const okY = min[1]! >= Math.max(0, m.travelMin[1]) - 1e-6 && max[1]! <= Math.min(m.workArea.y, m.travelMax[1]) + 1e-6
+    add('keepout', hitKeepOut.size === 0, 'Clear of the leadscrew and other keep-out areas', `Prints or cuts over: ${[...hitKeepOut].join(', ')}. Move the part.`)
     add('bed', okX && okY, `Inside the bed (${fmt(m.workArea.x)} x ${fmt(m.workArea.y)} mm)`, `Goes to ${box}. Move the part.`)
   }
 

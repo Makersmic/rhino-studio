@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { applyMaterial, materialName, materialsFor, newJob, parseMaterials, processFor } from './profiles'
 import { cncStock, cutHeight, kiriJob } from './kiriSettings'
-import { fileName, rhinoFile, shiftXY, xyBounds } from './rhinoFile'
+import { fileName, paLine, rhinoFile, shiftXY, xyBounds } from './rhinoFile'
 import { blocking, checkFile } from './check'
 import { footprint, merge, partInfo, transform } from './model'
 import { DEFAULT_MACHINE, type PartInfo } from './types'
@@ -123,6 +123,20 @@ describe('rhinoFile', () => {
     const { checks } = checkFile(f.text, j, part(), M)
     expect(blocking(checks)).toEqual([])
   })
+  it('BlockOne gets the Orca profile\'s CALCULATE_PA line right after START_JOB', () => {
+    const j = newJob('BlockOne', 'fdm', materialsFor('BlockOne', null).list)
+    const lines = rhinoFile(fdmKiri, j, part(), M, 'x').text.split('\n')
+    const i = lines.findIndex((l) => l.startsWith('START_JOB'))
+    expect(lines[i + 1]).toBe('CALCULATE_PA BOWDEN_LENGTH=5.9 MATERIAL=PLA LAYER_HEIGHT=0.2 NOZZLE_SIZE=0.4 PRINT_SPEED=60 FILAMENT_DIAMETER=1.75 LINE_WIDTH=0.4')
+    expect(blocking(checkFile(lines.join('\n'), j, part(), M).checks)).toEqual([])
+  })
+  it('no CALCULATE_PA for a head without a bowden length, or a material the macro does not know', () => {
+    const sf = newJob('SwitchFly', 'fdm', materialsFor('SwitchFly', null).list)
+    expect(paLine(sf)).toBeNull()
+    const b = newJob('BlockOne', 'fdm', materialsFor('BlockOne', null).list)
+    b.material = 'WOODFILL_0_4'
+    expect(paLine(b)).toBeNull()
+  })
   it('SwitchFly path 1 goes into EXTRUDER=', () => {
     const list = materialsFor('SwitchFly', null).list
     const j = newJob('SwitchFly', 'fdm', list)
@@ -184,6 +198,12 @@ describe('check', () => {
     const body = ['G1 Z0.2', 'G1 X300 Y200', line, ...(line === 'G91' ? ['G1 X5'] : [])]
     const bad = blocking(checkFile(fdm(body), j(), part(), M).checks).map((c) => c.id)
     expect(bad).toContain(id)
+  })
+  it('printing over the leadscrew is blocked; travelling over it is not', () => {
+    const over = checkFile(fdm(['G1 Z0.2', 'G1 X440 Y320', 'G1 X470 Y320 E1']), j(), part(), M)
+    expect(blocking(over.checks).map((c) => c.id)).toContain('keepout')
+    const travel = checkFile(fdm(['G1 Z0.2', 'G1 X440 Y320', 'G1 X470 Y320', 'G1 X300 Y200', 'G1 X310 Y200 E1']), j(), part(), M)
+    expect(blocking(travel.checks)).toEqual([])
   })
   it('M104 S0 (heater off) is fine', () => {
     expect(blocking(checkFile(fdm(['M104 S0', 'G1 Z0.2', 'G1 X300 Y200 E1']), j(), part(), M).checks)).toEqual([])

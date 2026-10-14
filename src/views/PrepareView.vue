@@ -1,8 +1,15 @@
 <script setup lang="ts">
 /**
- * Prepare a job: model in, Rhino job file out.
- * The slicing is Kiri:Moto's engine running in this browser (src/slicer/), so
- * the Pi only ever receives the finished file. See src/stores/prepare.ts.
+ * Job setup: model in, Rhino job file out, in three steps (the flow online
+ * manufacturing services use: upload, confirm the process, configure):
+ *
+ *   File      drop a model or drawing, or start from a toolhead card
+ *   Process   Studio says what kind of file it is and which processes fit;
+ *             you confirm one (skipped when you started from a card that fits)
+ *   Set up    place it, set the process, check the file, send it
+ *
+ * The slicing runs in this browser (src/slicer/), so the Pi only ever receives
+ * the finished file. See src/stores/prepare.ts.
  */
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
@@ -11,6 +18,9 @@ import RsButton from '@/components/RsButton.vue'
 import Icon from '@/icons/Icon.vue'
 import BedView from '@/prepare/BedView.vue'
 import NumField from '@/prepare/NumField.vue'
+import StepBar from '@/prepare/StepBar.vue'
+import ToolCard from '@/prepare/ToolCard.vue'
+import { PROCESS_ACTION, PROCESS_LABEL, prettyMaterial, toolFacts } from '@/prepare/facts'
 import { usePrepareStore } from '@/stores/prepare'
 import { useMachineStore } from '@/stores/machine'
 import { MODEL_TYPES } from '@/slicer/model'
@@ -41,7 +51,38 @@ const suits = computed(() => {
   return null
 })
 
-const processWord = { fdm: 'Print', laser: 'Laser cut', dragknife: 'Knife cut', cnc: 'Mill' } as const
+const processWord = PROCESS_LABEL
+
+const cards = computed(() =>
+  prep.tools.map((t) => ({ t, facts: toolFacts(t, prep.materialsOf(t.name), prep.machineInfo), mounted: t.name === machine.mountedName })),
+)
+
+/** Tool card: with no file yet, remember the tool and ask for the file */
+function startWith(tool: string) {
+  prep.startWith(tool)
+  if (prep.step === 'file') picker.value?.click()
+}
+
+/** Step 2: the process picked in the list (the first option until you choose) */
+const choice = ref<string | null>(null)
+const chosen = computed(() => choice.value ?? prep.options[0]?.tool.name ?? null)
+function confirm() {
+  if (chosen.value) prep.confirmProcess(chosen.value)
+  choice.value = null
+}
+function goStep(s: 'file' | 'process') {
+  if (s === 'file') prep.clearPart()
+  else prep.changeProcess()
+}
+const footprintPath = computed(() => {
+  const p = prep.part
+  if (!p || !p.footprint.length) return { d: '', view: '0 0 10 10' }
+  const w = Math.max(p.size.x, 1)
+  const h = Math.max(p.size.y, 1)
+  const pad = Math.max(w, h) * 0.06
+  const d = p.footprint.map(([x, y], i) => `${i ? 'L' : 'M'}${(x + w / 2).toFixed(2)} ${(h / 2 - y).toFixed(2)}`).join(' ') + ' Z'
+  return { d, view: `${-pad} ${-pad} ${w + 2 * pad} ${h + 2 * pad}` }
+})
 
 const fmtTime = (s: number) => {
   const m = Math.round(s / 60)
@@ -54,7 +95,7 @@ const summary = computed(() => {
   const r = prep.result
   if (!r || !proc.value) return []
   const time = r.kiriSeconds ?? r.stats.seconds
-  const rows: Array<{ label: string; value: string; note?: string }> = [{ label: 'Time', value: fmtTime(time), note: r.kiriSeconds ? 'Kiri:Moto estimate' : 'from feeds, no acceleration' }]
+  const rows: Array<{ label: string; value: string; note?: string }> = [{ label: 'Time', value: fmtTime(time), note: r.kiriSeconds ? 'estimate' : 'from feeds, no acceleration' }]
   if (proc.value === 'fdm') {
     rows.push({ label: 'Filament', value: fmtLen(r.kiriFilament ?? r.stats.filament), note: '1.75 mm' })
     rows.push({ label: 'Layers', value: String(r.stats.layers) })
@@ -77,38 +118,100 @@ function openInFiles() {
 </script>
 
 <template>
-  <div class="view">
+  <div class="view" @dragover.prevent="prep.step !== 'setup' && (dragging = true)" @dragleave.self="dragging = false" @drop.prevent="onDrop">
     <div class="view-head">
-      <h1>Prepare a job</h1>
-      <p>Bring in a model or drawing, pick the toolhead, and turn it into a Rhino job file. Slicing runs in this browser with the Kiri:Moto engine, so the Pi stays free for Klipper.</p>
+      <h1>Job setup</h1>
+      <p>Drop in a model or drawing, confirm what the Rhino should do with it, then place it, set it up and send it. Everything is worked out on this computer; the Pi only receives the finished job.</p>
     </div>
 
-    <div class="layout">
-      <!-- ============ the bed -->
+    <input ref="picker" type="file" :accept="accepts" class="visually-hidden" aria-label="Choose a model file" @change="pick(($event.target as HTMLInputElement).files)" />
+    <StepBar :step="prep.step" @go="goStep" />
+
+    <!-- ============ 1. File -->
+    <template v-if="prep.step === 'file'">
+      <button type="button" class="dropzone" :class="{ dragging }" @click="picker?.click()">
+        <Icon nav="prepare" :size="56" />
+        <span class="big">{{ prep.loading ? 'Reading the file…' : prep.preset ? `Drop a file for ${prep.preset}, or click to choose one` : 'Drop a model or drawing here, or click to choose one' }}</span>
+        <span class="muted small">3D models: STL, 3MF, OBJ · 2D drawings: SVG, DXF</span>
+        <span v-if="prep.loadError" class="error" role="alert">{{ prep.loadError }}</span>
+      </button>
+
+      <h2 class="section">Or start from a toolhead</h2>
+      <div class="cards">
+        <ToolCard
+          v-for="c in cards"
+          :key="c.t.name"
+          :look="c.t.look"
+          :slot="c.t.slot"
+          :process="processWord[c.t.process]"
+          :facts="c.facts"
+          :mounted="c.mounted"
+          :action="PROCESS_ACTION[c.t.process]"
+          @pick="startWith(c.t.name)"
+        />
+      </div>
+    </template>
+
+    <!-- ============ 2. Process -->
+    <RsPanel v-else-if="prep.step === 'process' && prep.part" panel-id="prepare.process" :title="`What should the Rhino do with ${prep.part.name}?`">
+      <template #actions>
+        <RsButton size="sm" variant="quiet" @click="prep.clearPart()">Use another file</RsButton>
+      </template>
+      <div class="procgrid">
+        <figure class="detect">
+          <svg :viewBox="footprintPath.view" class="fp" role="img" :aria-label="`${prep.part.name} seen from above`">
+            <path :d="footprintPath.d" />
+          </svg>
+          <figcaption>
+            <span><strong>{{ prep.fileKind }}</strong> · {{ prep.part.name.split('.').pop()?.toUpperCase() }}</span>
+            <span>{{ fmt(prep.part.size.x) }} × {{ fmt(prep.part.size.y) }}<template v-if="!prep.flat"> × {{ fmt(prep.part.size.z) }}</template> mm</span>
+            <span class="muted small">{{ prep.flat ? 'A flat outline: it can be cut, not printed or milled.' : 'A solid: it can be printed or milled, or cut along its outline.' }}</span>
+          </figcaption>
+        </figure>
+
+        <div class="options" role="radiogroup" aria-label="Process">
+          <button
+            v-for="o in prep.options"
+            :key="o.tool.name"
+            type="button"
+            role="radio"
+            class="option"
+            :aria-checked="chosen === o.tool.name"
+            :style="{ '--accent': `var(${o.tool.look.accentVar})` }"
+            @click="choice = o.tool.name"
+            @dblclick="choice = o.tool.name; confirm()"
+          >
+            <span class="oicon"><Icon :tool="o.tool.look.icon" :size="32" /></span>
+            <span class="otext">
+              <span class="oname">{{ processWord[o.tool.process] }} · {{ o.tool.name }}</span>
+              <span class="osub">{{ o.recommended ? 'Suits this file' : 'Also possible: cuts the outline at one height' }}<template v-if="o.mounted"> · mounted now</template></span>
+            </span>
+          </button>
+          <div class="ogo">
+            <RsButton variant="primary" :disabled="!chosen" @click="confirm">Continue</RsButton>
+          </div>
+        </div>
+      </div>
+    </RsPanel>
+
+    <!-- ============ 3. Set up & send -->
+    <div v-else-if="prep.step === 'setup'" class="layout">
+      <!-- the bed -->
       <RsPanel
         panel-id="prepare.bed"
         :title="prep.part ? prep.part.name : 'Model'"
         :status="prep.part ? `${fmt(prep.part.size.x)} × ${fmt(prep.part.size.y)} × ${fmt(prep.part.size.z)} mm` : undefined"
         class="bedpanel drop"
         :class="{ dragging }"
-        @dragover.prevent="dragging = true"
+        @dragover.prevent.stop="dragging = true"
         @dragleave="dragging = false"
-        @drop.prevent="onDrop"
+        @drop.prevent.stop="onDrop"
       >
         <template #actions>
-          <input ref="picker" type="file" :accept="accepts" class="visually-hidden" aria-label="Choose a model file" @change="pick(($event.target as HTMLInputElement).files)" />
-          <RsButton size="sm" :disabled="prep.loading" @click="picker?.click()">{{ prep.part ? 'Replace' : 'Open' }}</RsButton>
-          <RsButton v-if="prep.part" size="sm" variant="quiet" @click="prep.clearPart()">Clear</RsButton>
+          <RsButton size="sm" :disabled="prep.loading" @click="picker?.click()">Replace</RsButton>
         </template>
 
-        <div v-if="!prep.part" class="empty" @click="picker?.click()">
-          <Icon nav="prepare" :size="56" />
-          <p class="big">{{ prep.loading ? 'Reading the file…' : 'Drop a model here, or click to choose one' }}</p>
-          <p class="muted small">STL, 3MF or OBJ to print or mill · SVG or DXF to laser or knife cut</p>
-          <p v-if="prep.loadError" class="error" role="alert">{{ prep.loadError }}</p>
-        </div>
-
-        <template v-else-if="job">
+        <template v-if="job && prep.part">
           <BedView :machine="prep.machineInfo" :job="job" :part="prep.part" :result="prep.result?.file.bounds ?? null" />
           <p v-if="suits" class="notice small" role="status">{{ suits }}</p>
           <div class="place">
@@ -124,32 +227,28 @@ function openInFiles() {
             </div>
           </div>
           <p class="muted small">{{ prep.part.triangles.toLocaleString() }} triangles<template v-if="proc !== 'cnc'"> · drag the part or use the arrow keys (Shift = 10 mm)</template></p>
+          <p v-if="prep.loadError" class="error" role="alert">{{ prep.loadError }}</p>
         </template>
       </RsPanel>
 
       <div class="side">
-        <!-- ============ toolhead and material -->
-        <RsPanel panel-id="prepare.tool" title="Toolhead" :status="machine.mountedName ? `${machine.mountedName} mounted` : machine.online ? 'No tool confirmed' : 'Offline'">
-          <div class="tools" role="radiogroup" aria-label="Toolhead">
-            <button
-              v-for="t in prep.tools"
-              :key="t.name"
-              type="button"
-              role="radio"
-              class="tool"
-              :aria-checked="job?.toolhead === t.name"
-              :style="{ '--accent': `var(${t.look.accentVar})` }"
-              @click="prep.pickTool(t.name)"
-            >
-              <span class="tname">{{ t.name }}</span>
-              <span class="tsub">{{ processWord[t.process] }}<template v-if="t.name === machine.mountedName"> · mounted</template></span>
-            </button>
+        <!-- process and material -->
+        <RsPanel v-if="prep.tool" panel-id="prepare.tool" :title="processWord[prep.tool.process]" :status="prep.tool.name === machine.mountedName ? 'Mounted' : machine.online ? `${machine.mountedName ?? 'No tool'} mounted` : undefined">
+          <template #actions>
+            <RsButton size="sm" variant="quiet" @click="prep.changeProcess()">Change</RsButton>
+          </template>
+          <div class="chosen" :style="{ '--accent': `var(${prep.tool.look.accentVar})` }">
+            <span class="oicon"><Icon :tool="prep.tool.look.icon" :size="32" /></span>
+            <span class="otext">
+              <span class="oname">{{ prep.tool.name }}</span>
+              <span class="osub">Slot {{ prep.tool.slot ?? '–' }}<template v-if="prep.tool.name !== machine.mountedName && machine.online"> · swap to it before starting</template></span>
+            </span>
           </div>
 
           <div v-if="job" class="mat">
             <label for="prep-mat">Material</label>
             <select id="prep-mat" :value="job.material" @change="prep.pickMaterial(($event.target as HTMLSelectElement).value)">
-              <option v-for="m in prep.materials.list" :key="m.key" :value="m.key">{{ m.key }}</option>
+              <option v-for="m in prep.materials.list" :key="m.key" :value="m.key">{{ prettyMaterial(m.name) }}{{ m.nozzle ? ` · ${m.nozzle} mm nozzle` : '' }}{{ m.path !== undefined ? ` · path ${m.path + 1}` : '' }}</option>
             </select>
             <p class="muted small">
               <template v-if="mat && proc === 'fdm'">Nozzle {{ mat.extruderTemp ?? '–' }}°, bed {{ mat.bedTemp ?? '–' }}°: START_JOB heats from this table, the file never sets a temperature.</template>
@@ -160,7 +259,7 @@ function openInFiles() {
           </div>
         </RsPanel>
 
-        <!-- ============ settings -->
+        <!-- settings -->
         <RsPanel v-if="job" panel-id="prepare.settings" title="Settings" :status="proc ? processWord[proc] : undefined">
           <div v-if="proc === 'fdm'" class="grid">
             <NumField v-model="job.fdm.layerHeight" label="Layer height" unit="mm" :min="0.04" :max="job.fdm.nozzle * 0.8" :step="0.04" />
@@ -224,7 +323,7 @@ function openInFiles() {
           </div>
         </RsPanel>
 
-        <!-- ============ the job file -->
+        <!-- the job file -->
         <RsPanel v-if="job" panel-id="prepare.file" title="Job file" :status="prep.result ? prep.result.file.name : undefined">
           <div class="go">
             <RsButton variant="primary" :disabled="!prep.part || !!prep.phase || !!suits" @click="prep.prepare()">{{ prep.phase ? 'Preparing…' : prep.result ? 'Prepare again' : 'Prepare' }}</RsButton>
@@ -270,7 +369,7 @@ function openInFiles() {
               Sent as <strong>{{ prep.sentPath }}</strong>. Nothing has started.
               <RsButton size="sm" @click="openInFiles">Start it from Files</RsButton>
             </p>
-            <p class="muted small">Kiri:Moto {{ prep.result.kiri }} · {{ prep.result.stats.moves.toLocaleString() }} moves. Files checks the mounted toolhead again before anything runs<template v-if="proc !== 'fdm'">, and starts this through the {{ proc === 'laser' ? 'laser' : proc === 'cnc' ? 'CNC' : 'knife' }} setup wizard</template>.</p>
+            <p class="muted small">{{ prep.result.stats.moves.toLocaleString() }} moves. Files checks the mounted toolhead again before anything runs<template v-if="proc !== 'fdm'">, and starts this through the {{ proc === 'laser' ? 'laser' : proc === 'cnc' ? 'CNC' : 'knife' }} setup wizard</template>.</p>
           </template>
         </RsPanel>
       </div>
@@ -284,6 +383,35 @@ function openInFiles() {
 @media (max-width: 1100px) { .layout { grid-template-columns: minmax(0, 1fr); } }
 
 .drop.dragging { outline: 2px dashed var(--rs-ink); outline-offset: -6px; }
+
+/* 1. File */
+.dropzone { width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--rs-space-2); min-height: 260px; padding: var(--rs-space-6); border: 1.5px dashed var(--rs-line-strong); border-radius: var(--rs-radius-lg); background: var(--rs-surface); color: var(--rs-text-muted); font: inherit; cursor: pointer; text-align: center; }
+.dropzone:hover, .dropzone.dragging { border-color: var(--rs-ink); color: var(--rs-text-strong); background: var(--rs-surface-2); }
+.dropzone .big { font-size: var(--rs-text-lg); font-weight: var(--rs-weight-medium); color: var(--rs-text-strong); }
+.section { margin: var(--rs-space-6) 0 var(--rs-space-3); font-size: var(--rs-text-md); font-weight: var(--rs-weight-medium); color: var(--rs-text-strong); }
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: var(--rs-gap); }
+
+/* 2. Process */
+.procgrid { display: grid; grid-template-columns: minmax(200px, 300px) minmax(0, 1fr); gap: var(--rs-space-6); align-items: start; }
+@media (max-width: 720px) { .procgrid { grid-template-columns: minmax(0, 1fr); } }
+.detect { margin: 0; display: flex; flex-direction: column; gap: var(--rs-space-3); }
+.fp { width: 100%; max-height: 220px; background: var(--rs-dither-faint); border-radius: var(--rs-radius-md); }
+.fp path { fill: var(--rs-surface); stroke: var(--rs-text-strong); stroke-width: 1.5; vector-effect: non-scaling-stroke; stroke-linejoin: round; }
+.detect figcaption { display: flex; flex-direction: column; gap: 2px; font-size: var(--rs-text-sm); color: var(--rs-text-strong); }
+.options { display: flex; flex-direction: column; gap: 6px; }
+.option, .chosen { position: relative; display: flex; align-items: center; gap: var(--rs-space-3); padding: 10px 14px 10px 18px; border: 1px solid var(--rs-line); border-radius: var(--rs-radius-md); background: transparent; color: var(--rs-text-strong); font: inherit; text-align: left; }
+.option { cursor: pointer; }
+.option::before, .chosen::before { content: ''; position: absolute; left: 0; top: 10px; bottom: 10px; width: 4px; border-radius: 0 2px 2px 0; background: var(--accent); }
+.option:hover { border-color: var(--rs-line-strong); }
+.option[aria-checked='true'] { background: var(--rs-ink); border-color: var(--rs-ink); color: var(--rs-on-ink); }
+.option[aria-checked='true'] .osub { color: inherit; opacity: 0.8; }
+.chosen { border: 0; padding-left: 18px; }
+.oicon { display: grid; place-items: center; width: 44px; height: 44px; flex: none; border-radius: var(--rs-radius-md); background: var(--rs-dither-faint); color: var(--rs-text-strong); }
+.option[aria-checked='true'] .oicon { background: transparent; color: inherit; }
+.otext { display: flex; flex-direction: column; min-width: 0; }
+.oname { font-weight: var(--rs-weight-medium); font-size: var(--rs-text-sm); }
+.osub { font-size: 11px; color: var(--rs-text-muted); }
+.ogo { margin-top: var(--rs-space-3); }
 .empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--rs-space-2); min-height: 340px; border: 1px dashed var(--rs-line-strong); border-radius: var(--rs-radius-md); cursor: pointer; text-align: center; padding: var(--rs-space-5); color: var(--rs-text-muted); }
 .empty .big { color: var(--rs-text-strong); font-weight: var(--rs-weight-medium); }
 .small { font-size: var(--rs-text-xs); }

@@ -60,6 +60,9 @@ const prime = computed(() => {
   return { x: Math.max(0, p.x - 2), y: fy(p.y + p.length), w: 4, h: p.length }
 })
 
+/** Leadscrew and other no-go areas (bed processes only; a CNC job is drawn on its stock) */
+const keepOut = computed(() => (isCnc.value ? [] : props.machine.keepOut.map((k) => ({ ...k, x: k.x0, y: fy(k.y1), w: k.x1 - k.x0, h: k.y1 - k.y0 }))))
+
 const fileBox = computed(() => {
   const r = props.result
   if (!r) return null
@@ -138,6 +141,13 @@ const fmt = (v: number) => (Math.round(v * 10) / 10).toString()
         <rect :x="prime.x" :y="prime.y" :width="prime.w" :height="prime.h" fill="url(#bed-hatch)" />
       </g>
 
+      <g v-for="k in keepOut" :key="k.label + k.x" class="keepout">
+        <rect :x="k.x" :y="k.y" :width="k.w" :height="k.h" fill="url(#bed-hatch)" />
+        <rect :x="k.x" :y="k.y" :width="k.w" :height="k.h" class="koedge" />
+        <rect :x="k.x + k.w / 2 - dot * 10" :y="k.y + k.h / 2 - dot * 2.6" :width="dot * 20" :height="dot * 5.2" :rx="dot" class="kolabel" />
+        <text :x="k.x + k.w / 2" :y="k.y + k.h / 2" :font-size="dot * 3.4" text-anchor="middle" dominant-baseline="central">{{ k.label }}</text>
+      </g>
+
       <!-- origin: front-left corner -->
       <g class="origin">
         <path :d="`M0 ${area.h} l${area.w * 0.06} 0 M0 ${area.h} l0 ${-area.h * 0.08}`" />
@@ -153,7 +163,7 @@ const fmt = (v: number) => (Math.round(v * 10) / 10).toString()
     </svg>
     <figcaption>
       <span v-if="isCnc">Stock {{ stock ? `${fmt(stock.x)} × ${fmt(stock.y)} × ${fmt(stock.z)} mm` : '' }} · X0 Y0 front-left corner · Z0 stock top</span>
-      <span v-else>Bed {{ fmt(machine.workArea.x) }} × {{ fmt(machine.workArea.y) }} mm · X0 Y0 front-left<template v-if="prime"> · hatched: prime line</template></span>
+      <span v-else>Bed {{ fmt(machine.workArea.x) }} × {{ fmt(machine.workArea.y) }} mm · X0 Y0 front-left<template v-if="prime || keepOut.length"> · hatched: {{ [prime ? 'prime line' : '', keepOut.length ? 'keep clear' : ''].filter(Boolean).join(', ') }}</template></span>
       <span v-if="result" class="file">Outline: where the file's moves go</span>
     </figcaption>
   </figure>
@@ -166,6 +176,10 @@ svg { width: 100%; height: auto; max-height: 62vh; display: block; color: var(--
 .grid line { stroke: var(--rs-line); stroke-width: 1; vector-effect: non-scaling-stroke; stroke-dasharray: 1 3; }
 .origin path { stroke: var(--rs-text-strong); stroke-width: 2; fill: none; vector-effect: non-scaling-stroke; }
 .prime { color: var(--rs-text-muted); }
+.keepout { color: var(--rs-text-muted); }
+.kolabel { fill: var(--rs-surface-2); }
+.koedge { fill: none; stroke: var(--rs-text-muted); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.keepout text { fill: var(--rs-text-strong); font-family: var(--rs-font-ui); font-weight: 600; }
 .part { outline: none; }
 .part.movable { cursor: grab; }
 .part.movable:active { cursor: grabbing; }

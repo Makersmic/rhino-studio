@@ -7,7 +7,8 @@ export const router = createRouter({
   routes: [
     { path: '/', redirect: '/dashboard' },
     { path: '/dashboard', component: () => import('./views/DashboardView.vue'), meta: { title: 'Dashboard', ownAlerts: true, lookOnly: true } },
-    { path: '/prepare', component: () => import('./views/PrepareView.vue'), meta: { title: 'Prepare' } },
+    { path: '/setup', component: () => import('./views/PrepareView.vue'), meta: { title: 'Job setup' } },
+    { path: '/prepare', redirect: '/setup' },
     { path: '/preview', component: () => import('./views/PreviewView.vue'), meta: { title: 'Preview' } },
     { path: '/control', component: () => import('./views/ControlView.vue'), meta: { title: 'Control' } },
     { path: '/device', redirect: '/control' },

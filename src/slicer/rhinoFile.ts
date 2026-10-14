@@ -25,6 +25,22 @@ import type { MachineInfo, PartInfo, PrepareJob } from './types'
 
 export const STUDIO_FILE_VERSION = 1
 
+/**
+ * Pressure advance: the same CALCULATE_PA line the Orca profile runs after START_JOB.
+ * BOWDEN_LENGTH (cm) is per print head; a head not listed here gets no CALCULATE_PA line.
+ * CALCULATE_PA only knows these materials (tools/3dp_macros.cfg) and fails on any other.
+ */
+export const PA_BOWDEN_CM: Record<string, number> = { BlockOne: 5.9 }
+export const PA_MATERIALS = new Set(['PLA', 'PETG', 'ABS', 'TPU', 'NYLON', 'ASA', 'PVB', 'PA', 'FLEX'])
+
+export function paLine(job: PrepareJob): string | null {
+  const bowden = PA_BOWDEN_CM[job.toolhead]
+  const mat = materialParam(job.material)
+  if (bowden === undefined || !PA_MATERIALS.has(mat)) return null
+  const f = job.fdm
+  return `CALCULATE_PA BOWDEN_LENGTH=${fmt(bowden)} MATERIAL=${mat} LAYER_HEIGHT=${fmt(f.layerHeight)} NOZZLE_SIZE=${fmt(f.nozzle)} PRINT_SPEED=${fmt(f.speed)} FILAMENT_DIAMETER=1.75 LINE_WIDTH=${fmt(f.nozzle)}`
+}
+
 export interface RhinoFile {
   text: string
   name: string
@@ -137,6 +153,7 @@ export function rhinoFile(kiri: string, job: PrepareJob, part: PartInfo, _machin
         'M140 S0 ; bed off until START_JOB heats it from the material table',
         'M104 S0 ; nozzle off until START_JOB heats it',
         `START_JOB TOOLHEAD=${job.toolhead} MATERIAL=${mat} NOZZLE_SIZE=${fmt(f.nozzle)} EXTRUDER=${f.path}`,
+        ...(paLine(job) ? [paLine(job)!] : []),
         'G90 ; absolute X/Y/Z',
         'G21 ; millimetres',
         'M83 ; relative extrusion (Kiri:Moto writes E per move)',

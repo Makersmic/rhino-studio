@@ -21,6 +21,11 @@ import { FLAT_TYPES, extOf, merge, partInfo, transform } from '@/slicer/model'
 import { DEFAULT_MACHINE, type MachineInfo, type PartInfo, type PrepareJob, type Process } from '@/slicer/types'
 import { loadModelFile, runKiri, kiriVersion, type Phase } from '@/slicer/engine'
 
+/** Flat drawings (SVG, DXF) are outlines: only cut processes can use them. */
+export function suits(process: Process, flat: boolean): boolean {
+  return flat ? process === 'laser' || process === 'dragknife' : true
+}
+
 export interface PrepTool {
   name: string
   slot: number | null
@@ -75,6 +80,7 @@ export const usePrepareStore = defineStore('prepare', () => {
       travelMax,
       workArea: { x: Math.min(DEFAULT_MACHINE.workArea.x, travelMax[0]), y: Math.min(DEFAULT_MACHINE.workArea.y, travelMax[1]) },
       laserSMax: num(vars?.laser_s_max, DEFAULT_MACHINE.laserSMax),
+      keepOut: DEFAULT_MACHINE.keepOut,
       prime: pos ? { x: num(pos.prime_x, 5), y: num(pos.prime_y, 10), length: num(pos.prime_length, 120) } : machine.online ? null : DEFAULT_MACHINE.prime,
     }
   })
@@ -105,9 +111,17 @@ export const usePrepareStore = defineStore('prepare', () => {
   const loading = ref(false)
   const loadError = ref<string | null>(null)
 
+  // ---- the flow: File -> Process -> Set up & send (like an online manufacturing quote)
+  /** the process (toolhead) was confirmed for the loaded file */
+  const confirmed = ref(false)
+  /** a tool card was clicked before any file: use it straight away if the file suits it */
+  const preset = ref<string | null>(null)
+  const step = computed<'file' | 'process' | 'setup'>(() => (!raw.value ? 'file' : confirmed.value ? 'setup' : 'process'))
+
   // ---- the job
   const saved = loadSaved()
   const job = ref<PrepareJob | null>(null)
+  const materialsOf = (tool: string) => materialsFor(tool, toolheadsTable.value).list
   const materials = computed<{ list: Material[]; live: boolean }>(() => (job.value ? materialsFor(job.value.toolhead, toolheadsTable.value) : { list: [], live: false }))
 
   function pickTool(name: string) {
@@ -172,6 +186,14 @@ export const usePrepareStore = defineStore('prepare', () => {
       raw.value = verts
       fileName.value = file.name
       flat.value = FLAT_TYPES.has(ext)
+      confirmed.value = false
+      // Started from a tool card and the file suits that tool: straight to set up
+      const want = preset.value ? tools.value.find((t) => t.name === preset.value) : null
+      if (want && suits(want.process, flat.value)) {
+        pickTool(want.name)
+        confirmed.value = true
+      }
+      preset.value = null
       if (job.value) {
         job.value.placement = { x: machineInfo.value.workArea.x / 2, y: machineInfo.value.workArea.y / 2, rotate: 0, scale: 1 }
         // a flat drawing (SVG/DXF) is extruded 5 mm by the loader: cut it near the bottom
@@ -188,7 +210,40 @@ export const usePrepareStore = defineStore('prepare', () => {
     raw.value = null
     fileName.value = null
     result.value = null
+    confirmed.value = false
+    preset.value = null
   }
+
+  /** Tool card: remember the tool, then the view opens the file picker */
+  function startWith(tool: string) {
+    preset.value = tool
+    if (raw.value) confirmProcess(tool)
+  }
+
+  function confirmProcess(tool: string) {
+    pickTool(tool)
+    confirmed.value = true
+  }
+
+  function changeProcess() {
+    confirmed.value = false
+  }
+
+  /**
+   * What the Rhino could do with the loaded file, best first:
+   * 3D models print (or mill); flat drawings laser or knife cut. A 3D model can
+   * also be laser or knife cut along its outline at a height; a flat drawing
+   * can't be printed or milled (it's only an outline).
+   */
+  const options = computed(() => {
+    if (!raw.value) return []
+    const mounted = machine.mountedName
+    const list = tools.value
+      .filter((t) => suits(t.process, flat.value))
+      .map((t) => ({ tool: t, recommended: flat.value ? true : t.process === 'fdm' || t.process === 'cnc', mounted: t.name === mounted }))
+    const rank = (o: (typeof list)[number]) => (o.recommended ? 0 : 2) + (o.mounted ? 0 : 1)
+    return list.sort((a, b) => rank(a) - rank(b))
+  })
 
   function centre() {
     if (!job.value) return
@@ -278,8 +333,18 @@ export const usePrepareStore = defineStore('prepare', () => {
   }
 
   const tool = computed(() => tools.value.find((t) => t.name === job.value?.toolhead) ?? null)
+  const fileKind = computed(() => (raw.value ? (flat.value ? '2D drawing' : '3D model') : null))
 
   return {
+    step,
+    confirmed,
+    preset,
+    options,
+    fileKind,
+    startWith,
+    materialsOf,
+    confirmProcess,
+    changeProcess,
     machineInfo,
     tools,
     tool,

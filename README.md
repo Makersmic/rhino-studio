@@ -2,7 +2,7 @@
 
 One interface for every Rhino Multi Motion System process: import a model, pick a toolhead, prepare, preview, send and monitor. "Rhino Studio" is a working title; the name and logo live in `src/brand/brand.ts`.
 
-Status: **Phases 3-4** (Prepare: print, laser, knife and CNC job files from Kiri:Moto), on top of 2b (machine control), 2a (live status) and Care (maintenance). **This version can move the Rhino, heat it, run macros and start jobs.** Run the checks in [docs/testing.md](docs/testing.md) in order before trusting it, starting with 2a's A1-A8.
+Status: **Phases 3-4** (Job setup: print, laser, knife and CNC job files from Kiri:Moto), on top of 2b (machine control), 2a (live status) and Care (maintenance). **This version can move the Rhino, heat it, run macros and start jobs.** Run the checks in [docs/testing.md](docs/testing.md) in order before trusting it, starting with 2a's A1-A8.
 
 ### What it can do
 
@@ -13,7 +13,7 @@ Status: **Phases 3-4** (Prepare: print, laser, knife and CNC job files from Kiri
   - **Jog** screen uses two-hand control: the jog keys stay greyed out unless the **Hold** button in the bottom corner is held. Hold with one thumb, tap with the other; one tap is one step. Letting go, a cancelled touch, the screen turning off or switching apps kills the keys at once. A left-handed option mirrors the layout. On a computer, hold Shift as the Hold button.
   - **Status** screen: big work/machine position, Home, Set Z zero / Set work zero.
 - **Klipper prompts**: the Rhino wizards' questions (SWAP_TOOL, RESTORE_TOOL, the job setup wizards) pop up in Studio as well as Mainsail. A button runs only its own command.
-- **Prepare**: open a model (STL, 3MF, OBJ) or drawing (SVG, DXF), pick the toolhead and material, place it on a to-scale bed, and Prepare. Kiri:Moto's engine slices **in the browser**, never on the Pi. Print heads get a print with START_JOB (the same line as the Orca profile: tool check, homing, heat from the material table, prime) and END_PRINT; the LightSaber a cut in machine X/Y with power scaled to `laser_s_max`, repeated per pass, rail off at the end; the drag knife a cut with slow blade plunges; HotJoe a cut-out (or clear-and-cut-out) in work coordinates, X0 Y0 at the stock's front-left corner and Z0 on its top. Materials, powers and feeds come from Klipper's own `VARIABLES` tables. Every file is then **checked line by line** (tool, forbidden commands, travel limits or stock, heaters, laser power, depth, END_PRINT) and anything that fails can't be sent. **Send to Rhino** only uploads it; start it from Files.
+- **Job setup** (the flow of online manufacturing services like SendCutSend and Xometry: upload, confirm the process, configure): **1 File**: drop a model (STL, 3MF, OBJ) or drawing (SVG, DXF), or start from a toolhead card (what it makes, files it takes, build or cut area, materials). **2 Process**: Studio says whether it's a 3D model or a flat drawing and lists the processes that fit, best first (skipped when you started from a card that fits). **3 Set up & send**: place it on a to-scale bed (leadscrew keep-out and prime line shown), pick the material, adjust the settings and Prepare. Kiri:Moto's engine slices **in the browser**, never on the Pi. Print heads get a print with START_JOB and CALCULATE_PA (the same lines as the Orca profile: tool check, homing, heat from the material table, prime, pressure advance) and END_PRINT; the LightSaber a cut in machine X/Y with power scaled to `laser_s_max`, repeated per pass, rail off at the end; the drag knife a cut with slow blade plunges; HotJoe a cut-out (or clear-and-cut-out) in work coordinates, X0 Y0 at the stock's front-left corner and Z0 on its top. Materials, powers and feeds come from Klipper's own `VARIABLES` tables. Every file is then **checked line by line** (tool, forbidden commands, travel limits or stock, nothing printed or cut over the leadscrew, heaters, laser power, depth, END_PRINT) and anything that fails can't be sent. **Send to Rhino** only uploads it; start it from Files.
 - **Files**: upload (button or drag and drop; never starts the file) and Start. Start checks the file's toolhead against the mounted one and blocks a mismatch (offering the swap). Print files start directly (their START_JOB checks again on the machine); laser, spindle, knife and added-tool files start through LASER_JOB_SETUP, CNC_JOB_SETUP, DRAGKNIFE_JOB_SETUP or TOOL_JOB_SETUP with `FILE=`, so the wizard's safety steps and the laser rail (config 1.4.1) aren't skipped.
 
 ### What each tool shows
@@ -125,7 +125,7 @@ src/
   portal/       Rhino Portal client (maintenance API)
   maintenance/  care rules (+ tests), task cards, log-work dialog, care tiles
   slicer/       Prepare: job settings, Kiri:Moto settings, Rhino job file writer, file checks (+ tests), engine loader
-  prepare/      the bed view and number fields
+  prepare/      Job setup parts: step bar, toolhead cards and their facts (+ tests), bed view, number fields
   webcams/      camera rules (+ tests), the camera viewer, Settings → Cameras
   dashboard/    Dashboard notices (+ tests)
   stores/       machine state, control (console, prompts, motion lock, confirmations), cameras, care, settings, theme
