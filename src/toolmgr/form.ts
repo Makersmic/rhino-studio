@@ -7,7 +7,7 @@
  * the whole Klipper config (/api/tools/check, /api/preview/*). These local
  * checks only catch typos before a round trip.
  */
-import type { ToolControl, ToolDetail, ToolMacro, ToolOptions, ToolType } from './types'
+import type { ToolControl, ToolDetail, ToolKind, ToolMacro, ToolOptions, ToolType } from './types'
 
 export const pct = (v: number | string | null | undefined) => (v === '' || v == null ? '' : Math.round(Number(v) * 1000) / 10)
 export const frac = (v: number | string | null | undefined) => (v === '' || v == null ? '' : Math.round(Number(v) * 10) / 1000)
@@ -142,6 +142,28 @@ export function controlPins(opt: ToolOptions, role: string, taken: string[], min
     const bad = info.type === 'mosfet' && (role === 'input' || role === 'servo')
     return { pin: p, bad, label: p + (info.label ? ` - ${info.label}` : '') + (info.type ? ` (${info.type === 'mosfet' ? 'power output' : 'logic'})` : '') }
   })
+}
+
+/** Board pins that drive power (MOSFET heater and fan outputs): no inputs or servos there. */
+const POWER_PINS = new Set(['PA8', 'PE5', 'PD12', 'PD13', 'PD14', 'PD15', 'PA2', 'PA3', 'PB10', 'PB11', 'PA1'])
+
+/**
+ * Pins system hardware may use: the board headers that aren't on the
+ * umbilical (options.board_pins), plus the one it already has. Mirrors the
+ * Portal's own list (portal.js controlPins, hardware branch).
+ */
+export function hardwarePins(opt: ToolOptions, role: string, mine: string[]) {
+  const board = opt.board_pins ?? []
+  const pool = [...mine.filter((p) => p && !board.some((x) => x.pin === p)).map((pin) => ({ pin, header: '' })), ...board]
+  return pool.map((x) => {
+    const heat = POWER_PINS.has(x.pin)
+    return { pin: x.pin, bad: heat && (role === 'input' || role === 'servo'), label: x.pin + (x.header ? ` - ${x.header}` : '') + (heat ? ' (power output)' : '') }
+  })
+}
+
+/** A new piece of system hardware: like a control, but not switched off with the tool, and with a category. */
+export function newHardware(opt: ToolOptions | null): ControlDraft {
+  return { ...newControl(opt), safe_off: false, mounted_only: false, category: opt?.hw_categories?.[0]?.id ?? '', notes: '' }
 }
 
 // ---------------------------------------------------------------- outputs (powered tools)
@@ -326,3 +348,55 @@ export function editBody(t: ToolDetail, f: EditForm, rows: MatRow[], removed: st
   if (t.type === 'POWERED') Object.assign(body, { cap: frac(f.cap), min: frac(f.min), idle: frac(f.idle), max_on_s: f.max_on_s, s_max: f.s_max })
   return body
 }
+
+// ---------------------------------------------------------------- toolhead setup: kinds of tool
+
+/** What a kind of tool needs, in words. */
+export const BEHAVIOUR_TEXT: Record<string, string> = { PRINT_HEAD: 'A print head (copies an extruder)', POWERED: 'A power output', PASSIVE: 'Nothing (unpowered)' }
+
+export interface KindMat { name: string; power: number | string; feed: number | string }
+export interface KindEdit {
+  id: string
+  category: string
+  behaviour: string
+  label: string
+  help: string
+  isNew: boolean
+  cap: number | string
+  max_on_s: number | string
+  mats: KindMat[]
+  checklist: string
+}
+
+/** A kind as the setup screen edits it: power and cap in %, materials as rows, checklist as lines. */
+export function kindToEdit(k: ToolKind): KindEdit {
+  return {
+    id: k.id, category: k.category, behaviour: k.behaviour, label: k.label, help: k.help ?? '', isNew: false,
+    cap: pct(k.cap ?? 1), max_on_s: k.max_on_s ?? 300,
+    mats: Object.entries(k.materials ?? {}).map(([name, m]) => ({ name, power: m.power === undefined ? '' : pct(m.power), feed: m.feed_rate ?? '' })),
+    checklist: (k.checklist ?? []).join('\n'),
+  }
+}
+
+export const newKind = (category: string, behaviour: string): KindEdit => ({
+  id: '', category, behaviour, label: '', help: '', isNew: true, cap: 100, max_on_s: 300, mats: [], checklist: '',
+})
+
+/** Back to what POST /api/lists { kinds } takes (the Portal's admin.js kindPayload). */
+export function editToKind(e: KindEdit): ToolKind {
+  const out: ToolKind = { id: e.id, category: e.category, behaviour: e.behaviour, label: e.label.trim(), help: e.help.trim() }
+  if (e.behaviour === 'PRINT_HEAD') return out
+  out.checklist = e.checklist.split('\n').map((x) => x.trim()).filter(Boolean)
+  out.materials = {}
+  for (const m of e.mats) {
+    const name = m.name.trim().toUpperCase().replace(/\s+/g, '_')
+    if (!name) continue
+    out.materials[name] = e.behaviour === 'POWERED' ? { power: Number(frac(m.power === '' ? 50 : m.power)), feed_rate: Number(m.feed || 600) } : { feed_rate: Number(m.feed || 800) }
+  }
+  if (e.behaviour === 'POWERED') {
+    out.cap = Number(frac(e.cap === '' ? 100 : e.cap))
+    out.max_on_s = Number(e.max_on_s || 300)
+  }
+  return out
+}
+

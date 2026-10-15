@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { PORTAL_RESTART, PORTAL_TOOL_CHECKS, PORTAL_TOOL_WRITES, PORTAL_WRITES, PortalClient, WRITE_ROUTES } from './client'
+import {
+  PORTAL_CARE_SETUP, PORTAL_CARE_WRITES, PORTAL_HARDWARE, PORTAL_RESTART, PORTAL_TOOL_CHECKS, PORTAL_TOOL_SETUP, PORTAL_TOOL_WRITES, PORTAL_WRITES, PortalClient, WRITE_ROUTES,
+} from './client'
+import type { TaskDef } from '@/maintenance/types'
 
 type Call = { url: string; init?: RequestInit }
 
@@ -59,7 +62,10 @@ describe('PortalClient', () => {
   })
 
   it('every write kind has exactly one route, and the lists cover them all', () => {
-    const kinds = [...PORTAL_WRITES, ...PORTAL_TOOL_CHECKS, ...PORTAL_TOOL_WRITES, ...PORTAL_RESTART]
+    const kinds = [
+      ...PORTAL_WRITES, ...PORTAL_TOOL_CHECKS, ...PORTAL_TOOL_WRITES, ...PORTAL_RESTART,
+      ...PORTAL_CARE_WRITES, ...PORTAL_CARE_SETUP, ...PORTAL_TOOL_SETUP, ...PORTAL_HARDWARE,
+    ]
     expect(new Set(kinds).size).toBe(kinds.length)
     expect(Object.keys(WRITE_ROUTES).sort()).toEqual([...kinds].sort())
   })
@@ -102,6 +108,76 @@ describe('PortalClient', () => {
     // and a route Studio never makes is refused outright
     await expect((c as unknown as { write: (k: string, m: string, p: string) => Promise<unknown> }).write('restart', 'POST', '/api/maint/settings')).rejects.toThrow(/doesn't send/)
     await expect((c as unknown as { write: (k: string, m: string, p: string) => Promise<unknown> }).write('nope', 'POST', '/api/restart')).rejects.toThrow(/doesn't send/)
+  })
+
+  it('care, setup and hardware writes go to their fixed requests, with the token', async () => {
+    const p = fakePortal()
+    const c = new PortalClient('/portal')
+    const def = { title: 'Belts', asset: 'machine:motion_xy' } as TaskDef
+    await c.createTask(def)
+    await c.updateTask('t1', def)
+    await c.updateTask('t1', { detach: true })
+    await c.deleteTask('t1')
+    await c.setTaskStatus('t1', { status: 's_parts', note: 'belt' })
+    await c.taskToLibrary('t1')
+    await c.setMeter({ scope: 'machine', meter: 'prod_h', value: 10 })
+    await c.careSettings({ boot_reminder: false })
+    await c.saveTemplate(null, def)
+    await c.saveTemplate('u_1', def)
+    await c.deleteTemplate('u_1')
+    await c.assignTemplate('u_1', 'tool:BlockOne')
+    await c.saveBook(null, { name: 'B', description: '', templates: ['u_1'] })
+    await c.saveBook('b_1', { name: 'B', description: '', templates: ['u_1'] })
+    await c.deleteBook('b_1')
+    await c.assignBook('b_1', 'machine', false)
+    await c.saveAreas([{ id: 'frame', label: 'Frame' }])
+    await c.saveMaintLists({ priorities: { low: 'Low' } })
+    await c.saveStatuses({ builtin: {}, custom: [] })
+    await c.saveToolLists({ nozzles: '0.4' })
+    await c.previewHardware({ name: 'light' })
+    await c.saveHardware({ name: 'light' })
+    await c.deleteHardware('light')
+    const writes = p.calls.filter((x) => x.init?.method === 'POST' || x.init?.method === 'DELETE').map((x) => `${x.init!.method} ${x.url}`)
+    expect(writes).toEqual([
+      'POST /portal/api/maint/tasks',
+      'POST /portal/api/maint/tasks/t1',
+      'POST /portal/api/maint/tasks/t1',
+      'DELETE /portal/api/maint/tasks/t1',
+      'POST /portal/api/maint/tasks/t1/status',
+      'POST /portal/api/maint/tasks/t1/to-library',
+      'POST /portal/api/maint/meters',
+      'POST /portal/api/maint/settings',
+      'POST /portal/api/maint/templates',
+      'POST /portal/api/maint/templates/u_1',
+      'DELETE /portal/api/maint/templates/u_1',
+      'POST /portal/api/maint/templates/u_1/assign',
+      'POST /portal/api/maint/books',
+      'POST /portal/api/maint/books/b_1',
+      'DELETE /portal/api/maint/books/b_1',
+      'POST /portal/api/maint/books/b_1/assign',
+      'POST /portal/api/maint/areas',
+      'POST /portal/api/maint/lists',
+      'POST /portal/api/maint/statuses',
+      'POST /portal/api/lists',
+      'POST /portal/api/preview/hardware',
+      'POST /portal/api/hardware',
+      'DELETE /portal/api/hardware/light',
+    ])
+    for (const x of p.calls.filter((x) => x.init?.method === 'POST' || x.init?.method === 'DELETE'))
+      expect((x.init!.headers as Record<string, string>)['X-Rhino-Token']).toBe('tok-1')
+    const body = (i: number) => JSON.parse(String(p.calls.filter((x) => x.init?.method === 'POST' || x.init?.method === 'DELETE')[i]!.init!.body))
+    expect(body(2)).toEqual({ detach: true })
+    expect(body(15)).toEqual({ asset: 'machine', on: false })
+    expect(body(20)).toEqual({ item: { name: 'light' } })
+  })
+
+  it('a care write cannot reach a tool or restart route', async () => {
+    fakePortal()
+    const w = (new PortalClient('/portal') as unknown as { write: (k: string, m: string, p: string) => Promise<unknown> }).write.bind(new PortalClient('/portal'))
+    await expect(w('task-update', 'POST', '/api/restart')).rejects.toThrow(/doesn't send/)
+    await expect(w('task-delete', 'DELETE', '/api/tools/BlockOne')).rejects.toThrow(/doesn't send/)
+    await expect(w('hardware-delete', 'DELETE', '/api/hardware/a/b')).rejects.toThrow(/doesn't send/)
+    await expect(w('tool-lists', 'POST', '/api/maint/lists')).rejects.toThrow(/doesn't send/)
   })
 
   it('photos go up as a form, not JSON', async () => {

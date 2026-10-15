@@ -23,6 +23,16 @@
  *   PORTAL_RESTART       restart Klipper to load waiting tool changes, or ask
  *                        the Portal to do it when the job ends. The Portal
  *                        refuses while a job runs; Studio asks first.
+ *   PORTAL_CARE_WRITES   maintenance tasks, the Task Library and Task Books,
+ *                        statuses on tasks, meter readings, the reminder
+ *                        setting. Maintenance records only.
+ *   PORTAL_CARE_SETUP    machine areas, kinds of work, priorities, status
+ *                        codes. Maintenance records only.
+ *   PORTAL_TOOL_SETUP    the add-a-tool lists (kinds of tool, material names,
+ *                        nozzle sizes, hardware categories). Portal data only.
+ *   PORTAL_HARDWARE      check, save and remove system hardware (fans,
+ *                        lights, pumps on the board). Writes custom_tools.cfg,
+ *                        live after the next Klipper restart, like tools.
  *
  * Nothing here moves the machine or switches a tool on.
  *
@@ -30,19 +40,30 @@
  * it in a <meta name="rhino-token"> tag on its home page, so we read it from
  * there, and read it again if the Portal was restarted.
  */
-import type { JobsWeeks, MaintHistory, MaintOverview } from '@/maintenance/types'
-import type { PortalState, PreviewResult, ToolDetail, ToolOptions, ToolSheetData, WriteResult } from '@/toolmgr/types'
+import type { JobsWeeks, MaintHistory, MaintOverview, TaskLibrary, MaintLists, TaskDef, BookDef, StatusEdit } from '@/maintenance/types'
+import type { PortalState, PreviewResult, ToolDetail, ToolLists, ToolOptions, ToolSheetData, WriteResult } from '@/toolmgr/types'
 
 export const PORTAL_WRITES = ['done', 'snooze'] as const
 export const PORTAL_TOOL_CHECKS = ['tool-check', 'preview-control', 'preview-macro'] as const
 export const PORTAL_TOOL_WRITES = ['tool-add', 'tool-edit', 'tool-rename', 'tool-delete', 'photo-add', 'photo-delete'] as const
 export const PORTAL_RESTART = ['restart', 'restart-auto'] as const
+export const PORTAL_CARE_WRITES = [
+  'task-create', 'task-update', 'task-delete', 'task-status', 'task-to-library', 'meter-set', 'care-settings',
+  'template-create', 'template-update', 'template-delete', 'template-assign', 'book-create', 'book-update', 'book-delete', 'book-assign',
+] as const
+export const PORTAL_CARE_SETUP = ['areas', 'maint-lists', 'statuses'] as const
+export const PORTAL_TOOL_SETUP = ['tool-lists'] as const
+export const PORTAL_HARDWARE = ['preview-hardware', 'hardware-save', 'hardware-delete'] as const
 
 export type WriteKind =
   | (typeof PORTAL_WRITES)[number]
   | (typeof PORTAL_TOOL_CHECKS)[number]
   | (typeof PORTAL_TOOL_WRITES)[number]
   | (typeof PORTAL_RESTART)[number]
+  | (typeof PORTAL_CARE_WRITES)[number]
+  | (typeof PORTAL_CARE_SETUP)[number]
+  | (typeof PORTAL_TOOL_SETUP)[number]
+  | (typeof PORTAL_HARDWARE)[number]
 
 /** The one request each write kind may make. */
 export const WRITE_ROUTES: Record<WriteKind, { method: 'POST' | 'DELETE'; path: RegExp }> = {
@@ -59,9 +80,34 @@ export const WRITE_ROUTES: Record<WriteKind, { method: 'POST' | 'DELETE'; path: 
   'photo-delete': { method: 'DELETE', path: /^\/api\/tools\/[^/]+\/photos\/[^/]+$/ },
   restart: { method: 'POST', path: /^\/api\/restart$/ },
   'restart-auto': { method: 'POST', path: /^\/api\/restart\/auto$/ },
+  'task-create': { method: 'POST', path: /^\/api\/maint\/tasks$/ },
+  'task-update': { method: 'POST', path: /^\/api\/maint\/tasks\/[^/]+$/ },
+  'task-delete': { method: 'DELETE', path: /^\/api\/maint\/tasks\/[^/]+$/ },
+  'task-status': { method: 'POST', path: /^\/api\/maint\/tasks\/[^/]+\/status$/ },
+  'task-to-library': { method: 'POST', path: /^\/api\/maint\/tasks\/[^/]+\/to-library$/ },
+  'meter-set': { method: 'POST', path: /^\/api\/maint\/meters$/ },
+  'care-settings': { method: 'POST', path: /^\/api\/maint\/settings$/ },
+  'template-create': { method: 'POST', path: /^\/api\/maint\/templates$/ },
+  'template-update': { method: 'POST', path: /^\/api\/maint\/templates\/[^/]+$/ },
+  'template-delete': { method: 'DELETE', path: /^\/api\/maint\/templates\/[^/]+$/ },
+  'template-assign': { method: 'POST', path: /^\/api\/maint\/templates\/[^/]+\/assign$/ },
+  'book-create': { method: 'POST', path: /^\/api\/maint\/books$/ },
+  'book-update': { method: 'POST', path: /^\/api\/maint\/books\/[^/]+$/ },
+  'book-delete': { method: 'DELETE', path: /^\/api\/maint\/books\/[^/]+$/ },
+  'book-assign': { method: 'POST', path: /^\/api\/maint\/books\/[^/]+\/assign$/ },
+  areas: { method: 'POST', path: /^\/api\/maint\/areas$/ },
+  'maint-lists': { method: 'POST', path: /^\/api\/maint\/lists$/ },
+  statuses: { method: 'POST', path: /^\/api\/maint\/statuses$/ },
+  'tool-lists': { method: 'POST', path: /^\/api\/lists$/ },
+  'preview-hardware': { method: 'POST', path: /^\/api\/preview\/hardware$/ },
+  'hardware-save': { method: 'POST', path: /^\/api\/hardware$/ },
+  'hardware-delete': { method: 'DELETE', path: /^\/api\/hardware\/[^/]+$/ },
 }
 
-const ALLOWED = new Set<string>([...PORTAL_WRITES, ...PORTAL_TOOL_CHECKS, ...PORTAL_TOOL_WRITES, ...PORTAL_RESTART])
+const ALLOWED = new Set<string>([
+  ...PORTAL_WRITES, ...PORTAL_TOOL_CHECKS, ...PORTAL_TOOL_WRITES, ...PORTAL_RESTART,
+  ...PORTAL_CARE_WRITES, ...PORTAL_CARE_SETUP, ...PORTAL_TOOL_SETUP, ...PORTAL_HARDWARE,
+])
 const enc = encodeURIComponent
 
 export class PortalClient {
@@ -179,6 +225,109 @@ export class PortalClient {
   /** Let the Portal restart Klipper by itself when the running job ends. */
   async setAutoRestart(on: boolean): Promise<WriteResult> {
     return this.write('restart-auto', 'POST', '/api/restart/auto', { on })
+  }
+
+  // ---- care: tasks, library, books (maintenance records only) -----------
+
+  async taskLibrary(): Promise<TaskLibrary> {
+    return this.getJson<TaskLibrary>('/api/maint/tasklib')
+  }
+
+  async maintLists(): Promise<MaintLists> {
+    return this.getJson<MaintLists>('/api/maint/lists')
+  }
+
+  async createTask(def: TaskDef): Promise<WriteResult> {
+    return this.write('task-create', 'POST', '/api/maint/tasks', def)
+  }
+
+  /** Save a task, or { detach: true } to unlink it from its library task. */
+  async updateTask(id: string, body: TaskDef | { detach: true }): Promise<WriteResult> {
+    return this.write('task-update', 'POST', `/api/maint/tasks/${enc(id)}`, body)
+  }
+
+  async deleteTask(id: string): Promise<WriteResult> {
+    return this.write('task-delete', 'DELETE', `/api/maint/tasks/${enc(id)}`)
+  }
+
+  /** Set a custom status (status: '' clears it). */
+  async setTaskStatus(id: string, body: { status: string; note?: string }): Promise<WriteResult> {
+    return this.write('task-status', 'POST', `/api/maint/tasks/${enc(id)}/status`, body)
+  }
+
+  async taskToLibrary(id: string): Promise<WriteResult> {
+    return this.write('task-to-library', 'POST', `/api/maint/tasks/${enc(id)}/to-library`, {})
+  }
+
+  async setMeter(body: { scope: 'machine' | 'tool'; tool?: string | null; meter: string; value: number; note?: string }): Promise<WriteResult> {
+    return this.write('meter-set', 'POST', '/api/maint/meters', body)
+  }
+
+  async careSettings(body: { boot_reminder?: boolean }): Promise<WriteResult> {
+    return this.write('care-settings', 'POST', '/api/maint/settings', body)
+  }
+
+  async saveTemplate(id: string | null, def: TaskDef): Promise<WriteResult> {
+    return id ? this.write('template-update', 'POST', `/api/maint/templates/${enc(id)}`, def) : this.write('template-create', 'POST', '/api/maint/templates', def)
+  }
+
+  async deleteTemplate(id: string): Promise<WriteResult> {
+    return this.write('template-delete', 'DELETE', `/api/maint/templates/${enc(id)}`)
+  }
+
+  async assignTemplate(id: string, asset: string): Promise<WriteResult> {
+    return this.write('template-assign', 'POST', `/api/maint/templates/${enc(id)}/assign`, { asset })
+  }
+
+  async saveBook(id: string | null, def: BookDef): Promise<WriteResult> {
+    return id ? this.write('book-update', 'POST', `/api/maint/books/${enc(id)}`, def) : this.write('book-create', 'POST', '/api/maint/books', def)
+  }
+
+  async deleteBook(id: string): Promise<WriteResult> {
+    return this.write('book-delete', 'DELETE', `/api/maint/books/${enc(id)}`)
+  }
+
+  /** Put a book on an asset (on: true) or take it off (its tasks there are archived, history kept). */
+  async assignBook(id: string, asset: string, on = true): Promise<WriteResult> {
+    return this.write('book-assign', 'POST', `/api/maint/books/${enc(id)}/assign`, { asset, on })
+  }
+
+  // ---- care setup -----------------------------------------------------------
+
+  async saveAreas(areas: { id: string; label: string }[]): Promise<WriteResult> {
+    return this.write('areas', 'POST', '/api/maint/areas', { areas })
+  }
+
+  async saveMaintLists(body: { types?: { id: string; label: string }[]; priorities?: Record<string, string> }): Promise<WriteResult> {
+    return this.write('maint-lists', 'POST', '/api/maint/lists', body)
+  }
+
+  async saveStatuses(body: StatusEdit): Promise<WriteResult> {
+    return this.write('statuses', 'POST', '/api/maint/statuses', body)
+  }
+
+  // ---- toolhead setup -------------------------------------------------------
+
+  async toolLists(): Promise<ToolLists> {
+    return this.getJson<ToolLists>('/api/lists')
+  }
+
+  async saveToolLists(body: Record<string, unknown>): Promise<WriteResult> {
+    return this.write('tool-lists', 'POST', '/api/lists', body)
+  }
+
+  // ---- system hardware ------------------------------------------------------
+
+  async previewHardware(item: object): Promise<PreviewResult> {
+    return this.write('preview-hardware', 'POST', '/api/preview/hardware', { item })
+  }
+
+  async saveHardware(item: object): Promise<WriteResult> {
+    return this.write('hardware-save', 'POST', '/api/hardware', item)
+  }
+
+  async deleteHardware(name: string): Promise<WriteResult> {
+    return this.write('hardware-delete', 'DELETE', `/api/hardware/${enc(name)}`)
   }
 
   /** Reads the token and version from the Portal's home page. */

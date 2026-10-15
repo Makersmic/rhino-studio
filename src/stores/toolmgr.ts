@@ -14,7 +14,7 @@
 import { defineStore } from 'pinia'
 import { computed, ref, shallowRef } from 'vue'
 import type { PortalClient } from '@/portal/client'
-import type { PortalState, ToolOptions } from '@/toolmgr/types'
+import type { PortalState, ToolLists, ToolOptions } from '@/toolmgr/types'
 import { useMaintenanceStore } from './maintenance'
 import { useMachineStore } from './machine'
 
@@ -23,6 +23,8 @@ export const useToolMgrStore = defineStore('toolmgr', () => {
   const machine = useMachineStore()
   const state = shallowRef<PortalState | null>(null)
   const options = shallowRef<ToolOptions | null>(null)
+  /** Toolhead setup: what Add a toolhead offers (kinds, material names, nozzles, hardware categories). */
+  const lists = shallowRef<ToolLists | null>(null)
   const error = ref<string | null>(null)
   const restarting = ref(false)
   let optionsAt = 0
@@ -73,6 +75,19 @@ export const useToolMgrStore = defineStore('toolmgr', () => {
     await Promise.all([refresh(), care.refresh()])
   }
 
+  async function loadLists(): Promise<ToolLists> {
+    lists.value = await client().toolLists()
+    return lists.value
+  }
+
+  /** Save one of the setup lists; the forms' choices follow straight away. */
+  async function saveLists(body: Record<string, unknown>) {
+    await client().saveToolLists(body)
+    optionsAt = 0
+    await Promise.all([loadLists(), refresh()])
+  }
+
+  const pins = computed(() => state.value?.pins ?? null)
   const tools = computed(() => [...(state.value?.tools ?? [])].sort((a, b) => a.slot - b.slot))
   const pending = computed(() => (state.value?.restart_pending ? (state.value.pending ?? {}) : null))
   const printer = computed(() => state.value?.printer ?? null)
@@ -98,5 +113,5 @@ export const useToolMgrStore = defineStore('toolmgr', () => {
     await refresh()
   }
 
-  return { state, options, error, restarting, tools, pending, printer, restartBlocked, client, refresh, use, loadOptions, changed, restart, setAutoRestart }
+  return { state, options, lists, pins, error, restarting, tools, pending, printer, restartBlocked, client, refresh, use, loadOptions, loadLists, saveLists, changed, restart, setAutoRestart }
 })

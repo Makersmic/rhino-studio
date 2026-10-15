@@ -8,8 +8,8 @@ import CareBar from './CareBar.vue'
 import { attentionOf } from './summary'
 import type { MaintTask } from './types'
 
-const props = withDefaults(defineProps<{ task: MaintTask; compact?: boolean; busy?: boolean }>(), { compact: false, busy: false })
-defineEmits<{ log: [task: MaintTask]; snooze: [task: MaintTask] }>()
+const props = withDefaults(defineProps<{ task: MaintTask; compact?: boolean; busy?: boolean; statusable?: boolean }>(), { compact: false, busy: false, statusable: false })
+defineEmits<{ log: [task: MaintTask]; snooze: [task: MaintTask]; status: [task: MaintTask] }>()
 
 const att = computed(() => attentionOf(props.task))
 const tool = computed(() => (props.task.asset.startsWith('tool:') ? props.task.asset.slice(5) : null))
@@ -25,7 +25,7 @@ const showPriority = computed(() => props.task.priority === 'high' || props.task
       <span class="state" :class="att">{{ stateText }}</span>
     </header>
 
-    <h3 class="title">{{ task.title }}</h3>
+    <h3 class="title"><RouterLink :to="`/care/tasks/${encodeURIComponent(task.id)}`">{{ task.title }}</RouterLink></h3>
 
     <CareBar :fraction="task.status?.fraction ?? 0" :level="att" :label="`${task.title}: interval used`" />
     <p class="when">
@@ -36,6 +36,7 @@ const showPriority = computed(() => props.task.priority === 'high' || props.task
     <footer v-if="!compact" class="actions">
       <RsButton :disabled="busy" @click="$emit('log', task)">Log work</RsButton>
       <RsButton v-if="att === 'overdue' || att === 'due_soon'" variant="quiet" :disabled="busy" @click="$emit('snooze', task)">Snooze 7 days</RsButton>
+      <RsButton v-if="statusable" variant="quiet" :disabled="busy" @click="$emit('status', task)">{{ task.status?.hold ? 'Change status' : 'Set status' }}</RsButton>
       <span v-if="task.minutes" class="mins">About {{ task.minutes }} min</span>
     </footer>
   </article>
@@ -68,6 +69,8 @@ const showPriority = computed(() => props.task.priority === 'high' || props.task
 .state.due_soon { border-color: var(--rs-ink); color: var(--rs-text-strong); }
 .state.overdue { background: var(--rs-ink); border-color: var(--rs-ink); color: var(--rs-on-ink); }
 .title { font-size: var(--rs-text-lg); font-weight: var(--rs-weight-medium); line-height: 1.25; }
+.title a { color: inherit; text-decoration: none; }
+.title a:hover { text-decoration: underline; text-underline-offset: 3px; }
 .compact .title { font-size: var(--rs-text-md); }
 .card { color: var(--rs-text-muted); }
 .title, .area { color: var(--rs-text-strong); }

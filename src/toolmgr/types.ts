@@ -46,6 +46,7 @@ export interface PortalPrinter {
 export interface PortalState {
   ok: boolean
   tools: PortalTool[]
+  pins?: PinsReport
   printer: PortalPrinter
   restart_pending: boolean
   pending: PendingInfo | null
@@ -177,6 +178,9 @@ export interface ToolOptions {
   material_names: Record<string, string[]>
   nozzles: number[]
   limits: Record<string, [number, number]>
+  hw_categories?: { id: string; label: string }[]
+  /** board headers off the umbilical, for system hardware */
+  board_pins?: { pin: string; header: string }[]
 }
 
 export interface PreviewResult {
@@ -195,4 +199,50 @@ export interface WriteResult {
   warnings?: string[]
   images?: string[]
   [k: string]: unknown
+}
+
+/** A kind of tool, as the add-a-tool lists keep it (GET /api/lists). */
+export interface ToolKind {
+  id: string
+  category: string
+  behaviour: 'PRINT_HEAD' | 'POWERED' | 'PASSIVE' | string
+  label: string
+  help?: string
+  cap?: number
+  max_on_s?: number
+  materials?: Record<string, { power?: number; feed_rate?: number }>
+  checklist?: string[]
+}
+
+/** GET /api/lists: what Add a toolhead offers. */
+export interface ToolLists {
+  ok: boolean
+  kinds: ToolKind[]
+  materials: Record<string, string[]>
+  nozzles: number[]
+  hw_categories: { id: string; label: string }[]
+  in_use: { kinds: Record<string, string[]>; hw_categories: Record<string, string[]> }
+  builtin_kinds: string[]
+  categories: { value: string; label: string; help?: string }[]
+  behaviours: { value: string; label: string }[]
+  category_behaviours: Record<string, string[]>
+  limits: Record<string, [number, number]>
+}
+
+/** GET /api/state pins: the tool connector, the board's pins and outputs, system hardware. */
+export interface PinsReport {
+  pins: { pin: string; state: 'free' | 'claimed' | 'tool' | string; owner?: string }[]
+  channels: { name: string; pwm: boolean; value?: number | null; shared_with?: string; pin?: string; contact?: number | null; hardware?: boolean }[]
+  contacts: (OptionContact & { owner?: string; warning?: string })[]
+  hardware: SystemHardware[]
+  missing_includes: string[]
+}
+
+/** One piece of system hardware: a control wired to the board, not the tool connector. */
+export interface SystemHardware extends ToolControl {
+  category?: string
+  category_label?: string
+  header?: string
+  notes?: string
+  macros: string[]
 }

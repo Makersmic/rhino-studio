@@ -644,6 +644,9 @@ async function portal(req: IncomingMessage, res: import('node:http').ServerRespo
   // Portal: python3 dev/demo_server.py in Toolhead_Manager, then PORTAL=http://127.0.0.1:5055 npm run dev
   if (req.method === 'GET' && url === '/api/state') return json(res, 200, portalFixture('state')), true
   if (req.method === 'GET' && url === '/api/options') return json(res, 200, portalFixture('options')), true
+  if (req.method === 'GET' && url === '/api/lists') return json(res, 200, portalFixture('lists')), true
+  if (req.method === 'GET' && url === '/api/maint/tasklib') return json(res, 200, portalFixture('tasklib')), true
+  if (req.method === 'GET' && url === '/api/maint/lists') return json(res, 200, portalFixture('maint-lists')), true
   const sheet = url.match(/^\/api\/tools\/([^/]+)\/sheet$/)
   if (req.method === 'GET' && sheet) {
     const f = portalFixture(`sheet-${decodeURIComponent(sheet[1]!)}`)
@@ -654,7 +657,7 @@ async function portal(req: IncomingMessage, res: import('node:http').ServerRespo
     const f = portalFixture(`tool-${decodeURIComponent(tool[1]!)}`)
     return json(res, f ? 200 : 400, f ?? { ok: false, error: 'The pretend Pi can only open FoamWire for editing' }), true
   }
-  if ((req.method === 'POST' || req.method === 'DELETE') && /^\/api\/(tools|preview|restart)/.test(url))
+  if ((req.method === 'POST' || req.method === 'DELETE') && /^\/api\/(tools|preview|restart|lists|hardware)/.test(url))
     return json(res, 400, { ok: false, error: "The pretend Pi doesn't save tool changes. Run the Portal's demo (dev/demo_server.py) and point PORTAL at it." }), true
   const m = url.match(/^\/api\/maint\/tasks\/([^/]+)\/(done|snooze)$/)
   if (req.method === 'POST' && m) {
@@ -674,6 +677,9 @@ async function portal(req: IncomingMessage, res: import('node:http').ServerRespo
     recount()
     return json(res, 200, { ok: true }), true
   }
+  // Care editing (tasks, library, books, meters, setup) needs the real Portal too
+  if ((req.method === 'POST' || req.method === 'DELETE') && url.startsWith('/api/maint/'))
+    return json(res, 400, { ok: false, error: "The pretend Pi only logs work and snoozes. Run the Portal's demo (dev/demo_server.py) and point PORTAL at it to edit tasks." }), true
   return false
 }
 

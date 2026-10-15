@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
-import type { ToolDetail, ToolOptions } from './types'
+import type { ToolDetail, ToolKind, ToolOptions } from './types'
 import {
   applyKindPreset,
   checkStep,
@@ -9,6 +9,11 @@ import {
   ctlMacroNames,
   draftToControl,
   editBody,
+  editToKind,
+  hardwarePins,
+  kindToEdit,
+  newHardware,
+  newKind,
   editForm,
   frac,
   newControl,
@@ -116,5 +121,37 @@ describe('tool forms (same requests as the Portal)', () => {
     const b = editBody(foam, { ...f, cap: 40 }, rowsFromTool(foam), ['OLD'], [], [])
     expect(b).toMatchObject({ cap: 0.4, delete_materials: ['OLD'], checklist: expect.any(String) })
     expect(editBody({ ...foam, type: 'DEPOSITION' }, f, [], [], [], [])).not.toHaveProperty('checklist')
+  })
+})
+
+describe('system hardware pins', () => {
+  const o = { ...opt, board_pins: [{ pin: 'PD15', header: 'FAN5' }, { pin: 'PG11', header: 'DIAG3' }] }
+  it('offers the board headers off the umbilical, plus the pin it already has', () => {
+    const p = hardwarePins(o, 'switch', ['PE11'])
+    expect(p.map((x) => x.pin)).toEqual(['PE11', 'PD15', 'PG11'])
+    expect(p[1]!.label).toBe('PD15 - FAN5 (power output)')
+  })
+  it('a power output can switch, not read an input or drive a servo', () => {
+    expect(hardwarePins(o, 'switch', []).find((x) => x.pin === 'PD15')!.bad).toBe(false)
+    expect(hardwarePins(o, 'input', []).find((x) => x.pin === 'PD15')!.bad).toBe(true)
+    expect(hardwarePins(o, 'servo', []).find((x) => x.pin === 'PG11')!.bad).toBe(false)
+  })
+  it('new hardware is not switched off with the tool and starts in the first category', () => {
+    const h = newHardware({ ...o, hw_categories: [{ id: 'cooling', label: 'Fans' }] })
+    expect(h).toMatchObject({ safe_off: false, mounted_only: false, category: 'cooling', notes: '' })
+  })
+})
+
+describe('kinds of tool', () => {
+  const powered: ToolKind = { id: 'DISPENSER', category: 'additive', behaviour: 'POWERED', label: 'Dispenser', help: 'A pump', cap: 0.8, max_on_s: 120, materials: { PASTE: { power: 0.5, feed_rate: 400 } }, checklist: ['Cartridge in'] }
+  it('round-trips a powered kind through the % form', () => {
+    const e = kindToEdit(powered)
+    expect(e).toMatchObject({ cap: 80, max_on_s: 120, mats: [{ name: 'PASTE', power: 50, feed: 400 }], checklist: 'Cartridge in' })
+    expect(editToKind(e)).toEqual(powered)
+  })
+  it('a print head kind sends no starting values; a passive one no power', () => {
+    expect(editToKind(kindToEdit({ id: 'PRINT_HEAD', category: 'additive', behaviour: 'PRINT_HEAD', label: 'Head', help: '' }))).toEqual({ id: 'PRINT_HEAD', category: 'additive', behaviour: 'PRINT_HEAD', label: 'Head', help: '' })
+    const p = { ...newKind('passive', 'PASSIVE'), label: 'Pen ', mats: [{ name: 'card stock', power: '', feed: 900 }] }
+    expect(editToKind(p)).toEqual({ id: '', category: 'passive', behaviour: 'PASSIVE', label: 'Pen', help: '', checklist: [], materials: { CARD_STOCK: { feed_rate: 900 } } })
   })
 })

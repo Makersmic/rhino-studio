@@ -14,6 +14,7 @@ import Icon from '@/icons/Icon.vue'
 import AssetCareTile from '@/maintenance/AssetCareTile.vue'
 import CareTaskCard from '@/maintenance/CareTaskCard.vue'
 import LogWorkDialog from '@/maintenance/LogWorkDialog.vue'
+import StatusDialog from '@/maintenance/StatusDialog.vue'
 import { fmtMeter } from '@/maintenance/summary'
 import type { MaintTask } from '@/maintenance/types'
 import { lookFor } from '@/toolheads/registry'
@@ -33,6 +34,7 @@ const upcoming = computed(() => (onlyTool.value ? (care.overview?.tasks ?? []).f
 const held = computed(() => care.held.filter(mine))
 
 const logging = ref<MaintTask | null>(null)
+const statusFor = ref<MaintTask | null>(null)
 const busy = ref<string | null>(null)
 const notice = ref<string | null>(null)
 
@@ -66,7 +68,7 @@ const machineMeters = computed(() => care.overview?.meters.machine ?? [])
 
 const ACTION: Record<string, string> = { done: 'Done', skipped: 'Skipped', status: 'Status set', status_cleared: 'Status cleared', meter: 'Meter set' }
 const fmtDay = (s: number) => new Date(s * 1000).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
-const log = computed(() => care.history.filter((r) => !onlyTool.value || r.asset === `tool:${onlyTool.value}`).slice(0, 15))
+const log = computed(() => care.history.filter((r) => !onlyTool.value || r.asset === `tool:${onlyTool.value}`).slice(0, 8))
 </script>
 
 <template>
@@ -74,11 +76,9 @@ const log = computed(() => care.history.filter((r) => !onlyTool.value || r.asset
     <div class="view-head">
       <h1>Care</h1>
       <p>
-        Preventive maintenance for the Rhino and every toolhead, counted from real use.
-        Schedules and the work log live in the Rhino Portal<template v-if="care.portalVersion"> (v{{ care.portalVersion }})</template>;
-        add or edit tasks and Task Books
-        <a v-if="care.portalHome" :href="care.portalHome" target="_blank" rel="noopener">in the Portal</a><template v-else>in the Portal</template>
-        until Phase 5 brings that here.
+        Preventive maintenance for the Rhino and every toolhead, counted from real use. What needs doing is here;
+        every task, the Task Library and the setup lists are in the menu. The Rhino Portal<template v-if="care.portalVersion"> (v{{ care.portalVersion }})</template>
+        keeps the schedules and the work log.
       </p>
     </div>
 
@@ -94,6 +94,7 @@ const log = computed(() => care.history.filter((r) => !onlyTool.value || r.asset
       <div v-if="onlyTool" class="filter">
         <span>Showing <strong>{{ onlyTool }}</strong> only</span>
         <RouterLink :to="`/toolheads/${encodeURIComponent(onlyTool)}`">Its page</RouterLink>
+        <RouterLink :to="{ path: '/care/tasks', query: { for: `tool:${onlyTool}` } }">All its tasks</RouterLink>
         <button type="button" @click="router.replace({ path: '/care' })">Show everything</button>
       </div>
 
@@ -111,7 +112,7 @@ const log = computed(() => care.history.filter((r) => !onlyTool.value || r.asset
 
       <SectionRule label="Due now" />
       <div v-if="due.length" class="cards">
-        <CareTaskCard v-for="t in due" :key="t.id" :task="t" :busy="busy === t.id" @log="logging = $event" @snooze="snooze" />
+        <CareTaskCard v-for="t in due" :key="t.id" :task="t" :busy="busy === t.id" statusable @log="logging = $event" @snooze="snooze" @status="statusFor = $event" />
       </div>
       <p v-else class="muted pad">Nothing is due. Next up: {{ upcoming[0]?.title ?? 'nothing scheduled' }}.</p>
 
@@ -127,7 +128,7 @@ const log = computed(() => care.history.filter((r) => !onlyTool.value || r.asset
         </div>
       </template>
 
-      <SectionRule label="Coming up" />
+      <div class="ruled"><SectionRule label="Coming up" /><RouterLink class="all" to="/care/tasks">Every task</RouterLink></div>
       <div class="cards">
         <CareTaskCard v-for="t in upcoming" :key="t.id" :task="t" compact />
       </div>
@@ -135,12 +136,12 @@ const log = computed(() => care.history.filter((r) => !onlyTool.value || r.asset
       <template v-if="held.length">
         <SectionRule label="On hold" />
         <div class="cards">
-          <CareTaskCard v-for="t in held" :key="t.id" :task="t" :busy="busy === t.id" @log="logging = $event" @snooze="snooze" />
+          <CareTaskCard v-for="t in held" :key="t.id" :task="t" :busy="busy === t.id" statusable @log="logging = $event" @snooze="snooze" @status="statusFor = $event" />
         </div>
       </template>
 
       <div class="grid two">
-        <RsPanel title="Work log" index="L" panel-id="care.worklog">
+        <RsPanel title="Latest work" index="L" panel-id="care.worklog">
           <ul class="log">
             <li v-for="r in log" :key="r.id">
               <span class="date">{{ fmtDay(r.at) }}</span>
@@ -151,6 +152,7 @@ const log = computed(() => care.history.filter((r) => !onlyTool.value || r.asset
               </span>
             </li>
           </ul>
+          <RouterLink class="all" to="/care/log">The whole work log</RouterLink>
         </RsPanel>
         <RsPanel title="Usage meters" index="M" panel-id="care.meters">
           <dl class="meters">
@@ -162,7 +164,7 @@ const log = computed(() => care.history.filter((r) => !onlyTool.value || r.asset
               </dd>
             </template>
           </dl>
-          <p class="muted small">Counted by the Portal from Klipper and Moonraker. Each toolhead's own meters are on its page in Toolheads.</p>
+          <p class="muted small">Counted by the Portal from Klipper and Moonraker. <RouterLink to="/care/meters">Every meter, and each toolhead's own</RouterLink>.</p>
         </RsPanel>
       </div>
     </template>
@@ -170,6 +172,7 @@ const log = computed(() => care.history.filter((r) => !onlyTool.value || r.asset
     <p v-else class="muted pad">Loading maintenance from the Portal…</p>
 
     <LogWorkDialog :task="logging" @close="logging = null" @saved="(t) => flash(`Logged: ${t}`)" />
+    <StatusDialog :task="statusFor" @close="statusFor = null" @saved="flash" />
   </div>
 </template>
 
@@ -183,6 +186,10 @@ const log = computed(() => care.history.filter((r) => !onlyTool.value || r.asset
 .filter a, .filter button { color: var(--rs-text-strong); font: inherit; background: none; border: 0; padding: 0; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
 .filter button { margin-left: auto; }
 .pad { padding: 0 var(--rs-space-1); }
+.ruled { display: flex; align-items: flex-end; gap: var(--rs-space-3); }
+.ruled > :first-child { flex: 1; }
+.all { font-size: var(--rs-text-sm); color: var(--rs-text-strong); text-underline-offset: 3px; white-space: nowrap; }
+.log + .all { display: inline-block; margin-top: var(--rs-space-3); }
 .small { font-size: var(--rs-text-sm); }
 .notice { align-self: flex-start; padding: 8px 16px; border-radius: var(--rs-radius-pill); background: var(--rs-paper); color: var(--rs-paper-ink); font-weight: var(--rs-weight-medium); }
 .log { list-style: none; margin: 0; padding: 0; max-height: 520px; overflow: auto; }

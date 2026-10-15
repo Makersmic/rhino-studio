@@ -9,7 +9,7 @@
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import RsButton from '@/components/RsButton.vue'
 import { useToolMgrStore } from '@/stores/toolmgr'
-import { controlPins, ctlMacroNames, draftToControl, type ControlDraft } from './form'
+import { controlPins, ctlMacroNames, draftToControl, hardwarePins, type ControlDraft } from './form'
 import type { ToolControl, ToolMacro, ToolOptions } from './types'
 import './forms.css'
 
@@ -28,8 +28,15 @@ const props = defineProps<{
   options: ToolOptions
   pinsTaken: string[]
   pinsMine: string[]
+  /**
+   * System hardware (a control wired to the board, not the tool connector):
+   * board pins, a category and notes, checked with the hardware preview, and
+   * saved straight to the Portal by `submit` (the dialog shows its refusal).
+   */
+  hardware?: boolean
+  submit?: (item: ToolControl) => Promise<void>
 }>()
-const emit = defineEmits<{ close: []; save: [item: ToolControl | ToolMacro] }>()
+const emit = defineEmits<{ close: []; save: [item: ToolControl | ToolMacro]; remove: [] }>()
 
 const tm = useToolMgrStore()
 const dlg = ref<HTMLDialogElement | null>(null)
@@ -78,7 +85,7 @@ async function run() {
     if (props.kind === 'macro' && props.controls) body.controls = props.controls
   }
   try {
-    const r = await tm.client().preview(props.kind, body)
+    const r = props.hardware ? await tm.client().previewHardware(item) : await tm.client().preview(props.kind, body)
     if (n !== seq) return
     last.value = { ok: true, text: r.text, warnings: r.warnings, item: r.item }
   } catch (e) {
@@ -92,12 +99,37 @@ async function save() {
     if (timer) clearTimeout(timer)
     await run()
   }
-  if (last.value?.ok && last.value.item) emit('save', last.value.item)
+  if (!last.value?.ok || !last.value.item) return
+  if (!props.submit) return emit('save', last.value.item)
+  saving.value = true
+  saveError.value = null
+  try {
+    await props.submit({ ...(last.value.item as ToolControl), original: (props.item as ControlDraft).original ?? '' })
+  } catch (e) {
+    saveError.value = (e as Error).message
+  } finally {
+    saving.value = false
+  }
 }
+const saving = ref(false)
+const saveError = ref<string | null>(null)
+watch(() => props.item, () => (saveError.value = null))
 
 // ---- control choices
 const roles = computed(() => props.options.control_roles.filter((r) => r.value !== 'input' && (r.value !== 'heater_fan' || props.options.heaters.length)))
-const pins = computed(() => (props.kind === 'control' ? controlPins(props.options, c.value.dir === 'in' ? 'input' : c.value.role, props.pinsTaken, props.pinsMine) : []))
+const pins = computed(() => {
+  if (props.kind !== 'control') return []
+  const role = c.value.dir === 'in' ? 'input' : c.value.role
+  return props.hardware ? hardwarePins(props.options, role, props.pinsMine) : controlPins(props.options, role, props.pinsTaken, props.pinsMine)
+})
+const typedPin = computed({
+  get: () => (c.value.pin && !pins.value.some((p) => p.pin === c.value.pin) ? c.value.pin : ''),
+  set: (v: string) => {
+    c.value.pin = v.trim().toUpperCase()
+    schedule()
+  },
+})
+const what = computed(() => (props.hardware ? 'system hardware' : props.kind))
 const pinInfo = computed(() => props.options.pin_info[c.value?.pin ?? ''] ?? {})
 const genNames = computed(() => (props.kind === 'control' ? ctlMacroNames([{ ...draftToControl(c.value), make_macros: true, name: c.value.name || 'name' }]) : []))
 const madeByControls = computed(() => ctlMacroNames(props.controls ?? []))
@@ -114,7 +146,7 @@ const step = computed(() => (c.value?.dir === 'out' ? 4 : 3))
 <template>
   <dialog ref="dlg" class="dlg" aria-labelledby="item-title" @cancel.prevent="emit('close')">
     <form v-if="item" class="body" @submit.prevent="save">
-      <h2 id="item-title">{{ isNew ? 'New' : 'Edit' }} {{ kind }} · {{ toolName }}</h2>
+      <h2 id="item-title">{{ isNew ? 'New' : 'Edit' }} {{ what }}{{ hardware ? (isNew ? '' : ` · ${(item as ControlDraft).original}`) : ` · ${toolName}` }}</h2>
 
       <!-- ===== macro ===== -->
       <template v-if="kind === 'macro'">
@@ -143,20 +175,28 @@ const step = computed(() => (c.value?.dir === 'out' ? 4 : 3))
       <template v-else>
         <div class="tm-row">
           <div class="tm-fld">
-            <label for="ctl-name">Control name</label>
-            <input id="ctl-name" v-model="c.name" class="tm-in code" maxlength="32" placeholder="needle_vacuum" @input="c.name = c.name.toLowerCase(); schedule()" />
-            <span class="tm-hint">Lower-case letters, digits and _. Used in G-code, e.g. SET_PIN PIN={{ c.name || 'needle_vacuum' }}.</span>
+            <label for="ctl-name">{{ hardware ? 'Name' : 'Control name' }}</label>
+            <input id="ctl-name" v-model="c.name" class="tm-in code" maxlength="32" :placeholder="hardware ? 'enclosure_light' : 'needle_vacuum'" @input="c.name = c.name.toLowerCase(); schedule()" />
+            <span class="tm-hint">Lower-case letters, digits and _. Used in G-code, e.g. SET_PIN PIN={{ c.name || (hardware ? 'enclosure_light' : 'needle_vacuum') }}.</span>
           </div>
           <div class="tm-fld">
             <label for="ctl-purpose">What is it?</label>
-            <input id="ctl-purpose" v-model="c.purpose" class="tm-in" maxlength="80" placeholder="Vacuum pump relay" @input="schedule()" />
+            <input id="ctl-purpose" v-model="c.purpose" class="tm-in" maxlength="80" :placeholder="hardware ? 'Enclosure LED strip' : 'Vacuum pump relay'" @input="schedule()" />
           </div>
+        </div>
+        <div v-if="hardware" class="tm-row">
+          <label class="tm-fld">
+            <span class="tm-lbl">Category</span>
+            <select v-model="c.category" class="tm-sel" @change="schedule(0)"><option v-for="x in options.hw_categories ?? []" :key="x.id" :value="x.id">{{ x.label }}</option></select>
+            <span class="tm-hint">Edit the categories in Toolhead setup.</span>
+          </label>
+          <label class="tm-fld"><span class="tm-lbl">Notes (optional)</span><input v-model="c.notes" class="tm-in" maxlength="300" placeholder="24 V strip on the FAN5 header, 2 A" @input="schedule()" /></label>
         </div>
 
         <fieldset class="tm-set">
           <legend>1. Which way does the signal go?</legend>
-          <label class="tm-radio" :class="{ on: c.dir === 'out' }"><input type="radio" :checked="c.dir === 'out'" @change="setDir('out')" /><span><strong>Rhino controls something on the tool</strong><br /><span class="tm-hint">A relay, fan, light, servo, driver…</span></span></label>
-          <label class="tm-radio" :class="{ on: c.dir === 'in' }"><input type="radio" :checked="c.dir === 'in'" @change="setDir('in')" /><span><strong>The tool sends a signal to Rhino</strong><br /><span class="tm-hint">A button, door switch, limit switch, sensor…</span></span></label>
+          <label class="tm-radio" :class="{ on: c.dir === 'out' }"><input type="radio" :checked="c.dir === 'out'" @change="setDir('out')" /><span><strong>{{ hardware ? 'Rhino controls it' : 'Rhino controls something on the tool' }}</strong><br /><span class="tm-hint">A relay, fan, light, servo, driver…</span></span></label>
+          <label class="tm-radio" :class="{ on: c.dir === 'in' }"><input type="radio" :checked="c.dir === 'in'" @change="setDir('in')" /><span><strong>{{ hardware ? 'It sends a signal to Rhino' : 'The tool sends a signal to Rhino' }}</strong><br /><span class="tm-hint">A button, door switch, limit switch, sensor…</span></span></label>
         </fieldset>
 
         <fieldset v-if="c.dir === 'out'" class="tm-set">
@@ -168,13 +208,20 @@ const step = computed(() => (c.value?.dir === 'out' ? 4 : 3))
         </fieldset>
 
         <fieldset class="tm-set">
-          <legend>{{ c.dir === 'out' ? 3 : 2 }}. Which pin on the tool connector?</legend>
-          <div class="tm-fld">
-            <select v-model="c.pin" class="tm-sel" aria-label="Pin" @change="schedule(0)">
-              <option value="">{{ pins.length ? 'Choose a pin…' : 'No free tool-connector pins' }}</option>
-              <option v-for="p in pins" :key="p.pin" :value="p.pin" :disabled="p.bad">{{ p.label }}{{ p.bad ? ' - can’t do this' : '' }}</option>
-            </select>
-            <span class="tm-hint">{{ c.pin ? pinInfo.type_label : 'Only free pins wired to the umbilical are listed. Describe pins in myrhino/umbilical.json to filter by what they can do.' }}</span>
+          <legend>{{ c.dir === 'out' ? 3 : 2 }}. {{ hardware ? 'Which board pin is it wired to?' : 'Which pin on the tool connector?' }}</legend>
+          <div :class="hardware ? 'tm-row' : ''">
+            <div class="tm-fld">
+              <select v-model="c.pin" class="tm-sel" aria-label="Pin" @change="schedule(0)">
+                <option value="">{{ pins.length ? 'Choose a pin…' : hardware ? 'No free board headers' : 'No free tool-connector pins' }}</option>
+                <option v-for="p in pins" :key="p.pin" :value="p.pin" :disabled="p.bad">{{ p.label }}{{ p.bad ? ' - can’t do this' : '' }}</option>
+              </select>
+              <span class="tm-hint">{{ hardware ? 'Free headers on the board that are not on the umbilical.' : c.pin ? pinInfo.type_label : 'Only free pins wired to the umbilical are listed. Describe pins in myrhino/umbilical.json to filter by what they can do.' }}</span>
+            </div>
+            <label v-if="hardware" class="tm-fld">
+              <span class="tm-lbl">Or type another pin</span>
+              <input v-model.lazy="typedPin" class="tm-in code" maxlength="5" placeholder="PE11" />
+              <span class="tm-hint">Any free board pin, like one on the EXP headers. Checked against the whole config.</span>
+            </label>
           </div>
         </fieldset>
 
@@ -229,12 +276,12 @@ const step = computed(() => (c.value?.dir === 'out' ? 4 : 3))
 
         <fieldset v-if="c.dir === 'out' && c.role !== 'heater_fan'" class="tm-set">
           <legend>{{ step + 1 }}. Safety and shortcuts</legend>
-          <label class="tm-check"><input v-model="c.safe_off" type="checkbox" @change="schedule(0)" /><span>Switch it off whenever the machine is made safe<br /><span class="tm-hint">Cancel, tool swap and emergency stop (_TOOL_SAFE_OFF).</span></span></label>
+          <label class="tm-check"><input v-model="c.safe_off" type="checkbox" @change="schedule(0)" /><span>Switch it off whenever the machine is made safe<br /><span class="tm-hint">{{ hardware ? 'End of job, cancel, tool swap and emergency stop (_TOOL_SAFE_OFF). Leave it off for lights and cooling that should stay on.' : 'Cancel, tool swap and emergency stop (_TOOL_SAFE_OFF).' }}</span></span></label>
           <span class="tm-lbl">If Klipper shuts down or loses the board</span>
           <label class="tm-radio" :class="{ on: c.on_shutdown === 'off' }"><input type="radio" :checked="c.on_shutdown === 'off'" @change="c.on_shutdown = 'off'; schedule(0)" /><strong>Switch it off (recommended)</strong></label>
           <label class="tm-radio" :class="{ on: c.on_shutdown === 'on' }"><input type="radio" :checked="c.on_shutdown === 'on'" @change="c.on_shutdown = 'on'; schedule(0)" /><span><strong>Leave it on</strong><br /><span class="tm-hint">Only for things that are safe left running, such as cooling.</span></span></label>
           <label class="tm-check"><input v-model="c.make_macros" type="checkbox" @change="schedule(0)" /><span>Make macros for it: {{ genNames.join(', ') }}<br /><span class="tm-hint">Use them in job files or the console.</span></span></label>
-          <label v-if="c.make_macros" class="tm-check"><input v-model="c.mounted_only" type="checkbox" @change="schedule(0)" /><span>Those macros only switch it on while this tool is mounted<br /><span class="tm-hint">Switching it off always works.</span></span></label>
+          <label v-if="c.make_macros && !hardware" class="tm-check"><input v-model="c.mounted_only" type="checkbox" @change="schedule(0)" /><span>Those macros only switch it on while this tool is mounted<br /><span class="tm-hint">Switching it off always works.</span></span></label>
         </fieldset>
       </template>
 
@@ -244,10 +291,20 @@ const step = computed(() => (c.value?.dir === 'out' ? 4 : 3))
         <div v-for="(w, i) in last?.warnings ?? []" :key="i" class="tm-warn">{{ w }}</div>
       </div>
 
+      <p v-if="saveError" class="tm-err" role="alert">{{ saveError }}</p>
       <footer class="tm-actions foot">
-        <RsButton type="submit" variant="primary" :disabled="!!last && !last.ok">{{ isNew ? `Add ${kind}` : 'Keep changes' }}</RsButton>
-        <RsButton @click="emit('close')">Cancel</RsButton>
-        <span class="tm-hint">Saved with the tool.</span>
+        <template v-if="hardware">
+          <RsButton type="submit" variant="primary" :disabled="(!!last && !last.ok) || saving">{{ saving ? 'Saving…' : isNew ? 'Add hardware' : 'Save' }}</RsButton>
+          <RsButton @click="emit('close')">Cancel</RsButton>
+          <span class="tm-hint">Live after the next Klipper restart.</span>
+          <span class="grow" />
+          <RsButton v-if="!isNew" variant="danger-outline" @click="emit('remove')">Remove hardware</RsButton>
+        </template>
+        <template v-else>
+          <RsButton type="submit" variant="primary" :disabled="!!last && !last.ok">{{ isNew ? `Add ${kind}` : 'Keep changes' }}</RsButton>
+          <RsButton @click="emit('close')">Cancel</RsButton>
+          <span class="tm-hint">Saved with the tool.</span>
+        </template>
       </footer>
     </form>
   </dialog>
@@ -262,5 +319,6 @@ const step = computed(() => (c.value?.dir === 'out' ? 4 : 3))
 .body { display: flex; flex-direction: column; gap: var(--rs-space-4); padding: var(--rs-space-5) var(--rs-space-5) var(--rs-space-4); }
 h2 { margin: 0; font-size: var(--rs-text-lg); font-weight: var(--rs-weight-medium); color: var(--rs-text-strong); }
 .narrow { max-width: 200px; }
+.grow { flex: 1; }
 .foot { position: sticky; bottom: calc(-1 * var(--rs-space-4)); padding: var(--rs-space-3) 0; background: var(--rs-surface); border-top: 1px solid var(--rs-line); }
 </style>

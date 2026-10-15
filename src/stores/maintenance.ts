@@ -13,7 +13,7 @@ import { defineStore } from 'pinia'
 import { computed, ref, shallowRef, watch } from 'vue'
 import { PortalClient } from '@/portal/client'
 import { assetCare, dueList, heldList, machineAreas, toolAsset, upcomingList } from '@/maintenance/summary'
-import type { HistoryRecord, JobsWeeks, MaintOverview } from '@/maintenance/types'
+import type { HistoryRecord, JobsWeeks, MaintLists, MaintOverview, TaskLibrary } from '@/maintenance/types'
 import { useMachineStore } from './machine'
 
 export type CareSource = 'idle' | 'loading' | 'ready' | 'unavailable'
@@ -24,6 +24,9 @@ export const useMaintenanceStore = defineStore('maintenance', () => {
   const history = shallowRef<HistoryRecord[]>([])
   /** Jobs per week for the Dashboard; null if the Portal couldn't say */
   const jobWeeks = shallowRef<JobsWeeks | null>(null)
+  /** The Task Library and the Care setup lists: read when a screen needs them, kept fresh after changes. */
+  const library = shallowRef<TaskLibrary | null>(null)
+  const lists = shallowRef<MaintLists | null>(null)
   const source = ref<CareSource>('idle')
   const error = ref<string | null>(null)
   const updatedAt = ref<number | null>(null)
@@ -35,6 +38,8 @@ export const useMaintenanceStore = defineStore('maintenance', () => {
     overview.value = null
     history.value = []
     jobWeeks.value = null
+    library.value = null
+    lists.value = null
     void refresh()
     if (timer) clearInterval(timer)
     timer = setInterval(() => void refresh(), 120_000)
@@ -67,6 +72,32 @@ export const useMaintenanceStore = defineStore('maintenance', () => {
     if (!client) throw new Error('Portal not connected')
     await client.snooze(taskId, days)
     await refresh()
+  }
+
+  function api(): PortalClient {
+    if (!client) throw new Error('The Rhino Portal is not set up (Settings → Portal)')
+    return client
+  }
+
+  async function loadLibrary(): Promise<TaskLibrary> {
+    library.value = await api().taskLibrary()
+    return library.value
+  }
+
+  async function loadLists(): Promise<MaintLists> {
+    lists.value = await api().maintLists()
+    return lists.value
+  }
+
+  /**
+   * Make one change through the Portal, then read back everything it can
+   * touch: the overview (tasks, statuses), and the library and lists if a
+   * screen has them open. The Portal's own message is thrown on refusal.
+   */
+  async function write<T>(fn: (c: PortalClient) => Promise<T>): Promise<T> {
+    const r = await fn(api())
+    await Promise.all([refresh(), library.value && loadLibrary().catch(() => null), lists.value && loadLists().catch(() => null)])
+    return r
   }
 
   // Meters move when a job finishes or a tool is swapped: look again then
@@ -102,6 +133,8 @@ export const useMaintenanceStore = defineStore('maintenance', () => {
   return {
     overview,
     history,
+    library,
+    lists,
     jobWeeks,
     source,
     error,
@@ -121,5 +154,8 @@ export const useMaintenanceStore = defineStore('maintenance', () => {
     refresh,
     logWork,
     snooze,
+    loadLibrary,
+    loadLists,
+    write,
   }
 })

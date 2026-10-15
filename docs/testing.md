@@ -165,4 +165,27 @@ Studio sends the Portal the same requests as the Portal's own screens, so the Po
 | T10 | Edit tool → Delete tool on your test tool | Asks first (red); it's gone from the library after the restart; its care history is still in the work log | The mounted tool can be deleted |
 | T11 | Edit tool → add a photo, then delete it | The photo shows on its page, then goes | |
 | T12 | Stop the Portal, open Toolheads | Klipper's own tool list, with a note that the Portal isn't answering; no Add or Edit | Studio offers changes it can't make |
+| T13 | Toolheads → Wiring → Tool connector; pick BlockOne, then LightSaber | Only that tool's contacts are inked; the table lists only those; contact 20's wiring note shows if PD12 isn't in the config | A contact differs from the manual's pin sheet |
+| T14 | Wiring → System hardware → Add: `test_light`, Lighting, Rhino controls it, On/off, PD15 (FAN5) | The text it writes shows as you type; Add hardware saves it; the card shows under Lighting; the banner lists it. Restart Klipper (idle): `TEST_LIGHT_ON` / `_OFF` switch the header | The preview is wrong, or anything switches on by itself |
+| T15 | Edit test_light → Remove hardware | Asks first (red); gone after the restart | Hardware a tool switches on can be removed |
+| T16 | Toolhead setup → Kinds of tool: add a Passive kind with one material, Save; open Add a toolhead | The new kind is offered under Passive with its material. Remove it, Save | A built-in or in-use kind can be removed |
+| T17 | Toolhead setup → Materials, nozzles, categories: add a nozzle size `9`, Save | The Portal's "must be between" message; nothing saved. Remove it | It saves |
+
+## Care editing (phase 5)
+
+Maintenance records only: nothing here moves the machine or changes Klipper. Run with the Portal on port 5000 open beside it to compare.
+
+| # | Do this | Pass when | Stop if |
+|---|---|---|---|
+| M1 | Care → Tasks | Every task, one fold per area and tool, groups with nothing due folded; counts on Every task / Due / With a status match the Portal's Tasks page | A task is missing or in the wrong group |
+| M2 | New task: "Test check", For Frame, After so much use, Machine production hours, every 50, Save | "In plain words" says "Due every 50 production hours, early alarm 10 h before" while typing; Save opens the task, which also shows in the Portal | The plain words disagree with the Portal's schedule column |
+| M3 | Set status → Pending - Waiting on parts without a note, then with one | Greyed until there's a note; then the task shows the status, and the work log lists it | It saves without the note |
+| M4 | Add this task to the Task Library, then Detach to customise | Linked: only Paused is editable, with Edit the library task / Detach; detached: the full form is back | Linked steps can be edited on the task |
+| M5 | Delete task | Asks first (red); it's gone; its work-log lines stay | |
+| M6 | Task Library → New Task Book with one task; Assign… to a toolhead; take it off with × | Assign adds the task to that tool (Tasks shows it); × asks, then archives it (Archived filter shows it) | The task is deleted outright |
+| M7 | Usage meters → Set on Emergency stops: one more than now; then back | The readout and the Portal agree; the work log shows "Meter set" twice | |
+| M8 | Untick, then tick the Mainsail reminder | The Portal's Usage meters → Reminders follows | |
+| M9 | Care setup → Status codes: add one, Save, remove it, Save | Saved, then gone; a code set on a task can't be removed | One in use is removed |
+| M10 | Care setup → Areas: add one, Save, remove it, Save; try to remove Motion X/Y | Saved, then gone; Remove is greyed for an area with tasks | |
+| M11 | Phone: Care → the section button | The menu opens under it with the groups; picking one closes it | The page scrolls sideways |
 
