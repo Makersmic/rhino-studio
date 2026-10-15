@@ -146,3 +146,23 @@ Before any of these: Rhino config **1.4.3 or later** (real Z travel), `zero_max_
 | P16 | Run P15's file on scrap, Z0 on the stock top | Levels the top 1 mm first, roughs, then cuts out; spindle stops at the end | Anything cuts outside the stock or below the board: E-stop |
 | P17 | Slice a part in OrcaSlicer with the Rhino SwitchFly profile, drop the .gcode in Job setup | Says "Made by OrcaSlicer", picks SwitchFly from `; rhino_toolhead`, shows the toolpath on the bed, time and filament from the file; checks pass with only a temperature note; Send uploads it | It's sliced again, or a file with G28/T0/SWAP_TOOL can be sent |
 | P18 | Drop a .gcode without a `; rhino_toolhead` line (e.g. from LightBurn) | Asks which toolhead it's for; picking LightSaber adds the line at the top of the uploaded copy; a file that has `ACTIVATE_LASER` or powers the laser above `laser_s_max` can't be sent | It can be sent without a toolhead, or with too much laser power |
+
+## Toolheads (phase 5): library, tool pages, editing, adding
+
+Studio sends the Portal the same requests as the Portal's own screens, so the Portal's rules apply. Run these with the machine idle and a print head mounted. Nothing here moves the machine; Restart Klipper does stop it, so only press it idle.
+
+| # | Do this | Pass when | Stop if |
+|---|---|---|---|
+| T1 | Open Toolheads | Every tool from the Portal's library, built in and yours, with its slot, kind and care; the mounted one says Mounted. Matches the Portal's Tool library at port 5000 | A tool is missing or in the wrong slot |
+| T2 | Select BlockOne, then LightSaber | Its page: About, the connector with the contacts it uses inked, the pin table, materials, macros, use and care, and its drawing (white lines in night mode). Select contact 15 on the drawing: its row is marked | A contact differs from the manual's pin sheet |
+| T3 | On a tool page press Care tasks | Care shows that tool only, with "Show everything" to go back | Other tools' tasks show |
+| T4 | Dashboard → a tool card under Toolheads at a glance | Opens Care for that tool | |
+| T5 | Add a toolhead: Passive, a name, select 2-3 contacts, Next to Review | Review lists it and says which slot it becomes; Create opens its page; the banner lists "added <name>" | Anything is written before Create |
+| T6 | Add a toolhead: Subtractive → Hot wire, leave the output empty, Next | "Choose the contact or pin for every output…", nothing sent | It moves on |
+| T7 | Edit your new tool: change a material, select another contact, add a control (switch on a free pin) and a macro (`G4 P100`) | The control and macro dialogs show the exact custom_tools.cfg text as you type; a bad name shows the Portal's reason and Save stays greyed. Save changes → its page shows them; the banner lists the change | A broken macro can be saved |
+| T8 | With a job running, open Toolheads | The banner says the restart waits for the job, offers "Restart Klipper by itself when the job finishes"; no Restart button | Restart is offered during the job |
+| T9 | Idle: Restart Klipper | Asks first; then Klipper restarts, the "which toolhead is mounted?" question appears; the banner clears; `CHECK_TOOLHEADS` lists the new tool | Klipper won't start: open the Portal's banner and undo the last change, or report the red error |
+| T10 | Edit tool → Delete tool on your test tool | Asks first (red); it's gone from the library after the restart; its care history is still in the work log | The mounted tool can be deleted |
+| T11 | Edit tool → add a photo, then delete it | The photo shows on its page, then goes | |
+| T12 | Stop the Portal, open Toolheads | Klipper's own tool list, with a note that the Portal isn't answering; no Add or Edit | Studio offers changes it can't make |
+

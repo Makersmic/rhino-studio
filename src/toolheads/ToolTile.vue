@@ -9,13 +9,13 @@ import CareBar from '@/maintenance/CareBar.vue'
 import { careText, type AssetCare } from '@/maintenance/summary'
 
 withDefaults(
-  defineProps<{ look: ToolheadLook; slot?: number | null; caption?: string; mounted?: boolean; care?: AssetCare | null }>(),
-  { slot: null, caption: undefined, mounted: false, care: null },
+  defineProps<{ look: ToolheadLook; slot?: number | null; caption?: string; mounted?: boolean; care?: AssetCare | null; to?: string | null }>(),
+  { slot: null, caption: undefined, mounted: false, care: null, to: null },
 )
 </script>
 
 <template>
-  <article class="tile" :style="{ '--accent': `var(${look.accentVar})` }">
+  <component :is="to ? 'RouterLink' : 'article'" :to="to ?? undefined" class="tile" :class="{ link: !!to }" :style="{ '--accent': `var(${look.accentVar})` }">
     <header class="top">
       <h3 class="name">{{ look.name }}</h3>
       <span v-if="slot != null" class="index">{{ String(slot).padStart(2, '0') }}</span>
@@ -32,11 +32,11 @@ withDefaults(
       <span v-if="mounted" class="mounted">Mounted</span>
     </footer>
 
-    <RouterLink v-if="care && care.total" to="/care" class="care" :class="care.level" :title="care.next?.title">
+    <component :is="to ? 'span' : 'RouterLink'" v-if="care && care.total" :to="to ? undefined : '/care'" class="care" :class="care.level" :title="care.next?.title">
       <span class="care-text">{{ careText(care) }}</span>
       <CareBar :fraction="care.worstFraction" :level="care.level" :label="`${look.name} care`" />
-    </RouterLink>
-  </article>
+    </component>
+  </component>
 </template>
 
 <style scoped>
@@ -57,6 +57,10 @@ withDefaults(
 .tile::before { content: ''; position: absolute; left: 0; right: 0; top: 0; height: 4px; background: var(--accent); }
 .top { display: flex; align-items: baseline; justify-content: space-between; gap: var(--rs-space-2); }
 .name { color: var(--rs-text-strong); font-size: var(--rs-text-lg); font-weight: var(--rs-weight-medium); }
+.tile.link { text-decoration: none; cursor: pointer; transition: border-color var(--rs-dur, 0.15s); }
+.tile.link:hover { border-color: var(--rs-line-strong); }
+.tile.link:hover .name { text-decoration: underline; text-underline-offset: 4px; }
+.tile.link:focus-visible { outline: 2px solid var(--rs-ink); outline-offset: 2px; }
 .index { font-size: var(--rs-text-xs); color: var(--rs-text-muted); }
 .frame {
   position: relative;

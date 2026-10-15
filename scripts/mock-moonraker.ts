@@ -571,6 +571,14 @@ const fixtureShift = Math.round(Date.now() / 1000 - (maint.now as number))
 for (const r of maintHistory.records as { at: number }[]) r.at += fixtureShift
 const maintJobs = (JSON.parse(readFileSync(new URL('./fixtures/maint-jobs.json', import.meta.url), 'utf8')).jobs as { ago_s: number; status: string; duration_s: number }[])
 
+function portalFixture(name: string): unknown {
+  try {
+    return JSON.parse(readFileSync(new URL(`./fixtures/portal-${name}.json`, import.meta.url), 'utf8'))
+  } catch {
+    return null
+  }
+}
+
 /** The Portal's /api/dash/jobs (rhino/portal/routes.py dash_jobs): 12 Monday-based weeks, oldest first. */
 function jobsPerWeek() {
   const now = new Date()
@@ -632,6 +640,22 @@ async function portal(req: IncomingMessage, res: import('node:http').ServerRespo
   if (req.method === 'GET' && url === '/api/maint') return json(res, 200, maint), true
   if (req.method === 'GET' && url === '/api/maint/history') return json(res, 200, maintHistory), true
   if (req.method === 'GET' && url === '/api/dash/jobs') return json(res, 200, jobsPerWeek()), true
+  // Tool library, read-only, from the Portal's demo (scripts/fixtures/portal-*.json). Changes need the real
+  // Portal: python3 dev/demo_server.py in Toolhead_Manager, then PORTAL=http://127.0.0.1:5055 npm run dev
+  if (req.method === 'GET' && url === '/api/state') return json(res, 200, portalFixture('state')), true
+  if (req.method === 'GET' && url === '/api/options') return json(res, 200, portalFixture('options')), true
+  const sheet = url.match(/^\/api\/tools\/([^/]+)\/sheet$/)
+  if (req.method === 'GET' && sheet) {
+    const f = portalFixture(`sheet-${decodeURIComponent(sheet[1]!)}`)
+    return json(res, f ? 200 : 400, f ?? { ok: false, error: 'The pretend Pi only has the BlockOne and FoamWire pages' }), true
+  }
+  const tool = url.match(/^\/api\/tools\/([^/]+)$/)
+  if (req.method === 'GET' && tool) {
+    const f = portalFixture(`tool-${decodeURIComponent(tool[1]!)}`)
+    return json(res, f ? 200 : 400, f ?? { ok: false, error: 'The pretend Pi can only open FoamWire for editing' }), true
+  }
+  if ((req.method === 'POST' || req.method === 'DELETE') && /^\/api\/(tools|preview|restart)/.test(url))
+    return json(res, 400, { ok: false, error: "The pretend Pi doesn't save tool changes. Run the Portal's demo (dev/demo_server.py) and point PORTAL at it." }), true
   const m = url.match(/^\/api\/maint\/tasks\/([^/]+)\/(done|snooze)$/)
   if (req.method === 'POST' && m) {
     if (req.headers['x-rhino-token'] !== PORTAL_TOKEN) return json(res, 400, { ok: false, error: 'This page is out of date (the portal was restarted). Reload the page and try again.' }), true

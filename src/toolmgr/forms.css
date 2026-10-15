@@ -1,0 +1,39 @@
+/* Tool add/edit forms: one look for every field (the same as Job setup's settings). */
+.tm-fld { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.tm-fld > label, .tm-lbl { font-size: 12px; font-weight: var(--rs-weight-medium); color: var(--rs-text-muted); }
+.tm-hint { font-size: 11px; color: var(--rs-text-muted); line-height: 1.35; }
+.tm-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: var(--rs-space-3) var(--rs-space-4); }
+.tm-in, .tm-sel, .tm-ta {
+  width: 100%; min-height: 38px; padding: 0 10px; border: 1px solid var(--rs-line-strong); border-radius: var(--rs-radius-md);
+  background: var(--rs-surface); color: var(--rs-text-strong); font: inherit; font-size: var(--rs-text-sm);
+}
+.tm-ta { padding: 8px 10px; min-height: 90px; resize: vertical; line-height: 1.4; }
+.tm-ta.code, .tm-in.code { font-family: var(--rs-font-code); font-size: var(--rs-text-xs); }
+.tm-in:focus-visible, .tm-sel:focus-visible, .tm-ta:focus-visible { outline: 2px solid var(--rs-ink); outline-offset: 1px; }
+.tm-in:disabled { color: var(--rs-text-muted); background: var(--rs-dither-faint), var(--rs-surface); }
+.tm-set { border: 1px solid var(--rs-line); border-radius: var(--rs-radius-md); padding: var(--rs-space-3) var(--rs-space-4) var(--rs-space-4); margin: 0; display: flex; flex-direction: column; gap: var(--rs-space-3); min-width: 0; }
+.tm-set > legend { padding: 0 6px; font-size: var(--rs-text-sm); font-weight: var(--rs-weight-medium); color: var(--rs-text-strong); }
+.tm-check { display: flex; align-items: flex-start; gap: 8px; font-size: var(--rs-text-sm); color: var(--rs-text-strong); cursor: pointer; }
+.tm-check input, .tm-radio input { width: 16px; height: 16px; margin-top: 2px; accent-color: var(--rs-text-strong); flex: none; }
+.tm-radio { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border: 1px solid var(--rs-line); border-radius: var(--rs-radius-md); cursor: pointer; font-size: var(--rs-text-sm); color: var(--rs-text-strong); }
+.tm-radio.on { border-color: var(--rs-ink); box-shadow: inset 0 0 0 1px var(--rs-ink); }
+.tm-radio strong { font-weight: var(--rs-weight-medium); }
+.tm-pre {
+  margin: 0; padding: 10px 12px; border-radius: var(--rs-radius-md); border: 1px solid var(--rs-line);
+  background: var(--rs-dither-faint), var(--rs-surface); font-family: var(--rs-font-code); font-size: 11.5px; line-height: 1.5;
+  color: var(--rs-text-strong); white-space: pre-wrap; max-height: 260px; overflow: auto;
+}
+.tm-pre.bad { border-color: var(--rs-danger); color: var(--rs-danger); background: var(--rs-surface); }
+.tm-warn { padding: 8px 12px; border-left: 3px solid var(--rs-ink); background: var(--rs-dither-faint), var(--rs-surface); font-size: var(--rs-text-sm); color: var(--rs-text-strong); }
+.tm-err { margin: 0; padding: 8px 12px; border-radius: var(--rs-radius-md); border: 1.5px solid var(--rs-danger); color: var(--rs-danger); font-size: var(--rs-text-sm); }
+.tm-ok { margin: 0; font-size: var(--rs-text-sm); color: var(--rs-text-strong); }
+.tm-list { display: flex; flex-direction: column; gap: 6px; }
+.tm-item { display: flex; align-items: center; gap: var(--rs-space-3); padding: 10px 12px; border: 1px solid var(--rs-line); border-radius: var(--rs-radius-md); }
+.tm-item .main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.tm-item strong { font-size: var(--rs-text-sm); font-weight: var(--rs-weight-medium); color: var(--rs-text-strong); }
+.tm-item .mono { font-family: var(--rs-font-code); }
+.tm-empty { padding: 12px; border: 1px dashed var(--rs-line-strong); border-radius: var(--rs-radius-md); font-size: var(--rs-text-sm); color: var(--rs-text-muted); }
+.tm-link { padding: 0; border: 0; background: none; color: var(--rs-text-strong); font: inherit; font-size: var(--rs-text-sm); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.tm-link.danger { color: var(--rs-danger); }
+.tm-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--rs-space-2); }
+.tm-lead { margin: 0; font-size: var(--rs-text-sm); color: var(--rs-text); max-width: 70ch; }

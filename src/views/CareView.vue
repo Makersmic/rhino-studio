@@ -5,6 +5,7 @@
  * Studio's terms and lets you log work and snooze.
  */
 import { computed, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import EmptyState from '@/components/EmptyState.vue'
 import Readout from '@/components/Readout.vue'
 import RsPanel from '@/components/RsPanel.vue'
@@ -21,6 +22,15 @@ import { useMaintenanceStore } from '@/stores/maintenance'
 
 const care = useMaintenanceStore()
 const machine = useMachineStore()
+const route = useRoute()
+const router = useRouter()
+
+/** ?tool=BlockOne shows only that toolhead's tasks (from its page or the Dashboard) */
+const onlyTool = computed(() => (typeof route.query.tool === 'string' && route.query.tool ? route.query.tool : null))
+const mine = (t: MaintTask) => !onlyTool.value || t.asset === `tool:${onlyTool.value}`
+const due = computed(() => care.due.filter(mine))
+const upcoming = computed(() => (onlyTool.value ? (care.overview?.tasks ?? []).filter((t) => mine(t) && !care.due.includes(t) && !care.held.includes(t) && t.enabled !== false && !t.archived) : care.upcoming))
+const held = computed(() => care.held.filter(mine))
 
 const logging = ref<MaintTask | null>(null)
 const busy = ref<string | null>(null)
@@ -45,7 +55,9 @@ async function snooze(t: MaintTask) {
 
 const tools = computed(() => {
   const names = care.overview?.tools?.map((t) => t.name) ?? machine.knownTools.map((t) => t.name)
-  return names.map((name) => ({ name, look: lookFor(name, care.overview?.tools?.find((t) => t.name === name)?.type), care: care.forTool(name)! }))
+  return names
+    .filter((name) => !onlyTool.value || name === onlyTool.value)
+    .map((name) => ({ name, look: lookFor(name, care.overview?.tools?.find((t) => t.name === name)?.type), care: care.forTool(name)! }))
 })
 
 const meter = (key: string) => care.overview?.meters.machine.find((m) => m.meter === key) ?? null
@@ -54,7 +66,7 @@ const machineMeters = computed(() => care.overview?.meters.machine ?? [])
 
 const ACTION: Record<string, string> = { done: 'Done', skipped: 'Skipped', status: 'Status set', status_cleared: 'Status cleared', meter: 'Meter set' }
 const fmtDay = (s: number) => new Date(s * 1000).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
-const log = computed(() => care.history.slice(0, 15))
+const log = computed(() => care.history.filter((r) => !onlyTool.value || r.asset === `tool:${onlyTool.value}`).slice(0, 15))
 </script>
 
 <template>
@@ -79,7 +91,13 @@ const log = computed(() => care.history.slice(0, 15))
     <template v-else-if="care.overview">
       <p v-if="notice" class="notice" role="status">{{ notice }}</p>
 
-      <div class="readouts">
+      <div v-if="onlyTool" class="filter">
+        <span>Showing <strong>{{ onlyTool }}</strong> only</span>
+        <RouterLink :to="`/toolheads/${encodeURIComponent(onlyTool)}`">Its page</RouterLink>
+        <button type="button" @click="router.replace({ path: '/care' })">Show everything</button>
+      </div>
+
+      <div v-if="!onlyTool" class="readouts">
         <Readout label="Overdue" :value="String(care.counts.overdue)" :detail="care.counts.overdue ? 'Fit them in soon' : 'None'" />
         <Readout label="Due soon" :value="String(care.counts.due_soon)" detail="Plan the work, order parts" />
         <Readout label="On hold" :value="String(care.counts.held + care.counts.snoozed)" :detail="`${care.counts.snoozed} snoozed`" />
@@ -92,30 +110,32 @@ const log = computed(() => care.history.slice(0, 15))
       </div>
 
       <SectionRule label="Due now" />
-      <div v-if="care.due.length" class="cards">
-        <CareTaskCard v-for="t in care.due" :key="t.id" :task="t" :busy="busy === t.id" @log="logging = $event" @snooze="snooze" />
+      <div v-if="due.length" class="cards">
+        <CareTaskCard v-for="t in due" :key="t.id" :task="t" :busy="busy === t.id" @log="logging = $event" @snooze="snooze" />
       </div>
-      <p v-else class="muted pad">Nothing is due. Next up: {{ care.upcoming[0]?.title ?? 'nothing scheduled' }}.</p>
+      <p v-else class="muted pad">Nothing is due. Next up: {{ upcoming[0]?.title ?? 'nothing scheduled' }}.</p>
 
       <SectionRule label="Toolheads" />
       <div class="tiles">
         <AssetCareTile v-for="t in tools" :key="t.name" :care="t.care" :look="t.look" :mounted="machine.mountedName === t.name" />
       </div>
 
-      <SectionRule label="Machine" />
-      <div class="tiles">
-        <AssetCareTile v-for="a in care.areas.filter((x) => x.total > 0)" :key="a.asset" :care="a" />
-      </div>
+      <template v-if="!onlyTool">
+        <SectionRule label="Machine" />
+        <div class="tiles">
+          <AssetCareTile v-for="a in care.areas.filter((x) => x.total > 0)" :key="a.asset" :care="a" />
+        </div>
+      </template>
 
       <SectionRule label="Coming up" />
       <div class="cards">
-        <CareTaskCard v-for="t in care.upcoming" :key="t.id" :task="t" compact />
+        <CareTaskCard v-for="t in upcoming" :key="t.id" :task="t" compact />
       </div>
 
-      <template v-if="care.held.length">
+      <template v-if="held.length">
         <SectionRule label="On hold" />
         <div class="cards">
-          <CareTaskCard v-for="t in care.held" :key="t.id" :task="t" :busy="busy === t.id" @log="logging = $event" @snooze="snooze" />
+          <CareTaskCard v-for="t in held" :key="t.id" :task="t" :busy="busy === t.id" @log="logging = $event" @snooze="snooze" />
         </div>
       </template>
 
@@ -142,7 +162,7 @@ const log = computed(() => care.history.slice(0, 15))
               </dd>
             </template>
           </dl>
-          <p class="muted small">Counted by the Portal from Klipper and Moonraker. Each toolhead's own meters show on its Toolheads tile in Phase 5.</p>
+          <p class="muted small">Counted by the Portal from Klipper and Moonraker. Each toolhead's own meters are on its page in Toolheads.</p>
         </RsPanel>
       </div>
     </template>
@@ -158,6 +178,10 @@ const log = computed(() => care.history.slice(0, 15))
 .cards { display: grid; gap: var(--rs-gap); grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
 .tiles { display: grid; gap: var(--rs-gap); grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); }
 .two { grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); margin-top: var(--rs-space-4); }
+.filter { display: flex; align-items: center; gap: var(--rs-space-4); flex-wrap: wrap; padding: var(--rs-space-3) var(--rs-space-4); border: 1.5px solid var(--rs-ink); border-radius: var(--rs-radius-md); font-size: var(--rs-text-sm); }
+.filter strong { color: var(--rs-text-strong); }
+.filter a, .filter button { color: var(--rs-text-strong); font: inherit; background: none; border: 0; padding: 0; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.filter button { margin-left: auto; }
 .pad { padding: 0 var(--rs-space-1); }
 .small { font-size: var(--rs-text-sm); }
 .notice { align-self: flex-start; padding: 8px 16px; border-radius: var(--rs-radius-pill); background: var(--rs-paper); color: var(--rs-paper-ink); font-weight: var(--rs-weight-medium); }

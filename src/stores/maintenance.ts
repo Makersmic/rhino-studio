@@ -90,6 +90,9 @@ export const useMaintenanceStore = defineStore('maintenance', () => {
   const forTool = (name: string | null | undefined) => (name ? assetCare(overview.value, toolAsset(name), name) : null)
   const mountedCare = computed(() => (machine.mountedVerified ? forTool(machine.mountedName) : null))
 
+  /** The shared Portal client (one token for maintenance and tools). */
+  const portal = () => client
+
   const portalVersion = computed(() => client?.version ?? null)
   const portalHome = computed(() => client?.homeUrl ?? null)
   const statusOptions = computed(() =>
@@ -109,6 +112,7 @@ export const useMaintenanceStore = defineStore('maintenance', () => {
     held,
     areas,
     mountedCare,
+    portal,
     portalVersion,
     portalHome,
     statusOptions,

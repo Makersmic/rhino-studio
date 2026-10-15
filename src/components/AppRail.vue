@@ -25,7 +25,7 @@ const secondary: NavItem[] = [
   <nav class="rail" aria-label="Main">
     <ul class="group">
       <li v-for="item in main" :key="item.to">
-        <RouterLink :to="item.to" class="item">
+        <RouterLink :to="item.to" class="item" :class="{ 'router-link-active': $route.meta.nav === item.to }">
           <span class="well">
             <Icon :nav="item.icon" :size="24" />
             <span
