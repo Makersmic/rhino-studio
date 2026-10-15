@@ -51,4 +51,10 @@ describe('PortalClient', () => {
     await new PortalClient('/portal').snooze('t1', 400)
     expect(JSON.parse(String(p.calls.find((x) => x.init?.method === 'POST')!.init!.body))).toEqual({ days: 90 })
   })
+  it('reads jobs per week with a plain GET, no token', async () => {
+    const p = fakePortal()
+    await new PortalClient('/portal').jobsPerWeek()
+    expect(p.calls.map((c) => c.url)).toEqual(['/portal/api/dash/jobs'])
+    expect(p.calls[0]!.init?.method ?? 'GET').toBe('GET')
+  })
 })

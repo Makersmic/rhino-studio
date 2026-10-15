@@ -565,6 +565,30 @@ function handle(method: string, params: Record<string, unknown> | undefined): un
 const PORTAL_TOKEN = 'mock-token-' + Math.random().toString(36).slice(2)
 const maint = JSON.parse(readFileSync(new URL('./fixtures/maint-overview.json', import.meta.url), 'utf8'))
 const maintHistory = JSON.parse(readFileSync(new URL('./fixtures/maint-history.json', import.meta.url), 'utf8'))
+// The fixtures were recorded on a fixed day: move the work log and the jobs up to today, so the
+// Dashboard's "last 12 weeks" charts have something in them
+const fixtureShift = Math.round(Date.now() / 1000 - (maint.now as number))
+for (const r of maintHistory.records as { at: number }[]) r.at += fixtureShift
+const maintJobs = (JSON.parse(readFileSync(new URL('./fixtures/maint-jobs.json', import.meta.url), 'utf8')).jobs as { ago_s: number; status: string; duration_s: number }[])
+
+/** The Portal's /api/dash/jobs (rhino/portal/routes.py dash_jobs): 12 Monday-based weeks, oldest first. */
+function jobsPerWeek() {
+  const now = new Date()
+  const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - ((now.getDay() + 6) % 7)).getTime() / 1000
+  const starts = Array.from({ length: 12 }, (_, i) => monday - 7 * 86400 * (11 - i))
+  const weeks = starts.map((start) => ({ start, completed: 0, cancelled: 0, error: 0, hours: 0 }))
+  const t0 = Date.now() / 1000 - 2 * 3600
+  for (const j of maintJobs) {
+    const start = t0 - j.ago_s - j.duration_s
+    if (start < starts[0]!) continue
+    const w = weeks[Math.min(11, Math.floor((start - starts[0]!) / (7 * 86400)))]!
+    if (j.status === 'completed') w.completed++
+    else if (j.status === 'cancelled') w.cancelled++
+    else if (['error', 'klippy_shutdown', 'klippy_disconnect', 'server_exit'].includes(j.status)) w.error++
+    w.hours += j.duration_s / 3600
+  }
+  return { ok: true, weeks, available: true }
+}
 maint.now = Date.now() / 1000
 const lens = maint.tasks.find((t: { title: string }) => t.title.startsWith('Clean the laser lens'))
 if (lens) {
@@ -607,6 +631,7 @@ async function portal(req: IncomingMessage, res: import('node:http').ServerRespo
   }
   if (req.method === 'GET' && url === '/api/maint') return json(res, 200, maint), true
   if (req.method === 'GET' && url === '/api/maint/history') return json(res, 200, maintHistory), true
+  if (req.method === 'GET' && url === '/api/dash/jobs') return json(res, 200, jobsPerWeek()), true
   const m = url.match(/^\/api\/maint\/tasks\/([^/]+)\/(done|snooze)$/)
   if (req.method === 'POST' && m) {
     if (req.headers['x-rhino-token'] !== PORTAL_TOKEN) return json(res, 400, { ok: false, error: 'This page is out of date (the portal was restarted). Reload the page and try again.' }), true

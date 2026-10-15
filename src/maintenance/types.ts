@@ -92,3 +92,19 @@ export interface MaintHistory {
   ok: boolean
   records: HistoryRecord[]
 }
+
+/** GET /api/dash/jobs: finished, cancelled and failed jobs per week, last 12 weeks (Monday-based). */
+export interface JobsWeek {
+  start: number
+  completed: number
+  cancelled: number
+  error: number
+  hours: number
+}
+
+export interface JobsWeeks {
+  ok: boolean
+  weeks: JobsWeek[]
+  /** false when Moonraker's job history couldn't be read */
+  available: boolean
+}

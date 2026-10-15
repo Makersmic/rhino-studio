@@ -1,0 +1,590 @@
+{
+"note": "Last 12 weeks of jobs from the Portal's year-of-use demo (dev/maint_year_demo.py). The mock shifts them so the newest ended 2 hours ago.",
+"jobs": [
+{
+"ago_s": 7178281,
+"status": "completed",
+"duration_s": 15746
+},
+{
+"ago_s": 7108416,
+"status": "completed",
+"duration_s": 783
+},
+{
+"ago_s": 7100748,
+"status": "completed",
+"duration_s": 3491
+},
+{
+"ago_s": 7100711,
+"status": "completed",
+"duration_s": 3010
+},
+{
+"ago_s": 6942642,
+"status": "completed",
+"duration_s": 12499
+},
+{
+"ago_s": 6847769,
+"status": "completed",
+"duration_s": 19342
+},
+{
+"ago_s": 6841034,
+"status": "completed",
+"duration_s": 7367
+},
+{
+"ago_s": 6830698,
+"status": "completed",
+"duration_s": 19010
+},
+{
+"ago_s": 6324462,
+"status": "completed",
+"duration_s": 10924
+},
+{
+"ago_s": 6229657,
+"status": "completed",
+"duration_s": 4316
+},
+{
+"ago_s": 6231308,
+"status": "cancelled",
+"duration_s": 427
+},
+{
+"ago_s": 6141365,
+"status": "completed",
+"duration_s": 10381
+},
+{
+"ago_s": 6141155,
+"status": "cancelled",
+"duration_s": 4091
+},
+{
+"ago_s": 6160222,
+"status": "completed",
+"duration_s": 15083
+},
+{
+"ago_s": 6064997,
+"status": "completed",
+"duration_s": 6155
+},
+{
+"ago_s": 5809034,
+"status": "completed",
+"duration_s": 1808
+},
+{
+"ago_s": 5793904,
+"status": "completed",
+"duration_s": 3768
+},
+{
+"ago_s": 5716162,
+"status": "completed",
+"duration_s": 7409
+},
+{
+"ago_s": 5702787,
+"status": "completed",
+"duration_s": 17410
+},
+{
+"ago_s": 5640958,
+"status": "completed",
+"duration_s": 2960
+},
+{
+"ago_s": 5555289,
+"status": "cancelled",
+"duration_s": 1076
+},
+{
+"ago_s": 5443654,
+"status": "completed",
+"duration_s": 14205
+},
+{
+"ago_s": 5372139,
+"status": "completed",
+"duration_s": 19778
+},
+{
+"ago_s": 5375812,
+"status": "completed",
+"duration_s": 8236
+},
+{
+"ago_s": 5275485,
+"status": "completed",
+"duration_s": 2662
+},
+{
+"ago_s": 5191676,
+"status": "completed",
+"duration_s": 16949
+},
+{
+"ago_s": 5036583,
+"status": "completed",
+"duration_s": 2090
+},
+{
+"ago_s": 5025637,
+"status": "completed",
+"duration_s": 3959
+},
+{
+"ago_s": 4938951,
+"status": "completed",
+"duration_s": 2202
+},
+{
+"ago_s": 4776824,
+"status": "completed",
+"duration_s": 670
+},
+{
+"ago_s": 4776007,
+"status": "completed",
+"duration_s": 662
+},
+{
+"ago_s": 4752815,
+"status": "completed",
+"duration_s": 1675
+},
+{
+"ago_s": 4692670,
+"status": "completed",
+"duration_s": 1740
+},
+{
+"ago_s": 4597693,
+"status": "completed",
+"duration_s": 4276
+},
+{
+"ago_s": 4413311,
+"status": "completed",
+"duration_s": 15763
+},
+{
+"ago_s": 4405822,
+"status": "completed",
+"duration_s": 9680
+},
+{
+"ago_s": 4331823,
+"status": "error",
+"duration_s": 837
+},
+{
+"ago_s": 4325859,
+"status": "completed",
+"duration_s": 4107
+},
+{
+"ago_s": 4232995,
+"status": "completed",
+"duration_s": 11802
+},
+{
+"ago_s": 4240037,
+"status": "completed",
+"duration_s": 13487
+},
+{
+"ago_s": 4248996,
+"status": "completed",
+"duration_s": 12632
+},
+{
+"ago_s": 4160044,
+"status": "completed",
+"duration_s": 9456
+},
+{
+"ago_s": 4158388,
+"status": "completed",
+"duration_s": 9763
+},
+{
+"ago_s": 4160863,
+"status": "completed",
+"duration_s": 6390
+},
+{
+"ago_s": 4081277,
+"status": "cancelled",
+"duration_s": 6971
+},
+{
+"ago_s": 3909635,
+"status": "cancelled",
+"duration_s": 165
+},
+{
+"ago_s": 3657315,
+"status": "cancelled",
+"duration_s": 6762
+},
+{
+"ago_s": 3645658,
+"status": "completed",
+"duration_s": 5922
+},
+{
+"ago_s": 3547742,
+"status": "cancelled",
+"duration_s": 1106
+},
+{
+"ago_s": 3472007,
+"status": "completed",
+"duration_s": 929
+},
+{
+"ago_s": 3473961,
+"status": "completed",
+"duration_s": 772
+},
+{
+"ago_s": 3397383,
+"status": "completed",
+"duration_s": 8799
+},
+{
+"ago_s": 3314011,
+"status": "completed",
+"duration_s": 5618
+},
+{
+"ago_s": 3286354,
+"status": "completed",
+"duration_s": 5674
+},
+{
+"ago_s": 3283500,
+"status": "completed",
+"duration_s": 5896
+},
+{
+"ago_s": 3202735,
+"status": "cancelled",
+"duration_s": 2460
+},
+{
+"ago_s": 3197715,
+"status": "completed",
+"duration_s": 17163
+},
+{
+"ago_s": 3029051,
+"status": "completed",
+"duration_s": 1129
+},
+{
+"ago_s": 3032421,
+"status": "completed",
+"duration_s": 869
+},
+{
+"ago_s": 2962302,
+"status": "completed",
+"duration_s": 3052
+},
+{
+"ago_s": 2952388,
+"status": "completed",
+"duration_s": 3245
+},
+{
+"ago_s": 2946430,
+"status": "completed",
+"duration_s": 2460
+},
+{
+"ago_s": 2853806,
+"status": "completed",
+"duration_s": 13581
+},
+{
+"ago_s": 2850076,
+"status": "completed",
+"duration_s": 10642
+},
+{
+"ago_s": 2858654,
+"status": "completed",
+"duration_s": 4203
+},
+{
+"ago_s": 2768351,
+"status": "completed",
+"duration_s": 8360
+},
+{
+"ago_s": 2786401,
+"status": "completed",
+"duration_s": 8546
+},
+{
+"ago_s": 2687853,
+"status": "completed",
+"duration_s": 16799
+},
+{
+"ago_s": 2693329,
+"status": "completed",
+"duration_s": 5022
+},
+{
+"ago_s": 2594424,
+"status": "completed",
+"duration_s": 907
+},
+{
+"ago_s": 2603893,
+"status": "completed",
+"duration_s": 941
+},
+{
+"ago_s": 2606188,
+"status": "completed",
+"duration_s": 751
+},
+{
+"ago_s": 2504297,
+"status": "completed",
+"duration_s": 5208
+},
+{
+"ago_s": 2445895,
+"status": "completed",
+"duration_s": 11265
+},
+{
+"ago_s": 2422457,
+"status": "completed",
+"duration_s": 12193
+},
+{
+"ago_s": 2443197,
+"status": "completed",
+"duration_s": 10079
+},
+{
+"ago_s": 2348949,
+"status": "completed",
+"duration_s": 7097
+},
+{
+"ago_s": 2356595,
+"status": "completed",
+"duration_s": 7696
+},
+{
+"ago_s": 2171027,
+"status": "completed",
+"duration_s": 3881
+},
+{
+"ago_s": 1993142,
+"status": "completed",
+"duration_s": 8347
+},
+{
+"ago_s": 2002300,
+"status": "cancelled",
+"duration_s": 1688
+},
+{
+"ago_s": 1915513,
+"status": "completed",
+"duration_s": 14324
+},
+{
+"ago_s": 1908059,
+"status": "cancelled",
+"duration_s": 2285
+},
+{
+"ago_s": 1816320,
+"status": "completed",
+"duration_s": 12431
+},
+{
+"ago_s": 1831002,
+"status": "cancelled",
+"duration_s": 3286
+},
+{
+"ago_s": 1727792,
+"status": "completed",
+"duration_s": 19716
+},
+{
+"ago_s": 1746854,
+"status": "completed",
+"duration_s": 9363
+},
+{
+"ago_s": 1751812,
+"status": "completed",
+"duration_s": 9534
+},
+{
+"ago_s": 1647954,
+"status": "completed",
+"duration_s": 10699
+},
+{
+"ago_s": 1656313,
+"status": "completed",
+"duration_s": 8750
+},
+{
+"ago_s": 1641191,
+"status": "error",
+"duration_s": 8781
+},
+{
+"ago_s": 1574529,
+"status": "completed",
+"duration_s": 2132
+},
+{
+"ago_s": 1473941,
+"status": "completed",
+"duration_s": 11801
+},
+{
+"ago_s": 1395095,
+"status": "completed",
+"duration_s": 14551
+},
+{
+"ago_s": 1386377,
+"status": "completed",
+"duration_s": 13505
+},
+{
+"ago_s": 1298520,
+"status": "completed",
+"duration_s": 1603
+},
+{
+"ago_s": 1296323,
+"status": "completed",
+"duration_s": 1887
+},
+{
+"ago_s": 1295782,
+"status": "completed",
+"duration_s": 1513
+},
+{
+"ago_s": 1235119,
+"status": "completed",
+"duration_s": 2000
+},
+{
+"ago_s": 1234531,
+"status": "completed",
+"duration_s": 645
+},
+{
+"ago_s": 1135993,
+"status": "completed",
+"duration_s": 19291
+},
+{
+"ago_s": 1145155,
+"status": "completed",
+"duration_s": 15178
+},
+{
+"ago_s": 1137951,
+"status": "completed",
+"duration_s": 8318
+},
+{
+"ago_s": 1043934,
+"status": "completed",
+"duration_s": 3884
+},
+{
+"ago_s": 950017,
+"status": "completed",
+"duration_s": 12546
+},
+{
+"ago_s": 706427,
+"status": "completed",
+"duration_s": 2048
+},
+{
+"ago_s": 548858,
+"status": "completed",
+"duration_s": 2310
+},
+{
+"ago_s": 449251,
+"status": "completed",
+"duration_s": 18341
+},
+{
+"ago_s": 352263,
+"status": "completed",
+"duration_s": 14991
+},
+{
+"ago_s": 364332,
+"status": "completed",
+"duration_s": 7579
+},
+{
+"ago_s": 372547,
+"status": "completed",
+"duration_s": 19079
+},
+{
+"ago_s": 289443,
+"status": "completed",
+"duration_s": 18591
+},
+{
+"ago_s": 116506,
+"status": "completed",
+"duration_s": 16736
+},
+{
+"ago_s": 94588,
+"status": "completed",
+"duration_s": 3963
+},
+{
+"ago_s": 15504,
+"status": "completed",
+"duration_s": 8173
+},
+{
+"ago_s": 11282,
+"status": "completed",
+"duration_s": 4248
+},
+{
+"ago_s": 0,
+"status": "completed",
+"duration_s": 8756
+}
+]
+}

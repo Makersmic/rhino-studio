@@ -13,7 +13,7 @@ import { defineStore } from 'pinia'
 import { computed, ref, shallowRef, watch } from 'vue'
 import { PortalClient } from '@/portal/client'
 import { assetCare, dueList, heldList, machineAreas, toolAsset, upcomingList } from '@/maintenance/summary'
-import type { HistoryRecord, MaintOverview } from '@/maintenance/types'
+import type { HistoryRecord, JobsWeeks, MaintOverview } from '@/maintenance/types'
 import { useMachineStore } from './machine'
 
 export type CareSource = 'idle' | 'loading' | 'ready' | 'unavailable'
@@ -22,6 +22,8 @@ export const useMaintenanceStore = defineStore('maintenance', () => {
   const machine = useMachineStore()
   const overview = shallowRef<MaintOverview | null>(null)
   const history = shallowRef<HistoryRecord[]>([])
+  /** Jobs per week for the Dashboard; null if the Portal couldn't say */
+  const jobWeeks = shallowRef<JobsWeeks | null>(null)
   const source = ref<CareSource>('idle')
   const error = ref<string | null>(null)
   const updatedAt = ref<number | null>(null)
@@ -32,6 +34,7 @@ export const useMaintenanceStore = defineStore('maintenance', () => {
     client = new PortalClient(baseUrl)
     overview.value = null
     history.value = []
+    jobWeeks.value = null
     void refresh()
     if (timer) clearInterval(timer)
     timer = setInterval(() => void refresh(), 120_000)
@@ -41,9 +44,10 @@ export const useMaintenanceStore = defineStore('maintenance', () => {
     if (!client) return
     if (source.value !== 'ready') source.value = 'loading'
     try {
-      const [ov, h] = await Promise.all([client.overview(), client.history()])
+      const [ov, h, jw] = await Promise.all([client.overview(), client.history(), client.jobsPerWeek().catch(() => null)])
       overview.value = ov
       history.value = h.records ?? []
+      jobWeeks.value = jw
       source.value = 'ready'
       error.value = null
       updatedAt.value = Date.now()
@@ -95,6 +99,7 @@ export const useMaintenanceStore = defineStore('maintenance', () => {
   return {
     overview,
     history,
+    jobWeeks,
     source,
     error,
     updatedAt,

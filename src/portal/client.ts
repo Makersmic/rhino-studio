@@ -7,7 +7,7 @@
  * there is exactly one maintenance engine.
  *
  * What this client may do:
- *   read  GET /api/maint, GET /api/maint/history
+ *   read  GET /api/maint, GET /api/maint/history, GET /api/dash/jobs
  *   write POST /api/maint/tasks/<id>/done    (log work: done / skipped / a status)
  *         POST /api/maint/tasks/<id>/snooze  (0-90 days)
  * Those writes only change the Portal's maintenance records. Nothing here
@@ -18,7 +18,7 @@
  * it in a <meta name="rhino-token"> tag on its home page, so we read it from
  * there, and read it again if the Portal was restarted.
  */
-import type { MaintHistory, MaintOverview } from '@/maintenance/types'
+import type { JobsWeeks, MaintHistory, MaintOverview } from '@/maintenance/types'
 
 export const PORTAL_WRITES = ['done', 'snooze'] as const
 
@@ -43,6 +43,11 @@ export class PortalClient {
 
   async history(asset?: string): Promise<MaintHistory> {
     return this.getJson<MaintHistory>(`/api/maint/history${asset ? `?asset=${encodeURIComponent(asset)}` : ''}`)
+  }
+
+  /** Jobs per week for the Dashboard (the Portal reads them from Moonraker's job history). */
+  async jobsPerWeek(): Promise<JobsWeeks> {
+    return this.getJson<JobsWeeks>('/api/dash/jobs')
   }
 
   /** Log work on a task. action: 'done', 'skipped' or a custom status id offered by the Portal. */

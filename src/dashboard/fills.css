@@ -1,0 +1,10 @@
+/* Series fills for the Dashboard's charts: ink, dots and hatching instead of colours (e-paper rule).
+   Every fill has a hairline edge so the faint ones still read on paper and in grey. */
+.fill-ink { background: var(--rs-ink); }
+.fill-dense { background: var(--rs-dither-dense), var(--rs-surface); box-shadow: inset 0 0 0 1px var(--rs-dot); }
+.fill-dither { background: var(--rs-dither), var(--rs-surface); box-shadow: inset 0 0 0 1px var(--rs-dot); }
+.fill-faint { background: var(--rs-dither-faint), var(--rs-surface); box-shadow: inset 0 0 0 1px var(--rs-dot); }
+.fill-hatch {
+  background: repeating-linear-gradient(135deg, var(--rs-ink) 0 1.2px, transparent 1.2px 4.5px), var(--rs-surface);
+  box-shadow: inset 0 0 0 1px var(--rs-ink);
+}

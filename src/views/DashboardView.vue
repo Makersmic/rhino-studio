@@ -14,12 +14,16 @@
  * Nothing here acts on the machine: every value is a link to the screen
  * with the details. The E-stop stays in the top bar.
  *
+ * Scroll down for the reports (dashboard/DashReports.vue): use per toolhead,
+ * maintenance and jobs per week, the same figures as the Portal's Dashboard.
+ *
  * Text sits straight on live video, so it uses the overlay tokens: white
  * with a soft shadow, red only for what needs attention.
  */
 import { computed, onBeforeUnmount, ref } from 'vue'
 import Icon from '@/icons/Icon.vue'
 import WebcamView from '@/webcams/WebcamView.vue'
+import DashReports from '@/dashboard/DashReports.vue'
 import { useMachineStore } from '@/stores/machine'
 import { useControlStore } from '@/stores/control'
 import { useMaintenanceStore } from '@/stores/maintenance'
@@ -212,6 +216,9 @@ const list = computed(() =>
         <span v-if="webcams.current" class="camname">{{ webcams.current.name }} camera<template v-if="webcams.cameras.length > 1"> · {{ webcams.index + 1 }}/{{ webcams.cameras.length }}</template></span>
       </footer>
     </section>
+
+    <!-- under the screen: the reports from the Portal's Dashboard -->
+    <DashReports />
   </div>
 </template>
 

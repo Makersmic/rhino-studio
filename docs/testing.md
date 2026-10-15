@@ -91,6 +91,9 @@ Nothing here moves the machine. Camera edits change Moonraker's camera list, whi
 | D8 | During a job run a wizard that asks a question (or start a laser job) | The Dashboard shows "Klipper is asking" in red; the question itself appears on Control, not on the Dashboard | |
 | D9 | Mount a non-print tool | The Dashboard says "Body temperature" with "No sensor yet" instead of the hotend | It shows a hotend reading for a laser, spindle or knife |
 | D10 | Klipper busy without a job (Home all from Mainsail) | The Dashboard's state reads Busy and a "Machine busy" notice shows until homing ends | |
+| D11 | Scroll down the Dashboard | Reports under the camera screen: five number tiles, Toolheads (hours, jobs, at a glance, jobs per week) and Maintenance (task status, next up, tasks by machine and toolhead, work per week). The figures match the Portal's own Dashboard at port 5000 | A figure differs from the Portal's |
+| D12 | Press Table on any report, then Chart | The numbers as a table, then the chart again; nothing is logged or changed | |
+| D13 | Stop the Portal (`sudo systemctl stop rhino-portal`), reload the Dashboard; start it again | The reports say the Portal isn't answering, the camera screen above still works; they come back within 2 minutes of starting it | The Dashboard breaks or goes blank |
 
 Notes:
 - Each open camera view is one more stream the Pi 3B sends. Studio only pulls frames from the camera that's on screen, and stops when hidden. If Klipper reports "Timer too close" while watching, use "MJPEG snapshots" at 5 fps instead.
