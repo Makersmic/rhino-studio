@@ -51,7 +51,21 @@ export const router = createRouter({
       ],
     },
     { path: '/style', component: () => import('./views/StyleGuideView.vue'), meta: { title: 'Style guide' } },
-    { path: '/settings', component: () => import('./views/SettingsView.vue'), meta: { title: 'Settings' } },
+    // Settings: a section menu like Care
+    {
+      path: '/settings',
+      component: () => import('./views/settings/SettingsShell.vue'),
+      meta: { nav: '/settings' },
+      children: [
+        { path: '', component: () => import('./views/settings/AppearanceView.vue'), meta: { title: 'Settings', heading: 'Appearance', lead: 'Day or night for this screen, and the colour theme every screen shares.' } },
+        { path: 'connection', component: () => import('./views/settings/ConnectionView.vue'), meta: { title: 'Connection', lead: 'Where this screen finds Moonraker and the Rhino Portal.' } },
+        { path: 'tools', component: () => import('./views/settings/ToolChangingView.vue'), meta: { title: 'Tool changing', lead: 'How this machine changes tools, and how Studio reads which one is mounted.' } },
+        { path: 'cameras', component: () => import('./views/settings/CamerasView.vue'), meta: { title: 'Cameras', lead: 'The camera list in Moonraker, shared with every screen.' } },
+        { path: 'software', component: () => import('./views/settings/SoftwareView.vue'), meta: { title: 'Software and updates', lead: 'What Studio runs on, and what it is built with.' } },
+        { path: 'network', component: () => import('./views/settings/NetworkView.vue'), meta: { title: 'Network', lead: 'How this screen reaches the Rhino, and the Rhino’s own network.' } },
+        { path: 'about', component: () => import('./views/settings/AboutView.vue'), meta: { title: 'About' } },
+      ],
+    },
     { path: '/:pathMatch(.*)*', redirect: '/dashboard' },
   ],
 })

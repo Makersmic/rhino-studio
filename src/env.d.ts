@@ -7,3 +7,5 @@ declare module '*.vue' {
 
 /** package.json version, set by vite.config.ts */
 declare const __APP_VERSION__: string
+/** Libraries this build was made with (vite.config.ts) */
+declare const __BUILT_WITH__: { name: string; version: string; licence: string; role: string }[]

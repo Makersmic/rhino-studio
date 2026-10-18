@@ -1,0 +1,29 @@
+/* Shared by the Settings sub-pages (moved from SettingsView.vue). */
+.set-page .grid { display: grid; gap: var(--rs-gap); grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); align-items: start; }
+.set-page .wide { grid-column: 1 / -1; }
+.set-page .segmented { border: 1px solid var(--rs-line-strong); margin: 0 0 var(--rs-space-3); padding: 0; display: inline-flex; border-radius: var(--rs-radius-md); overflow: hidden; }
+.set-page .seg + .seg span { border-left: 1px solid var(--rs-line-strong); }
+.set-page .seg span { display: inline-flex; align-items: center; height: 36px; padding: 0 var(--rs-space-4); cursor: pointer; font-weight: var(--rs-weight-medium); color: var(--rs-text-muted); white-space: nowrap; }
+.set-page .seg input:checked + span { background: var(--rs-ink); color: var(--rs-on-ink); }
+.set-page .seg input:focus-visible + span { box-shadow: var(--rs-focus); }
+.set-page .seg input:disabled + span { cursor: not-allowed; opacity: 0.5; }
+.set-page .field { display: flex; flex-direction: column; gap: var(--rs-space-1); font-size: var(--rs-text-sm); margin-bottom: var(--rs-space-2); }
+.set-page .field input, .set-page .field select, .set-page select.inline {
+  height: 38px; padding: 0 12px; border-radius: var(--rs-radius-md); border: 1px solid var(--rs-line-strong);
+  background: var(--rs-surface); color: var(--rs-text-strong); font: inherit;
+}
+.set-page .field input:focus-visible { border-color: var(--rs-text-strong); }
+.set-page .field input.mono { font-family: var(--rs-font-code); }
+.set-page .small { font-size: var(--rs-text-sm); }
+.set-page .stack { display: flex; flex-direction: column; gap: var(--rs-space-3); }
+.set-page .check { display: flex; align-items: center; gap: var(--rs-space-2); cursor: pointer; }
+.set-page .check input { width: 18px; height: 18px; accent-color: var(--rs-text-strong); }
+.set-page .row { display: flex; align-items: center; flex-wrap: wrap; gap: var(--rs-space-3); }
+.set-page .sub-h { font-size: var(--rs-text-xs); font-weight: var(--rs-weight-medium); color: var(--rs-text-muted); margin: 0 0 var(--rs-space-2); }
+.set-page .sub-h:not(:first-child) { margin-top: var(--rs-space-5); }
+.set-page .link { padding: 0; border: 0; background: none; color: var(--rs-text-strong); font: inherit; font-size: var(--rs-text-sm); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.set-page .msg { margin-top: var(--rs-space-3); padding: 8px 12px; border-radius: var(--rs-radius-md); background: var(--rs-surface-2); color: var(--rs-text-strong); font-size: var(--rs-text-sm); }
+.set-page .msg.bad { border-left: 4px solid var(--rs-text-strong); }
+.set-page .warn-text { display: block; margin-top: 4px; color: var(--rs-text-strong); font-weight: var(--rs-weight-medium); }
+.set-page .badge { display: inline-block; font-size: 11px; font-weight: 400; color: var(--rs-text-muted); padding: 0 6px; line-height: 18px; border-radius: var(--rs-radius-sm); box-shadow: inset 0 0 0 1px var(--rs-line-strong); white-space: nowrap; }
+.set-page .mono { font-family: var(--rs-font-code); }

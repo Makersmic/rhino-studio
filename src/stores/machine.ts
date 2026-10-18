@@ -23,6 +23,8 @@ import { plausible } from '@/control/tempHistory'
 import { useControlStore } from './control'
 import { useWebcamsStore } from './webcams'
 import { useTempsStore } from './temps'
+import { useUpdatesStore } from './updates'
+import { useNetworkStore } from './network'
 import { readExtruder, type ExtruderStatus } from '@/control/extruder'
 
 export type { ConnectionState, KlippyState }
@@ -77,6 +79,15 @@ export const useMachineStore = defineStore('machine', () => {
         onWebcams(list) {
           useWebcamsStore().setFromMoonraker(list)
         },
+        onUpdateResponse(r) {
+          useUpdatesStore().onProgress(r)
+        },
+        onUpdateRefreshed(st) {
+          useUpdatesStore().onStatus(st)
+        },
+        onProcStats(st) {
+          useNetworkStore().onProcStats(st)
+        },
         onStatus(st, replace) {
           if (replace) {
             status.value = { ...st }
@@ -89,6 +100,7 @@ export const useMachineStore = defineStore('machine', () => {
       },
       { version: brand.version },
     )
+    client.setReconnectDelays(useNetworkStore().reconnectDelays)
     client.connect()
   }
 
@@ -271,6 +283,13 @@ export const useMachineStore = defineStore('machine', () => {
   const resumePrint = () => need().resumePrint()
   const cancelPrint = () => need().cancelPrint()
   const uploadFile = (file: File, onProgress?: (f: number) => void) => need().uploadFile(file, onProgress)
+  // Settings / Software and Network
+  const updateStatus = () => need().updateStatus()
+  const systemInfo = () => need().systemInfo()
+  const procStats = () => need().procStats()
+  const ping = () => need().ping()
+  const runUpdate = (method: string, params?: Record<string, unknown>) => need().update(method, params)
+  const setReconnectDelays = (d: number[]) => client?.setReconnectDelays(d)
 
   return {
     connection,
@@ -321,5 +340,11 @@ export const useMachineStore = defineStore('machine', () => {
     resumePrint,
     cancelPrint,
     uploadFile,
+    updateStatus,
+    systemInfo,
+    procStats,
+    ping,
+    runUpdate,
+    setReconnectDelays,
   }
 })

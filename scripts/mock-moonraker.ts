@@ -526,6 +526,87 @@ function runLine(raw: string) {
 
 const database: Record<string, Record<string, unknown>> = {}
 
+
+// ---- Settings / Software: Moonraker's update manager ----------------------
+const TM_VERSION = process.env.MOCK_TM_VERSION ?? '1.4.6'
+const versionInfo: Record<string, Record<string, unknown>> = {
+  system: { configured_type: 'system', package_count: 12, package_list: ['libssl3', 'openssl', 'python3-pip', 'linux-image-rpi-v8'] },
+  moonraker: { configured_type: 'git_repo', version: 'v0.9.3-41', remote_version: 'v0.9.3-45', is_valid: true, is_dirty: false, commits_behind_count: 0 },
+  klipper: { configured_type: 'git_repo', version: 'v0.13.0-180', remote_version: 'v0.13.0-195', is_valid: true, is_dirty: false, commits_behind_count: 15 },
+  crowsnest: { configured_type: 'git_repo', version: 'v4.1.9', remote_version: 'v4.1.9', is_valid: true, is_dirty: false, commits_behind_count: 0 },
+  'mainsail-config': { configured_type: 'git_repo', version: 'v1.2.1', remote_version: 'v1.2.2', is_valid: true, is_dirty: false, commits_behind_count: 2 },
+  mainsail: { configured_type: 'web', version: 'v2.14.0', remote_version: 'v2.15.0', is_valid: true },
+}
+let updateBusy = false
+const updStatus = () => ({ busy: updateBusy, github_rate_limit: 60, github_requests_remaining: 55, version_info: versionInfo })
+async function mockUpgrade(name: string) {
+  const v = versionInfo[name]
+  if (!v) throw new Error(`Updater ${name} not available`)
+  if (status.print_stats.state === 'printing' || status.print_stats.state === 'paused') throw new Error('Unable to update while printing')
+  updateBusy = true
+  const say = (message: string, complete = false) => notify('notify_update_response', [{ application: name, proc_id: 1, message, complete }])
+  const wait = (ms: number) => new Promise((r) => setTimeout(r, ms))
+  say(`Updating ${name}...`)
+  await wait(700)
+  say(name === 'system' ? 'Reading package lists... Unpacking 12 packages' : `Pulling from origin... ${v.remote_version}`)
+  await wait(900)
+  if (name === 'system') v.package_count = 0, v.package_list = []
+  else v.version = v.remote_version, v.commits_behind_count = 0
+  if (name === 'klipper') {
+    say('Restarting Klipper')
+    klippy = 'shutdown' as never
+    notify('notify_klippy_disconnected')
+    await wait(1200)
+    klippy = 'ready'
+    notify('notify_klippy_ready')
+  }
+  updateBusy = false
+  say(`Update of ${name} complete`, true)
+  notify('notify_update_refreshed', [updStatus()])
+  if (name === 'moonraker') {
+    // Moonraker restarts: every socket drops, Studio reconnects
+    setTimeout(() => { for (const s of sockets) s.close(); }, 100)
+  }
+}
+
+// ---- Settings / Network: the Pi's network through the Portal ----------------
+const netState = {
+  supported: true, manager: 'NetworkManager', hostname: 'mainsailos', revert_seconds: 120,
+  interfaces: [
+    { name: 'wlan0', type: 'wifi', state: 'connected', connection: 'ShopNet', ip: '192.168.1.50', prefix: 24, gateway: '192.168.1.1', dns: ['192.168.1.1'], mac: 'b8:27:eb:4c:91:2e', method: 'auto', ssid: 'ShopNet', signal: 58, powersave: true },
+    { name: 'eth0', type: 'ethernet', state: 'unavailable', connection: null, ip: null, prefix: null, gateway: null, dns: [], mac: 'b8:27:eb:11:22:33', method: 'auto' },
+  ] as Record<string, unknown>[],
+  pending: null as null | { kind: string; summary: string; expires_at: number; confirm_url: string | null; before: string },
+}
+let revertTimer: ReturnType<typeof setTimeout> | null = null
+function netPend(kind: string, summary: string, confirm_url: string | null = null) {
+  netState.pending = { kind, summary, expires_at: Date.now() / 1000 + netState.revert_seconds, confirm_url, before: JSON.stringify({ ...netState, pending: null }) }
+  if (revertTimer) clearTimeout(revertTimer)
+  revertTimer = setTimeout(netUndo, netState.revert_seconds * 1000)
+}
+function netUndo() {
+  if (!netState.pending) return
+  const before = JSON.parse(netState.pending.before)
+  Object.assign(netState, before, { pending: null })
+  if (revertTimer) clearTimeout(revertTimer)
+  console.log('  NET reverted')
+}
+const wifiList = [
+  { ssid: 'ShopNet', signal: 58, security: 'WPA2', in_use: true },
+  { ssid: 'HouseNet-5G', signal: 81, security: 'WPA2', in_use: false },
+  { ssid: 'Neighbours', signal: 22, security: 'WPA3', in_use: false },
+]
+let rx = 8.2e8, tx = 2.1e9
+setInterval(() => {
+  const bw = 380_000 + Math.random() * 90_000
+  rx += bw * 0.2; tx += bw * 0.8
+  notify('notify_proc_stat_update', [{
+    moonraker_stats: { time: Date.now() / 1000, cpu_usage: 3.1, memory: 42000, mem_units: 'kB' },
+    cpu_temp: 51.5, network: { lo: { rx_bytes: 1, tx_bytes: 1, bandwidth: 9000 }, wlan0: { rx_bytes: rx, tx_bytes: tx, bandwidth: bw } },
+    system_cpu_usage: { cpu: 12.5 }, websocket_connections: Math.max(1, sockets.size),
+  }])
+}, 1000)
+
 function handle(method: string, params: Record<string, unknown> | undefined): unknown {
   switch (method) {
     case 'printer.gcode.script': {
@@ -587,6 +668,12 @@ function handle(method: string, params: Record<string, unknown> | undefined): un
       outputsOff()
       respond('// Job cancelled, tool off')
       return 'ok'
+    case 'machine.update.status': return updStatus()
+    case 'machine.update.refresh': return updStatus()
+    case 'machine.system_info': return { system_info: { distribution: { name: 'Debian GNU/Linux 12 (bookworm)' }, network: {
+      wlan0: { mac_address: 'b8:27:eb:4c:91:2e', ip_addresses: [{ family: 'ipv4', address: '192.168.1.50', is_link_local: false }] },
+      lo: { mac_address: '00:00:00:00:00:00', ip_addresses: [{ family: 'ipv4', address: '127.0.0.1', is_link_local: false }] } } } }
+    case 'machine.proc_stats': return { websocket_connections: sockets.size }
     case 'server.connection.identify': return { connection_id: 1 }
     case 'server.info': return { klippy_connected: true, klippy_state: klippy, moonraker_version: 'mock' }
     case 'printer.objects.list': return { objects: [...new Set([...Object.keys(status), ...MACROS.map((m) => `gcode_macro ${m}`)])] }
@@ -676,7 +763,7 @@ function json(res: import('node:http').ServerResponse, code: number, body: unkno
 async function portal(req: IncomingMessage, res: import('node:http').ServerResponse, url: string): Promise<boolean> {
   if (req.method === 'GET' && url === '/') {
     res.writeHead(200, { 'content-type': 'text/html' }).end(
-      `<!doctype html><html><head><meta name="rhino-token" content="${PORTAL_TOKEN}"></head><body><p class="version">v1.4.1</p></body></html>`,
+      `<!doctype html><html><head><meta name="rhino-token" content="${PORTAL_TOKEN}"></head><body><p class="version">v${TM_VERSION}</p></body></html>`,
     )
     return true
   }
@@ -685,6 +772,32 @@ async function portal(req: IncomingMessage, res: import('node:http').ServerRespo
   if (req.method === 'GET' && url === '/api/dash/jobs') return json(res, 200, jobsPerWeek()), true
   // Tool library, read-only, from the Portal's demo (scripts/fixtures/portal-*.json). Changes need the real
   // Portal: python3 dev/demo_server.py in Toolhead_Manager, then PORTAL=http://127.0.0.1:5055 npm run dev
+  // Settings / Network (Portal 1.4.8)
+  if (req.method === 'GET' && url === '/api/net') {
+    const { pending, ...rest } = netState
+    return json(res, 200, { ok: true, ...rest, pending: pending ? { kind: pending.kind, summary: pending.summary, expires_at: pending.expires_at, confirm_url: pending.confirm_url } : null }), true
+  }
+  if (req.method === 'GET' && url === '/api/net/wifi') return json(res, 200, { ok: true, networks: wifiList }), true
+  const netw = url.match(/^\/api\/net\/(hostname|ipv4|wifi|powersave|keep|undo)$/)
+  if (req.method === 'POST' && netw) {
+    if (req.headers['x-rhino-token'] !== PORTAL_TOKEN) return json(res, 400, { ok: false, error: 'This page is out of date (the portal was restarted). Reload the page and try again.' }), true
+    const body = await readBody(req)
+    const what = netw[1]!
+    console.log(`  NET ${what} ${JSON.stringify({ ...body, password: body.password ? '***' : undefined })}`)
+    if (what === 'keep') { netState.pending = null; if (revertTimer) clearTimeout(revertTimer); return json(res, 200, { ok: true }), true }
+    if (what === 'undo') { netUndo(); return json(res, 200, { ok: true }), true }
+    if (netState.pending) return json(res, 400, { ok: false, error: 'Keep or undo the waiting network change first.' }), true
+    const wl = netState.interfaces[0]!
+    if (what === 'hostname') { netPend('hostname', `Renamed to ${body.hostname}.local`); netState.hostname = String(body.hostname) }
+    if (what === 'powersave') { netPend('powersave', `Wi-Fi power saving ${body.on ? 'on' : 'off'}`); wl.powersave = !!body.on }
+    if (what === 'ipv4') {
+      const i = netState.interfaces.find((x) => x.name === body.iface)!
+      if (body.method === 'manual') { netPend('ipv4', `${body.iface}: fixed address ${body.address}/${body.prefix}`, body.address !== i.ip ? `http://${body.address}:5000/` : null); Object.assign(i, { method: 'manual', ip: body.address, prefix: body.prefix, gateway: body.gateway, dns: body.dns }) }
+      else { netPend('ipv4', `${body.iface}: automatic address`); i.method = 'auto' }
+    }
+    if (what === 'wifi') { netPend('wifi', `Joined ${body.ssid}`); Object.assign(wl, { ssid: body.ssid, connection: body.ssid }); for (const w of wifiList) w.in_use = w.ssid === body.ssid }
+    return json(res, 200, { ok: true, pending: true }), true
+  }
   if (req.method === 'GET' && url === '/api/state') return json(res, 200, portalFixture('state')), true
   if (req.method === 'GET' && url === '/api/options') return json(res, 200, portalFixture('options')), true
   if (req.method === 'GET' && url === '/api/lists') return json(res, 200, portalFixture('lists')), true
@@ -790,6 +903,15 @@ wss.on('connection', (ws) => {
   ws.on('message', (data) => {
     const msg = JSON.parse(String(data)) as { id: number; method: string; params?: Record<string, unknown> }
     console.log(`  -> ${msg.method}`)
+    if (msg.method === 'machine.update.upgrade') {
+      const name = String(msg.params?.name ?? '')
+      console.log(`  UPDATE ${name}`)
+      mockUpgrade(name).then(
+        () => ws.send(JSON.stringify({ jsonrpc: '2.0', id: msg.id, result: 'ok' })),
+        (e: Error) => ws.send(JSON.stringify({ jsonrpc: '2.0', id: msg.id, error: { code: 400, message: e.message } })),
+      )
+      return
+    }
     try {
       ws.send(JSON.stringify({ jsonrpc: '2.0', id: msg.id, result: handle(msg.method, msg.params) }))
     } catch (e) {

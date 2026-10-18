@@ -17,6 +17,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { cssAspect, cssTransform, sourceUrl, viewMode, withStamp, type Webcam } from './webcams'
 import { useWebcamsStore } from '@/stores/webcams'
+import { useNetworkStore } from '@/stores/network'
 
 const props = withDefaults(defineProps<{ cam: Webcam; fit?: 'contain' | 'cover'; fill?: boolean }>(), { fit: 'contain', fill: false })
 
@@ -26,8 +27,12 @@ const inView = ref(true)
 const pageVisible = ref(typeof document === 'undefined' || document.visibilityState !== 'hidden')
 const active = computed(() => inView.value && pageVisible.value)
 
-const mode = computed(() => viewMode(props.cam.service))
-const url = computed(() => webcams.url(sourceUrl(props.cam)))
+// Settings / Network can turn MJPEG streams into snapshots on phones or a slow link
+const net = useNetworkStore()
+const asSnapshots = computed(() => viewMode(props.cam.service) === 'mjpeg' && !!props.cam.snapshotUrl && net.camerasAsSnapshots)
+const mode = computed(() => (asSnapshots.value ? 'snapshot' : viewMode(props.cam.service)))
+const url = computed(() => webcams.url(asSnapshots.value ? props.cam.snapshotUrl : sourceUrl(props.cam)))
+const fps = computed(() => (asSnapshots.value ? Math.min(props.cam.targetFps || net.snapshotFps, net.snapshotFps) : props.cam.targetFps || 5))
 const transform = computed(() => cssTransform(props.cam))
 const aspect = computed(() => cssAspect(props.cam))
 
@@ -58,7 +63,7 @@ function nextSnapshot() {
     if (preload !== img) return
     shown.value = img.src
     phase.value = 'live'
-    const wait = Math.max(0, 1000 / props.cam.targetFps - (performance.now() - started))
+    const wait = Math.max(0, 1000 / fps.value - (performance.now() - started))
     timer = setTimeout(nextSnapshot, wait)
   }
   img.onerror = () => {

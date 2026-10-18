@@ -7,6 +7,40 @@ import { readFileSync } from 'node:fs'
 const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')) as { version: string }
 
 /**
+ * What Studio is built with, as installed when this build was made (Settings /
+ * Software, "Built with"). These only change with a new Studio build.
+ */
+const LIBS: [string, string][] = [
+  ['vue', 'Interface framework'],
+  ['pinia', 'App state'],
+  ['vue-router', 'Screens and links'],
+  ['@fontsource-variable/archivo', 'Interface font (Archivo)'],
+  ['@fontsource/jetbrains-mono', 'Positions and console font (JetBrains Mono)'],
+  ['vite', 'Build tool'],
+  ['typescript', 'Type checking'],
+]
+function installed(name: string): { name: string; version: string; licence: string } {
+  try {
+    const p = JSON.parse(readFileSync(new URL(`./node_modules/${name}/package.json`, import.meta.url), 'utf8')) as { version: string; license?: string }
+    return { name, version: p.version, licence: p.license ?? '' }
+  } catch {
+    return { name, version: '?', licence: '' }
+  }
+}
+function kiriVersion(): string {
+  try {
+    return readFileSync(new URL('./public/kiri/VERSION', import.meta.url), 'utf8').trim()
+  } catch {
+    return ''
+  }
+}
+const builtWith = [
+  ...LIBS.map(([n, role]) => ({ ...installed(n), role })),
+  { name: 'Kiri:Moto engine', version: kiriVersion().replace(/^Kiri:Moto\s*/, '') || '?', licence: 'MIT', role: 'Slicing and toolpaths, in the browser' },
+  { name: 'DSEG7 Classic', version: 'bundled', licence: 'OFL-1.1', role: 'Seven-segment readout font (bundled)' },
+]
+
+/**
  * During development the app runs on your PC (localhost:5173) but Moonraker
  * runs on the Pi. Browsers block that kind of cross-site connection unless
  * moonraker.conf lists your PC in cors_domains. Instead of changing the Pi,
@@ -47,7 +81,7 @@ export default defineConfig({
   base: './',
   plugins: [vue()],
   // Written into every job file Prepare makes (; Made by Rhino Studio <version>)
-  define: { __APP_VERSION__: JSON.stringify(pkg.version) },
+  define: { __APP_VERSION__: JSON.stringify(pkg.version), __BUILT_WITH__: JSON.stringify(builtWith) },
   resolve: {
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
   },

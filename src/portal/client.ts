@@ -41,6 +41,7 @@
  * there, and read it again if the Portal was restarted.
  */
 import type { JobsWeeks, MaintHistory, MaintOverview, TaskLibrary, MaintLists, TaskDef, BookDef, StatusEdit } from '@/maintenance/types'
+import type { NetState, WifiNetwork } from '@/system/network'
 import type { PortalState, PreviewResult, ToolDetail, ToolLists, ToolOptions, ToolSheetData, WriteResult } from '@/toolmgr/types'
 
 export const PORTAL_WRITES = ['done', 'snooze'] as const
@@ -54,6 +55,8 @@ export const PORTAL_CARE_WRITES = [
 export const PORTAL_CARE_SETUP = ['areas', 'maint-lists', 'statuses'] as const
 export const PORTAL_TOOL_SETUP = ['tool-lists'] as const
 export const PORTAL_HARDWARE = ['preview-hardware', 'hardware-save', 'hardware-delete'] as const
+/** The Rhino's network (config 1.4.8+). Each change switches back after a while unless kept. */
+export const PORTAL_NETWORK = ['net-hostname', 'net-ipv4', 'net-wifi', 'net-powersave', 'net-keep', 'net-undo'] as const
 
 export type WriteKind =
   | (typeof PORTAL_WRITES)[number]
@@ -64,6 +67,7 @@ export type WriteKind =
   | (typeof PORTAL_CARE_SETUP)[number]
   | (typeof PORTAL_TOOL_SETUP)[number]
   | (typeof PORTAL_HARDWARE)[number]
+  | (typeof PORTAL_NETWORK)[number]
 
 /** The one request each write kind may make. */
 export const WRITE_ROUTES: Record<WriteKind, { method: 'POST' | 'DELETE'; path: RegExp }> = {
@@ -102,11 +106,17 @@ export const WRITE_ROUTES: Record<WriteKind, { method: 'POST' | 'DELETE'; path: 
   'preview-hardware': { method: 'POST', path: /^\/api\/preview\/hardware$/ },
   'hardware-save': { method: 'POST', path: /^\/api\/hardware$/ },
   'hardware-delete': { method: 'DELETE', path: /^\/api\/hardware\/[^/]+$/ },
+  'net-hostname': { method: 'POST', path: /^\/api\/net\/hostname$/ },
+  'net-ipv4': { method: 'POST', path: /^\/api\/net\/ipv4$/ },
+  'net-wifi': { method: 'POST', path: /^\/api\/net\/wifi$/ },
+  'net-powersave': { method: 'POST', path: /^\/api\/net\/powersave$/ },
+  'net-keep': { method: 'POST', path: /^\/api\/net\/keep$/ },
+  'net-undo': { method: 'POST', path: /^\/api\/net\/undo$/ },
 }
 
 const ALLOWED = new Set<string>([
   ...PORTAL_WRITES, ...PORTAL_TOOL_CHECKS, ...PORTAL_TOOL_WRITES, ...PORTAL_RESTART,
-  ...PORTAL_CARE_WRITES, ...PORTAL_CARE_SETUP, ...PORTAL_TOOL_SETUP, ...PORTAL_HARDWARE,
+  ...PORTAL_CARE_WRITES, ...PORTAL_CARE_SETUP, ...PORTAL_TOOL_SETUP, ...PORTAL_HARDWARE, ...PORTAL_NETWORK,
 ])
 const enc = encodeURIComponent
 
@@ -328,6 +338,34 @@ export class PortalClient {
 
   async deleteHardware(name: string): Promise<WriteResult> {
     return this.write('hardware-delete', 'DELETE', `/api/hardware/${enc(name)}`)
+  }
+
+  // ---- the Rhino's network (config 1.4.8+) --------------------------------
+
+  async netState(): Promise<NetState> {
+    return this.getJson<NetState & { ok: boolean }>('/api/net')
+  }
+  async wifiScan(): Promise<WifiNetwork[]> {
+    return (await this.getJson<{ ok: boolean; networks: WifiNetwork[] }>('/api/net/wifi')).networks
+  }
+  setHostname(hostname: string): Promise<WriteResult> {
+    return this.write('net-hostname', 'POST', '/api/net/hostname', { hostname })
+  }
+  setIpv4(body: { iface: string; method: 'auto' | 'manual'; address?: string; prefix?: number; gateway?: string; dns?: string[] }): Promise<WriteResult> {
+    return this.write('net-ipv4', 'POST', '/api/net/ipv4', body)
+  }
+  /** The password goes in the body over the Pi's own network; the Portal never logs or returns it. */
+  joinWifi(ssid: string, password: string): Promise<WriteResult> {
+    return this.write('net-wifi', 'POST', '/api/net/wifi', { ssid, password })
+  }
+  setPowersave(on: boolean): Promise<WriteResult> {
+    return this.write('net-powersave', 'POST', '/api/net/powersave', { on })
+  }
+  keepNetChange(): Promise<WriteResult> {
+    return this.write('net-keep', 'POST', '/api/net/keep', {})
+  }
+  undoNetChange(): Promise<WriteResult> {
+    return this.write('net-undo', 'POST', '/api/net/undo', {})
   }
 
   /** Reads the token and version from the Portal's home page. */

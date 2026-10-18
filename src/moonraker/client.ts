@@ -44,6 +44,25 @@ export const READ_ONLY_METHODS: ReadonlySet<string> = new Set([
   'printer.gcode.help',
   'server.webcams.list',
   'server.temperature_store',
+  // Settings / Software and Network: versions, interfaces, load. Nothing here changes anything.
+  'machine.update.status',
+  'machine.system_info',
+  'machine.proc_stats',
+])
+
+/**
+ * Software updates through Moonraker's update manager. They restart services
+ * (Moonraker, Klipper) but never move the machine; Moonraker refuses them
+ * during a job, and Studio checks first (src/system/updates.ts). Only
+ * update() sends these. The legacy ones are for Moonraker before API 1.5.
+ */
+export const UPDATE_METHODS: ReadonlySet<string> = new Set([
+  'machine.update.refresh',
+  'machine.update.upgrade',
+  'machine.update.system',
+  'machine.update.moonraker',
+  'machine.update.klipper',
+  'machine.update.client',
 ])
 
 /**
@@ -119,6 +138,12 @@ export interface ClientHandlers {
   onTemperatureStore?: (store: unknown) => void
   /** Moonraker's camera list (raw entries); sent on connect and whenever it changes. */
   onWebcams?: (webcams: unknown[]) => void
+  /** A line of update progress (notify_update_response) */
+  onUpdateResponse?: (r: { application?: string; message?: string; complete?: boolean }) => void
+  /** Update manager status changed (notify_update_refreshed) */
+  onUpdateRefreshed?: (status: unknown) => void
+  /** Once a second: load and network counters (notify_proc_stat_update) */
+  onProcStats?: (stats: unknown) => void
 }
 
 export interface GcodeStoreEntry {
@@ -148,6 +173,7 @@ export class MoonrakerClient {
   private handlers: ClientHandlers
   private WS: WsCtor
   private version: string
+  private delays = [1000, 2000, 4000, 8000, 10000]
 
   constructor(baseUrl: string, handlers: ClientHandlers, opts: { WebSocketImpl?: WsCtor; version?: string } = {}) {
     this.baseUrl = baseUrl.replace(/\/+$/, '')
@@ -246,6 +272,33 @@ export class MoonrakerClient {
   /** Save one of Studio's settings. */
   setStudioSetting(key: string, value: unknown): Promise<unknown> {
     return this.studioSetting('server.database.post_item', { namespace: STUDIO_NAMESPACE, key, value })
+  }
+
+  // ---- Settings: software and network ------------------------------------
+
+  updateStatus(): Promise<unknown> {
+    return this.call('machine.update.status')
+  }
+  systemInfo(): Promise<unknown> {
+    return this.call('machine.system_info')
+  }
+  procStats(): Promise<unknown> {
+    return this.call('machine.proc_stats')
+  }
+  /** Round trip to Moonraker in ms (a server.info request). */
+  async ping(): Promise<number> {
+    const t = performance.now()
+    await this.call('server.info')
+    return performance.now() - t
+  }
+  /** Run an update-manager method. Updates can take many minutes. */
+  update(method: string, params?: Record<string, unknown>): Promise<unknown> {
+    if (!UPDATE_METHODS.has(method)) return Promise.reject(new Error(`Blocked: "${method}" is not an allowed update call`))
+    return this.send(method, params, method === 'machine.update.refresh' ? 120_000 : 1_800_000)
+  }
+  /** Reconnect waits (ms), first to last; the last repeats. */
+  setReconnectDelays(delays: number[]) {
+    if (delays.length && delays.every((d) => Number.isFinite(d) && d >= 250)) this.delays = [...delays]
   }
 
   // ---- actions ---------------------------------------------------------
@@ -468,6 +521,17 @@ export class MoonrakerClient {
         else this.listWebcams().then((w) => this.handlers.onWebcams?.(w)).catch(() => {})
         break
       }
+      case 'notify_update_response': {
+        const r = msg.params?.[0]
+        if (r && typeof r === 'object') this.handlers.onUpdateResponse?.(r as never)
+        break
+      }
+      case 'notify_update_refreshed':
+        this.handlers.onUpdateRefreshed?.(msg.params?.[0])
+        break
+      case 'notify_proc_stat_update':
+        this.handlers.onProcStats?.(msg.params?.[0])
+        break
       case 'notify_klippy_ready':
         void this.checkKlippy()
         break
@@ -484,7 +548,7 @@ export class MoonrakerClient {
 
   private scheduleReconnect() {
     if (!this.wanted) return
-    const delay = [1000, 2000, 4000, 8000][this.retry] ?? 10000
+    const delay = this.delays[Math.min(this.retry, this.delays.length - 1)]!
     this.retry++
     this.retryTimer = setTimeout(() => this.open(), delay)
   }

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { MoonrakerClient, READ_ONLY_METHODS, ACTION_METHODS, CAMERA_METHODS, SETTINGS_METHODS, type Status } from './client'
+import { MoonrakerClient, READ_ONLY_METHODS, ACTION_METHODS, CAMERA_METHODS, SETTINGS_METHODS, UPDATE_METHODS, type Status } from './client'
 import { approve, check } from '@/control/commands'
 
 /** A stand-in for the browser WebSocket that answers like Moonraker. */
@@ -104,6 +104,18 @@ describe('MoonrakerClient', () => {
     await expect(act('machine.reboot')).rejects.toThrow(/not an allowed action/)
     await expect(act('server.files.delete_file')).rejects.toThrow(/not an allowed action/)
     expect([...ACTION_METHODS].every((m) => m.startsWith('printer.'))).toBe(true)
+  })
+
+  it('software updates go only through update(), and only update-manager methods', async () => {
+    const { c } = make()
+    c.connect()
+    for (let i = 0; i < 10; i++) await flush()
+    void c.update('machine.update.upgrade', { name: 'klipper' })
+    expect(FakeSocket.last!.sent.at(-1)).toEqual({ method: 'machine.update.upgrade', params: { name: 'klipper' } })
+    await expect(c.update('machine.reboot')).rejects.toThrow(/not an allowed update/)
+    await expect(c.update('printer.gcode.script', { script: 'G28' })).rejects.toThrow(/not an allowed update/)
+    expect([...UPDATE_METHODS].every((m) => m.startsWith('machine.update.'))).toBe(true)
+    expect([...READ_ONLY_METHODS].some((m) => UPDATE_METHODS.has(m))).toBe(false)
   })
 
   it('passes Klipper output and prompt lines to the app', async () => {

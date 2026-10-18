@@ -92,6 +92,22 @@ Needs Toolhead_Manager 1.4.7 (per-path materials for SwitchFly, and the record t
 | X9 | On T0, hot, Extrude 5 mm; then switch to T1 and Extrude 5 mm | Both paths feed **in** (the config reverses the stepper for T1) | T1 pulls filament out |
 | X10 | On SwitchFly T1, swap to BlockOne, then back to SwitchFly and confirm | The selector turns to path 1; the block shows T0 selected; hot, Extrude 5 mm feeds **in** | T1 still shows, or filament comes out |
 
+## Settings: Software and Network
+
+Software needs Moonraker's update manager; the Rhino's network needs Toolhead_Manager 1.4.8 (its N checks cover the
+Pi side). Machine idle, no job.
+
+| # | Do this | Pass when | Stop if |
+|---|---|---|---|
+| S1 | Open Settings | A menu like Care: Appearance; Machine (Connection, Tool changing, Cameras); System (Software, Network); About. Every old setting is still there | A setting is missing |
+| S2 | Software | Same packages and versions as Mainsail's update panel, without Mainsail; one Status column: "Up to date" or an Update button | Mainsail is listed |
+| S3 | Update one package (e.g. Crowsnest) | Asks first, lists what restarts; progress lines appear; ends "Up to date" | It starts without asking |
+| S4 | Update all with Moonraker and Klipper behind | Order: system, Moonraker, repos, Klipper last; Studio reconnects after Moonraker by itself and carries on; Klipper restarts once | Klipper restarts more than once, or the run stops at Moonraker |
+| S5 | Start a print, open Software | Update buttons are dead, "Not while a job is running" | An update can start |
+| S6 | Network, Link now | Response, Wi-Fi signal, traffic and screens connected show and change; address line matches the Pi | |
+| S7 | Network, cameras Snapshots, open Control | The camera shows stills at the snapshot rate; Live video brings the stream back | |
+| S8 | Network, Reconnect Patient, stop Moonraker 20 s | Reconnects with longer waits (watch the top bar) | |
+
 ## Cameras and Dashboard
 
 Nothing here moves the machine. Camera edits change Moonraker's camera list, which Mainsail uses too.

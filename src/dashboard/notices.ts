@@ -91,7 +91,7 @@ export function notices(i: NoticeInput): Notice[] {
 
   // --- connection and Klipper -------------------------------------------
   if (!i.online) {
-    add({ id: 'offline', tone: 'alert', title: 'Not connected to the Rhino', detail: 'Trying again. Nothing shown here is live.', to: '/settings' })
+    add({ id: 'offline', tone: 'alert', title: 'Not connected to the Rhino', detail: 'Trying again. Nothing shown here is live.', to: '/settings/connection' })
     return out
   }
   if (i.klippy === 'shutdown' || i.klippy === 'error') {
