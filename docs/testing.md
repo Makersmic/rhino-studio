@@ -77,7 +77,7 @@ Notes:
 
 ## Extruder block (Control)
 
-Needs Toolhead_Manager 1.4.6 (per-path materials for SwitchFly). Before you start: no job, bed clear, a bin under the nozzle, filament loaded. Use 5 mm feeds until X3 passes. If filament moves the wrong way, or anything but the extruder moves when you feed, press Stop and stop testing.
+Needs Toolhead_Manager 1.4.7 (per-path materials for SwitchFly, and the record that tells Studio which path is in use). Before you start: no job, bed clear, a bin under the nozzle, filament loaded. Use 5 mm feeds until X3 passes. If filament moves the wrong way, or anything but the extruder moves when you feed, press Stop and stop testing.
 
 | # | Do this | Pass when | Stop if |
 |---|---|---|---|
@@ -90,7 +90,7 @@ Needs Toolhead_Manager 1.4.6 (per-path materials for SwitchFly). Before you star
 | X7 | Mount SwitchFly (record still says BlockOne) | Path row live; neither T0 nor T1 selected; feed keys dead, "Pick a path first" | Extrude works before a path is picked |
 | X8 | Press T0 | Confirmation "Switch to T0?" saying it lifts Z, retracts, heats, loads and purges, with the remembered material; Cancel sends nothing; Switch to T0 runs SWITCH_T0 | It switches without asking |
 | X9 | On T0, hot, Extrude 5 mm; then switch to T1 and Extrude 5 mm | Both paths feed **in** (the config reverses the stepper for T1) | T1 pulls filament out |
-| X10 | Swap SwitchFly (on T1) for BlockOne, heat, look at Extrude | Dead, "Klipper still has SwitchFly recorded; start a BlockOne job first" (E would run backwards) | Extrude works |
+| X10 | On SwitchFly T1, swap to BlockOne, then back to SwitchFly and confirm | The selector turns to path 1; the block shows T0 selected; hot, Extrude 5 mm feeds **in** | T1 still shows, or filament comes out |
 
 ## Cameras and Dashboard
 
