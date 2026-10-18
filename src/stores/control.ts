@@ -11,6 +11,7 @@ import { computed, ref, shallowRef, watch } from 'vue'
 import { approve, check, fromPrompt, heaterScript, jogScript, type Axis, type CheckedScript, type ScriptCheck } from '@/control/commands'
 import { PromptTracker, type Prompt, type PromptButton } from '@/control/prompts'
 import { checkStart, type StartCheck } from '@/control/jobs'
+import { feedBlock, feedScript, flowScript, pathBlock, pressureAdvanceScript } from '@/control/extruder'
 import type { GcodeStoreEntry } from '@/moonraker/client'
 import { useSettingsStore } from './settings'
 import { useMachineStore } from './machine'
@@ -304,6 +305,76 @@ export const useControlStore = defineStore('control', () => {
     await send(h.script, { label: `${heater === 'extruder' ? 'Hotend' : 'Bed'} ${target > 0 ? `to ${target}°` : 'off'}` })
   }
 
+
+  // ---- extruder block (src/control/extruder.ts) -----------------------------
+  const feedCtx = computed(() => ({
+    klippyReady: machine.klippyReady,
+    printHead: machine.toolKind === 'print',
+    mountedName: machine.mountedName,
+    jobActive: jobActive.value,
+    swapping: machine.toolState.kind === 'swapping',
+  }))
+  /** Why Extrude / Retract are dead right now, or null */
+  const feedBlocked = computed(() => feedBlock({ ...feedCtx.value, ex: machine.extruder }))
+  /** Why the SwitchFly path can't be changed, or null */
+  const pathBlocked = computed(() => pathBlock(feedCtx.value))
+  /** Flow and pressure advance: a print head and Klipper ready; live during a job */
+  const tuneBlocked = computed(() => (!machine.klippyReady ? 'Klipper is not ready' : machine.toolKind !== 'print' ? 'Confirm a print head first' : null))
+
+  async function setFlow(percent: number) {
+    if (tuneBlocked.value) return log('error', `Flow not set: ${tuneBlocked.value}`), false
+    const b = flowScript(percent)
+    if ('error' in b) return log('error', b.error), false
+    return send(b.script, { label: `Flow ${Math.round(percent)}%` })
+  }
+
+  async function setPressureAdvance(advance: number, smooth: number) {
+    if (tuneBlocked.value) return log('error', `Pressure advance not set: ${tuneBlocked.value}`), false
+    const b = pressureAdvanceScript(advance, smooth)
+    if ('error' in b) return log('error', b.error), false
+    return send(b.script, { label: `Pressure advance ${advance} s, smooth ${smooth} s` })
+  }
+
+  /**
+   * Extrude / Retract. No confirmation (Mike, 2026-10-18): feedBlock() is the
+   * gate, the script only moves E, and Klipper refuses a cold extrude anyway.
+   */
+  async function feed(direction: 'extrude' | 'retract', length: number, speedMmS: number) {
+    const label = `${direction === 'extrude' ? 'Extrude' : 'Retract'} ${length} mm at ${speedMmS} mm/s`
+    if (feedBlocked.value) return log('error', `${label}: ${feedBlocked.value}`), false
+    const b = feedScript(direction, length, speedMmS)
+    if ('error' in b) return log('error', b.error), false
+    const c = check(b.script, { jobActive: false })
+    if (c.blocked) return log('error', c.blocked), false
+    log('sent', label)
+    running.value = label
+    try {
+      await machine.runChecked(approve(c, true))
+      return true
+    } catch (e) {
+      log('error', (e as Error).message)
+      return false
+    } finally {
+      running.value = null
+    }
+  }
+
+  /** SwitchFly path: SWITCH_T0 / SWITCH_T1, always confirmed (it moves Z, retracts, heats and purges). */
+  async function switchPath(path: 0 | 1) {
+    if (pathBlocked.value) return log('error', `Path not changed: ${pathBlocked.value}`), false
+    if (machine.extruder.path === path) return true
+    const mat = machine.extruder.pathMaterial[path]
+    return send(`SWITCH_T${path}`, {
+      label: `Switch to path ${path + 1} (T${path})`,
+      confirmTitle: `Switch to T${path}?`,
+      confirmFeature: `Path ${path + 1} · T${path}${mat ? ` · ${mat}` : ''}`,
+      confirmBody:
+        'SwitchFly lifts Z 5 mm, retracts, turns the selector servo, heats to the material’s temperature if needed, then loads and purges. ' +
+        (mat ? `Material: ${mat}, as remembered for this path.` : 'No material is remembered for this path yet: the Rhino will ask which one is loaded.'),
+      confirmLabel: `Switch to T${path}`,
+    })
+  }
+
   // ---- jobs ---------------------------------------------------------------
   function startCheck(path: string, fileTool: string | null | undefined): StartCheck {
     const tools = machine.knownTools
@@ -488,6 +559,13 @@ export const useControlStore = defineStore('control', () => {
     motorsOff,
     setHeater,
     hotendSettable,
+    feedBlocked,
+    pathBlocked,
+    tuneBlocked,
+    setFlow,
+    setPressureAdvance,
+    feed,
+    switchPath,
     startCheck,
   }
 })

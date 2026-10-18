@@ -4,6 +4,8 @@
  *
  *   [ status: toolhead | what the tool uses | job + its controls ]
  *     (temperatures are set right there, with their graphs)
+ *   [ extruder: flow | pressure advance | feed settings | extrude/retract ]
+ *     (print heads only; SwitchFly's T0/T1 path greyed out on BlockOne)
  *   [ motion + position         ] [ camera                     ]
  *   [ macros         ] [ console                               ]
  *
@@ -15,6 +17,10 @@ import MotionPanel from '@/control/MotionPanel.vue'
 import WebcamPanel from '@/control/WebcamPanel.vue'
 import MacroPanel from '@/control/MacroPanel.vue'
 import ConsolePanel from '@/control/ConsolePanel.vue'
+import ExtruderPanel from '@/control/ExtruderPanel.vue'
+import { useMachineStore } from '@/stores/machine'
+
+const machine = useMachineStore()
 </script>
 
 <template>
@@ -25,6 +31,8 @@ import ConsolePanel from '@/control/ConsolePanel.vue'
     </div>
 
     <StatusStrip />
+
+    <ExtruderPanel v-if="machine.toolKind === 'print'" />
 
     <div class="grid-a">
       <MotionPanel class="motion" />

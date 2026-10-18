@@ -23,6 +23,7 @@ import { plausible } from '@/control/tempHistory'
 import { useControlStore } from './control'
 import { useWebcamsStore } from './webcams'
 import { useTempsStore } from './temps'
+import { readExtruder, type ExtruderStatus } from '@/control/extruder'
 
 export type { ConnectionState, KlippyState }
 
@@ -184,6 +185,8 @@ export const useMachineStore = defineStore('machine', () => {
     return Array.isArray(o) && (o as number[]).slice(0, 3).some((v) => Math.abs(v) > 0.001)
   })
   const speedFactor = computed(() => num(status.value.gcode_move?.speed_factor))
+  /** Flow, pressure advance, can_extrude and the SwitchFly path (src/control/extruder.ts) */
+  const extruder = computed<ExtruderStatus>(() => readExtruder(status.value as never))
 
   /**
    * What the tool outputs are doing, read from Klipper's pins (read only).
@@ -296,6 +299,7 @@ export const useMachineStore = defineStore('machine', () => {
     workPosition,
     hasWorkOffset,
     speedFactor,
+    extruder,
     outputs,
     toolKind,
     plan,

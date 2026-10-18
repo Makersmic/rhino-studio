@@ -10,6 +10,10 @@
  *   swap      a swap from slot 1 to slot 4 is under way
  *   custom    a user-added HotWire in slot 6 is mounted
  *   spindle   HotJoe (CNC) confirmed in slot 4, with a work zero set
+ *   blockone  BlockOne (print head) confirmed in slot 1, hotend at 215
+ *   switchfly SwitchFly confirmed in slot 2 on path T0 (PLA; PETG in T1), hotend cold.
+ *             SWITCH_T0/T1, M221, SET_PRESSURE_ADVANCE and G1 E work; a cold
+ *             extrude fails like Klipper's "Extrude below minimum temp".
  *   toolchanger  NOT a Rhino: a StealthChanger-style machine running
  *             viesturz/klipper-toolchanger with three tools (T0, T1 print
  *             heads, Brush with no extruder) and tool sensors. SELECT_TOOL,
@@ -55,6 +59,8 @@ const tool = {
   swap: { current_tool: 1, pending_tool: 4, saved: 1 },
   custom: { current_tool: 6, pending_tool: -1, saved: 6 },
   spindle: { current_tool: 4, pending_tool: -1, saved: 4 },
+  blockone: { current_tool: 1, pending_tool: -1, saved: 1 },
+  switchfly: { current_tool: 2, pending_tool: -1, saved: 2 },
 }[scenario] ?? { current_tool: 3, pending_tool: -1, saved: 3 }
 
 let klippy: 'ready' | 'shutdown' = 'ready'
@@ -63,15 +69,24 @@ const status: Record<string, Record<string, unknown>> = {
   print_stats: { state: 'standby', filename: '', message: '', print_duration: 0 },
   virtual_sdcard: { progress: 0, is_active: false },
   toolhead: { position: [120.0, 85.5, 12.3, 0], homed_axes: 'xyz', axis_minimum: [0, 0, -5, 0], axis_maximum: [576, 406, 300, 0] },
-  gcode_move: { gcode_position: [120.0, 85.5, 12.3, 0], homing_origin: [0, 0, 0, 0], speed_factor: 1, absolute_coordinates: true },
+  gcode_move: { gcode_position: [120.0, 85.5, 12.3, 0], homing_origin: [0, 0, 0, 0], speed_factor: 1, extrude_factor: 1, absolute_coordinates: true },
   pause_resume: { is_paused: false },
   idle_timeout: { state: 'Idle' },
-  extruder: { temperature: 24.1, target: 0 },
+  extruder: { temperature: 24.1, target: 0, can_extrude: false, pressure_advance: 0.024, smooth_time: 0.04 },
   heater_bed: { temperature: 23.6, target: 0 },
   'gcode_macro SWAP_TOOL': { current_tool: tool.current_tool, pending_tool: tool.pending_tool },
   'gcode_macro VARIABLES': { tool_mapping: toolMapping, toolheads },
   'gcode_macro CUSTOM_TOOLS': custom,
-  save_variables: { variables: { current_tool: tool.saved } },
+  save_variables: {
+    variables: {
+      current_tool: tool.saved,
+      // The material record the Rhino G0/G1 override reads (E is reversed on SwitchFly path 1)
+      set_material_toolhead: scenario === 'switchfly' ? 'SwitchFly' : 'BlockOne',
+      set_material_extruder_index: 0,
+      switchfly_material_t0: 'PLA',
+      switchfly_material_t1: 'PETG',
+    },
+  },
   // Tool outputs, as in the Rhino config
   fan: { speed: 0 },
   'output_pin LASER_INITIALIZE': { value: 0 },
@@ -136,6 +151,10 @@ const tempStore: Record<string, Series> = { extruder: { temperatures: [], target
   }
   status.extruder.temperature = e
   status.heater_bed.temperature = b
+}
+if (scenario === 'blockone') {
+  status.extruder = { ...status.extruder, temperature: 214.6, target: 215, can_extrude: true }
+  status.heater_bed = { ...status.heater_bed, temperature: 59.8, target: 60 }
 }
 
 // ---- pretend cameras -----------------------------------------------------
@@ -298,6 +317,8 @@ function runLine(raw: string) {
     case 'RESTORE_GCODE_STATE': relative = false; return
     case 'G0':
     case 'G1': {
+      if (/(^|\s)E-?[\d.]/i.test(line) && !status.extruder.can_extrude) throw new Error('Extrude below minimum temp\nSee the \'min_extrude_temp\' config option for details')
+      if (/(^|\s)E-?[\d.]/i.test(line)) respond(`// E${/E(-?[\d.]+)/i.exec(line)?.[1]} mm`)
       const pos = [...th.position]
       for (const [i, a] of ['X', 'Y', 'Z'].entries()) {
         const v = new RegExp(`${a}(-?[\\d.]+)`, 'i').exec(line)?.[1]
@@ -308,6 +329,28 @@ function runLine(raw: string) {
       }
       update('toolhead', { position: pos })
       update('gcode_move', { gcode_position: workPos(pos) })
+      return
+    }
+    case 'M82':
+    case 'M83':
+      return
+    case 'M221':
+      update('gcode_move', { extrude_factor: Number(/S([\d.]+)/i.exec(line)?.[1] ?? 100) / 100 })
+      return
+    case 'SET_PRESSURE_ADVANCE': {
+      const a = arg(line, 'ADVANCE')
+      const t = arg(line, 'SMOOTH_TIME')
+      update('extruder', { ...(a != null ? { pressure_advance: Number(a) } : {}), ...(t != null ? { smooth_time: Number(t) } : {}) })
+      return
+    }
+    case 'SWITCH_T0':
+    case 'SWITCH_T1': {
+      const p = cmd === 'SWITCH_T1' ? 1 : 0
+      if (status.print_stats.state === 'printing') throw new Error('SWITCH_T: not during a job in this mock')
+      const sv = status.save_variables.variables as Record<string, unknown>
+      update('save_variables', { variables: { ...sv, set_material_toolhead: 'SwitchFly', set_material_extruder_index: p } })
+      update('extruder', { target: p ? 240 : 215 })
+      respond(`// Switched to path ${p + 1} (T${p}): ${p ? sv.switchfly_material_t1 : sv.switchfly_material_t0}`)
       return
     }
     case 'M84':
@@ -379,7 +422,7 @@ function runLine(raw: string) {
     case '_RESTORE_TOOL_CONFIRM': {
       const t = Number(arg(line, 'TOOL') ?? arg(line, 'SLOT'))
       update('gcode_macro SWAP_TOOL', { current_tool: t, pending_tool: -1 })
-      update('save_variables', { variables: { current_tool: t } })
+      update('save_variables', { variables: { ...(status.save_variables.variables as object), current_tool: t } })
       prompt(['prompt_end'])
       respond(`// ${name(t)} confirmed in slot ${t}`)
       return
@@ -763,7 +806,7 @@ setInterval(() => {
     const cur = status[h]!.temperature as number
     const target = (status[h]!.target as number) || 24 + Math.sin(Date.now() / 4000) * 0.4
     const next = cur + Math.max(-6, Math.min(6, (target - cur) * 0.25))
-    update(h, { temperature: Number(next.toFixed(2)) })
+    update(h, { temperature: Number(next.toFixed(2)), ...(h === 'extruder' ? { can_extrude: next >= 170 } : {}) })
     const series = tempStore[h]!
     series.temperatures.push(Number(next.toFixed(2))); series.targets.push((status[h]!.target as number) || 0); series.powers.push(0)
     if (series.temperatures.length > 1200) { series.temperatures.shift(); series.targets.shift(); series.powers.shift() }

@@ -79,10 +79,10 @@ export const WATCHED_OBJECTS: Record<string, string[] | null> = {
   print_stats: ['state', 'filename', 'message', 'print_duration'],
   virtual_sdcard: ['progress', 'is_active'],
   toolhead: ['position', 'homed_axes', 'axis_minimum', 'axis_maximum'],
-  gcode_move: ['gcode_position', 'homing_origin', 'speed_factor', 'absolute_coordinates'],
+  gcode_move: ['gcode_position', 'homing_origin', 'speed_factor', 'extrude_factor', 'absolute_coordinates'],
   pause_resume: ['is_paused'],
   idle_timeout: ['state'],
-  extruder: ['temperature', 'target'],
+  extruder: ['temperature', 'target', 'can_extrude', 'pressure_advance', 'smooth_time'],
   heater_bed: ['temperature', 'target'],
   // Tool state: whatever the tool-change adapters read (src/tools/adapters), added at subscribe time
   // Tool outputs, read only (names from the Rhino config; only those Klipper has are watched)

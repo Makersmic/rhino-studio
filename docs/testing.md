@@ -75,6 +75,23 @@ Notes:
 - B13 needs Toolhead_Manager 1.4.1 on the Pi (the laser rail fix). On 1.3.4, don't run laser jobs from Studio yet.
 - Pendant over plain http can't keep the phone screen on. Raise the phone's auto-lock time while you use it.
 
+## Extruder block (Control)
+
+Needs Toolhead_Manager 1.4.6 (per-path materials for SwitchFly). Before you start: no job, bed clear, a bin under the nozzle, filament loaded. Use 5 mm feeds until X3 passes. If filament moves the wrong way, or anything but the extruder moves when you feed, press Stop and stop testing.
+
+| # | Do this | Pass when | Stop if |
+|---|---|---|---|
+| X1 | Mount LightSaber, open Control | No extruder block | The block shows, or Extrude can be pressed |
+| X2 | Mount BlockOne, hotend cold | Block under the status box, the same height; Path row greyed out, "SwitchFly only"; Extrude and Retract solid grey, "Hotend cold" | Extrude sends anything |
+| X3 | Heat BlockOne to its print temperature, Length 5, Speed 2, Extrude, then Retract | No confirmation; filament goes in 5 mm, then back 5 mm; X, Y and Z don't move; Mainsail's console shows the G1 E lines inside SAVE/RESTORE_GCODE_STATE | Filament goes the wrong way, or the head moves |
+| X4 | Flow: drag to 95%, let go; then + once | Mainsail shows M221 S95, then S96; the big number agrees | |
+| X5 | Pressure advance: arrow up twice, wait; type 0.045 in Smooth, Enter | One SET_PRESSURE_ADVANCE per pause, values match `GET_PRESSURE_ADVANCE` (or Mainsail's extruder panel) | Values outside 0–1 s / 0.005–0.2 s are sent |
+| X6 | During a BlockOne print: change Flow and Advance; try Extrude | Flow and Advance apply live; Extrude and Retract are dead, "Not while a job is running" | Extrude works during a job |
+| X7 | Mount SwitchFly (record still says BlockOne) | Path row live; neither T0 nor T1 selected; feed keys dead, "Pick a path first" | Extrude works before a path is picked |
+| X8 | Press T0 | Confirmation "Switch to T0?" saying it lifts Z, retracts, heats, loads and purges, with the remembered material; Cancel sends nothing; Switch to T0 runs SWITCH_T0 | It switches without asking |
+| X9 | On T0, hot, Extrude 5 mm; then switch to T1 and Extrude 5 mm | Both paths feed **in** (the config reverses the stepper for T1) | T1 pulls filament out |
+| X10 | Swap SwitchFly (on T1) for BlockOne, heat, look at Extrude | Dead, "Klipper still has SwitchFly recorded; start a BlockOne job first" (E would run backwards) | Extrude works |
+
 ## Cameras and Dashboard
 
 Nothing here moves the machine. Camera edits change Moonraker's camera list, which Mainsail uses too.
