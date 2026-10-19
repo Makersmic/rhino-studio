@@ -108,6 +108,20 @@ Pi side). Machine idle, no job.
 | S7 | Network, cameras Snapshots, open Control | The camera shows stills at the snapshot rate; Live video brings the stream back | |
 | S8 | Network, Reconnect Patient, stop Moonraker 20 s | Reconnects with longer waits (watch the top bar) | |
 
+## Studio served from the Rhino
+
+Needs Toolhead_Manager 1.5.1 installed. **Stop if** Mainsail stops opening.
+
+| # | Do this | Pass when | Stop if |
+|---|---|---|---|
+| S1 | Open `http://<pi>:5001` on the PC | Studio opens, Connected, the mounted tool shows | Mainsail (port 80) no longer opens |
+| S2 | Same address on a phone | Studio opens and works the same | |
+| S3 | Care and Toolheads | Tasks, tools and photos come from the Portal | "Portal not reachable" |
+| S4 | From this address, Settings › Software, PrusaSlicer engine: Install (that is P1) | It starts installing; no "Cross-site request refused" | |
+| S5 | Control, cameras | The camera picture shows | |
+| S6 | Prepare a part with PrusaSlicer and Send to Rhino, then Files | The file is there | |
+| S7 | Settings › Software | Rhino Studio row says "served by the Rhino" with this version | |
+
 ## PrusaSlicer on the Rhino
 
 Needs Toolhead_Manager 1.5.0. Machine idle unless a check says otherwise. **Stop if** Klipper reports "Timer too

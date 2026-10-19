@@ -119,7 +119,16 @@ Other commands:
 | `npm test` | Runs the unit tests (command safety, prompts, job starts, tool state, G-code headers, client gates, care rules) |
 | `npm run mock` | Starts the pretend Moonraker |
 
-The built `dist/` folder is plain static files and works from any folder, so later it can be served by the nginx that already serves Mainsail on the Pi. Deployment to the Pi comes with Phase 2.
+The built `dist/` folder is plain static files and works from any folder.
+
+## Run it on the Rhino
+
+From Rhino Tool Manager 1.5.1, the release zip carries a build of Studio and the installer serves it with the
+nginx that already serves Mainsail, on a port of its own: **`http://<pi>:5001`**, from any PC, phone or tablet on
+the network, with nothing to install. Mainsail's site isn't touched. The Pi's nginx forwards Moonraker, the
+cameras and `/portal` the same way the dev server does, so Studio works exactly as it does from a PC. Updating the
+Tool Manager (its zip, through `rhino.sh`) updates Studio; Settings › Software shows the version. The zip is made
+with `sh dev/make_zip.sh ../rhino-studio` in the Tool Manager repo. Running it from a PC (above) still works.
 
 ## Folder map
 

@@ -140,6 +140,10 @@ export class PortalClient {
 
   /** Link to open the full Portal. */
   get homeUrl(): string {
+    // The Portal's own pages use root paths (/static/...), so they only work on its own port. Served
+    // from the Pi (nginx forwards /portal), link to port 5000 on the same host instead.
+    if (this.baseUrl.startsWith('/') && !import.meta.env.DEV && typeof location !== 'undefined')
+      return `${location.protocol}//${location.hostname}:5000/`
     return `${this.baseUrl}/`
   }
 

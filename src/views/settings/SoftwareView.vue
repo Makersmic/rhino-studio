@@ -121,7 +121,7 @@ const libs = __BUILT_WITH__
           <ol class="steps quiet">
             <li>System packages</li><li>Moonraker</li><li>Config and helper repos</li><li>Klipper, restarted once</li><li>Web apps</li>
           </ol>
-          <span class="muted small">Up-to-date steps are skipped. Refused while a job runs. Mainsail isn't listed or updated here. The PrusaSlicer engine updates on its own button: it restarts nothing, and the version before is kept. The Rhino Tool Manager installs from its zip with <code>rhino.sh</code>, so its preview can check the machine first.</span>
+          <span class="muted small">Up-to-date steps are skipped. Refused while a job runs. Mainsail isn't listed or updated here. The PrusaSlicer engine updates on its own button: it restarts nothing, and the version before is kept. The Rhino Tool Manager installs from its zip with <code>rhino.sh</code>, so its preview can check the machine first; Rhino Studio comes in the same zip when it is served from the Rhino.</span>
         </div>
       </RsPanel>
 

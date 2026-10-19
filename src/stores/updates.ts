@@ -17,7 +17,7 @@ import { brand } from '@/brand/brand'
 import type { SlicerState } from '@/slicer/prusa/portal'
 
 export interface ExtraRow {
-  name: 'rhino-tool-manager' | 'rhino-studio-pc' | 'prusaslicer'
+  name: 'rhino-tool-manager' | 'rhino-studio-pc' | 'rhino-studio-pi' | 'prusaslicer'
   label: string
   note: string
   installed: string | null
@@ -173,15 +173,29 @@ export const useUpdatesStore = defineStore('updates', () => {
       error: e?.install_error ?? engineError.value,
     })
     if (!hasStudioOnPi.value)
-      rows.push({
-        name: 'rhino-studio-pc',
-        label: 'Rhino Studio',
-        note: 'This app, running from your PC',
-        installed: brand.version,
-        latest: latestStudio.value,
-        needsUpdate: newer(brand.version, latestStudio.value),
-        how: 'Studio runs from your PC for now. In its folder: git pull, then npm ci, then start it again with npm run dev.',
-      })
+      rows.push(
+        import.meta.env.DEV
+          ? {
+              name: 'rhino-studio-pc',
+              label: 'Rhino Studio',
+              note: 'This app, running from your PC',
+              installed: brand.version,
+              latest: latestStudio.value,
+              needsUpdate: newer(brand.version, latestStudio.value),
+              how: 'Studio is running from your PC. In its folder: git pull, then npm ci, then start it again with npm run dev.',
+            }
+          : {
+              name: 'rhino-studio-pi',
+              label: 'Rhino Studio',
+              note: 'This app, served by the Rhino',
+              installed: brand.version,
+              latest: latestStudio.value,
+              needsUpdate: newer(brand.version, latestStudio.value),
+              how:
+                'Studio comes with the Rhino Tool Manager: installing its next zip (row above) updates Studio too. ' +
+                'Reload this page afterwards.',
+            },
+      )
     return rows
   })
 

@@ -40,7 +40,7 @@ function save() {
             <span>Rhino Portal address (maintenance, toolheads, network)</span>
             <input v-model="portal" type="text" placeholder="Leave blank for /portal on this app's address" autocomplete="off" spellcheck="false" />
           </label>
-          <p class="muted small">The Portal runs on the Pi at port 5000. In development the dev server forwards <code>/portal</code> to it (set <code>PORTAL=</code> to change where).</p>
+          <p class="muted small">The Portal runs on the Pi at port 5000. When Studio is served from the Pi, the Pi's nginx forwards <code>/portal</code> to it; in development the dev server does (set <code>PORTAL=</code> to change where).</p>
           <label class="check">
             <input v-model="settings.autoConnect" type="checkbox" />
             Connect when the app opens
