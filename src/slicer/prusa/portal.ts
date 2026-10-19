@@ -20,8 +20,16 @@ export interface SlicerState {
     /** an install or update is running */
     installing: boolean
     install_error: string | null
-    /** a build exists for this machine's processor */
+    /** what an install or update is doing now ("Downloading from Flathub…"); Tool Manager 1.5.2+ */
+    install_phase?: string | null
+    /** Install/Update can run on this host */
     can_install: boolean
+    /** why it can't (no flatpak yet, under 2 GB of memory, no build for the processor); 1.5.2+ */
+    blocked?: string | null
+    /** the version before the last update, to go back to; 1.5.2+ */
+    previous?: string | null
+    /** where the engine comes from ("Flathub" from 1.5.2) */
+    source?: string
     arch: string
   }
   host: { mem_total_mb: number; cpus: number; small: boolean }

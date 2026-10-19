@@ -99,15 +99,24 @@ const libs = __BUILT_WITH__
                     {{ r.busy ? 'Installing…' : r.actionLabel }}
                   </button>
                   <button v-else-if="r.needsUpdate" type="button" class="upd" :aria-expanded="open === r.name" @click="open = open === r.name ? null : r.name">Update</button>
+                  <span v-else-if="r.blocked" class="chip quiet">Not offered</span>
                   <span v-else-if="r.latest && r.installed" class="chip">Up to date</span>
                   <span v-else class="chip quiet">—</span>
                 </td>
               </tr>
-              <tr v-if="open === r.name || (!r.action && r.how && !r.installed && r.name === 'prusaslicer')" class="how">
+              <tr v-if="open === r.name || (!r.action && r.how && (!r.installed || r.blocked) && r.name === 'prusaslicer')" class="how">
                 <td colspan="4">{{ r.how }}</td>
+              </tr>
+              <tr v-if="r.busy && r.busyNote" class="how">
+                <td colspan="4">{{ r.busyNote }}…</td>
               </tr>
               <tr v-if="r.error" class="how">
                 <td colspan="4">{{ r.error }}</td>
+              </tr>
+              <tr v-if="r.back" class="how">
+                <td colspan="4">
+                  <RsButton class="back" variant="quiet" size="sm" :disabled="!!up.block" :title="up.block ?? ''" @click="up.rollBackEngine()">Go back to {{ r.back }}</RsButton>
+                </td>
               </tr>
             </template>
             <tr v-if="!up.packages.length && machine.online && !up.loading">
@@ -121,7 +130,7 @@ const libs = __BUILT_WITH__
           <ol class="steps quiet">
             <li>System packages</li><li>Moonraker</li><li>Config and helper repos</li><li>Klipper, restarted once</li><li>Web apps</li>
           </ol>
-          <span class="muted small">Up-to-date steps are skipped. Refused while a job runs. Mainsail isn't listed or updated here. The PrusaSlicer engine updates on its own button: it restarts nothing, and the version before is kept. The Rhino Tool Manager installs from its zip with <code>rhino.sh</code>, so its preview can check the machine first; Rhino Studio comes in the same zip when it is served from the Rhino.</span>
+          <span class="muted small">Up-to-date steps are skipped. Refused while a job runs. Mainsail isn't listed or updated here. The PrusaSlicer engine comes from Flathub and updates on its own button: it restarts nothing, and the version before can be put back. The Rhino Tool Manager installs from its zip with <code>rhino.sh</code>, so its preview can check the machine first; Rhino Studio comes in the same zip when it is served from the Rhino.</span>
         </div>
       </RsPanel>
 
@@ -157,6 +166,7 @@ const libs = __BUILT_WITH__
 .st { width: 140px; text-align: right; }
 .chip { display: inline-block; font-size: 12px; padding: 0 8px; line-height: 24px; border-radius: var(--rs-radius-sm); box-shadow: inset 0 0 0 1px var(--rs-line-strong); color: var(--rs-text); white-space: nowrap; }
 .chip.quiet { box-shadow: none; color: var(--rs-text-muted); }
+.how .back { margin-left: -12px; }
 .chip.attn { background: var(--rs-dither-faint), var(--rs-surface-2); color: var(--rs-text-strong); font-weight: var(--rs-weight-medium); cursor: help; }
 .upd {
   height: 26px; padding: 0 12px; border-radius: var(--rs-radius-sm); border: 1px solid var(--rs-ink);

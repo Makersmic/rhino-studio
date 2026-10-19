@@ -764,7 +764,20 @@ function json(res: import('node:http').ServerResponse, code: number, body: unkno
 // ---- PrusaSlicer on the Rhino (Portal 1.5.0): pretend engine -----------------
 const prusaSchema = JSON.parse(readFileSync(new URL('../src/slicer/prusa/schema.json', import.meta.url), 'utf8')) as { options: Record<string, unknown> }
 const prusaKeys = [...Object.keys(prusaSchema.options), 'bed_shape', 'autoemit_temperature_commands', 'start_gcode', 'end_gcode', 'post_process', 'gcode_substitutions']
-const engine = { installed: process.env.MOCK_PRUSA === '0' ? null as string | null : '2.9.5', latest: '2.9.6', installing: false }
+const engine = { installed: process.env.MOCK_PRUSA === '0' ? null as string | null : '2.9.5', latest: '2.9.6', installing: false,
+  phase: null as string | null, previous: null as string | null }
+// Why the Portal (1.5.2) wouldn't offer the engine: MOCK_SMALL=1 (a Pi 3B), MOCK_FLATPAK=0 (no flatpak yet)
+const engineBlocked = process.env.MOCK_SMALL === '1'
+  ? 'PrusaSlicer needs a host with 2 GB of memory or more. Kiri:Moto in the browser still slices on this one.'
+  : process.env.MOCK_FLATPAK === '0'
+    ? 'PrusaSlicer comes from Flathub, so the Rhino’s host needs Flatpak first. Over SSH, run once: sudo apt install flatpak — then press Install again. (The Portal never runs sudo itself.)'
+    : null
+function mockInstall(to: string, from: string | null) {
+  engine.installing = true
+  const steps = from && to !== engine.latest ? [`Going back to ${to}`, 'Checking it slices'] : ['Adding Flathub', from ? 'Updating from Flathub' : 'Downloading from Flathub (the first time brings its runtime too)', 'Checking it slices']
+  steps.forEach((ph, i) => setTimeout(() => (engine.phase = ph), i * 1500))
+  setTimeout(() => { engine.installed = to; engine.previous = from; engine.installing = false; engine.phase = null }, steps.length * 1500)
+}
 type SliceJob = { id: string; state: string; phase: string; progress: number | null; error: string | null; started: number; center: [number, number]; ini: string; gcode?: string }
 const sliceJobs: Record<string, SliceJob> = {}
 function prusaGcode(cx: number, cy: number, ini: string) {
@@ -839,11 +852,14 @@ async function portal(req: IncomingMessage, res: import('node:http').ServerRespo
     if (what === 'wifi') { netPend('wifi', `Joined ${body.ssid}`); Object.assign(wl, { ssid: body.ssid, connection: body.ssid }); for (const w of wifiList) w.in_use = w.ssid === body.ssid }
     return json(res, 200, { ok: true, pending: true }), true
   }
-  // PrusaSlicer on the Rhino (Portal 1.5.0)
+  // PrusaSlicer on the Rhino (Portal 1.5.0; from Flathub 1.5.2)
   if (req.method === 'GET' && url === '/api/slicer') {
     const printing = status.print_stats.state === 'printing' || status.print_stats.state === 'paused'
-    return json(res, 200, { ok: true, engine: { name: 'PrusaSlicer', installed: engine.installed, latest: engine.latest, update_available: !engine.installed || engine.installed !== engine.latest,
-      installing: engine.installing, install_error: null, can_install: true, arch: 'x86_64' }, host: { mem_total_mb: 15800, cpus: 8, small: false },
+    return json(res, 200, { ok: true, engine: { name: 'PrusaSlicer', source: 'Flathub', installed: engine.installed, latest: engine.latest,
+      update_available: !engineBlocked && (!engine.installed || engine.installed !== engine.latest),
+      installing: engine.installing, install_phase: engine.phase, install_error: null, can_install: !engineBlocked, blocked: engineBlocked,
+      previous: engine.previous, arch: process.env.MOCK_SMALL === '1' ? 'aarch64' : 'x86_64' },
+      host: { mem_total_mb: process.env.MOCK_SMALL === '1' ? 906 : 15800, cpus: process.env.MOCK_SMALL === '1' ? 4 : 8, small: process.env.MOCK_SMALL === '1' },
       busy: Object.values(sliceJobs).find((j) => j.state === 'running')?.id ?? null, refuse: printing && process.env.MOCK_SMALL === '1' ? 'This host has under 2 GB of memory.' : null }), true
   }
   if (req.method === 'GET' && url === '/api/slicer/keys') return json(res, engine.installed ? 200 : 400, engine.installed ? { ok: true, keys: prusaKeys } : { ok: false, error: 'not installed' }), true
@@ -874,10 +890,16 @@ async function portal(req: IncomingMessage, res: import('node:http').ServerRespo
     }
     if (url === '/api/slicer/engine/check') return json(res, 200, { ok: true }), true
     if (url === '/api/slicer/engine/update') {
-      engine.installing = true
-      console.log(`  ENGINE install ${engine.latest}`)
-      setTimeout(() => { engine.installed = engine.latest; engine.installing = false }, 4000)
+      if (engineBlocked) return json(res, 400, { ok: false, error: engineBlocked }), true
+      console.log(`  ENGINE install ${engine.latest} from Flathub`)
+      mockInstall(engine.latest, engine.installed)
       return json(res, 200, { ok: true, version: engine.latest }), true
+    }
+    if (url === '/api/slicer/engine/rollback') {
+      if (!engine.previous) return json(res, 400, { ok: false, error: "There's no earlier PrusaSlicer to go back to." }), true
+      console.log(`  ENGINE go back to ${engine.previous}`)
+      mockInstall(engine.previous, engine.installed)
+      return json(res, 200, { ok: true, version: engine.previous }), true
     }
   }
   if (req.method === 'GET' && url === '/api/state') return json(res, 200, portalFixture('state')), true

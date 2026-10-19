@@ -58,7 +58,7 @@ export const PORTAL_TOOL_SETUP = ['tool-lists'] as const
 export const PORTAL_HARDWARE = ['preview-hardware', 'hardware-save', 'hardware-delete'] as const
 /** The Rhino's network (config 1.4.8+). Each change switches back after a while unless kept. */
 /** PrusaSlicer on the Rhino (config 1.5.0+): slicing jobs and the engine's own updates. */
-export const PORTAL_SLICER = ['slice', 'slice-cancel', 'engine-check', 'engine-update'] as const
+export const PORTAL_SLICER = ['slice', 'slice-cancel', 'engine-check', 'engine-update', 'engine-rollback'] as const
 export const PORTAL_NETWORK = ['net-hostname', 'net-ipv4', 'net-wifi', 'net-powersave', 'net-keep', 'net-undo'] as const
 
 export type WriteKind =
@@ -120,6 +120,7 @@ export const WRITE_ROUTES: Record<WriteKind, { method: 'POST' | 'DELETE'; path: 
   'slice-cancel': { method: 'POST', path: /^\/api\/slicer\/jobs\/[\w-]+\/cancel$/ },
   'engine-check': { method: 'POST', path: /^\/api\/slicer\/engine\/check$/ },
   'engine-update': { method: 'POST', path: /^\/api\/slicer\/engine\/update$/ },
+  'engine-rollback': { method: 'POST', path: /^\/api\/slicer\/engine\/rollback$/ },
 }
 
 const ALLOWED = new Set<string>([
@@ -414,6 +415,10 @@ export class PortalClient {
   }
   updateEngine(): Promise<WriteResult> {
     return this.write('engine-update', 'POST', '/api/slicer/engine/update', {})
+  }
+  /** Put back the PrusaSlicer version from before the last update (Tool Manager 1.5.2+). */
+  rollbackEngine(): Promise<WriteResult> {
+    return this.write('engine-rollback', 'POST', '/api/slicer/engine/rollback', {})
   }
 
   /** Reads the token and version from the Portal's home page. */

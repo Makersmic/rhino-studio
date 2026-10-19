@@ -234,3 +234,8 @@ FDM jobs can slice with PrusaSlicer running on the Rhino host (through the Rhino
 Prepare shows every option on PrusaSlicer's Print, Filament and Printer tabs. The list, labels and tooltips in
 `src/slicer/prusa/schema.json` are generated from PrusaSlicer's own source (`scripts/prusa/make_schema.py`;
 PrusaSlicer is AGPL-3.0, © Prusa Research and the Slic3r authors). Kiri:Moto in the browser stays available.
+
+The engine comes from Flathub (Toolhead_Manager 1.5.2+; Prusa ships Linux builds nowhere else): the host needs
+`sudo apt install flatpak` once, by hand. Settings › Software installs it, shows each step, test-slices it, and
+offers **Go back** after an update. Hosts under 2 GB of memory (a Pi 3B) aren't offered it and say why. Try those
+states with the mock: `MOCK_SMALL=1`, `MOCK_FLATPAK=0`, `MOCK_PRUSA=0` (not installed).

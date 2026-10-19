@@ -28,6 +28,12 @@ export interface ExtraRow {
   action?: 'engine'
   actionLabel?: string
   busy?: boolean
+  /** what a running install is doing */
+  busyNote?: string | null
+  /** a version Studio can go back to */
+  back?: string | null
+  /** Studio can't install or update it on this host (`how` says why) */
+  blocked?: boolean
   error?: string | null
 }
 
@@ -166,10 +172,13 @@ export const useUpdatesStore = defineStore('updates', () => {
       installed: e?.installed ?? null,
       latest: e?.latest ?? null,
       needsUpdate: !!e?.update_available,
-      how: e ? '' : 'Needs Rhino Tool Manager 1.5.0 or later on the Rhino; install that first (row above).',
-      action: e ? 'engine' : undefined,
+      how: e ? (e.blocked ?? '') : 'Needs Rhino Tool Manager 1.5.0 or later on the Rhino; install that first (row above).',
+      action: e && (e.can_install || e.installing) ? 'engine' : undefined,
       actionLabel: e?.installed ? 'Update' : 'Install',
       busy: !!e?.installing,
+      busyNote: e?.installing ? e.install_phase ?? null : null,
+      back: e && e.can_install && !e.installing ? e.previous ?? null : null,
+      blocked: !!e?.blocked && !e.installing,
       error: e?.install_error ?? engineError.value,
     })
     if (!hasStudioOnPi.value)
@@ -307,7 +316,7 @@ export const useUpdatesStore = defineStore('updates', () => {
     }
   }
 
-  /** Install or update PrusaSlicer on the Rhino: the Portal downloads, unpacks and tests it, then switches. */
+  /** Install or update PrusaSlicer on the Rhino: the Portal installs it from Flathub, test-slices it, and goes back if that fails. */
   async function runEngine() {
     const c = useMaintenanceStore().portal()
     const e = engine.value?.engine
@@ -316,9 +325,10 @@ export const useUpdatesStore = defineStore('updates', () => {
     const ok = await useControlStore().confirm({
       title: `${e.installed ? 'Update' : 'Install'} PrusaSlicer ${e.latest ?? ''} on the Rhino?`,
       body:
-        'The Portal downloads the official Linux build from PrusaSlicer’s GitHub releases (about 100 MB), unpacks it at the lowest priority, ' +
-        'checks it starts, and only then switches to it. ' +
-        (e.installed ? `PrusaSlicer ${e.installed} is kept to go back to. ` : '') +
+        'The Portal installs Prusa’s official Linux build from Flathub at the lowest priority' +
+        (e.installed ? ', ' : ' (the first time it also brings the runtime it needs, a few hundred MB), ') +
+        'then slices a test cube with it. ' +
+        (e.installed ? `If the new version can’t slice, ${e.installed} is put back. ` : '') +
         'Klipper and Moonraker aren’t restarted.',
       confirmLabel: e.installed ? 'Update' : 'Install',
       tone: 'normal',
@@ -330,11 +340,37 @@ export const useUpdatesStore = defineStore('updates', () => {
       engineError.value = (err as Error).message
       return
     }
+    await waitEngine()
+  }
+
+  async function waitEngine() {
     await loadEngine()
-    for (let i = 0; i < 600 && engine.value?.engine.installing; i++) {
+    for (let i = 0; i < 1800 && engine.value?.engine.installing; i++) {
       await new Promise((r) => setTimeout(r, 2000))
       await loadEngine()
     }
+  }
+
+  /** Put back the PrusaSlicer from before the last update (it's test-sliced too). */
+  async function rollBackEngine() {
+    const c = useMaintenanceStore().portal()
+    const e = engine.value?.engine
+    if (!c || !e?.previous) return
+    if (jobActive.value) return (engineError.value = 'Not while a job is running')
+    const ok = await useControlStore().confirm({
+      title: `Go back to PrusaSlicer ${e.previous}?`,
+      body: `The Portal asks Flathub for ${e.previous} again, then slices a test cube with it. ${e.installed} can be put back the same way. Klipper and Moonraker aren’t restarted.`,
+      confirmLabel: 'Go back',
+      tone: 'normal',
+    })
+    if (!ok) return
+    try {
+      await c.rollbackEngine()
+    } catch (err) {
+      engineError.value = (err as Error).message
+      return
+    }
+    await waitEngine()
   }
 
   // Fresh numbers whenever the connection comes back
@@ -345,6 +381,6 @@ export const useUpdatesStore = defineStore('updates', () => {
 
   return {
     packages, extras, busy, loading, checkedAt, error, running, runPlan, doneSteps, progress, runError,
-    readyCount, runnableCount, byHandCount, engineCount, engine, runEngine, block, hasStudioOnPi, load, refresh, run, onStatus, onProgress,
+    readyCount, runnableCount, byHandCount, engineCount, engine, runEngine, rollBackEngine, block, hasStudioOnPi, load, refresh, run, onStatus, onProgress,
   }
 })

@@ -156,7 +156,7 @@ const engineNote = computed(() => {
   const st = prep.slicer
   if (prep.slicerError) return prep.slicerError
   if (!st) return 'Asking the Rhino Portal…'
-  if (!st.engine.installed) return 'Not installed on the Rhino yet: Settings > Software > PrusaSlicer engine.'
+  if (!st.engine.installed) return st.engine.blocked ?? 'Not installed on the Rhino yet: Settings > Software > PrusaSlicer engine.'
   if (st.refuse) return st.refuse
   return `PrusaSlicer ${st.engine.installed} on the Rhino${st.host.small ? ' (a small host: no slicing during a print)' : ''}.`
 })
