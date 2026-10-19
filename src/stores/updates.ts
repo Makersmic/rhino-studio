@@ -161,8 +161,8 @@ export const useUpdatesStore = defineStore('updates', () => {
       latest: latestTm.value,
       needsUpdate: newer(tmv, latestTm.value),
       how:
-        'The Tool Manager installs from its release zip, so the preview can check your machine first. Run BACKUP_CFG, upload ' +
-        `rhino-config-${latestTm.value ?? '<version>'}.zip in Mainsail (Machine), open rhino.sh and pick option 3, then FIRMWARE_RESTART.`,
+        `Download rhino-config-${latestTm.value ?? '<version>'}.zip and drop it on Install from zip, below: it backs up, installs and restarts Klipper. ` +
+        'Before 1.5.3 (no Install from zip yet): upload it in Mainsail (Machine), run rhino.sh option 3, then FIRMWARE_RESTART.',
     })
     const e = engine.value?.engine
     rows.push({

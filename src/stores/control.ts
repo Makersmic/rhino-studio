@@ -8,6 +8,7 @@
  */
 import { defineStore } from 'pinia'
 import { computed, ref, shallowRef, watch } from 'vue'
+import { speedScript, zStepScript, zResetScript, limitsScript, isTuningScript } from '@/control/tuning'
 import { approve, check, fromPrompt, heaterScript, jogScript, type Axis, type CheckedScript, type ScriptCheck } from '@/control/commands'
 import { PromptTracker, type Prompt, type PromptButton } from '@/control/prompts'
 import { checkStart, type StartCheck } from '@/control/jobs'
@@ -321,6 +322,47 @@ export const useControlStore = defineStore('control', () => {
   /** Flow and pressure advance: a print head and Klipper ready; live during a job */
   const tuneBlocked = computed(() => (!machine.klippyReady ? 'Klipper is not ready' : machine.toolKind !== 'print' ? 'Confirm a print head first' : null))
 
+  // ---- live tuning (src/control/tuning.ts): a red padlock, no per-tap asking --
+  const tuneUnlocked = ref(false)
+  const tuningBlock = computed(() => {
+    if (!machine.klippyReady) return 'Klipper is not ready'
+    if (machine.toolKind !== 'print') return 'Confirm a print head first'
+    return null
+  })
+  function lockTuning() {
+    tuneUnlocked.value = false
+  }
+  function unlockTuning() {
+    if (!tuningBlock.value) tuneUnlocked.value = true
+  }
+  watch(tuningBlock, (b) => b && lockTuning())
+  watch(() => machine.mountedName, lockTuning)
+
+  /** Unlocked is the confirmation; only scripts the tuning builders make go this way. */
+  async function sendTuning(script: string, label: string): Promise<boolean> {
+    if (!tuneUnlocked.value) return log('error', `${label}: unlock tuning first`), false
+    if (tuningBlock.value) return log('error', `${label}: ${tuningBlock.value}`), false
+    if (!isTuningScript(script)) return log('error', `${label}: not a tuning command`), false
+    const c = check(script, { jobActive: jobActive.value, macros: new Set(macros.value.keys()) })
+    const approved = approve(c, true)
+    log('sent', label)
+    try {
+      await machine.runChecked(approved)
+      return true
+    } catch (e) {
+      log('error', `${label}: ${(e as Error).message}`)
+      return false
+    }
+  }
+  function tuneBuilt(b: { script: string } | { error: string }, label: string) {
+    if ('error' in b) return log('error', `${label}: ${b.error}`), Promise.resolve(false)
+    return sendTuning(b.script, label)
+  }
+  const setSpeed = (p: number) => tuneBuilt(speedScript(p), `Speed ${Math.round(p)}%`)
+  const zStep = (d: number) => tuneBuilt(zStepScript(d, machine.zOffset, machine.position.homed), `Z offset ${d > 0 ? '+' : ''}${d} mm`)
+  const zReset = () => tuneBuilt(zResetScript(machine.zOffset, machine.position.homed), 'Z offset back to 0')
+  const setLimits = (v: number | null, a: number | null) => tuneBuilt(limitsScript(v, a), v != null ? `Velocity ${v} mm/s` : `Acceleration ${a} mm/s²`)
+
   async function setFlow(percent: number) {
     if (tuneBlocked.value) return log('error', `Flow not set: ${tuneBlocked.value}`), false
     const b = flowScript(percent)
@@ -562,6 +604,14 @@ export const useControlStore = defineStore('control', () => {
     feedBlocked,
     pathBlocked,
     tuneBlocked,
+    tuneUnlocked,
+    tuningBlock,
+    lockTuning,
+    unlockTuning,
+    setSpeed,
+    zStep,
+    zReset,
+    setLimits,
     setFlow,
     setPressureAdvance,
     feed,

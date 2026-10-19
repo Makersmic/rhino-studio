@@ -18,6 +18,7 @@ import WebcamPanel from '@/control/WebcamPanel.vue'
 import MacroPanel from '@/control/MacroPanel.vue'
 import ConsolePanel from '@/control/ConsolePanel.vue'
 import ExtruderPanel from '@/control/ExtruderPanel.vue'
+import TuningPanel from '@/control/TuningPanel.vue'
 import { useMachineStore } from '@/stores/machine'
 
 const machine = useMachineStore()
@@ -33,6 +34,7 @@ const machine = useMachineStore()
     <StatusStrip />
 
     <ExtruderPanel v-if="machine.toolKind === 'print'" />
+    <TuningPanel v-if="machine.toolKind === 'print'" />
 
     <div class="grid-a">
       <MotionPanel class="motion" />

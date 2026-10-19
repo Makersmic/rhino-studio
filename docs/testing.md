@@ -272,3 +272,29 @@ On the machine, Klipper ready, no job unless a row says so.
 | H4 | Reboot host, confirm | Host reboots, Studio reconnects within ~2 min. (Shut down: only if someone can switch it back on) | |
 | L1 | Settings → Logs | klippy.log first; the end of the file is shown, scrolled to the bottom; Download gets the whole file | The page freezes on a big log |
 | L2 | After a known error (e.g. a bad config line, restart) | "Last error in this part" shows the error block; Copy last error copies it | |
+
+## 0.6.2: Live tuning (red padlock)
+
+BlockOne mounted and confirmed, homed. Have a hand near Stop.
+
+| # | Do | Pass | Stop if |
+|---|---|---|---|
+| T1 | Control, tuning strip, padlock closed | Speed, Z and limit controls are faded and do nothing | Any of them sends a command |
+| T2 | Tap the red padlock | It opens (outlined); controls light up. Speed + → 105% in the strip and in Mainsail | |
+| T3 | Z: step 0.01, tap ↓ Closer twice | Z offset −0.020; the nozzle moves 0.02 mm down, nothing else moves | Anything other than Z moves, or a step larger than chosen |
+| T4 | Reset | Z offset back to +0.000, nozzle back up by the same amount | |
+| T5 | During a print: unlock, adjust speed and Z | Applied live, no dialogs; the print continues | The print stops or the head jumps |
+| T6 | Leave Control and come back | Padlock is closed again | It stays open |
+| T7 | Swap to the laser | Tuning strip disappears (print heads only) | |
+
+## 0.6.2: Install from zip (needs Tool Manager 1.5.3 on the Rhino)
+
+The first 1.5.3 install is by hand (rhino.sh option 3); these check the next ones.
+
+| # | Do | Pass | Stop if |
+|---|---|---|---|
+| Z1 | Settings → Software → Install from zip: drop a random .zip | "This isn't a Rhino Tool Manager release zip"; nothing kept, nothing installs | Anything installs |
+| Z2 | Drop rhino-config-<same version>.zip | Shows its version vs installed; Install button; nothing installs yet | It installs without pressing Install |
+| Z3 | Start a print, then press Install | Refused: a job is running | The install starts |
+| Z4 | No job: Install, confirm | Steps tick through; "The Portal is restarting" while it does; done, then Studio reloads itself. Klipper restarted (axes unhomed) | It stops with no reason shown |
+| Z5 | After Z4: Go back to <previous> | The previous version installs the same way | |

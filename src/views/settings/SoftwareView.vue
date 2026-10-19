@@ -15,6 +15,7 @@ import RsButton from '@/components/RsButton.vue'
 import { useUpdatesStore } from '@/stores/updates'
 import { useMachineStore } from '@/stores/machine'
 import { updatePlan } from '@/system/updates'
+import ZipUpdatePanel from '@/system/ZipUpdatePanel.vue'
 
 const up = useUpdatesStore()
 const machine = useMachineStore()
@@ -130,11 +131,13 @@ const libs = __BUILT_WITH__
           <ol class="steps quiet">
             <li>System packages</li><li>Moonraker</li><li>Config and helper repos</li><li>Klipper, restarted once</li><li>Web apps</li>
           </ol>
-          <span class="muted small">Up-to-date steps are skipped. Refused while a job runs. Mainsail isn't listed or updated here. The PrusaSlicer engine comes from Flathub and updates on its own button: it restarts nothing, and the version before can be put back. The Rhino Tool Manager installs from its zip with <code>rhino.sh</code>, so its preview can check the machine first; Rhino Studio comes in the same zip when it is served from the Rhino.</span>
+          <span class="muted small">Up-to-date steps are skipped. Refused while a job runs. Mainsail isn't listed or updated here. The PrusaSlicer engine comes from Flathub and updates on its own button: it restarts nothing, and the version before can be put back. The Rhino Tool Manager installs from its release zip (Install from zip, below; the first time with <code>rhino.sh</code>), and Rhino Studio comes in the same zip when it is served from the Rhino.</span>
         </div>
       </RsPanel>
 
-      <RsPanel title="Built with" index="02" panel-id="settings.builtwith" class="wide">
+      <ZipUpdatePanel />
+
+      <RsPanel title="Built with" index="03" panel-id="settings.builtwith" class="wide">
         <p class="muted small">The libraries in this build of Rhino Studio. They change only with a new Studio release, so there's nothing to update here.</p>
         <table class="pk">
           <thead><tr><th>Library</th><th>Version</th><th>Licence</th><th>Used for</th></tr></thead>

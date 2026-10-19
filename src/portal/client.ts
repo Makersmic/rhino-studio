@@ -45,6 +45,30 @@ import type { NetState, WifiNetwork } from '@/system/network'
 import type { SliceJobState, SlicerState } from '@/slicer/prusa/portal'
 import type { PortalState, PreviewResult, ToolDetail, ToolLists, ToolOptions, ToolSheetData, WriteResult } from '@/toolmgr/types'
 
+/** GET /api/update (Tool Manager 1.5.3+) */
+export interface UpdateRun {
+  state: 'idle' | 'running' | 'done' | 'failed'
+  zip?: string
+  version?: string
+  from_version?: string | null
+  step?: number
+  step_name?: string
+  steps?: string[]
+  error?: string | null
+  log?: string[]
+  started?: number
+  finished?: number | null
+  updated?: number
+}
+export interface UpdateState {
+  installed: string
+  /** the updater is set up on this Rhino (installed once by hand) */
+  helper: boolean
+  zips: { zip: string; version: string; size: number; at: number }[]
+  busy: boolean
+  status: UpdateRun
+}
+
 export const PORTAL_WRITES = ['done', 'snooze'] as const
 export const PORTAL_TOOL_CHECKS = ['tool-check', 'preview-control', 'preview-macro'] as const
 export const PORTAL_TOOL_WRITES = ['tool-add', 'tool-edit', 'tool-rename', 'tool-delete', 'photo-add', 'photo-delete'] as const
@@ -59,6 +83,8 @@ export const PORTAL_HARDWARE = ['preview-hardware', 'hardware-save', 'hardware-d
 /** The Rhino's network (config 1.4.8+). Each change switches back after a while unless kept. */
 /** PrusaSlicer on the Rhino (config 1.5.0+): slicing jobs and the engine's own updates. */
 export const PORTAL_SLICER = ['slice', 'slice-cancel', 'engine-check', 'engine-update', 'engine-rollback'] as const
+/** Install a Tool Manager release zip through the root-owned updater (config 1.5.3+). */
+export const PORTAL_UPDATE = ['update-upload', 'update-install'] as const
 export const PORTAL_NETWORK = ['net-hostname', 'net-ipv4', 'net-wifi', 'net-powersave', 'net-keep', 'net-undo'] as const
 
 export type WriteKind =
@@ -72,6 +98,7 @@ export type WriteKind =
   | (typeof PORTAL_HARDWARE)[number]
   | (typeof PORTAL_NETWORK)[number]
   | (typeof PORTAL_SLICER)[number]
+  | (typeof PORTAL_UPDATE)[number]
 
 /** The one request each write kind may make. */
 export const WRITE_ROUTES: Record<WriteKind, { method: 'POST' | 'DELETE'; path: RegExp }> = {
@@ -121,11 +148,13 @@ export const WRITE_ROUTES: Record<WriteKind, { method: 'POST' | 'DELETE'; path: 
   'engine-check': { method: 'POST', path: /^\/api\/slicer\/engine\/check$/ },
   'engine-update': { method: 'POST', path: /^\/api\/slicer\/engine\/update$/ },
   'engine-rollback': { method: 'POST', path: /^\/api\/slicer\/engine\/rollback$/ },
+  'update-upload': { method: 'POST', path: /^\/api\/update\/upload$/ },
+  'update-install': { method: 'POST', path: /^\/api\/update\/install$/ },
 }
 
 const ALLOWED = new Set<string>([
   ...PORTAL_WRITES, ...PORTAL_TOOL_CHECKS, ...PORTAL_TOOL_WRITES, ...PORTAL_RESTART,
-  ...PORTAL_CARE_WRITES, ...PORTAL_CARE_SETUP, ...PORTAL_TOOL_SETUP, ...PORTAL_HARDWARE, ...PORTAL_NETWORK, ...PORTAL_SLICER,
+  ...PORTAL_CARE_WRITES, ...PORTAL_CARE_SETUP, ...PORTAL_TOOL_SETUP, ...PORTAL_HARDWARE, ...PORTAL_NETWORK, ...PORTAL_SLICER, ...PORTAL_UPDATE,
 ])
 const enc = encodeURIComponent
 
@@ -419,6 +448,22 @@ export class PortalClient {
   /** Put back the PrusaSlicer version from before the last update (Tool Manager 1.5.2+). */
   rollbackEngine(): Promise<WriteResult> {
     return this.write('engine-rollback', 'POST', '/api/slicer/engine/rollback', {})
+  }
+
+  // ---- install a release zip (config 1.5.3+) ----------------------------------
+
+  async updateState(): Promise<UpdateState> {
+    return this.getJson<UpdateState & { ok: boolean }>('/api/update')
+  }
+  /** Upload a rhino-config-<version>.zip; the Portal checks and keeps it. Nothing is installed yet. */
+  uploadUpdate(zip: File): Promise<{ ok: boolean; zip: string; version: string; installed: string }> {
+    const f = new FormData()
+    f.append('zip', zip, zip.name)
+    return this.write('update-upload', 'POST', '/api/update/upload', f)
+  }
+  /** Ask the root-owned updater to install a kept zip (also how "Go back" works). */
+  installUpdate(zip: string): Promise<WriteResult> {
+    return this.write('update-install', 'POST', '/api/update/install', { zip })
   }
 
   /** Reads the token and version from the Portal's home page. */

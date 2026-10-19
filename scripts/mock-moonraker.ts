@@ -68,7 +68,7 @@ const status: Record<string, Record<string, unknown>> = {
   webhooks: { state: 'ready', state_message: 'Printer is ready' },
   print_stats: { state: 'standby', filename: '', message: '', print_duration: 0 },
   virtual_sdcard: { progress: 0, is_active: false },
-  toolhead: { position: [120.0, 85.5, 12.3, 0], homed_axes: 'xyz', axis_minimum: [0, 0, -5, 0], axis_maximum: [576, 406, 300, 0] },
+  toolhead: { position: [120.0, 85.5, 12.3, 0], homed_axes: 'xyz', axis_minimum: [0, 0, -5, 0], axis_maximum: [576, 406, 300, 0], max_velocity: 300, max_accel: 3000 },
   gcode_move: { gcode_position: [120.0, 85.5, 12.3, 0], homing_origin: [0, 0, 0, 0], speed_factor: 1, extrude_factor: 1, absolute_coordinates: true },
   pause_resume: { is_paused: false },
   idle_timeout: { state: 'Idle' },
@@ -364,6 +364,22 @@ function runLine(raw: string) {
     case 'M82':
     case 'M83':
       return
+    case 'M220':
+      update('gcode_move', { speed_factor: Number(/S([\d.]+)/i.exec(line)?.[1] ?? 100) / 100 })
+      return
+    case 'SET_GCODE_OFFSET': {
+      const o = [...((status.gcode_move.homing_origin as number[]) ?? [0, 0, 0, 0])]
+      const adj = arg(line, 'Z_ADJUST'), z = arg(line, 'Z')
+      if (adj != null) o[2] = Number((o[2]! + Number(adj)).toFixed(4))
+      else if (z != null) o[2] = Number(z)
+      update('gcode_move', { homing_origin: o })
+      return
+    }
+    case 'SET_VELOCITY_LIMIT': {
+      const v = arg(line, 'VELOCITY'), a = arg(line, 'ACCEL')
+      update('toolhead', { ...(v != null ? { max_velocity: Number(v) } : {}), ...(a != null ? { max_accel: Number(a) } : {}) })
+      return
+    }
     case 'M221':
       update('gcode_move', { extrude_factor: Number(/S([\d.]+)/i.exec(line)?.[1] ?? 100) / 100 })
       return
@@ -861,12 +877,71 @@ function multipart(req: IncomingMessage): Promise<Record<string, string>> {
   })
 }
 
+// ---- install a release zip (Tool Manager 1.5.3): pretend updater -------------
+// MOCK_UPDATER=0: the updater isn't set up yet (Tool Manager before 1.5.3 on the Rhino)
+const UPD_STEPS = ['Checking the zip', 'Checking no job runs', 'Backing up the config (BACKUP_CFG)', 'Unpacking', 'Installing', 'Restarting Klipper (FIRMWARE_RESTART)']
+const upd = {
+  installed: process.env.MOCK_TM_VERSION ?? '1.5.2',
+  zips: [{ zip: 'rhino-config-1.5.1.zip', version: '1.5.1', size: 5_100_000, at: Date.now() / 1000 - 86400 * 9 }] as { zip: string; version: string; size: number; at: number }[],
+  status: { state: 'idle' } as Record<string, unknown>,
+  restartingUntil: 0,
+}
+function updRun(zip: string) {
+  const version = /rhino-config-([\d.]+)\.zip/.exec(zip)![1]!
+  const log: string[] = []
+  upd.status = { state: 'running', zip, version, from_version: upd.installed, steps: UPD_STEPS, step: 0, step_name: UPD_STEPS[0], started: Date.now() / 1000, updated: Date.now() / 1000, log, error: null, finished: null }
+  let i = 0
+  const lines = ['Zip checked: Rhino Tool Manager ' + version, 'No job running (standby)', 'BACKUP_CFG done', 'Unpacked', '[1] Checking this Pi\n   OK   config folder\n[2] Backing up your config folder\n   OK   backup: ~/rhino-backup-2026-10-19-1840\n[3] Copying the new files\n   OK   files copied\n[4] Starting the portal as a service', 'FIRMWARE_RESTART sent']
+  const tick = () => {
+    log.push(...lines[i]!.split('\n'))
+    i++
+    if (i === 5) upd.restartingUntil = Date.now() + 3500 // the Portal restarts during the install
+    if (i >= UPD_STEPS.length) {
+      const keep = upd.installed
+      upd.installed = version
+      upd.zips = upd.zips.filter((z) => z.version === version || z.version === keep)
+      upd.status = { ...upd.status, state: 'done', step: UPD_STEPS.length, finished: Date.now() / 1000, updated: Date.now() / 1000 }
+      return
+    }
+    upd.status = { ...upd.status, step: i, step_name: UPD_STEPS[i], updated: Date.now() / 1000 }
+    setTimeout(tick, 1500)
+  }
+  setTimeout(tick, 1200)
+}
+
 async function portal(req: IncomingMessage, res: import('node:http').ServerResponse, url: string): Promise<boolean> {
   if (req.method === 'GET' && url === '/') {
     res.writeHead(200, { 'content-type': 'text/html' }).end(
       `<!doctype html><html><head><meta name="rhino-token" content="${PORTAL_TOKEN}"></head><body><p class="version">v${TM_VERSION}</p></body></html>`,
     )
     return true
+  }
+  if (url.startsWith('/api/update')) {
+    if (process.env.MOCK_UPDATER === 'old') return json(res, 404, { ok: false, error: 'Not found' }), true
+    if (Date.now() < upd.restartingUntil) return res.writeHead(502).end(), true
+    const busy = upd.status.state === 'running'
+    if (req.method === 'GET' && url === '/api/update') return json(res, 200, { ok: true, installed: upd.installed, helper: process.env.MOCK_UPDATER !== '0', zips: upd.zips, busy, status: upd.status }), true
+    if (req.headers['x-rhino-token'] !== PORTAL_TOKEN) return json(res, 400, { ok: false, error: 'This page is out of date (the portal was restarted). Reload the page and try again.' }), true
+    if (req.method === 'POST' && url === '/api/update/upload') {
+      const chunks: Buffer[] = []
+      for await (const d of req) chunks.push(d as Buffer)
+      const name = /filename="([^"]+)"/.exec(Buffer.concat(chunks).toString('latin1'))?.[1] ?? ''
+      const v = /rhino-config-(\d+\.\d+\.\d+)\.zip$/.exec(name)?.[1]
+      if (busy) return json(res, 400, { ok: false, error: 'An install is running. Wait for it to finish.' }), true
+      if (!v) return json(res, 400, { ok: false, error: "This isn't a Rhino Tool Manager release zip (missing VERSION, install.sh, rhino.sh)." }), true
+      const zip = `rhino-config-${v}.zip`
+      upd.zips = [...upd.zips.filter((z) => z.zip !== zip), { zip, version: v, size: chunks.reduce((n, c) => n + c.length, 0), at: Date.now() / 1000 }]
+      return json(res, 200, { ok: true, zip, version: v, installed: upd.installed }), true
+    }
+    if (req.method === 'POST' && url === '/api/update/install') {
+      const body = await readBody(req)
+      if (process.env.MOCK_UPDATER === '0') return json(res, 400, { ok: false, error: "The updater isn't set up on this Rhino yet." }), true
+      if (busy) return json(res, 400, { ok: false, error: 'An install is already running.' }), true
+      if (status.print_stats.state === 'printing' || status.print_stats.state === 'paused') return json(res, 400, { ok: false, error: 'A job is running. Finish or cancel it first.' }), true
+      if (!upd.zips.some((z) => z.zip === body.zip)) return json(res, 400, { ok: false, error: "That zip isn't here. Upload it again." }), true
+      updRun(String(body.zip))
+      return json(res, 200, { ok: true, zip: body.zip }), true
+    }
   }
   if (req.method === 'GET' && url === '/api/maint') return json(res, 200, maint), true
   if (req.method === 'GET' && url === '/api/maint/history') return json(res, 200, maintHistory), true

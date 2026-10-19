@@ -197,6 +197,13 @@ export const useMachineStore = defineStore('machine', () => {
     return Array.isArray(o) && (o as number[]).slice(0, 3).some((v) => Math.abs(v) > 0.001)
   })
   const speedFactor = computed(() => num(status.value.gcode_move?.speed_factor))
+  /** The Z offset now (baby-steps), from gcode_move.homing_origin */
+  const zOffset = computed(() => {
+    const o = status.value.gcode_move?.homing_origin
+    return Array.isArray(o) && typeof o[2] === 'number' ? (o[2] as number) : null
+  })
+  /** Current velocity and acceleration limits (SET_VELOCITY_LIMIT changes them until a restart) */
+  const motionLimits = computed(() => ({ velocity: num(status.value.toolhead?.max_velocity), accel: num(status.value.toolhead?.max_accel) }))
   /** Flow, pressure advance, can_extrude and the SwitchFly path (src/control/extruder.ts) */
   const extruder = computed<ExtruderStatus>(() => readExtruder(status.value as never))
 
@@ -337,6 +344,8 @@ export const useMachineStore = defineStore('machine', () => {
     workPosition,
     hasWorkOffset,
     speedFactor,
+    zOffset,
+    motionLimits,
     extruder,
     outputs,
     toolKind,
