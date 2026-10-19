@@ -14,15 +14,21 @@ import { useMachineStore } from './machine'
 import { useControlStore } from './control'
 import { useMaintenanceStore } from './maintenance'
 import { brand } from '@/brand/brand'
+import type { SlicerState } from '@/slicer/prusa/portal'
 
 export interface ExtraRow {
-  name: 'rhino-tool-manager' | 'rhino-studio-pc'
+  name: 'rhino-tool-manager' | 'rhino-studio-pc' | 'prusaslicer'
   label: string
   note: string
   installed: string | null
   latest: string | null
   needsUpdate: boolean
   how: string
+  /** Studio can run it (through the Portal): the button acts instead of showing `how` */
+  action?: 'engine'
+  actionLabel?: string
+  busy?: boolean
+  error?: string | null
 }
 
 /** Public raw files: the latest released version of each Rhino repo. */
@@ -47,6 +53,20 @@ export const useUpdatesStore = defineStore('updates', () => {
   const latestTm = ref<string | null>(null)
   const latestStudio = ref<string | null>(null)
   const tmVersion = ref<string | null>(null)
+  /** PrusaSlicer on the Rhino (Portal 1.5.0+); null = this Portal doesn't have it */
+  const engine = shallowRef<SlicerState | null>(null)
+  const engineError = ref<string | null>(null)
+  async function loadEngine() {
+    const c = useMaintenanceStore().portal()
+    if (!c) return
+    try {
+      engine.value = await c.slicerState()
+      engineError.value = null
+    } catch (e) {
+      engine.value = null
+      engineError.value = /404|not found/i.test((e as Error).message) ? null : (e as Error).message
+    }
+  }
   const hasStudioOnPi = computed(() => packages.value.some((p) => p.name === 'rhino-studio'))
 
   function onStatus(st: unknown) {
@@ -90,6 +110,7 @@ export const useUpdatesStore = defineStore('updates', () => {
 
   async function loadLatest() {
     void loadTm()
+    void loadEngine()
     const get = async (url: string) => {
       try {
         const r = await fetch(url, { cache: 'no-store' })
@@ -137,6 +158,20 @@ export const useUpdatesStore = defineStore('updates', () => {
         'The Tool Manager installs from its release zip, so the preview can check your machine first. Run BACKUP_CFG, upload ' +
         `rhino-config-${latestTm.value ?? '<version>'}.zip in Mainsail (Machine), open rhino.sh and pick option 3, then FIRMWARE_RESTART.`,
     })
+    const e = engine.value?.engine
+    rows.push({
+      name: 'prusaslicer',
+      label: 'PrusaSlicer engine',
+      note: e ? `Slicing on the Rhino · ${engine.value!.host.cpus} cores, ${Math.round(engine.value!.host.mem_total_mb / 1024)} GB` : 'Slicing on the Rhino',
+      installed: e?.installed ?? null,
+      latest: e?.latest ?? null,
+      needsUpdate: !!e?.update_available,
+      how: e ? '' : 'Needs Rhino Tool Manager 1.5.0 or later on the Rhino; install that first (row above).',
+      action: e ? 'engine' : undefined,
+      actionLabel: e?.installed ? 'Update' : 'Install',
+      busy: !!e?.installing,
+      error: e?.install_error ?? engineError.value,
+    })
     if (!hasStudioOnPi.value)
       rows.push({
         name: 'rhino-studio-pc',
@@ -152,7 +187,8 @@ export const useUpdatesStore = defineStore('updates', () => {
 
   /** Updates Studio can run (Moonraker); the rest are installed by hand */
   const runnableCount = computed(() => packages.value.filter((p) => p.needsUpdate).length)
-  const byHandCount = computed(() => extras.value.filter((r) => r.needsUpdate).length)
+  const byHandCount = computed(() => extras.value.filter((r) => r.needsUpdate && !r.action).length)
+  const engineCount = computed(() => extras.value.filter((r) => r.needsUpdate && r.action).length)
   const readyCount = computed(() => packages.value.filter((p) => p.needsUpdate).length + extras.value.filter((r) => r.needsUpdate).length)
   const jobActive = computed(() => machine.job.state === 'printing' || machine.job.state === 'paused')
   const block = computed(() => updateBlock({ online: machine.online, jobActive: jobActive.value, busy: busy.value, running: !!running.value }))
@@ -257,6 +293,36 @@ export const useUpdatesStore = defineStore('updates', () => {
     }
   }
 
+  /** Install or update PrusaSlicer on the Rhino: the Portal downloads, unpacks and tests it, then switches. */
+  async function runEngine() {
+    const c = useMaintenanceStore().portal()
+    const e = engine.value?.engine
+    if (!c || !e) return
+    if (jobActive.value) return (engineError.value = 'Not while a job is running')
+    const ok = await useControlStore().confirm({
+      title: `${e.installed ? 'Update' : 'Install'} PrusaSlicer ${e.latest ?? ''} on the Rhino?`,
+      body:
+        'The Portal downloads the official Linux build from PrusaSlicer’s GitHub releases (about 100 MB), unpacks it at the lowest priority, ' +
+        'checks it starts, and only then switches to it. ' +
+        (e.installed ? `PrusaSlicer ${e.installed} is kept to go back to. ` : '') +
+        'Klipper and Moonraker aren’t restarted.',
+      confirmLabel: e.installed ? 'Update' : 'Install',
+      tone: 'normal',
+    })
+    if (!ok) return
+    try {
+      await c.updateEngine()
+    } catch (err) {
+      engineError.value = (err as Error).message
+      return
+    }
+    await loadEngine()
+    for (let i = 0; i < 600 && engine.value?.engine.installing; i++) {
+      await new Promise((r) => setTimeout(r, 2000))
+      await loadEngine()
+    }
+  }
+
   // Fresh numbers whenever the connection comes back
   watch(
     () => machine.online,
@@ -265,6 +331,6 @@ export const useUpdatesStore = defineStore('updates', () => {
 
   return {
     packages, extras, busy, loading, checkedAt, error, running, runPlan, doneSteps, progress, runError,
-    readyCount, runnableCount, byHandCount, block, hasStudioOnPi, load, refresh, run, onStatus, onProgress,
+    readyCount, runnableCount, byHandCount, engineCount, engine, runEngine, block, hasStudioOnPi, load, refresh, run, onStatus, onProgress,
   }
 })

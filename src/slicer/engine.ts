@@ -52,7 +52,7 @@ export async function loadModelFile(file: File): Promise<Array<{ vertices: Float
   return k.loadModel(await file.arrayBuffer(), file.name)
 }
 
-export type Phase = 'Loading the engine' | 'Slicing' | 'Planning the paths' | 'Writing G-code'
+export type Phase = 'Loading the engine' | 'Slicing' | 'Planning the paths' | 'Writing G-code' | 'Sending to the Rhino' | 'Waiting for the slicer' | 'Slicing on the Rhino' | 'Fetching the file'
 
 /** Slice one part (already turned, scaled and centred) and return Kiri's G-code. */
 export async function runKiri(vertices: Float32Array, job: KiriJob, onPhase: (p: Phase, fraction?: number) => void, timeoutMs = 300_000): Promise<string> {

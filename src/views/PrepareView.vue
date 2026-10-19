@@ -21,6 +21,8 @@ import NumField from '@/prepare/NumField.vue'
 import StepBar from '@/prepare/StepBar.vue'
 import FdmAdvanced from '@/prepare/FdmAdvanced.vue'
 import FoldGroup from '@/prepare/FoldGroup.vue'
+import PrusaPanel from '@/prepare/PrusaPanel.vue'
+import { rhinoBase, firstOf } from '@/slicer/prusa/config'
 import CncOps from '@/prepare/CncOps.vue'
 import ToolCard from '@/prepare/ToolCard.vue'
 import { PROCESS_ACTION, PROCESS_LABEL, prettyMaterial, toolFacts } from '@/prepare/facts'
@@ -132,13 +134,39 @@ function rotate(by: number) {
 function openInFiles() {
   if (prep.sentPath) void router.push({ path: '/files', query: { file: prep.sentPath } })
 }
+
+// ---- PrusaSlicer options: keep only what differs from the Rhino profile -------------
+function setPrusa(key: string, value: string | null) {
+  const j = prep.job
+  const sch = prep.schema
+  const ctx = prep.rhinoCtx
+  if (!j || !sch || !ctx) return
+  const next = { ...(j.prusa ?? {}) }
+  delete next[key]
+  if (value !== null) {
+    const base = rhinoBase(ctx)[key] ?? firstOf(sch.options[key]?.default ?? '', sch.options[key]?.type)
+    if (value !== base) next[key] = value
+  }
+  j.prusa = next
+}
+function resetPrusa() {
+  if (prep.job) prep.job.prusa = {}
+}
+const engineNote = computed(() => {
+  const st = prep.slicer
+  if (prep.slicerError) return prep.slicerError
+  if (!st) return 'Asking the Rhino Portal…'
+  if (!st.engine.installed) return 'Not installed on the Rhino yet: Settings > Software > PrusaSlicer engine.'
+  if (st.refuse) return st.refuse
+  return `PrusaSlicer ${st.engine.installed} on the Rhino${st.host.small ? ' (a small host: no slicing during a print)' : ''}.`
+})
 </script>
 
 <template>
   <div class="view" @dragover.prevent="prep.step !== 'setup' && (dragging = true)" @dragleave.self="dragging = false" @drop.prevent="onDrop">
     <div class="view-head">
       <h1>Job setup</h1>
-      <p>Drop in a model or drawing, confirm what the Rhino should do with it, then place it, set it up and send it. Everything is worked out on this computer; the Pi only receives the finished job.</p>
+      <p>Drop in a model or drawing, confirm what the Rhino should do with it, then place it, set it up and send it. 3D models can be sliced by PrusaSlicer on the Rhino or by Kiri:Moto in this browser; everything else is worked out on this computer. Every file is checked before it goes to the Rhino.</p>
     </div>
 
     <input ref="picker" type="file" :accept="accepts" class="visually-hidden" aria-label="Choose a model file" @change="pick(($event.target as HTMLInputElement).files)" />
@@ -326,7 +354,20 @@ function openInFiles() {
 
         <!-- settings -->
         <RsPanel v-if="job && !up" panel-id="prepare.settings" title="Settings" :status="proc ? processWord[proc] : undefined">
-          <div v-if="proc === 'fdm'" class="grid">
+          <!-- FDM: which engine slices -->
+          <div v-if="proc === 'fdm'" class="engine">
+            <fieldset class="eng-seg" aria-label="Slicing engine">
+              <label><input v-model="job.engine" type="radio" name="prep-engine" value="prusa" class="visually-hidden" /><span>PrusaSlicer <small>on the Rhino</small></span></label>
+              <label><input v-model="job.engine" type="radio" name="prep-engine" value="kiri" class="visually-hidden" /><span>Kiri:Moto <small>in this browser</small></span></label>
+            </fieldset>
+            <p v-if="job.engine === 'prusa'" class="muted small">{{ engineNote }}<template v-if="prep.slicer && !prep.slicer.engine.installed"> <RouterLink to="/settings/software">Open Software</RouterLink></template></p>
+          </div>
+          <template v-if="proc === 'fdm' && job.engine === 'prusa'">
+            <PrusaPanel v-if="prep.schema && prep.rhinoCtx" :schema="prep.schema" :ctx="prep.rhinoCtx" @set="setPrusa" @reset-all="resetPrusa" />
+            <p v-else-if="prep.schemaError" class="error">{{ prep.schemaError }}</p>
+            <p v-else class="muted small">Loading PrusaSlicer’s options…</p>
+          </template>
+          <div v-if="proc === 'fdm' && job.engine !== 'prusa'" class="grid">
             <NumField v-model="job.fdm.layerHeight" label="Layer height" unit="mm" :min="0.04" :max="job.fdm.nozzle * 0.8" :step="0.04" />
             <NumField v-model="job.fdm.firstLayer" label="First layer" unit="mm" :min="0.08" :max="job.fdm.nozzle" :step="0.04" />
             <NumField v-model="job.fdm.walls" label="Walls" :min="1" :max="20" />
@@ -350,7 +391,7 @@ function openInFiles() {
             <label class="check"><input v-model="job.fdm.supports" type="checkbox" /> Supports</label>
             <p v-if="job.toolhead === 'SwitchFly'" class="muted small wide">Filament path {{ job.fdm.path === 1 ? '2 (T1)' : '1 (T0)' }}, from the material.</p>
           </div>
-          <FdmAdvanced v-if="proc === 'fdm'" :fdm="job.fdm" />
+          <FdmAdvanced v-if="proc === 'fdm' && job.engine !== 'prusa'" :fdm="job.fdm" />
 
           <div v-else-if="proc === 'laser'" class="grid">
             <NumField v-model="job.laser.power" label="Power" unit="%" :min="0.01" :max="1" :step="0.05" percent :hint="`S ${Math.round(job.laser.power * prep.machineInfo.laserSMax)} of ${prep.machineInfo.laserSMax}`" />
@@ -456,6 +497,14 @@ function openInFiles() {
 </template>
 
 <style scoped>
+.engine { display: flex; flex-direction: column; gap: 6px; margin-bottom: var(--rs-space-3); }
+.eng-seg { display: flex; margin: 0; padding: 0; border: 1px solid var(--rs-line-strong); border-radius: var(--rs-radius-md); overflow: hidden; }
+.eng-seg label { flex: 1; }
+.eng-seg label + label span { border-left: 1px solid var(--rs-line-strong); }
+.eng-seg span { display: flex; flex-direction: column; justify-content: center; height: 44px; padding: 0 12px; cursor: pointer; font-weight: var(--rs-weight-medium); font-size: var(--rs-text-sm); color: var(--rs-text-muted); }
+.eng-seg small { font-size: 11px; font-weight: 400; }
+.eng-seg input:checked + span { background: var(--rs-ink); color: var(--rs-on-ink); }
+.eng-seg input:focus-visible + span { box-shadow: var(--rs-focus); }
 .layout { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(320px, 1fr); gap: var(--rs-gap); align-items: start; }
 .side { display: flex; flex-direction: column; gap: var(--rs-gap); min-width: 0; }
 @media (max-width: 1100px) { .layout { grid-template-columns: minmax(0, 1fr); } }

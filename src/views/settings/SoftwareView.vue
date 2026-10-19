@@ -32,6 +32,7 @@ const summary = computed(() => {
   if (!machine.online) return 'Not connected to the machine'
   const parts = []
   if (up.runnableCount) parts.push(`${up.runnableCount} update${up.runnableCount > 1 ? 's' : ''} ready`)
+  if (up.engineCount) parts.push('PrusaSlicer update ready')
   if (up.byHandCount) parts.push(`${up.byHandCount} to install by hand`)
   return parts.length ? parts.join(' · ') : 'Everything is up to date'
 })
@@ -94,13 +95,19 @@ const libs = __BUILT_WITH__
                 <td class="mono">{{ r.installed ?? '?' }}</td>
                 <td class="mono">{{ r.latest ?? 'Can’t check' }}</td>
                 <td class="st">
-                  <button v-if="r.needsUpdate" type="button" class="upd" :aria-expanded="open === r.name" @click="open = open === r.name ? null : r.name">Update</button>
+                  <button v-if="r.action && (r.needsUpdate || !r.installed)" type="button" class="upd" :disabled="r.busy || !!up.block" :title="up.block ?? ''" @click="up.runEngine()">
+                    {{ r.busy ? 'Installing…' : r.actionLabel }}
+                  </button>
+                  <button v-else-if="r.needsUpdate" type="button" class="upd" :aria-expanded="open === r.name" @click="open = open === r.name ? null : r.name">Update</button>
                   <span v-else-if="r.latest && r.installed" class="chip">Up to date</span>
                   <span v-else class="chip quiet">—</span>
                 </td>
               </tr>
-              <tr v-if="open === r.name" class="how">
+              <tr v-if="open === r.name || (!r.action && r.how && !r.installed && r.name === 'prusaslicer')" class="how">
                 <td colspan="4">{{ r.how }}</td>
+              </tr>
+              <tr v-if="r.error" class="how">
+                <td colspan="4">{{ r.error }}</td>
               </tr>
             </template>
             <tr v-if="!up.packages.length && machine.online && !up.loading">
@@ -114,7 +121,7 @@ const libs = __BUILT_WITH__
           <ol class="steps quiet">
             <li>System packages</li><li>Moonraker</li><li>Config and helper repos</li><li>Klipper, restarted once</li><li>Web apps</li>
           </ol>
-          <span class="muted small">Up-to-date steps are skipped. Refused while a job runs. Mainsail isn't listed or updated here. The Rhino Tool Manager installs from its zip with <code>rhino.sh</code>, so its preview can check the machine first.</span>
+          <span class="muted small">Up-to-date steps are skipped. Refused while a job runs. Mainsail isn't listed or updated here. The PrusaSlicer engine updates on its own button: it restarts nothing, and the version before is kept. The Rhino Tool Manager installs from its zip with <code>rhino.sh</code>, so its preview can check the machine first.</span>
         </div>
       </RsPanel>
 

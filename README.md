@@ -218,3 +218,10 @@ Third-party pieces in use:
 | Kiri:Moto engine, GridSpace grid-apps 4.7.0 (bundled in `public/kiri/`, built by `scripts/kiri/build.mjs` with two path fixes, licence alongside) | MIT |
 
 The mock's camera frames (`scripts/fixtures/webcam/`) were rendered for this project with three.js (MIT); three.js itself isn't part of the app.
+
+## PrusaSlicer
+
+FDM jobs can slice with PrusaSlicer running on the Rhino host (through the Rhino Portal, Toolhead_Manager 1.5.0+).
+Prepare shows every option on PrusaSlicer's Print, Filament and Printer tabs. The list, labels and tooltips in
+`src/slicer/prusa/schema.json` are generated from PrusaSlicer's own source (`scripts/prusa/make_schema.py`;
+PrusaSlicer is AGPL-3.0, © Prusa Research and the Slic3r authors). Kiri:Moto in the browser stays available.
