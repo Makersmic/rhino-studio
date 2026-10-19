@@ -132,7 +132,10 @@ export function normalizeJob(j: PrepareJob): PrepareJob {
     cnc.ops = j.cnc?.operation === 'clear-and-cutout' ? [{ ...newOp('rough'), stepDown: cnc.stepDown, stepOver: cnc.stepOver }, { ...newOp('outline'), stepDown: cnc.stepDown }] : [{ ...newOp('outline'), stepDown: cnc.stepDown }]
   } else cnc.ops = cnc.ops.filter((o) => ['level', 'rough', 'outline'].includes(o?.kind)).map((o) => fill(newOp(o.kind), o))
   delete cnc.operation
-  return { ...j, fdm: fill(DEFAULT_FDM, j.fdm), laser: fill(DEFAULT_LASER, j.laser), knife: fill(DEFAULT_KNIFE, j.knife), cnc }
+  const prusa: Record<string, string> = {}
+  if (isObj(j.prusa)) for (const [k, v] of Object.entries(j.prusa)) if (/^\w{1,64}$/.test(k) && typeof v === 'string' && !/[\r\n]/.test(v)) prusa[k] = v
+  const engine = j.engine === 'prusa' || j.engine === 'kiri' ? j.engine : 'kiri'
+  return { ...j, engine, prusa, fdm: fill(DEFAULT_FDM, j.fdm), laser: fill(DEFAULT_LASER, j.laser), knife: fill(DEFAULT_KNIFE, j.knife), cnc }
 }
 
 /** Fallback when Klipper isn't connected: the shipped variables.cfg tables, trimmed. */
@@ -215,6 +218,8 @@ export function newJob(tool: string, process: Process, materials: Material[]): P
     toolhead: tool,
     process,
     material: materials[0]?.key ?? '',
+    engine: 'prusa',
+    prusa: {},
     fdm: { ...DEFAULT_FDM },
     laser: { ...DEFAULT_LASER },
     knife: { ...DEFAULT_KNIFE },

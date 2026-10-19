@@ -2,7 +2,11 @@
  * Prepare: one part, one toolhead, one job file at a time.
  *
  *   load a model  ->  pick the toolhead and material  ->  place it  ->
- *   Prepare (Kiri:Moto in this browser)  ->  checks  ->  Send to the Pi
+ *   Prepare  ->  checks  ->  Send to the Pi
+ *
+ * FDM slices with PrusaSlicer on the Rhino (through the Portal, every PrusaSlicer
+ * option; src/slicer/prusa) or Kiri:Moto in this browser; laser, knife and CNC
+ * use Kiri:Moto.
  *
  * A ready-made G-code file (sliced in Orca, LightBurn, Fusion...) takes the same
  * steps without the slicing: Studio reads which toolhead it's for, you confirm
@@ -25,6 +29,9 @@ import { FLAT_TYPES, extOf, merge, partInfo, transform } from '@/slicer/model'
 import { DEFAULT_MACHINE, type MachineInfo, type PartInfo, type PrepareJob, type Process } from '@/slicer/types'
 import { loadModelFile, runKiri, kiriVersion, type Phase } from '@/slicer/engine'
 import { GCODE_TYPES, readJobFile, withToolhead, type JobFileInfo } from '@/slicer/gcodeFile'
+import { buildIni, loadSchema, valueOf, type RhinoCtx, type Schema } from '@/slicer/prusa/config'
+import { runPrusa, type SlicerState } from '@/slicer/prusa/portal'
+import { useMaintenanceStore } from './maintenance'
 
 /** Flat drawings (SVG, DXF) are outlines: only cut processes can use them. */
 export function suits(process: Process, flat: boolean): boolean {
@@ -330,6 +337,58 @@ export const usePrepareStore = defineStore('prepare', () => {
 
   const blocked = computed(() => (result.value ? blocking(result.value.checks) : []))
 
+  // ---- PrusaSlicer on the Rhino ------------------------------------------------
+  const schema = shallowRef<Schema | null>(null)
+  const schemaError = ref<string | null>(null)
+  const slicer = shallowRef<SlicerState | null>(null)
+  const slicerError = ref<string | null>(null)
+  let engineKeys: { version: string; keys: ReadonlySet<string> } | null = null
+
+  async function ensureSchema() {
+    if (schema.value) return schema.value
+    try {
+      schema.value = await loadSchema()
+      return schema.value
+    } catch (e) {
+      schemaError.value = (e as Error).message
+      throw e
+    }
+  }
+  /** What the Portal says about the engine (installed, busy, refused right now). */
+  async function refreshSlicer() {
+    const p = useMaintenanceStore().portal()
+    if (!p) return (slicerError.value = 'Rhino Portal not set up (Settings > Connection)')
+    try {
+      slicer.value = await p.slicerState()
+      slicerError.value = null
+    } catch (e) {
+      const m = (e as Error).message
+      slicer.value = null
+      slicerError.value = /404|not found/i.test(m) ? 'PrusaSlicer on the Rhino needs Rhino Tool Manager 1.5.0 or later.' : m
+    }
+  }
+  const rhinoCtx = computed<RhinoCtx | null>(() =>
+    job.value
+      ? {
+          job: job.value,
+          material: materials.value.list.find((x) => x.key === job.value!.material) ?? null,
+          machine: machineInfo.value,
+          hasExcludeObject: machine.objects.has('exclude_object'),
+          hasArcs: machine.objects.has('gcode_arcs'),
+        }
+      : null,
+  )
+  watch(
+    () => job.value?.process === 'fdm' && job.value.engine === 'prusa',
+    (on) => {
+      if (on) {
+        void ensureSchema().catch(() => {})
+        void refreshSlicer()
+      }
+    },
+    { immediate: true },
+  )
+
   async function prepare() {
     if (!job.value || !vertices.value || !part.value) return
     const id = ++runId
@@ -339,12 +398,35 @@ export const usePrepareStore = defineStore('prepare', () => {
     prepError.value = null
     modelResult.value = null
     progress.value = null
+    const onPhase = (ph: Phase, f?: number) => {
+      if (id !== runId) return
+      phase.value = ph
+      progress.value = f ?? null
+    }
     try {
-      const kiri = await runKiri(vertices.value, kiriJob(j, p, m), (ph, f) => {
+      if (j.process === 'fdm' && j.engine === 'prusa') {
+        const portal = useMaintenanceStore().portal()
+        if (!portal) throw new Error('PrusaSlicer runs on the Rhino: set the Rhino Portal’s address in Settings > Connection.')
+        const sch = await ensureSchema()
+        await refreshSlicer()
+        const st = slicer.value
+        if (!st) throw new Error(slicerError.value ?? 'Can’t reach the Rhino Portal')
+        if (!st.engine.installed) throw new Error('PrusaSlicer isn’t installed on the Rhino yet: Settings > Software > PrusaSlicer engine > Install.')
+        if (st.refuse) throw new Error(st.refuse)
+        if (!engineKeys || engineKeys.version !== st.engine.installed) engineKeys = { version: st.engine.installed, keys: new Set(await portal.slicerKeys()) }
+        const ctx: RhinoCtx = { ...rhinoCtx.value!, job: j }
+        const ini = buildIni(sch, ctx, engineKeys.keys)
+        const out = await runPrusa(portal, vertices.value, ini, p.name, [j.placement.x, j.placement.y], onPhase, () => id === runId)
         if (id !== runId) return
-        phase.value = ph
-        progress.value = f ?? null
-      })
+        // CALCULATE_PA and the header read the layer height and speed the engine actually used
+        j.fdm.layerHeight = Number(valueOf('layer_height', sch, ctx).value) || j.fdm.layerHeight
+        j.fdm.speed = Number(valueOf('perimeter_speed', sch, ctx).value) || j.fdm.speed
+        const file = rhinoFile(out.gcode, j, p, m, STUDIO_VERSION, 'PrusaSlicer')
+        const { checks, stats } = checkFile(file.text, j, p, m)
+        modelResult.value = { file, checks, stats, kiri: `PrusaSlicer ${st.engine.installed}${out.cached ? ' (from the cache)' : ''}`, kiriSeconds: out.seconds, kiriFilament: out.filamentMm }
+        return
+      }
+      const kiri = await runKiri(vertices.value, kiriJob(j, p, m), onPhase)
       if (id !== runId) return
       const file = rhinoFile(kiri, j, p, m, STUDIO_VERSION)
       const { checks, stats } = checkFile(file.text, j, p, m)
@@ -427,5 +509,12 @@ export const usePrepareStore = defineStore('prepare', () => {
     sentPath,
     sendError,
     download,
+    schema,
+    schemaError,
+    slicer,
+    slicerError,
+    refreshSlicer,
+    ensureSchema,
+    rhinoCtx,
   }
 })

@@ -42,6 +42,7 @@
  */
 import type { JobsWeeks, MaintHistory, MaintOverview, TaskLibrary, MaintLists, TaskDef, BookDef, StatusEdit } from '@/maintenance/types'
 import type { NetState, WifiNetwork } from '@/system/network'
+import type { SliceJobState, SlicerState } from '@/slicer/prusa/portal'
 import type { PortalState, PreviewResult, ToolDetail, ToolLists, ToolOptions, ToolSheetData, WriteResult } from '@/toolmgr/types'
 
 export const PORTAL_WRITES = ['done', 'snooze'] as const
@@ -56,6 +57,8 @@ export const PORTAL_CARE_SETUP = ['areas', 'maint-lists', 'statuses'] as const
 export const PORTAL_TOOL_SETUP = ['tool-lists'] as const
 export const PORTAL_HARDWARE = ['preview-hardware', 'hardware-save', 'hardware-delete'] as const
 /** The Rhino's network (config 1.4.8+). Each change switches back after a while unless kept. */
+/** PrusaSlicer on the Rhino (config 1.5.0+): slicing jobs and the engine's own updates. */
+export const PORTAL_SLICER = ['slice', 'slice-cancel', 'engine-check', 'engine-update'] as const
 export const PORTAL_NETWORK = ['net-hostname', 'net-ipv4', 'net-wifi', 'net-powersave', 'net-keep', 'net-undo'] as const
 
 export type WriteKind =
@@ -68,6 +71,7 @@ export type WriteKind =
   | (typeof PORTAL_TOOL_SETUP)[number]
   | (typeof PORTAL_HARDWARE)[number]
   | (typeof PORTAL_NETWORK)[number]
+  | (typeof PORTAL_SLICER)[number]
 
 /** The one request each write kind may make. */
 export const WRITE_ROUTES: Record<WriteKind, { method: 'POST' | 'DELETE'; path: RegExp }> = {
@@ -112,11 +116,15 @@ export const WRITE_ROUTES: Record<WriteKind, { method: 'POST' | 'DELETE'; path: 
   'net-powersave': { method: 'POST', path: /^\/api\/net\/powersave$/ },
   'net-keep': { method: 'POST', path: /^\/api\/net\/keep$/ },
   'net-undo': { method: 'POST', path: /^\/api\/net\/undo$/ },
+  slice: { method: 'POST', path: /^\/api\/slicer\/slice$/ },
+  'slice-cancel': { method: 'POST', path: /^\/api\/slicer\/jobs\/[\w-]+\/cancel$/ },
+  'engine-check': { method: 'POST', path: /^\/api\/slicer\/engine\/check$/ },
+  'engine-update': { method: 'POST', path: /^\/api\/slicer\/engine\/update$/ },
 }
 
 const ALLOWED = new Set<string>([
   ...PORTAL_WRITES, ...PORTAL_TOOL_CHECKS, ...PORTAL_TOOL_WRITES, ...PORTAL_RESTART,
-  ...PORTAL_CARE_WRITES, ...PORTAL_CARE_SETUP, ...PORTAL_TOOL_SETUP, ...PORTAL_HARDWARE, ...PORTAL_NETWORK,
+  ...PORTAL_CARE_WRITES, ...PORTAL_CARE_SETUP, ...PORTAL_TOOL_SETUP, ...PORTAL_HARDWARE, ...PORTAL_NETWORK, ...PORTAL_SLICER,
 ])
 const enc = encodeURIComponent
 
@@ -366,6 +374,42 @@ export class PortalClient {
   }
   undoNetChange(): Promise<WriteResult> {
     return this.write('net-undo', 'POST', '/api/net/undo', {})
+  }
+
+  // ---- PrusaSlicer on the Rhino (config 1.5.0+) -------------------------------
+
+  async slicerState(): Promise<SlicerState> {
+    return this.getJson<SlicerState & { ok: boolean }>('/api/slicer')
+  }
+  /** Option names the installed engine accepts (prusa-slicer --help-fff). */
+  async slicerKeys(): Promise<string[]> {
+    return (await this.getJson<{ ok: boolean; keys: string[] }>('/api/slicer/keys')).keys
+  }
+  /** Queue a slice: the part as binary STL and the full INI. The Portal answers with a job id. */
+  async slice(model: Blob, ini: string, name: string, center: [number, number]): Promise<{ id: string }> {
+    const f = new FormData()
+    f.append('model', model, 'part.stl')
+    f.append('config', new Blob([ini], { type: 'text/plain' }), 'rhino.ini')
+    f.append('name', name)
+    f.append('center', `${center[0]},${center[1]}`)
+    return this.write<{ ok: boolean; id: string }>('slice', 'POST', '/api/slicer/slice', f)
+  }
+  async sliceJob(id: string): Promise<SliceJobState> {
+    return this.getJson<SliceJobState & { ok: boolean }>(`/api/slicer/jobs/${enc(id)}`)
+  }
+  async sliceGcode(id: string): Promise<string> {
+    const r = await fetch(`${this.baseUrl}/api/slicer/jobs/${enc(id)}/gcode`)
+    if (!r.ok) throw new Error(`The sliced file couldn't be fetched (HTTP ${r.status})`)
+    return r.text()
+  }
+  cancelSlice(id: string): Promise<WriteResult> {
+    return this.write('slice-cancel', 'POST', `/api/slicer/jobs/${enc(id)}/cancel`, {})
+  }
+  checkEngine(): Promise<WriteResult> {
+    return this.write('engine-check', 'POST', '/api/slicer/engine/check', {})
+  }
+  updateEngine(): Promise<WriteResult> {
+    return this.write('engine-update', 'POST', '/api/slicer/engine/update', {})
   }
 
   /** Reads the token and version from the Portal's home page. */

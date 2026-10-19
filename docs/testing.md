@@ -108,6 +108,22 @@ Pi side). Machine idle, no job.
 | S7 | Network, cameras Snapshots, open Control | The camera shows stills at the snapshot rate; Live video brings the stream back | |
 | S8 | Network, Reconnect Patient, stop Moonraker 20 s | Reconnects with longer waits (watch the top bar) | |
 
+## PrusaSlicer on the Rhino
+
+Needs Toolhead_Manager 1.5.0. Machine idle unless a check says otherwise. **Stop if** Klipper reports "Timer too
+close" or a shutdown while slicing.
+
+| # | Do this | Pass when | Stop if |
+|---|---|---|---|
+| P1 | Settings > Software, PrusaSlicer engine: Install | Asks first; "Installing…" for a few minutes; then the installed version shows, Up to date | Klipper or Moonraker restart |
+| P2 | Job setup: a 3D model, BlockOne, PLA | Engine switch shows PrusaSlicer on the Rhino; Print / Filament / Printer tabs with PrusaSlicer's pages; Simple / Advanced / Expert change how many options show | |
+| P3 | Filament tab | Temperatures, diameter and type are locked with "Set by the Rhino" and the material's numbers | A temperature can be typed |
+| P4 | Change Perimeters to 4 and Fill pattern to Gyroid, Prepare | Slices on the Rhino with a progress bar; time and filament from PrusaSlicer; every check passes; the file starts with START_JOB and has no M104/M140 above 0 | The file heats or homes |
+| P5 | Prepare again with nothing changed | Comes back at once ("from the cache") | |
+| P6 | Change a setting while it slices | The old slice stops on the Rhino (Portal log) and a new one starts | Two slices run at once |
+| P7 | Start a print, then Prepare a part | Bigger host: slices with half the cores, print keeps going smoothly. Pi 3B: refused, says why | The print stutters or Klipper shuts down |
+| P8 | Print the P4 file | First layer and walls look like the Orca prints; SwitchFly path 2 prints the same way | Extrusion runs backwards |
+
 ## Cameras and Dashboard
 
 Nothing here moves the machine. Camera edits change Moonraker's camera list, which Mainsail uses too.

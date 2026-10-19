@@ -178,6 +178,14 @@ export interface PrepareJob {
   process: Process
   /** key in the tool's materials table (variables.cfg), e.g. PLA, PLYWOOD, SOFT_WOOD */
   material: string
+  /**
+   * FDM engine: 'prusa' = PrusaSlicer on the Rhino (through the Portal, every
+   * PrusaSlicer option, src/slicer/prusa), 'kiri' = Kiri:Moto in this browser
+   * (the fdm settings below). Older jobs: kiri.
+   */
+  engine?: 'prusa' | 'kiri'
+  /** PrusaSlicer options the user changed (INI values, single extruder) */
+  prusa?: Record<string, string>
   fdm: FdmSettings
   laser: LaserSettings
   knife: KnifeSettings
