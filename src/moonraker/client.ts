@@ -40,6 +40,7 @@ export const READ_ONLY_METHODS: ReadonlySet<string> = new Set([
   'printer.objects.list',
   'printer.objects.subscribe',
   'server.files.list',
+  'server.history.list',
   'server.gcode_store',
   'printer.gcode.help',
   'server.webcams.list',
@@ -79,6 +80,22 @@ export const CAMERA_METHODS: ReadonlySet<string> = new Set(['server.webcams.post
 export const SETTINGS_METHODS: ReadonlySet<string> = new Set(['server.database.get_item', 'server.database.post_item'])
 export const STUDIO_NAMESPACE = 'rhino_studio'
 
+/**
+ * Restarts and host power (Settings > Host). They never move the machine, but
+ * they stop whatever is running, so Studio refuses them during a job and
+ * confirms each one (src/system/power.ts). Only power() sends these.
+ */
+export const POWER_METHODS: ReadonlySet<string> = new Set([
+  'printer.firmware_restart',
+  'printer.restart',
+  'server.restart',
+  'machine.services.restart',
+  'machine.reboot',
+  'machine.shutdown',
+])
+/** Services Studio offers to restart (Moonraker refuses any not in its own allowed list too). */
+export const POWER_SERVICES: ReadonlySet<string> = new Set(['klipper', 'moonraker', 'crowsnest'])
+
 /** Methods that change the machine. Each has its own public function below. */
 export const ACTION_METHODS: ReadonlySet<string> = new Set([
   'printer.gcode.script',
@@ -113,6 +130,18 @@ export const WATCHED_OBJECTS: Record<string, string[] | null> = {
   'gcode_macro TOOL_POWER_STATE': ['active', 'level', 'suspended'], // added powered tools
   // Rhino config 1.4+: the prime line, so Prepare can keep parts off it
   'gcode_macro RHINO_POSITIONS': ['prime_x', 'prime_y', 'prime_length'],
+}
+
+/** One finished (or running) job in Moonraker's history. */
+export interface HistoryJob {
+  job_id: string
+  filename: string
+  /** completed, cancelled, error, klippy_shutdown, klippy_disconnect, server_exit, interrupted, in_progress */
+  status: string
+  start_time: number
+  end_time: number | null
+  print_duration: number
+  filament_used: number
 }
 
 export interface FileEntry {
@@ -221,6 +250,39 @@ export class MoonrakerClient {
     this.ws = null
     this.failPending('Disconnected')
     this.handlers.onState?.('offline')
+  }
+
+  /**
+   * Moonraker's job history, newest first (read only). Returns [] when the
+   * history component isn't loaded, so Files simply shows no results.
+   */
+  async listHistory(limit = 200): Promise<HistoryJob[]> {
+    try {
+      const r = (await this.call('server.history.list', { limit, order: 'desc' })) as { jobs?: HistoryJob[] }
+      return Array.isArray(r?.jobs) ? r.jobs : []
+    } catch {
+      return []
+    }
+  }
+
+  /** Log files Moonraker serves (the read-only "logs" root). */
+  async listLogs(): Promise<FileEntry[]> {
+    const r = (await this.call('server.files.list', { root: 'logs' })) as FileEntry[]
+    return Array.isArray(r) ? r : []
+  }
+
+  /** URL of a log file under the "logs" root. */
+  logUrl(path: string): string {
+    return `${this.baseUrl}/server/files/logs/${path.split('/').map(encodeURIComponent).join('/')}`
+  }
+
+  /** Restart / reboot / shut down. Callers check for a running job first (src/system/power.ts). */
+  power(method: string, params?: Record<string, unknown>): Promise<unknown> {
+    if (!POWER_METHODS.has(method)) return Promise.reject(new Error(`Blocked: "${method}" is not an allowed power action`))
+    if (method === 'machine.services.restart' && !POWER_SERVICES.has(String(params?.service))) {
+      return Promise.reject(new Error(`Blocked: Studio doesn't restart "${String(params?.service)}"`))
+    }
+    return this.send(method, params, 30_000)
   }
 
   async listFiles(): Promise<FileEntry[]> {

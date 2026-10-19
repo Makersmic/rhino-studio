@@ -255,6 +255,25 @@ export const useMachineStore = defineStore('machine', () => {
     return client.listFiles()
   }
 
+  function listLogs() {
+    if (!client) return Promise.reject(new Error('Not connected'))
+    return client.listLogs()
+  }
+  function logUrl(path: string) {
+    return client ? client.logUrl(path) : null
+  }
+  /** Restart / reboot / shut down; the caller has confirmed and checked powerBlock(). */
+  function power(method: string, params?: Record<string, unknown>) {
+    if (!client) return Promise.reject(new Error('Not connected'))
+    if (job.value.state === 'printing' || job.value.state === 'paused') return Promise.reject(new Error('A job is running'))
+    return client.power(method, params)
+  }
+
+  function listHistory(limit?: number) {
+    if (!client) return Promise.resolve([])
+    return client.listHistory(limit)
+  }
+
   function fileUrl(path: string) {
     return client?.fileUrl(path) ?? null
   }
@@ -328,6 +347,10 @@ export const useMachineStore = defineStore('machine', () => {
     disconnect,
     emergencyStop,
     listFiles,
+    listHistory,
+    listLogs,
+    logUrl,
+    power,
     fileUrl,
     webcamUrl,
     saveWebcam,

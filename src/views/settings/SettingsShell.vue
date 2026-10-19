@@ -3,7 +3,7 @@
  * Settings, with its own menu like Care:
  *   Appearance
  *   Machine   Connection, Tool changing, Cameras
- *   System    Software (with the number of updates ready), Network
+ *   System    Software (with the number of updates ready), Network, Host, Logs
  *   About
  * Each page gets its title and one line about it from the route.
  */
@@ -34,6 +34,8 @@ const groups = computed<SectionGroup[]>(() => [
     items: [
       { to: '/settings/software', label: 'Software', count: updates.readyCount, strong: updates.readyCount > 0 },
       { to: '/settings/network', label: 'Network', count: net.pending ? '!' : '', strong: !!net.pending },
+      { to: '/settings/host', label: 'Host' },
+      { to: '/settings/logs', label: 'Logs' },
     ],
   },
   { id: 'about', items: [{ to: '/settings/about', label: 'About' }] },

@@ -255,3 +255,20 @@ Maintenance records only: nothing here moves the machine or changes Klipper. Run
 | M10 | Care setup → Areas: add one, Save, remove it, Save; try to remove Motion X/Y | Saved, then gone; Remove is greyed for an area with tasks | |
 | M11 | Phone: Care → the section button | The menu opens under it with the groups; picking one closes it | The page scrolls sideways |
 
+
+## 0.6.2: Files list, Host, Logs
+
+On the machine, Klipper ready, no job unless a row says so.
+
+| # | Do | Pass | Stop if |
+|---|---|---|---|
+| FL1 | Files: drag two .gcode files and one .stl onto the dashed drop area | Both G-code files upload with progress, the list refreshes; the .stl is named as skipped. Nothing starts | A job starts, or the .stl reaches the Pi |
+| FL2 | Files: click the drop area | The file picker opens (several files allowed) | |
+| FL3 | Files with BlockOne mounted and verified | BlockOne files have one pastel green pill behind icon and name; other tools' files have none; there is no "Fits"/"Needs" column | Green shows while the mounted tool is unverified |
+| FL4 | Files: Last run column, after a print finishes and after one is cancelled | "✓ Completed" and "– Cancelled" with the date, matching Mainsail's history; never-run files say "Not run yet" | |
+| H1 | Settings → Host, no job: Restart firmware, confirm | Klipper restarts; Studio shows it ready again | Anything moves |
+| H2 | Settings → Host, Moonraker → Restart, confirm | Studio drops the connection and reconnects by itself | Studio stays disconnected |
+| H3 | Start a job, open Settings → Host | Every button is greyed, "A job is running" shown | Any action runs |
+| H4 | Reboot host, confirm | Host reboots, Studio reconnects within ~2 min. (Shut down: only if someone can switch it back on) | |
+| L1 | Settings → Logs | klippy.log first; the end of the file is shown, scrolled to the bottom; Download gets the whole file | The page freezes on a big log |
+| L2 | After a known error (e.g. a bad config line, restart) | "Last error in this part" shows the error block; Copy last error copies it | |

@@ -135,6 +135,35 @@ const files: Record<string, string> = {
 }
 const fileTimes = Object.fromEntries(Object.keys(files).map((f, i) => [f, Date.now() / 1000 - i * 3600]))
 
+// ---- logs (Moonraker's read-only "logs" root) ---------------------------
+const mockLogs: Record<string, string> = {
+  'klippy.log': Array.from({ length: 400 }, (_, i) => `Stats ${1000 + i * 5}.1: gcodein=0 mcu: mcu_awake=0.004 mcu_task_avg=0.000012 bytes_write=${i * 300} sysload=0.42`).join('\n')
+    + "\nMCU 'mcu' shutdown: Timer too close\n  This often indicates a host overload. Check sysload and the USB cable.\nTransition to shutdown state: MCU shutdown\n"
+    + Array.from({ length: 30 }, (_, i) => `Stats ${3200 + i * 5}.1: gcodein=0 sysload=0.20`).join('\n') + '\n',
+  'moonraker.log': '2026-10-19 18:00:01,100 [server.py:start()] - Starting Moonraker\n2026-10-19 18:00:02,000 [klippy_connection.py] - Klippy ready\n',
+  'klippy.log.1': 'older log\n',
+}
+
+// ---- job history (Moonraker's server.history.list, newest first) --------
+type HistJob = { job_id: string; filename: string; status: string; start_time: number; end_time: number; print_duration: number; total_duration: number; filament_used: number; exists: boolean }
+let histSeq = 100
+const histJob = (filename: string, status: string, hoursAgo: number, mins: number): HistJob => {
+  const end = Date.now() / 1000 - hoursAgo * 3600
+  return { job_id: String(histSeq++).padStart(6, '0'), filename, status, start_time: end - mins * 60, end_time: end, print_duration: mins * 60, total_duration: mins * 60 + 90, filament_used: filename.includes('benchy') ? 4200 : 0, exists: true }
+}
+const jobHistory: HistJob[] = process.env.MOCK_HISTORY === '0' ? [] : [
+  histJob('benchy_PLA_0.4.gcode', 'completed', 2, 74),
+  histJob('sign_engrave.gcode', 'cancelled', 20, 6),
+  histJob('benchy_PLA_0.4.gcode', 'error', 30, 12),
+  histJob('walnut_coaster_pocket.nc', 'completed', 50, 31),
+]
+let jobStarted = 0
+function recordJob(status: string) {
+  if (!jobFile) return
+  const end = Date.now() / 1000
+  jobHistory.unshift({ job_id: String(histSeq++).padStart(6, '0'), filename: jobFile, status, start_time: jobStarted || end, end_time: end, print_duration: Number(status.print_stats?.print_duration ?? 0), total_duration: end - (jobStarted || end), filament_used: 0, exists: true })
+}
+
 // ---- temperature history (Moonraker keeps 20 minutes, one reading a second) --
 type Series = { temperatures: number[]; targets: number[]; powers: number[] }
 const tempStore: Record<string, Series> = { extruder: { temperatures: [], targets: [], powers: [] }, heater_bed: { temperatures: [], targets: [], powers: [] } }
@@ -241,6 +270,7 @@ function busyFor(ms: number) {
 function startJob(file: string) {
   if (!(file in files)) throw new Error(`File not found: ${file}`)
   jobFile = file
+  jobStarted = Date.now() / 1000
   update('print_stats', { state: 'printing', filename: file, print_duration: 0 })
   update('virtual_sdcard', { progress: 0, is_active: true })
   update('idle_timeout', { state: 'Printing' })
@@ -662,6 +692,7 @@ function handle(method: string, params: Record<string, unknown> | undefined): un
       update('pause_resume', { is_paused: false })
       return 'ok'
     case 'printer.print.cancel':
+      recordJob('cancelled')
       update('print_stats', { state: 'cancelled' })
       update('virtual_sdcard', { is_active: false })
       update('idle_timeout', { state: 'Ready' })
@@ -681,7 +712,23 @@ function handle(method: string, params: Record<string, unknown> | undefined): un
       const wanted = Object.keys((params?.objects as object) ?? {})
       return { eventtime: Date.now() / 1000, status: Object.fromEntries(wanted.filter((k) => k in status).map((k) => [k, status[k]])) }
     }
+    case 'printer.firmware_restart':
+    case 'printer.restart':
+      respond(`// ${method === 'printer.restart' ? 'RESTART' : 'FIRMWARE_RESTART'} (pretend)`)
+      return 'ok'
+    case 'server.restart':
+    case 'machine.services.restart':
+    case 'machine.reboot':
+    case 'machine.shutdown':
+      if (status.print_stats?.state === 'printing') throw new Error('Not allowed while printing')
+      console.log(`[mock] ${method} ${JSON.stringify(params ?? {})}`)
+      return 'ok'
+    case 'server.history.list': {
+      const limit = Math.max(1, Math.min(1000, Number(params?.limit ?? 50)))
+      return { count: jobHistory.length, jobs: jobHistory.slice(0, limit) }
+    }
     case 'server.files.list':
+      if (params?.root === 'logs') return Object.entries(mockLogs).map(([path, text]) => ({ path, modified: Date.now() / 1000, size: text.length, permissions: 'r' }))
       return Object.entries(files).map(([path, text]) => ({ path, modified: fileTimes[path], size: text.length * 900, permissions: 'rw' }))
     case 'printer.emergency_stop':
       emergencyStop('websocket')
@@ -996,6 +1043,13 @@ const server = createServer(async (req, res) => {
     res.writeHead(200, { 'content-type': 'text/plain' }).end(files[m[1]!])
     return
   }
+  const lg = url.match(/^\/server\/files\/logs\/(.+)$/)
+  if (lg && mockLogs[decodeURIComponent(lg[1]!)] != null) {
+    const body = mockLogs[decodeURIComponent(lg[1]!)]!
+    const range = /^bytes=-(\d+)$/.exec(String(req.headers.range ?? ''))
+    if (range) return void res.writeHead(206, { 'content-type': 'text/plain' }).end(body.slice(-Number(range[1])))
+    return void res.writeHead(200, { 'content-type': 'text/plain' }).end(body)
+  }
   res.writeHead(404).end()
 })
 
@@ -1045,6 +1099,7 @@ setInterval(() => {
     if (p >= 1) {
       update('idle_timeout', { state: 'Ready' })
       outputsOff()
+      recordJob('completed')
       update('print_stats', { state: 'complete' })
       respond(`Done printing file ${jobFile}`)
     }

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { MoonrakerClient, READ_ONLY_METHODS, ACTION_METHODS, CAMERA_METHODS, SETTINGS_METHODS, UPDATE_METHODS, type Status } from './client'
+import { MoonrakerClient, READ_ONLY_METHODS, ACTION_METHODS, CAMERA_METHODS, SETTINGS_METHODS, UPDATE_METHODS, POWER_METHODS, POWER_SERVICES, type Status } from './client'
 import { approve, check } from '@/control/commands'
 
 /** A stand-in for the browser WebSocket that answers like Moonraker. */
@@ -192,5 +192,19 @@ describe('MoonrakerClient', () => {
     expect(c.resolveUrl('/webcam/?action=stream')).toBe('http://rhino.test/webcam/?action=stream')
     expect(c.resolveUrl('webcam2/?action=snapshot')).toBe('http://rhino.test/webcam2/?action=snapshot')
     expect(c.resolveUrl('http://192.168.1.60:8080/stream')).toBe('http://192.168.1.60:8080/stream')
+  })
+})
+
+describe('power allowlist', () => {
+  it('only power() sends restarts, and nothing else uses them', () => {
+    for (const set of [READ_ONLY_METHODS, ACTION_METHODS, CAMERA_METHODS, SETTINGS_METHODS, UPDATE_METHODS]) {
+      expect([...POWER_METHODS].some((m) => set.has(m))).toBe(false)
+    }
+  })
+  it('refuses methods and services outside the lists', async () => {
+    const c = new MoonrakerClient('http://x', {})
+    await expect(c.power('server.files.delete_file')).rejects.toThrow(/not an allowed power action/)
+    await expect(c.power('machine.services.restart', { service: 'nginx' })).rejects.toThrow(/doesn't restart/)
+    expect(POWER_SERVICES.has('klipper')).toBe(true)
   })
 })

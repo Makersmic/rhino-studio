@@ -169,6 +169,10 @@
      both themes; dark ink on it. */
   --rs-swap-menu: #f0892a;
   --rs-on-swap-menu: #141516;
+  /* Files: pastel green pill behind a toolhead that matches the mounted one.
+     Same in both themes, dark ink on it (like the swap orange). */
+  --rs-fit-fill: #bfe5c3;
+  --rs-on-fit: #141516;
   /* Older names kept so every component speaks the same language */
   --rs-paper: var(--rs-surface-2);
   --rs-paper-ink: var(--rs-text-strong);

@@ -1,8 +1,11 @@
 <script setup lang="ts">
 /**
- * G-code files on the Pi, with the toolhead each one asks for.
- * Upload files, and start a job once Studio has checked the file's toolhead
+ * G-code files on the Pi, with the toolhead each one asks for and how its
+ * last job ended (Moonraker's job history). Upload files (drop area or
+ * button), and start a job once Studio has checked the file's toolhead
  * against the mounted one (see src/control/jobs.ts). Nothing is deleted here.
+ * A file whose toolhead is the mounted one gets a pastel green pill behind
+ * the tool, instead of a separate "fits" column.
  */
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
@@ -18,6 +21,7 @@ import { useMachineStore } from '@/stores/machine'
 import { useMaintenanceStore } from '@/stores/maintenance'
 import { useControlStore } from '@/stores/control'
 import { careText } from '@/maintenance/summary'
+import { lastRuns, type LastRun } from '@/files/lastRun'
 
 const machine = useMachineStore()
 const care = useMaintenanceStore()
@@ -26,6 +30,7 @@ const route = useRoute()
 /** Prepare links here with ?file=<name> after sending: that row is marked and scrolled to */
 const highlight = computed(() => (typeof route.query.file === 'string' ? route.query.file : null))
 const files = ref<FileEntry[]>([])
+const runs = ref<Map<string, LastRun>>(new Map())
 const loading = ref(false)
 const error = ref<string | null>(null)
 /**
@@ -62,7 +67,8 @@ async function load() {
   loading.value = true
   error.value = null
   try {
-    const list = await machine.listFiles()
+    const [list, history] = await Promise.all([machine.listFiles(), machine.listHistory(500)])
+    runs.value = lastRuns(history)
     files.value = list.filter((f) => /\.(gcode|gco|g|nc|ngc)$/i.test(f.path)).sort((a, b) => b.modified - a.modified)
     void readHeaders()
     if (highlight.value) void nextTick(() => document.querySelector('.file.highlight')?.scrollIntoView({ block: 'center' }))
@@ -78,8 +84,9 @@ async function load() {
  * Skipped while a job runs: the Pi 3B's SD card is busy feeding Klipper then.
  */
 const jobRunning = computed(() => machine.job.state === 'printing')
-watch(jobRunning, (running) => {
+watch(jobRunning, (running, was) => {
   if (running) abort?.abort()
+  else if (was) void load() // a job just ended: refresh its result
   else if (files.value.length) void readHeaders()
 })
 
@@ -124,6 +131,7 @@ const rows = computed(() =>
       matches: !!tool && machine.mountedVerified && tool === machine.mountedName,
       care: tool ? care.forTool(tool) : null,
       start: control.startCheck(f.path, h === 'error' ? null : h),
+      run: runs.value.get(f.path) ?? null,
     }
   }),
 )
@@ -158,12 +166,26 @@ const dragging = ref(false)
 const ALLOWED = /\.(gcode|gco|g|nc|ngc)$/i
 
 async function upload(list: FileList | null) {
-  const file = list?.[0]
-  if (!file) return
-  if (!ALLOWED.test(file.name)) {
-    uploadMsg.value = `${file.name} isn't a G-code file (.gcode, .nc, .ngc, .gco, .g)`
-    return
+  const picked = [...(list ?? [])]
+  if (!picked.length) return
+  const bad = picked.filter((f) => !ALLOWED.test(f.name))
+  const good = picked.filter((f) => ALLOWED.test(f.name))
+  const done: string[] = []
+  for (const file of good) {
+    const path = await uploadOne(file)
+    if (path === false) break // an upload failed: its message is shown
+    if (path) done.push(path)
   }
+  if (picker.value) picker.value.value = ''
+  const skipped = bad.length ? ` Skipped ${bad.map((f) => f.name).join(', ')}: not G-code (.gcode, .nc, .ngc, .gco, .g).` : ''
+  if (done.length) {
+    uploadMsg.value = `Uploaded ${done.length === 1 ? done[0] : `${done.length} files`}. Nothing is started; press Start when you're ready.${skipped}`
+    await load()
+  } else if (bad.length && !uploadMsg.value) uploadMsg.value = skipped.trim()
+}
+
+/** null = skipped (kept the old one), false = failed */
+async function uploadOne(file: File): Promise<string | null | false> {
   if (files.value.some((f) => f.path === file.name)) {
     const ok = await control.confirm({
       title: `Replace ${file.name}?`,
@@ -171,19 +193,17 @@ async function upload(list: FileList | null) {
       confirmLabel: 'Replace',
       tone: 'normal',
     })
-    if (!ok) return
+    if (!ok) return null
   }
   uploading.value = { name: file.name, progress: 0 }
   uploadMsg.value = null
   try {
-    const path = await machine.uploadFile(file, (p) => uploading.value && (uploading.value.progress = p))
-    uploadMsg.value = `Uploaded ${path}. It isn't started; press Start when you're ready.`
-    await load()
+    return await machine.uploadFile(file, (p) => uploading.value && (uploading.value.progress = p))
   } catch (e) {
-    uploadMsg.value = (e as Error).message
+    uploadMsg.value = `${file.name}: ${(e as Error).message}`
+    return false
   } finally {
     uploading.value = null
-    if (picker.value) picker.value.value = ''
   }
 }
 function onDrop(e: DragEvent) {
@@ -191,6 +211,7 @@ function onDrop(e: DragEvent) {
   void upload(e.dataTransfer?.files ?? null)
 }
 
+const fmtWhen = (s: number) => new Date(s * 1000).toLocaleString(undefined, { month: 'short', day: 'numeric' })
 const fmtDate = (s: number) => new Date(s * 1000).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
 const fmtSize = (b: number) => (b > 1048576 ? `${(b / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`)
 </script>
@@ -199,7 +220,7 @@ const fmtSize = (b: number) => (b > 1048576 ? `${(b / 1048576).toFixed(1)} MB` :
   <div class="view">
     <div class="view-head">
       <h1>Files</h1>
-      <p>G-code on the Pi, with the toolhead each job asks for. Start checks the file against the mounted toolhead; laser, spindle and knife jobs start through their Rhino setup wizard.</p>
+      <p>G-code on the Pi, the toolhead each job asks for (green when it is the mounted one) and how its last run ended. Start checks the file against the mounted toolhead; laser, spindle and knife jobs start through their Rhino setup wizard.</p>
     </div>
 
     <EmptyState v-if="!machine.online" title="Connect to see files on the Pi">
@@ -218,17 +239,23 @@ const fmtSize = (b: number) => (b > 1048576 ? `${(b / 1048576).toFixed(1)} MB` :
       @drop.prevent="onDrop"
     >
       <template #actions>
-        <input ref="picker" type="file" accept=".gcode,.gco,.g,.nc,.ngc" class="visually-hidden" @change="upload(($event.target as HTMLInputElement).files)" />
+        <input ref="picker" type="file" multiple accept=".gcode,.gco,.g,.nc,.ngc" class="visually-hidden" @change="upload(($event.target as HTMLInputElement).files)" />
         <RsButton :disabled="!!uploading" @click="picker?.click()">Upload</RsButton>
         <RsButton variant="quiet" :disabled="loading" @click="load">Refresh</RsButton>
       </template>
 
-      <p v-if="uploading" class="upl" role="status">
-        Uploading {{ uploading.name }}… {{ Math.round(uploading.progress * 100) }}%
-        <span class="bar"><span :style="{ width: `${uploading.progress * 100}%` }" /></span>
-      </p>
-      <p v-else-if="uploadMsg" class="upl" role="status">{{ uploadMsg }}</p>
-      <p v-else class="muted small hint">Drop a G-code file here to upload it. Uploading never starts it.</p>
+      <button type="button" class="dropzone" :class="{ dragging }" :disabled="!!uploading" @click="picker?.click()">
+        <template v-if="uploading">
+          <span class="big">Uploading {{ uploading.name }}… {{ Math.round(uploading.progress * 100) }}%</span>
+          <span class="bar"><span :style="{ width: `${uploading.progress * 100}%` }" /></span>
+        </template>
+        <template v-else>
+          <Icon nav="files" :size="28" />
+          <span class="big">Drop G-code files here, or click to choose</span>
+          <span class="small">.gcode, .nc, .ngc, .gco, .g · Uploading never starts a job</span>
+        </template>
+      </button>
+      <p v-if="uploadMsg && !uploading" class="upl" role="status">{{ uploadMsg }}</p>
       <p v-if="control.jobActive" class="busy" role="status">
         Start is off while <strong>{{ machine.job.filename }}</strong> {{ machine.job.state === 'paused' ? 'is paused' : 'runs' }}.
         <template v-if="jobRunning">Files not read yet are checked once it finishes, to keep the Pi free for the job.</template>
@@ -238,22 +265,38 @@ const fmtSize = (b: number) => (b > 1048576 ? `${(b / 1048576).toFixed(1)} MB` :
       <p v-else-if="!loading && !files.length" class="muted">No G-code files in the gcodes folder yet.</p>
 
       <ul v-else class="list">
+        <li class="file head" aria-hidden="true">
+          <span>Toolhead</span><span>File</span><span>Modified</span><span>Last run</span><span />
+        </li>
         <li v-for="r in rows" :key="r.f.path" class="file" :class="{ highlight: r.f.path === highlight }">
           <span class="tool">
-            <ToolheadBadge v-if="r.look" :look="r.look" size="sm" />
+            <span
+              v-if="r.look"
+              class="pill"
+              :class="{ fits: r.matches }"
+              :title="r.matches ? 'Uses the mounted toolhead' : r.needsSwap ? `Needs ${r.tool}; ${machine.mountedName} is mounted` : undefined"
+            >
+              <ToolheadBadge :look="r.look" size="sm" />
+            </span>
             <span v-else class="muted small">{{ r.pending ? (jobRunning ? 'Not read yet' : 'Reading…') : r.unreadable ? "Couldn't read" : 'Not declared' }}</span>
           </span>
-          <span class="name">{{ r.f.path }}</span>
-          <span class="meta">{{ fmtDate(r.f.modified) }} · {{ fmtSize(r.f.size) }}</span>
-          <span class="fit">
+          <span class="name">
+            {{ r.f.path }}
             <RouterLink
               v-if="r.care && (r.care.overdue || r.care.dueSoon)"
               to="/care"
               class="tag care"
               :title="r.care.next?.title"
             >{{ r.care.overdue ? 'Care overdue' : 'Care due' }}</RouterLink>
-            <span v-if="r.needsSwap" class="tag swap">Needs {{ r.tool }}</span>
-            <span v-else-if="r.matches" class="tag ok">Fits mounted tool</span>
+          </span>
+          <span class="meta">{{ fmtDate(r.f.modified) }} · {{ fmtSize(r.f.size) }}</span>
+          <span class="run" :class="r.run?.kind ?? 'never'" :title="r.run ? `${r.run.detail}, ${fmtDate(r.run.at)}` : 'No job from this file in the history'">
+            <template v-if="r.run">
+              <span class="mark" aria-hidden="true">{{ r.run.kind === 'completed' ? '✓' : r.run.kind === 'failed' ? '✕' : r.run.kind === 'running' ? '•' : '–' }}</span>
+              {{ r.run.label }}
+              <span class="when">{{ fmtWhen(r.run.at) }}</span>
+            </template>
+            <template v-else>Not run yet</template>
           </span>
           <span class="go">
             <RsButton
@@ -282,7 +325,7 @@ const fmtSize = (b: number) => (b > 1048576 ? `${(b / 1048576).toFixed(1)} MB` :
 .list { list-style: none; margin: 0; padding: 0; }
 .file {
   display: grid;
-  grid-template-columns: 170px minmax(0, 1fr) auto auto 150px;
+  grid-template-columns: 200px minmax(0, 1fr) auto 150px 150px;
   align-items: center;
   gap: var(--rs-space-4);
   padding: var(--rs-space-3) 0;
@@ -291,25 +334,36 @@ const fmtSize = (b: number) => (b > 1048576 ? `${(b / 1048576).toFixed(1)} MB` :
 .file:first-child { border-top: 0; }
 .name { overflow-wrap: anywhere; color: var(--rs-text-strong); }
 .meta { font-size: var(--rs-text-xs); color: var(--rs-text-muted); white-space: nowrap; }
-.fit { min-width: 130px; display: flex; justify-content: flex-end; gap: 6px; }
+.file.head { padding: 0 0 var(--rs-space-2); font-size: var(--rs-text-xs); font-weight: var(--rs-weight-medium); color: var(--rs-text-muted); border-top: 0; }
+.file.head + .file { border-top: 0; }
+/* One pill behind icon and name, pastel green when the file uses the mounted tool */
+.pill { display: inline-flex; align-items: center; max-width: 100%; padding: 3px 14px 3px 3px; border-radius: var(--rs-radius-pill); }
+.pill.fits { background: var(--rs-fit-fill); }
+.pill.fits :deep(.name) { color: var(--rs-on-fit); }
+.pill.fits :deep(.disc) { border-radius: 999px; }
+.name .tag { margin-left: 8px; vertical-align: 1px; }
+.run { font-size: var(--rs-text-sm); color: var(--rs-text-strong); white-space: nowrap; }
+.run .mark { display: inline-block; width: 1em; font-weight: var(--rs-weight-medium); }
+.run .when { margin-left: 4px; font-size: var(--rs-text-xs); color: var(--rs-text-muted); }
+.run.never, .run.cancelled { color: var(--rs-text-muted); }
+.run.failed { color: var(--rs-danger); }
+.dropzone { width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; min-height: 120px; margin-bottom: var(--rs-space-3); padding: var(--rs-space-4); border: 1.5px dashed var(--rs-line-strong); border-radius: var(--rs-radius-lg); background: var(--rs-surface); color: var(--rs-text-muted); font: inherit; cursor: pointer; text-align: center; }
+.dropzone:hover:not(:disabled), .dragging .dropzone { border-color: var(--rs-ink); color: var(--rs-text-strong); background: var(--rs-surface-2); }
+.dropzone .big { font-size: var(--rs-text-md, 1rem); font-weight: var(--rs-weight-medium); color: var(--rs-text-strong); }
+.dropzone .bar { width: min(320px, 80%); height: 6px; border-radius: var(--rs-radius-pill); background: var(--rs-surface-2); overflow: hidden; }
+.dropzone .bar span { display: block; height: 100%; background: var(--rs-ink); }
 .tag { font-size: var(--rs-text-xs); font-weight: var(--rs-weight-medium); padding: 3px 10px; border-radius: var(--rs-radius-pill); white-space: nowrap; }
-.tag.swap { background: var(--rs-paper); color: var(--rs-paper-ink); }
-.tag.ok { border: 1.5px solid var(--rs-line-strong); }
-.tag.care { background: var(--rs-warn-fill); color: var(--th-ink); text-decoration: none; }
+.tag.care { background: var(--rs-warn-fill); color: var(--rs-on-ink); text-decoration: none; }
 .small { font-size: var(--rs-text-sm); }
 .go { display: flex; justify-content: flex-end; }
-.hint, .upl { margin-bottom: var(--rs-space-3); }
-.upl { font-size: var(--rs-text-sm); color: var(--rs-text-strong); display: flex; flex-direction: column; gap: 6px; }
-.upl .bar { height: 6px; border-radius: var(--rs-radius-pill); background: var(--rs-surface-2); overflow: hidden; }
-.upl .bar span { display: block; height: 100%; background: var(--rs-active); }
-.drop.dragging { outline: 2px dashed var(--rs-text-strong); outline-offset: -8px; }
+.upl { margin-bottom: var(--rs-space-3); font-size: var(--rs-text-sm); color: var(--rs-text-strong); }
 .note { margin-top: var(--rs-space-3); }
 .error { color: var(--rs-danger); }
 @media (max-width: 820px) {
   .file { grid-template-columns: 1fr auto; }
+  .file.head { display: none; }
   .name { grid-column: 1 / -1; order: -1; }
-  .fit { min-width: 0; }
-  .go { grid-column: 1 / -1; justify-content: flex-start; }
+  .go { justify-content: flex-end; }
 }
 .file.highlight { outline: 2px solid var(--rs-ink); outline-offset: -2px; border-radius: var(--rs-radius-md); }
 </style>
