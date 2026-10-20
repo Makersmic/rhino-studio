@@ -40,7 +40,9 @@ export const READ_ONLY_METHODS: ReadonlySet<string> = new Set([
   'printer.objects.list',
   'printer.objects.subscribe',
   'server.files.list',
+  'server.files.get_directory',
   'server.history.list',
+  'server.history.totals',
   'server.gcode_store',
   'printer.gcode.help',
   'server.webcams.list',
@@ -96,6 +98,34 @@ export const POWER_METHODS: ReadonlySet<string> = new Set([
 /** Services Studio offers to restart (Moonraker refuses any not in its own allowed list too). */
 export const POWER_SERVICES: ReadonlySet<string> = new Set(['klipper', 'moonraker', 'crowsnest'])
 
+/**
+ * File manager changes (Files > Gcode files / Config): folders, delete, move/rename,
+ * copy. Only files() sends these, and only inside FILE_ROOTS: never the logs root,
+ * never the rest of the disk. Moonraker itself refuses to touch the file a job is
+ * printing; Studio refuses first (src/files/fileOps.ts) and says why.
+ */
+export const FILE_METHODS: ReadonlySet<string> = new Set([
+  'server.files.post_directory',
+  'server.files.delete_directory',
+  'server.files.delete_file',
+  'server.files.move',
+  'server.files.copy',
+])
+/** Moonraker roots Studio may change. 'logs' is read-only and not here. */
+export const FILE_ROOTS: ReadonlySet<string> = new Set(['gcodes', 'config'])
+/** Roots Studio lists and reads. */
+export const READ_ROOTS: ReadonlySet<string> = new Set(['gcodes', 'config', 'logs'])
+
+/** A Moonraker path like "gcodes/parts/a.gcode": known root, no "..", no leading slash, no empty parts. */
+export function checkRootPath(path: string, roots: ReadonlySet<string>): string | null {
+  if (typeof path !== 'string' || !path) return 'No path given'
+  if (path.startsWith('/') || path.includes('\\')) return `"${path}" isn't inside a Moonraker folder`
+  const parts = path.split('/')
+  if (!roots.has(parts[0]!)) return `"${parts[0]}" isn't a folder Studio can change`
+  if (parts.some((p, i) => (i > 0 && p === '') || p === '..' || p === '.')) return `"${path}" isn't a plain path`
+  return null
+}
+
 /** Methods that change the machine. Each has its own public function below. */
 export const ACTION_METHODS: ReadonlySet<string> = new Set([
   'printer.gcode.script',
@@ -142,12 +172,31 @@ export interface HistoryJob {
   end_time: number | null
   print_duration: number
   filament_used: number
+  total_duration?: number
+  /** false when the file has been deleted or moved since */
+  exists?: boolean
+}
+
+export interface HistoryTotals {
+  total_jobs: number
+  total_time: number
+  total_print_time: number
+  total_filament_used: number
+  longest_job: number
+  longest_print: number
 }
 
 export interface FileEntry {
   path: string
   modified: number
   size: number
+}
+
+/** One folder's contents (server.files.get_directory). */
+export interface DirListing {
+  dirs: { dirname: string; modified: number; size: number }[]
+  files: { filename: string; modified: number; size: number; permissions?: string }[]
+  disk_usage?: { total: number; used: number; free: number }
 }
 
 export interface ClientHandlers {
@@ -256,6 +305,16 @@ export class MoonrakerClient {
    * Moonraker's job history, newest first (read only). Returns [] when the
    * history component isn't loaded, so Files simply shows no results.
    */
+  /** Moonraker's running totals over every job it has kept. */
+  async historyTotals(): Promise<HistoryTotals | null> {
+    try {
+      const r = (await this.call('server.history.totals')) as { job_totals?: HistoryTotals }
+      return r?.job_totals ?? null
+    } catch {
+      return null
+    }
+  }
+
   async listHistory(limit = 200): Promise<HistoryJob[]> {
     try {
       const r = (await this.call('server.history.list', { limit, order: 'desc' })) as { jobs?: HistoryJob[] }
@@ -283,6 +342,77 @@ export class MoonrakerClient {
       return Promise.reject(new Error(`Blocked: Studio doesn't restart "${String(params?.service)}"`))
     }
     return this.send(method, params, 30_000)
+  }
+
+  /** One folder of a root, e.g. "gcodes" or "config/myrhino". */
+  async getDirectory(path: string): Promise<DirListing> {
+    const bad = checkRootPath(path, READ_ROOTS)
+    if (bad) throw new Error(`Blocked: ${bad}`)
+    const r = (await this.call('server.files.get_directory', { path, extended: false })) as DirListing
+    return { dirs: Array.isArray(r?.dirs) ? r.dirs : [], files: Array.isArray(r?.files) ? r.files : [], disk_usage: r?.disk_usage }
+  }
+
+  /** URL of any file under a readable root, e.g. ("config", "printer.cfg"). */
+  rootUrl(root: string, path: string): string {
+    if (!READ_ROOTS.has(root)) throw new Error(`Blocked: "${root}" isn't a folder Studio reads`)
+    return `${this.baseUrl}/server/files/${root}/${path.split('/').map(encodeURIComponent).join('/')}`
+  }
+
+  /**
+   * File manager changes. Every path parameter (path, source, dest) must be a
+   * plain path inside FILE_ROOTS; anything else is refused before it's sent.
+   */
+  files(method: string, params: Record<string, unknown>): Promise<unknown> {
+    if (!FILE_METHODS.has(method)) return Promise.reject(new Error(`Blocked: "${method}" is not an allowed file change`))
+    for (const k of ['path', 'source', 'dest']) {
+      if (!(k in params)) continue
+      const bad = checkRootPath(String(params[k]), FILE_ROOTS)
+      if (bad) return Promise.reject(new Error(`Blocked: ${bad}`))
+    }
+    if (!('path' in params) && !('source' in params)) return Promise.reject(new Error('Blocked: no path given'))
+    if (method === 'server.files.move' || method === 'server.files.copy') {
+      if (!('source' in params) || !('dest' in params)) return Promise.reject(new Error('Blocked: move and copy need a source and a destination'))
+      if (String(params.source).split('/')[0] !== String(params.dest).split('/')[0]) return Promise.reject(new Error("Blocked: files don't move between G-code and config folders"))
+    }
+    return this.send(method, params, 30_000)
+  }
+
+  /**
+   * Upload into a folder of a writable root (path '' = the root itself).
+   * Never starts a job. `name` lets a text edit be saved under its own name.
+   */
+  uploadTo(root: string, folder: string, file: Blob, name: string, onProgress?: (fraction: number) => void): Promise<string> {
+    if (!FILE_ROOTS.has(root)) return Promise.reject(new Error(`Blocked: uploads go to G-code or config folders only`))
+    const bad = checkRootPath(folder ? `${root}/${folder}/${name}` : `${root}/${name}`, FILE_ROOTS)
+    if (bad || name.includes('/')) return Promise.reject(new Error(`Blocked: ${bad ?? `"${name}" isn't a plain file name`}`))
+    return new Promise((resolve, reject) => {
+      const form = new FormData()
+      form.append('root', root)
+      if (folder) form.append('path', folder)
+      form.append('print', 'false')
+      form.append('file', file, name)
+      const xhr = new XMLHttpRequest()
+      xhr.open('POST', `${this.baseUrl}/server/files/upload`)
+      xhr.upload.onprogress = (e) => e.lengthComputable && onProgress?.(e.loaded / e.total)
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          try {
+            const r = JSON.parse(xhr.responseText) as { item?: { path?: string }; result?: { item?: { path?: string } } }
+            resolve(r.item?.path ?? r.result?.item?.path ?? name)
+          } catch {
+            resolve(name)
+          }
+        } else {
+          let msg = `HTTP ${xhr.status}`
+          try {
+            msg = (JSON.parse(xhr.responseText) as { error?: { message?: string } }).error?.message ?? msg
+          } catch { /* not JSON */ }
+          reject(new Error(`Upload failed: ${msg}`))
+        }
+      }
+      xhr.onerror = () => reject(new Error('Upload failed: network error'))
+      xhr.send(form)
+    })
   }
 
   async listFiles(): Promise<FileEntry[]> {

@@ -265,7 +265,7 @@ On the machine, Klipper ready, no job unless a row says so.
 | FL1 | Files: drag two .gcode files and one .stl onto the dashed drop area | Both G-code files upload with progress, the list refreshes; the .stl is named as skipped. Nothing starts | A job starts, or the .stl reaches the Pi |
 | FL2 | Files: click the drop area | The file picker opens (several files allowed) | |
 | FL3 | Files with BlockOne mounted and verified | BlockOne files have one pastel green pill behind icon and name; other tools' files have none; there is no "Fits"/"Needs" column | Green shows while the mounted tool is unverified |
-| FL4 | Files: Last run column, after a print finishes and after one is cancelled | "✓ Completed" and "– Cancelled" with the date, matching Mainsail's history; never-run files say "Not run yet" | |
+| FL4 | Files: Last run column, after a print finishes and after one is cancelled | "✓ Completed" and "– Cancelled" with the date, matching Mainsail's history; never-run files have a small hollow ring after the name (tooltip "Not run yet") | |
 | H1 | Settings → Host, no job: Restart firmware, confirm | Klipper restarts; Studio shows it ready again | Anything moves |
 | H2 | Settings → Host, Moonraker → Restart, confirm | Studio drops the connection and reconnects by itself | Studio stays disconnected |
 | H3 | Start a job, open Settings → Host | Every button is greyed, "A job is running" shown | Any action runs |
@@ -298,3 +298,38 @@ The first 1.5.3 install is by hand (rhino.sh option 3); these check the next one
 | Z3 | Start a print, then press Install | Refused: a job is running | The install starts |
 | Z4 | No job: Install, confirm | Steps tick through; "The Portal is restarting" while it does; done, then Studio reloads itself. Klipper restarted (axes unhomed) | It stops with no reason shown |
 | Z5 | After Z4: Go back to <previous> | The previous version installs the same way | |
+
+## 0.6.2: File manager (Files tabs)
+
+Klipper ready. Keep Mainsail open on another screen to compare. **Stop if** anything outside Moonraker's gcodes / config / logs folders is listed or changed, or Klipper restarts without you pressing a restart.
+
+| # | Do | Pass | Stop if |
+|---|---|---|---|
+| F1 | Files: tabs Gcode files · Config · Logs · Job history | Each lists what Mainsail shows for that folder; folders first; sort by Name, Modified, Size (click again to flip) | Files from elsewhere on the disk |
+| F2 | Gcode files: New folder "test", drag a .gcode from the PC onto its row | The row outlines while dragging; the file uploads into test (progress shown); breadcrumb Gcode files › test after opening it | It starts a job |
+| F3 | Row menu (right-click; long-press on a phone; or ⋯) on that file: Rename, Duplicate, Move to folder… (back to the top), Download; then drag the row out to the desktop (Chrome/Edge) | Each does what it says, and Mainsail agrees; Download and drag-out give the file | |
+| F4 | Upload a file with a name already there | Asks Replace / Keep both / Cancel; Keep both makes "name (1).gcode" | It overwrites without asking |
+| F5 | Start a print; open the menu on its file and on its folder | Edit, Rename, Move, Delete are greyed with "A job is using this file" / "…a file in this folder"; Duplicate and Download work; an "In use" tag on the row | Any of them runs |
+| F6 | Config: open printer.cfg, add a comment line, Ctrl+S | "Saved. The file as it was is in studio_backups/printer.cfg.<time>.bak"; Klipper is NOT restarted; Restart Klipper to apply asks first | Klipper restarts by itself |
+| F7 | Close the editor with unsaved changes; reload the page with unsaved changes | "Close without saving?" asks first; the browser warns before leaving | Changes lost without a question |
+| F8 | Save printer.cfg 11 times | studio_backups keeps the newest 10 copies of it | |
+| F9 | Open a G-code file over 2 MB, then klippy.log | Opens read-only (says why); nothing over 25 MB opens (downloads instead) | The page freezes |
+| F10 | Delete the test folder | Confirms (red outline Delete) and says everything in it goes; gone in Mainsail too | It deletes without asking |
+| F11 | Logs tab | Read-only: no Upload, New, Rename or Delete anywhere | |
+| F12 | Phone | No sideways scrolling; Upload button works; the drop area only appears while uploading | |
+| JH1 | Job history | Matches Mainsail's history (status, start, print time, filament) and its totals; a deleted file is struck through with Reprint off | |
+| JH2 | Reprint a finished print-head job with the same tool mounted | The same checks as Start (care note if due), then it starts | It starts with the wrong tool mounted |
+
+## 0.6.2: Cameras, red panels, pin labels, Scan Config
+
+| # | Do | Pass | Stop if |
+|---|---|---|---|
+| C1 | Settings › Cameras | Each camera row has a small live picture left of Turn off; a turned-off camera shows "Off"; scrolling it out of view stops its stream (crowsnest log or network tab) | |
+| R1 | Control: tap the tuning padlock; Motion: Unlock | Each panel turns red (#c0281d) with white text and white-on-red controls; the padlock turns white; locking turns it back to paper and ink | |
+| R2 | Pendant | Unchanged (Hold still inverts the keys; no red) | |
+| PL1 | Toolheads › Wiring › Board pins (Tool Manager 1.5.3): Add label ENCLOSURE_LIGHT on a free header pin | Listed under Pin labels; the restart banner lists it; `myrhino/custom_tools.cfg` has `[board_pins rhino]` with it | Klipper restarts by itself |
+| PL2 | In printer.cfg (Files › Config) add `[output_pin enclosure_light]` with `pin: ENCLOSURE_LIGHT`, save, Restart Klipper | Klipper starts; the label shows "Used by printer.cfg [output_pin enclosure_light]"; SET_PIN PIN=enclosure_light VALUE=1 lights it | Klipper reports an alias error |
+| PL3 | Click the label's pin, pick another free pin | A save icon appears beside it and "was <old pin>" under it; press save: the banner says "<old> -> <new>" | |
+| PL4 | Outputs: Label it on an output written with a raw pin, name it, Use | That one line in its file now says `pin: <label>` (prefix and comment kept); a copy is in `~/printer_data/rhino_data/config_backups`; Klipper starts after the restart | Any other line changed |
+| PL5 | Remove a label something uses | Refused, naming what uses it | |
+| SC1 | System hardware › Add, step 3: Scan Config | Lists your labels (free ones can be used; used ones say by what) and the pins your config files use; Use puts the label in the pin field; the saved section says `pin: <label>` | |

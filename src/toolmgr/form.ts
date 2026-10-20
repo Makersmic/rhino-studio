@@ -99,6 +99,9 @@ export function newControl(opt: ToolOptions | null): ControlDraft {
 export function controlToDraft(c: ToolControl): ControlDraft {
   const d = JSON.parse(JSON.stringify(c)) as ControlDraft
   d.original = c.name
+  // on a pin label: edit it as the label, so it stays on the label (the Portal keeps the resolved pin too)
+  if (c.pin_label) d.pin = c.pin_label
+  delete (d as Partial<ToolControl>).pin_label
   d.dir = c.role === 'input' ? 'in' : 'out'
   d.max_pct = pct(c.max_power ?? 1)
   d.min_ms = (c.min_pulse ?? 0.001) * 1000

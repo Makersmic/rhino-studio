@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
-  PORTAL_CARE_SETUP, PORTAL_CARE_WRITES, PORTAL_HARDWARE, PORTAL_NETWORK, PORTAL_SLICER, PORTAL_UPDATE, PORTAL_RESTART, PORTAL_TOOL_CHECKS, PORTAL_TOOL_SETUP, PORTAL_TOOL_WRITES, PORTAL_WRITES, PortalClient, WRITE_ROUTES,
+  PORTAL_CARE_SETUP, PORTAL_CARE_WRITES, PORTAL_HARDWARE, PORTAL_LABELS, PORTAL_NETWORK, PORTAL_SLICER, PORTAL_UPDATE, PORTAL_RESTART, PORTAL_TOOL_CHECKS, PORTAL_TOOL_SETUP, PORTAL_TOOL_WRITES, PORTAL_WRITES, PortalClient, WRITE_ROUTES,
 } from './client'
 import type { TaskDef } from '@/maintenance/types'
 
@@ -61,10 +61,17 @@ describe('PortalClient', () => {
     expect(p.calls[0]!.init?.method ?? 'GET').toBe('GET')
   })
 
+  it('pin labels: only the four label routes, and a label in the path is plain letters, digits and _', () => {
+    expect([...PORTAL_LABELS]).toEqual(['label-preview', 'label-save', 'label-delete', 'label-use'])
+    expect(WRITE_ROUTES['label-delete']!.path.test('/api/pins/label/ENCLOSURE_LIGHT')).toBe(true)
+    for (const bad of ['/api/pins/label/../hardware', '/api/pins/label/a%2Fb', '/api/pins/label/']) expect(WRITE_ROUTES['label-delete']!.path.test(bad), bad).toBe(false)
+    expect(WRITE_ROUTES['label-use']).toEqual({ method: 'POST', path: /^\/api\/pins\/label\/use$/ })
+  })
+
   it('every write kind has exactly one route, and the lists cover them all', () => {
     const kinds = [
       ...PORTAL_WRITES, ...PORTAL_TOOL_CHECKS, ...PORTAL_TOOL_WRITES, ...PORTAL_RESTART,
-      ...PORTAL_CARE_WRITES, ...PORTAL_CARE_SETUP, ...PORTAL_TOOL_SETUP, ...PORTAL_HARDWARE, ...PORTAL_NETWORK, ...PORTAL_SLICER, ...PORTAL_UPDATE,
+      ...PORTAL_CARE_WRITES, ...PORTAL_CARE_SETUP, ...PORTAL_TOOL_SETUP, ...PORTAL_HARDWARE, ...PORTAL_LABELS, ...PORTAL_NETWORK, ...PORTAL_SLICER, ...PORTAL_UPDATE,
     ]
     expect(new Set(kinds).size).toBe(kinds.length)
     expect(Object.keys(WRITE_ROUTES).sort()).toEqual([...kinds].sort())

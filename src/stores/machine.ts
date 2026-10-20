@@ -281,6 +281,11 @@ export const useMachineStore = defineStore('machine', () => {
     return client.listHistory(limit)
   }
 
+  function historyTotals() {
+    if (!client) return Promise.resolve(null)
+    return client.historyTotals()
+  }
+
   function fileUrl(path: string) {
     return client?.fileUrl(path) ?? null
   }
@@ -309,6 +314,12 @@ export const useMachineStore = defineStore('machine', () => {
   const resumePrint = () => need().resumePrint()
   const cancelPrint = () => need().cancelPrint()
   const uploadFile = (file: File, onProgress?: (f: number) => void) => need().uploadFile(file, onProgress)
+  // File manager (Files): the gates are in the client (FILE_METHODS, roots) and src/files/fileOps.ts
+  const getDirectory = (path: string) => need().getDirectory(path)
+  const fileChange = (method: string, params: Record<string, unknown>) => need().files(method, params)
+  const uploadTo = (root: string, folder: string, file: Blob, name: string, onProgress?: (f: number) => void) =>
+    need().uploadTo(root, folder, file, name, onProgress)
+  const rootUrl = (root: string, path: string) => client?.rootUrl(root, path) ?? null
   // Settings / Software and Network
   const updateStatus = () => need().updateStatus()
   const systemInfo = () => need().systemInfo()
@@ -357,6 +368,7 @@ export const useMachineStore = defineStore('machine', () => {
     emergencyStop,
     listFiles,
     listHistory,
+    historyTotals,
     listLogs,
     logUrl,
     power,
@@ -372,6 +384,10 @@ export const useMachineStore = defineStore('machine', () => {
     resumePrint,
     cancelPrint,
     uploadFile,
+    getDirectory,
+    fileChange,
+    uploadTo,
+    rootUrl,
     updateStatus,
     systemInfo,
     procStats,

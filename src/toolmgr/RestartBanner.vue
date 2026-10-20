@@ -41,8 +41,8 @@ async function restart() {
   err.value = null
   const ok = await control.confirm({
     title: 'Restart Klipper?',
-    body: 'Klipper restarts to load the tool changes. Heaters switch off and the machine forgets where it is: home it again afterwards, and answer the "which toolhead is mounted?" question when it appears.',
-    feature: changes.value.length === 1 ? changes.value[0] : `${changes.value.length} tool changes`,
+    body: 'Klipper restarts to load the saved changes. Heaters switch off and the machine forgets where it is: home it again afterwards, and answer the "which toolhead is mounted?" question when it appears.',
+    feature: changes.value.length === 1 ? changes.value[0] : `${changes.value.length} changes`,
     confirmLabel: 'Restart Klipper',
     tone: 'normal',
   })
@@ -68,7 +68,7 @@ async function auto(on: boolean) {
   <section v-if="p" class="banner" role="status" aria-live="polite">
     <span class="mark" aria-hidden="true" />
     <div class="text">
-      <strong>{{ changes.length > 1 ? `${changes.length} tool changes are saved but not live yet` : 'A tool change is saved but not live yet' }}</strong>
+      <strong>{{ changes.length > 1 ? `${changes.length} changes are saved but not live yet` : 'A change is saved but not live yet' }}</strong>
       <ul v-if="changes.length">
         <li v-for="(c, i) in changes.slice(-6)" :key="i">{{ c }}</li>
         <li v-if="changes.length > 6" class="muted">and {{ changes.length - 6 }} earlier</li>

@@ -72,6 +72,12 @@
 }
 
 /* Night (default): inverted e-ink. Black housing, charcoal paper, light ink. */
+:root {
+  /* Unlocked and live (Motion's Unlock, the tuning padlock): a deeper red than --rs-danger,
+     the same in day and night, so small white text on it stays readable */
+  --rs-live-fill: #c0281d;
+}
+
 :root,
 :root[data-theme='dark'] {
   color-scheme: dark;

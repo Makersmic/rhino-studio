@@ -83,6 +83,8 @@ export interface ToolControl {
   purpose?: string
   role: 'switch' | 'level' | 'fan' | 'heater_fan' | 'servo' | 'input' | string
   pin: string
+  /** system hardware on a pin label (Tool Manager 1.5.3+): the section says pin: <label> */
+  pin_label?: string
   invert?: boolean
   start_on?: boolean
   on_shutdown?: 'off' | 'on'
@@ -230,7 +232,27 @@ export interface ToolLists {
 }
 
 /** GET /api/state pins: the tool connector, the board's pins and outputs, system hardware. */
+export interface PinLabel {
+  alias: string
+  pin: string
+  /** true = a Rhino label ([board_pins rhino]); false = an alias in your own files, read-only */
+  editable: boolean
+  source: string
+  used_by: string[]
+}
+/** A section's pin line that names a pin directly (it could use a label instead). */
+export interface RawPinLine {
+  file: string
+  section: string
+  key: string
+  value: string
+  pin: string
+}
 export interface PinsReport {
+  /** Tool Manager 1.5.3+ */
+  labels?: PinLabel[]
+  raw_pin_lines?: RawPinLine[]
+  free_board_pins?: { pin: string; header: string; connector: boolean; labelled: string[] }[]
   pins: { pin: string; state: 'free' | 'claimed' | 'tool' | string; owner?: string }[]
   channels: { name: string; pwm: boolean; value?: number | null; shared_with?: string; pin?: string; contact?: number | null; hardware?: boolean }[]
   contacts: (OptionContact & { owner?: string; warning?: string })[]

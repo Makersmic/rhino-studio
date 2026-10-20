@@ -80,6 +80,12 @@ export const PORTAL_CARE_WRITES = [
 export const PORTAL_CARE_SETUP = ['areas', 'maint-lists', 'statuses'] as const
 export const PORTAL_TOOL_SETUP = ['tool-lists'] as const
 export const PORTAL_HARDWARE = ['preview-hardware', 'hardware-save', 'hardware-delete'] as const
+/**
+ * PORTAL_LABELS (Tool Manager 1.5.3+): pin labels, Klipper aliases in [board_pins rhino].
+ * Save/remove only change the Portal's generated file; label-use rewrites ONE pin line in a
+ * config file (backed up first, read back, put back if it doesn't resolve). Nothing restarts.
+ */
+export const PORTAL_LABELS = ['label-preview', 'label-save', 'label-delete', 'label-use'] as const
 /** The Rhino's network (config 1.4.8+). Each change switches back after a while unless kept. */
 /** PrusaSlicer on the Rhino (config 1.5.0+): slicing jobs and the engine's own updates. */
 export const PORTAL_SLICER = ['slice', 'slice-cancel', 'engine-check', 'engine-update', 'engine-rollback'] as const
@@ -89,6 +95,7 @@ export const PORTAL_NETWORK = ['net-hostname', 'net-ipv4', 'net-wifi', 'net-powe
 
 export type WriteKind =
   | (typeof PORTAL_WRITES)[number]
+  | (typeof PORTAL_LABELS)[number]
   | (typeof PORTAL_TOOL_CHECKS)[number]
   | (typeof PORTAL_TOOL_WRITES)[number]
   | (typeof PORTAL_RESTART)[number]
@@ -137,6 +144,10 @@ export const WRITE_ROUTES: Record<WriteKind, { method: 'POST' | 'DELETE'; path: 
   'preview-hardware': { method: 'POST', path: /^\/api\/preview\/hardware$/ },
   'hardware-save': { method: 'POST', path: /^\/api\/hardware$/ },
   'hardware-delete': { method: 'DELETE', path: /^\/api\/hardware\/[^/]+$/ },
+  'label-preview': { method: 'POST', path: /^\/api\/preview\/pins\/label$/ },
+  'label-save': { method: 'POST', path: /^\/api\/pins\/label$/ },
+  'label-delete': { method: 'DELETE', path: /^\/api\/pins\/label\/[A-Za-z0-9_]+$/ },
+  'label-use': { method: 'POST', path: /^\/api\/pins\/label\/use$/ },
   'net-hostname': { method: 'POST', path: /^\/api\/net\/hostname$/ },
   'net-ipv4': { method: 'POST', path: /^\/api\/net\/ipv4$/ },
   'net-wifi': { method: 'POST', path: /^\/api\/net\/wifi$/ },
@@ -154,7 +165,7 @@ export const WRITE_ROUTES: Record<WriteKind, { method: 'POST' | 'DELETE'; path: 
 
 const ALLOWED = new Set<string>([
   ...PORTAL_WRITES, ...PORTAL_TOOL_CHECKS, ...PORTAL_TOOL_WRITES, ...PORTAL_RESTART,
-  ...PORTAL_CARE_WRITES, ...PORTAL_CARE_SETUP, ...PORTAL_TOOL_SETUP, ...PORTAL_HARDWARE, ...PORTAL_NETWORK, ...PORTAL_SLICER, ...PORTAL_UPDATE,
+  ...PORTAL_CARE_WRITES, ...PORTAL_CARE_SETUP, ...PORTAL_TOOL_SETUP, ...PORTAL_HARDWARE, ...PORTAL_LABELS, ...PORTAL_NETWORK, ...PORTAL_SLICER, ...PORTAL_UPDATE,
 ])
 const enc = encodeURIComponent
 
@@ -380,6 +391,18 @@ export class PortalClient {
 
   async deleteHardware(name: string): Promise<WriteResult> {
     return this.write('hardware-delete', 'DELETE', `/api/hardware/${enc(name)}`)
+  }
+
+  // ---- pin labels (Tool Manager 1.5.3+) ----------------------------------------
+
+  async saveLabel(body: { alias: string; pin: string; original?: string }): Promise<WriteResult & { previous?: string; warnings?: string[] }> {
+    return this.write('label-save', 'POST', '/api/pins/label', body)
+  }
+  async deleteLabel(alias: string): Promise<WriteResult> {
+    return this.write('label-delete', 'DELETE', `/api/pins/label/${enc(alias)}`)
+  }
+  async useLabel(body: { file: string; section: string; key: string; alias: string }): Promise<WriteResult & { made_label?: boolean }> {
+    return this.write('label-use', 'POST', '/api/pins/label/use', body)
   }
 
   // ---- the Rhino's network (config 1.4.8+) --------------------------------

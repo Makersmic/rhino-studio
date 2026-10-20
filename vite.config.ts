@@ -16,6 +16,7 @@ const LIBS: [string, string][] = [
   ['vue-router', 'Screens and links'],
   ['@fontsource-variable/archivo', 'Interface font (Archivo)'],
   ['@fontsource/jetbrains-mono', 'Positions and console font (JetBrains Mono)'],
+  ['@codemirror/view', 'File editor (CodeMirror, with @codemirror/state, commands, language, search)'],
   ['vite', 'Build tool'],
   ['typescript', 'Type checking'],
 ]

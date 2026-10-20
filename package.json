@@ -1,7 +1,7 @@
 {
   "name": "rhino-studio",
   "private": true,
-  "version": "0.6.1",
+  "version": "0.6.2",
   "description": "One interface for every Rhino Multi Motion System process: prepare, preview, send, monitor.",
   "license": "GPL-3.0-or-later",
   "type": "module",
@@ -16,8 +16,14 @@
     "kiri": "node scripts/kiri/build.mjs"
   },
   "dependencies": {
+    "@codemirror/commands": "^6.11.1",
+    "@codemirror/language": "^6.13.1",
+    "@codemirror/search": "^6.7.2",
+    "@codemirror/state": "^6.7.6",
+    "@codemirror/view": "^6.43.15",
     "@fontsource-variable/archivo": "^5.3.0",
     "@fontsource/jetbrains-mono": "^5.3.0",
+    "@lezer/highlight": "^1.2.5",
     "pinia": "^2.3.1",
     "vue": "^3.5.43",
     "vue-router": "^4.6.4"

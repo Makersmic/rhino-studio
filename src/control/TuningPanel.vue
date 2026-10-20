@@ -45,7 +45,7 @@ const lockLabel = computed(() => (control.tuneUnlocked ? 'Tuning unlocked. Lock 
 </script>
 
 <template>
-  <section class="tune" :class="{ live }" aria-label="Live tuning">
+  <section class="tune" :class="{ live, 'rs-live': control.tuneUnlocked }" aria-label="Live tuning">
     <button
       type="button"
       class="lock"

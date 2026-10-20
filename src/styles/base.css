@@ -117,3 +117,33 @@ textarea {
 
 /* No data: a plain dash in the interface font, never dotted */
 .rs-num.empty, .rs-num:empty { font-family: var(--rs-font-ui); font-weight: var(--rs-weight-light); color: var(--rs-text-muted); }
+
+/* ---- Unlocked = red panel ---------------------------------------------------------
+   A panel with a lock (Motion on Control, the tuning strip) wears this while it is
+   unlocked and live. It redefines the colour tokens inside the panel, so every control
+   in it (sliders, buttons, chips, number boxes, the padlock) turns white on red by itself.
+   Locked, the panel is paper and ink again. Not the pendant: its Hold already inverts. */
+.rs-live {
+  --rs-surface: var(--rs-live-fill);
+  --rs-surface-2: color-mix(in srgb, var(--rs-live-fill) 84%, #000);
+  --rs-paper: var(--rs-live-fill);
+  --rs-edit-fill: rgb(255 255 255 / 0.16);
+  --rs-key-fill: rgb(255 255 255 / 0.2);
+  --rs-text: #ffffff;
+  --rs-text-strong: #ffffff;
+  --rs-text-muted: rgb(255 255 255 / 0.8);
+  --rs-ink: #ffffff;
+  --rs-on-ink: var(--rs-live-fill);
+  --rs-line: rgb(255 255 255 / 0.3);
+  --rs-line-strong: rgb(255 255 255 / 0.7);
+  --rs-dot: rgb(255 255 255 / 0.75);
+  --rs-dot-faint: rgb(255 255 255 / 0.4);
+  --rs-danger: #ffffff;
+  --rs-danger-strong: #ffffff;
+  --rs-on-danger: var(--rs-live-fill);
+  --rs-focus-ring: #ffffff;
+  --rs-graph-grid: rgb(255 255 255 / 0.25);
+  background: var(--rs-live-fill);
+  border-color: var(--rs-live-fill);
+  color: #ffffff;
+}

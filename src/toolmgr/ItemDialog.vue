@@ -130,6 +130,40 @@ const typedPin = computed({
   },
 })
 const what = computed(() => (props.hardware ? 'system hardware' : props.kind))
+// ---- Scan Config (system hardware, Tool Manager 1.5.3+) --------------------------------
+const scanning = ref(false)
+type ScanLabel = { alias: string; pin: string; editable: boolean; source: string; block: string | null }
+const scan = ref<{ error?: string; labels: ScanLabel[]; raw: { file: string; section: string; key: string; pin: string }[] } | null>(null)
+async function scanConfig() {
+  scanning.value = true
+  try {
+    await tm.refresh()
+    const p = tm.pins
+    if (!p || !Array.isArray(p.labels)) {
+      scan.value = { error: 'This Rhino Tool Manager is too old to scan the config (1.5.3 or newer).', labels: [], raw: [] }
+      return
+    }
+    const onConnector = new Set([...props.options.contacts.map((x) => x.pin).filter(Boolean), ...Object.keys(props.options.pin_info ?? {})])
+    const editingLabel = (props.item as ControlDraft | null)?.pin ?? ''
+    scan.value = {
+      labels: p.labels.map((l) => ({
+        ...l,
+        block: l.used_by.length && l.alias !== editingLabel ? `used by ${l.used_by.join(', ')}` : onConnector.has(l.pin) ? 'on the tool connector' : null,
+      })),
+      raw: (p.raw_pin_lines ?? []).slice().sort((a, b) => a.pin.localeCompare(b.pin, undefined, { numeric: true })),
+    }
+  } catch (e) {
+    scan.value = { error: `Couldn't scan: ${(e as Error).message}`, labels: [], raw: [] }
+  } finally {
+    scanning.value = false
+  }
+}
+function pickLabel(alias: string) {
+  if (!c.value) return
+  c.value.pin = alias
+  schedule(0)
+}
+
 const pinInfo = computed(() => props.options.pin_info[c.value?.pin ?? ''] ?? {})
 const genNames = computed(() => (props.kind === 'control' ? ctlMacroNames([{ ...draftToControl(c.value), make_macros: true, name: c.value.name || 'name' }]) : []))
 const madeByControls = computed(() => ctlMacroNames(props.controls ?? []))
@@ -218,10 +252,37 @@ const step = computed(() => (c.value?.dir === 'out' ? 4 : 3))
               <span class="tm-hint">{{ hardware ? 'Free headers on the board that are not on the umbilical.' : c.pin ? pinInfo.type_label : 'Only free pins wired to the umbilical are listed. Describe pins in myrhino/umbilical.json to filter by what they can do.' }}</span>
             </div>
             <label v-if="hardware" class="tm-fld">
-              <span class="tm-lbl">Or type another pin</span>
-              <input v-model.lazy="typedPin" class="tm-in code" maxlength="5" placeholder="PE11" />
-              <span class="tm-hint">Any free board pin, like one on the EXP headers. Checked against the whole config.</span>
+              <span class="tm-lbl">Or type another pin or a label</span>
+              <input v-model.lazy="typedPin" class="tm-in code" maxlength="32" placeholder="PE11 or ENCLOSURE_LIGHT" />
+              <span class="tm-hint">Any free board pin, like one on the EXP headers, or a pin label. Checked against the whole config.</span>
             </label>
+          </div>
+          <!-- Scan Config (1.5.3): the pins and labels your config files define, to pick the one you set up -->
+          <div v-if="hardware" class="scan">
+            <RsButton size="sm" :disabled="scanning" @click="scanConfig">{{ scanning ? 'Scanning…' : 'Scan Config' }}</RsButton>
+            <span class="tm-hint">Looks through printer.cfg and the files it includes for pin labels and the pins sections use.</span>
+            <div v-if="scan" class="scanres">
+              <p v-if="scan.error" class="tm-hint bad">{{ scan.error }}</p>
+              <template v-else>
+                <p class="sh">Pin labels{{ scan.labels.length ? '' : ': none yet (add them in Board pins and outputs)' }}</p>
+                <ul v-if="scan.labels.length" class="sl">
+                  <li v-for="l in scan.labels" :key="`${l.source}|${l.alias}`" :class="{ on: c.pin === l.alias }">
+                    <span class="code strong">{{ l.alias }}</span>
+                    <span class="code">{{ l.pin }}</span>
+                    <span class="tm-hint">{{ l.block ?? (l.editable ? 'Rhino label, free' : `${l.source}, free`) }}</span>
+                    <RsButton size="sm" :disabled="!!l.block || c.pin === l.alias" @click="pickLabel(l.alias)">{{ c.pin === l.alias ? 'Chosen' : 'Use' }}</RsButton>
+                  </li>
+                </ul>
+                <p class="sh">Pins your config already uses</p>
+                <ul class="sl used">
+                  <li v-for="r in scan.raw" :key="`${r.file}|${r.section}|${r.key}`">
+                    <span class="code strong">{{ r.pin }}</span>
+                    <span class="code">{{ r.file }} [{{ r.section }}] {{ r.key }}</span>
+                  </li>
+                </ul>
+                <p class="tm-hint">These are taken: a second section can't use the same pin. To move one of them here, give it a label in Board pins and outputs (Label it), then use the label above.</p>
+              </template>
+            </div>
           </div>
         </fieldset>
 
@@ -311,6 +372,17 @@ const step = computed(() => (c.value?.dir === 'out' ? 4 : 3))
 </template>
 
 <style scoped>
+.scan { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin-top: var(--rs-space-3); }
+.scanres { flex-basis: 100%; padding: 10px 12px; border: 1px solid var(--rs-line); border-radius: var(--rs-radius-md); background: var(--rs-surface-2); }
+.scanres .sh { margin: 6px 0 4px; font-size: 12px; font-weight: var(--rs-weight-medium); color: var(--rs-text-muted); }
+.sl { list-style: none; margin: 0 0 6px; padding: 0; max-height: 200px; overflow: auto; }
+.sl li { display: grid; grid-template-columns: minmax(120px, 1fr) 60px minmax(0, 1.4fr) auto; align-items: center; gap: 10px; padding: 5px 0; border-top: 1px solid var(--rs-line); font-size: var(--rs-text-sm); }
+.sl li:first-child { border-top: 0; }
+.sl li.on .strong { text-decoration: underline; text-underline-offset: 3px; }
+.sl.used li { grid-template-columns: 60px minmax(0, 1fr); color: var(--rs-text-muted); }
+.sl .code { font-family: var(--rs-font-code); font-size: var(--rs-text-xs); overflow-wrap: anywhere; }
+.sl .strong { color: var(--rs-text-strong); font-weight: 600; }
+.bad { color: var(--rs-danger); }
 .dlg {
   width: min(720px, calc(100vw - 24px)); max-height: calc(100vh - 32px); padding: 0;
   border: 1px solid var(--rs-line-strong); border-radius: var(--rs-radius-lg); background: var(--rs-surface); color: var(--rs-text);

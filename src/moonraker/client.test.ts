@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { MoonrakerClient, READ_ONLY_METHODS, ACTION_METHODS, CAMERA_METHODS, SETTINGS_METHODS, UPDATE_METHODS, POWER_METHODS, POWER_SERVICES, type Status } from './client'
+import { MoonrakerClient, READ_ONLY_METHODS, ACTION_METHODS, CAMERA_METHODS, SETTINGS_METHODS, UPDATE_METHODS, POWER_METHODS, POWER_SERVICES, FILE_METHODS, FILE_ROOTS, checkRootPath, type Status } from './client'
 import { approve, check } from '@/control/commands'
 
 /** A stand-in for the browser WebSocket that answers like Moonraker. */
@@ -206,5 +206,52 @@ describe('power allowlist', () => {
     await expect(c.power('server.files.delete_file')).rejects.toThrow(/not an allowed power action/)
     await expect(c.power('machine.services.restart', { service: 'nginx' })).rejects.toThrow(/doesn't restart/)
     expect(POWER_SERVICES.has('klipper')).toBe(true)
+  })
+})
+
+describe('file manager allowlist (FILE_METHODS)', () => {
+  it('file changes are in no other list, and the read list has no change in it', () => {
+    for (const m of FILE_METHODS) {
+      for (const other of [READ_ONLY_METHODS, ACTION_METHODS, CAMERA_METHODS, SETTINGS_METHODS, UPDATE_METHODS, POWER_METHODS]) expect(other.has(m), m).toBe(false)
+    }
+    expect([...READ_ONLY_METHODS].filter((m) => m.startsWith('server.files.'))).toEqual(['server.files.list', 'server.files.get_directory'])
+    expect([...FILE_ROOTS].sort()).toEqual(['config', 'gcodes'])
+  })
+  it('paths stay inside a root: no logs, no "..", no absolute or empty parts', () => {
+    for (const p of ['gcodes', 'gcodes/a.gcode', 'config/myrhino/x.cfg']) expect(checkRootPath(p, FILE_ROOTS), p).toBeNull()
+    for (const p of ['logs/klippy.log', '/etc/passwd', 'gcodes/../config/printer.cfg', 'gcodes//a', 'config/./x', 'home/pi/x', '', 'gcodes\\a']) {
+      expect(checkRootPath(p, FILE_ROOTS), p).not.toBeNull()
+    }
+  })
+  it('files() sends only file methods with checked paths, and never moves between roots', async () => {
+    const { c } = make()
+    c.connect()
+    await flush()
+    await flush()
+    const ws = FakeSocket.last!
+    await c.files('server.files.delete_file', { path: 'gcodes/old.gcode' })
+    await c.files('server.files.move', { source: 'config/a.cfg', dest: 'config/sub/a.cfg' })
+    await expect(c.files('printer.gcode.script', { path: 'gcodes/a' })).rejects.toThrow(/not an allowed file change/)
+    await expect(c.files('server.files.delete_file', { path: 'logs/klippy.log' })).rejects.toThrow(/Blocked/)
+    await expect(c.files('server.files.delete_directory', { path: 'gcodes/../config' })).rejects.toThrow(/Blocked/)
+    await expect(c.files('server.files.move', { source: 'gcodes/a.gcode', dest: 'config/a.gcode' })).rejects.toThrow(/between G-code and config/)
+    await expect(c.files('server.files.copy', { source: 'gcodes/a.gcode' })).rejects.toThrow(/source and a destination/)
+    await expect(c.files('server.files.delete_file', {})).rejects.toThrow(/no path/)
+    expect(ws.sent.filter((m) => m.method.startsWith('server.files.') && m.method !== 'server.files.list').map((m) => m.method)).toEqual([
+      'server.files.delete_file',
+      'server.files.move',
+    ])
+  })
+  it('reads folders only inside the readable roots; uploads only into writable ones', async () => {
+    const { c } = make()
+    c.connect()
+    await flush()
+    await flush()
+    await expect(c.getDirectory('etc')).rejects.toThrow(/Blocked/)
+    await expect(c.uploadTo('logs', '', new Blob(['x']), 'x.log')).rejects.toThrow(/G-code or config folders only/)
+    await expect(c.uploadTo('config', '../..', new Blob(['x']), 'x.cfg')).rejects.toThrow(/Blocked/)
+    await expect(c.uploadTo('config', '', new Blob(['x']), 'a/b.cfg')).rejects.toThrow(/Blocked/)
+    expect(() => c.rootUrl('etc', 'passwd')).toThrow(/Blocked/)
+    expect(c.rootUrl('config', 'my rhino/a.cfg')).toBe('http://rhino.test/server/files/config/my%20rhino/a.cfg')
   })
 })

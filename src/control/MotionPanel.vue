@@ -36,7 +36,7 @@ onBeforeUnmount(() => control.lockMotion())
 </script>
 
 <template>
-  <RsPanel title="Motion" panel-id="control.motion">
+  <RsPanel title="Motion" panel-id="control.motion" :live="armed">
     <template #actions>
       <!-- one toggle: Unlock, or the time left with Lock -->
       <RsButton v-if="armed" size="sm" :aria-label="`Unlocked, locks in ${control.unlockSecondsLeft} seconds. Lock now`" @click="control.lockMotion()">

@@ -12,7 +12,7 @@ import { computed } from 'vue'
 import PanelMenu from './PanelMenu.vue'
 import { usePanelThemeStore } from '@/stores/panelTheme'
 
-const props = withDefaults(defineProps<{ title?: string; index?: string; status?: string; flush?: boolean; panelId?: string }>(), {
+const props = withDefaults(defineProps<{ title?: string; index?: string; status?: string; flush?: boolean; panelId?: string; live?: boolean }>(), {
   title: undefined,
   index: undefined,
   status: undefined,
@@ -24,7 +24,8 @@ const colours = computed(() => themes.styleFor(props.panelId))
 </script>
 
 <template>
-  <section class="module" :class="{ flush }" :style="colours">
+  <!-- live: unlocked (red panel, see .rs-live in base.css); a panel's own colours step aside meanwhile -->
+  <section class="module" :class="{ flush, 'rs-live': live }" :style="live ? undefined : colours">
     <header v-if="title || status || $slots.actions || panelId" class="head">
       <h2 v-if="title">{{ title }}</h2>
       <span v-if="status" class="status">{{ status }}</span>
