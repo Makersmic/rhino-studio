@@ -103,9 +103,9 @@ async function toggle(cam: Webcam) {
           <strong>{{ cam.name }}<em v-if="!cam.enabled">Off</em><em v-if="cam.source === 'config'">moonraker.conf</em></strong>
           <span>{{ serviceLabel(cam.service) }} · <code>{{ viewMode(cam.service) === 'snapshot' ? cam.snapshotUrl : cam.streamUrl }}</code></span>
         </div>
-        <!-- a small live picture, left of Turn off (streams only while on screen) -->
+        <!-- a small live picture, left of Turn off: one still a second, only while on screen (easy on a Pi 3B) -->
         <div class="thumb" :class="{ blank: !cam.enabled }" :aria-label="cam.enabled ? `Live picture from ${cam.name}` : `${cam.name} is off`">
-          <WebcamView v-if="cam.enabled && form?.uid !== cam.uid" :key="`${cam.uid}|${cam.service}|${cam.streamUrl}|${cam.snapshotUrl}`" :cam="cam" fit="cover" fill />
+          <WebcamView v-if="cam.enabled && form?.uid !== cam.uid" :key="`${cam.uid}|${cam.service}|${cam.streamUrl}|${cam.snapshotUrl}`" :cam="cam" fit="cover" fill thumb />
           <span v-else-if="!cam.enabled" class="muted">Off</span>
         </div>
         <div v-if="cam.source !== 'config'" class="acts">

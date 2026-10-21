@@ -19,7 +19,8 @@ import { cssAspect, cssTransform, sourceUrl, viewMode, withStamp, type Webcam } 
 import { useWebcamsStore } from '@/stores/webcams'
 import { useNetworkStore } from '@/stores/network'
 
-const props = withDefaults(defineProps<{ cam: Webcam; fit?: 'contain' | 'cover'; fill?: boolean }>(), { fit: 'contain', fill: false })
+/** thumb: a small preview (Settings › Cameras) - one still a second when the camera has a snapshot address, never a full stream */
+const props = withDefaults(defineProps<{ cam: Webcam; fit?: 'contain' | 'cover'; fill?: boolean; thumb?: boolean }>(), { fit: 'contain', fill: false, thumb: false })
 
 const webcams = useWebcamsStore()
 const root = ref<HTMLElement | null>(null)
@@ -29,10 +30,10 @@ const active = computed(() => inView.value && pageVisible.value)
 
 // Settings / Network can turn MJPEG streams into snapshots on phones or a slow link
 const net = useNetworkStore()
-const asSnapshots = computed(() => viewMode(props.cam.service) === 'mjpeg' && !!props.cam.snapshotUrl && net.camerasAsSnapshots)
+const asSnapshots = computed(() => viewMode(props.cam.service) === 'mjpeg' && !!props.cam.snapshotUrl && (net.camerasAsSnapshots || props.thumb))
 const mode = computed(() => (asSnapshots.value ? 'snapshot' : viewMode(props.cam.service)))
 const url = computed(() => webcams.url(asSnapshots.value ? props.cam.snapshotUrl : sourceUrl(props.cam)))
-const fps = computed(() => (asSnapshots.value ? Math.min(props.cam.targetFps || net.snapshotFps, net.snapshotFps) : props.cam.targetFps || 5))
+const fps = computed(() => (props.thumb && asSnapshots.value ? 1 : asSnapshots.value ? Math.min(props.cam.targetFps || net.snapshotFps, net.snapshotFps) : props.cam.targetFps || 5))
 const transform = computed(() => cssTransform(props.cam))
 const aspect = computed(() => cssAspect(props.cam))
 

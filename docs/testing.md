@@ -333,3 +333,11 @@ Klipper ready. Keep Mainsail open on another screen to compare. **Stop if** anyt
 | PL4 | Outputs: Label it on an output written with a raw pin, name it, Use | That one line in its file now says `pin: <label>` (prefix and comment kept); a copy is in `~/printer_data/rhino_data/config_backups`; Klipper starts after the restart | Any other line changed |
 | PL5 | Remove a label something uses | Refused, naming what uses it | |
 | SC1 | System hardware › Add, step 3: Scan Config | Lists your labels (free ones can be used; used ones say by what) and the pins your config files use; Use puts the label in the pin field; the saved section says `pin: <label>` | |
+
+## Easier on a Pi 3B (after 0.6.2)
+
+| # | Do | Pass | Stop if |
+|---|---|---|---|
+| LG1 | Settings › Cameras | Thumbnails change about once a second (snapshots), not a full stream; Control and the Dashboard still stream | |
+| LG2 | Open a Toolheads page, start a print, watch the Portal log (or the network tab) for a minute | No /api/state reads every 10 s while printing; they resume when the job ends; a change you make still refreshes at once | |
+| LG3 | During a print: upload a G-code file; open a G-code file over 1 MB | Each asks first ("…is printing… can make a small host stutter"); Cancel does nothing; small config files open without asking | It uploads or reads without asking |

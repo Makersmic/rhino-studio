@@ -245,6 +245,7 @@ async function namesIn(dir: string): Promise<Set<string>> {
 async function upload(list: FileList | File[] | null, into = folder.value) {
   const picked = [...(list ?? [])]
   if (!picked.length || !writable.value) return
+  if (!(await okDuringJob(`Upload ${picked.length === 1 ? picked[0]!.name : `${picked.length} files`} now?`))) return
   msg.value = null
   const skipped = picked.filter((f) => uploadProblem(props.root, f.name)).map((f) => `${f.name} (${uploadProblem(props.root, f.name)})`)
   const good = picked.filter((f) => !uploadProblem(props.root, f.name))
@@ -354,6 +355,7 @@ async function open(r: Row) {
   }
   const url = machine.rootUrl(props.root, r.rel)
   if (!url) return
+  if (r.size > BIG_DURING_JOB && !(await okDuringJob(`Open ${r.name} (${fmtSize(r.size)}) now?`))) return
   try {
     const res = await fetch(url, { cache: 'no-store' })
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
@@ -364,6 +366,21 @@ async function open(r: Row) {
   } catch (e) {
     msg.value = `Couldn't open ${r.name}: ${(e as Error).message}`
   }
+}
+
+/**
+ * While a job prints, the host's storage is feeding Klipper: on a small host (a Pi 3B's SD card) a big
+ * read or an upload can stall it ("Timer too close"). So those ask first. Small files just open.
+ */
+const BIG_DURING_JOB = 1024 * 1024
+async function okDuringJob(title: string): Promise<boolean> {
+  if (machine.job.state !== 'printing') return true
+  return control.confirm({
+    title,
+    body: `${machine.job.filename || 'A job'} is printing. Reading or writing big files makes the host's storage busy, which can make a small host like a Pi 3B stutter. You can also wait until the job ends.`,
+    confirmLabel: 'Go ahead',
+    tone: 'normal',
+  })
 }
 
 /** Save the editor's text. Config files: a backup copy first, then the new text. Never restarts. */

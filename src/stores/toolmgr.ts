@@ -46,11 +46,15 @@ export const useToolMgrStore = defineStore('toolmgr', () => {
     }
   }
 
-  /** Screens that show tools call this while open; the Portal is polled only then. */
+  const jobRunning = () => machine.job.state === 'printing' || machine.job.state === 'paused'
+
+  /** Screens that show tools call this while open; the Portal is polled only then (and not during a job). */
   function use(): () => void {
     users++
     void refresh()
-    if (!timer) timer = setInterval(() => void refresh(), 10_000)
+    // During a print the background re-reads stop: each one makes the Portal parse the whole config,
+    // which a Pi 3B feeding Klipper doesn't need. A change you make still refreshes straight away.
+    if (!timer) timer = setInterval(() => !jobRunning() && void refresh(), 10_000)
     return () => {
       users = Math.max(0, users - 1)
       if (!users && timer) {
