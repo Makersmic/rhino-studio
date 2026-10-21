@@ -161,6 +161,10 @@ export const WATCHED_OBJECTS: Record<string, string[] | null> = {
   'gcode_macro TOOL_POWER_STATE': ['active', 'level', 'suspended'], // added powered tools
   // Rhino config 1.4+: the prime line, so Prepare can keep parts off it
   'gcode_macro RHINO_POSITIONS': ['prime_x', 'prime_y', 'prime_length'],
+  // Bed mesh (Bed mesh page): Klipper's mesh, what SAVE_CONFIG would write, and the Rhino's mesh settings (1.6.0+)
+  bed_mesh: ['profile_name', 'mesh_min', 'mesh_max', 'probed_matrix', 'profiles'],
+  configfile: ['save_config_pending', 'save_config_pending_items'],
+  'gcode_macro RHINO_MESH': ['match_c', 'cold_c', 'soak_min'],
 }
 
 /** One finished (or running) job in Moonraker's history. */

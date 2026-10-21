@@ -136,6 +136,8 @@ const HIDDEN = new Set([
   'CNC_BIT_CHANGE', 'REQUIRE_TOOLHEAD',
   // in the top bar, beside the mounted tool (Swap lists the toolheads itself)
   'SWAP_TOOL', 'RESTORE_TOOL', 'LIST_TOOLHEADS', 'CHECK_TOOLHEADS',
+  // the Bed mesh page (Tool Manager 1.6.0): making, removing and reading meshes
+  'RHINO_MESH', 'RHINO_MESH_CALIBRATE', 'RHINO_MESH_REMOVE',
 ])
 
 const label = (n: string) => LABELS[n] ?? n.replace(/_/g, ' ').toLowerCase().replace(/^\w/, (c) => c.toUpperCase())

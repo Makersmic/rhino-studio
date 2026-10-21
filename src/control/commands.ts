@@ -67,6 +67,8 @@ const MOTION: Record<string, string> = {
   Z_TILT_ADJUST: 'probes and levels the gantry (moves the machine)',
   QUAD_GANTRY_LEVEL: 'probes and levels the gantry (moves the machine)',
   BED_MESH_CALIBRATE: 'probes the bed (moves the machine)',
+  RHINO_MESH_CALIBRATE: 'homes if needed, heats the bed, levels the gantry and probes the bed (moves the machine)',
+  BED_MESH_CLEAR: 'switches the bed mesh off: from the next move Z no longer follows the bed',
   PROBE: 'probes (moves the machine)',
   PROBE_CALIBRATE: 'probes (moves the machine)',
   PROBE_ACCURACY: 'probes repeatedly (moves the machine)',
@@ -148,6 +150,8 @@ function checkLine(line: string): LineCheck {
   if (command === 'SAVE_VARIABLE' && /VARIABLE\s*=\s*current_tool\b/i.test(line))
     return r('tool-state', 'changes the saved toolhead, without a physical swap')
   if (command === 'CONFIRM_TOOL_INSTALL') return r('tool-state', 'records a toolhead as mounted')
+  // Loading a mesh changes where Z goes from the next move (a spindle's cut depth too)
+  if (command === 'BED_MESH_PROFILE' && param(line, 'LOAD') != null) return r('motion', 'loads a bed mesh: from the next move Z follows it')
 
   // Other tool-change families (src/tools/adapters). Classified whatever adapter is active:
   // a T1 typed on any machine might swap tools.

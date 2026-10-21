@@ -3,7 +3,7 @@
  * toolhead emblems (see toolheads.ts for the class names).
  */
 
-export type NavIconId = 'dashboard' | 'camera' | 'prepare' | 'preview' | 'control' | 'pendant' | 'toolheads' | 'files' | 'care' | 'style' | 'settings'
+export type NavIconId = 'dashboard' | 'camera' | 'prepare' | 'preview' | 'control' | 'pendant' | 'toolheads' | 'files' | 'mesh' | 'care' | 'style' | 'settings'
 
 export const NAV_ICONS: Record<NavIconId, { title: string; body: string }> = {
   // A landscape screen with a status line along the top: the lock-screen dashboard
@@ -68,6 +68,17 @@ export const NAV_ICONS: Record<NavIconId, { title: string; body: string }> = {
       <path d="M5.5 2.5h9l4 4v15h-13z"/>
       <path d="M14.5 2.5v4h4"/>
       <path d="M8.5 11.5h7M8.5 14.5h7M8.5 17.5h4"/>`,
+  },
+  // A bed seen in perspective with a wavy line across it and probe points: the bed mesh
+  mesh: {
+    title: 'Bed mesh',
+    body: `
+      <path d="M2.8 16.8l5.4-9.6h13l-5.4 9.6z"/>
+      <path class="c" d="M5.4 12.2c2.6-1.6 4.4 1.6 7 0s4.4 1.6 7 0"/>
+      <circle class="f" cx="7.3" cy="14.6" r="1.05"/>
+      <circle class="f" cx="12" cy="11.9" r="1.05"/>
+      <circle class="f" cx="16.6" cy="9.5" r="1.05"/>
+      <path d="M2.8 16.8v2.6h13v-2.6M15.8 19.4l5.4-9.6V7.2"/>`,
   },
   // An open-end wrench with a tick: preventive maintenance
   care: {

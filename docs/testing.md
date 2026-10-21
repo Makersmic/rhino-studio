@@ -389,3 +389,22 @@ Studio has no login, like Mainsail: Moonraker's `[authorization] trusted_clients
 | GU3 | Install from zip with a downloaded zip | Works as before | |
 | GU4 | PrusaSlicer row (a host with PrusaSlicer installed) | "Keep it up to date while I use it" ticked, with when it last updated itself; unticking sticks after a reload | |
 | GU5 | After a PrusaSlicer update, press Go back | It doesn't reinstall that version by itself; the next newer one it does | It flips back to the version you left |
+
+## 0.7.0: Bed mesh (needs Tool Manager 1.6.0 on the Rhino)
+
+Start with BlockOne mounted and confirmed, the bed clear, a hand near Stop. Mesh checks BM1–BM9 on the Tool Manager side (its docs/testing.md) come first: they check the probe area.
+
+| # | Do | Pass | Stop if |
+|---|---|---|---|
+| MS1 | Open Bed mesh before installing 1.6.0 | "Bed mesh is not set up", saying how to add it | It offers to make a mesh |
+| MS2 | After 1.6.0, open Bed mesh | "No bed mesh in use: moves don't follow the bed." Make a mesh shows 60 °C (the material's bed temperature), soak 5, name bed-60 | |
+| MS3 | Mount the laser (or no tool confirmed) | Make the mesh is greyed with the reason (the probe is on the print heads) | It lets you start |
+| MS4 | BlockOne, press Make the mesh | Asks first, naming each step (home if needed, heat, soak, level, probe) and the command. On yes: the bed heats, soaks, Z_TILT_ADJUST runs, the bed is probed. Then "bed-60 is in use", "60°C · BlockOne · today", "Not saved yet: bed-60" | Anything moves before you confirm; the head goes outside the bed |
+| MS5 | Compare the map with the bed | Front of the machine at the bottom of the map; the low/high corners match what you know of the bed; the probed numbers match Mainsail's Heightmap (same mesh) | The map is mirrored or rotated |
+| MS6 | Reading | Range, tilt and warp make sense: after levelling, tilt should be small. Highest/lowest X/Y match the points on the map | |
+| MS7 | Save to printer.cfg | Asks, says Klipper restarts. After: no "Not saved", the tool question comes back, and "No bed mesh in use" (Klipper loads none at start) | It saves during a job; it would save something other than meshes without saying |
+| MS8 | Use bed-60 | Asks; nothing moves; then "bed-60 is in use" | Anything moves |
+| MS9 | Make a second mesh at 100 °C (bed-100), then Compare bed-100 minus bed-60 | Shows how the bed moved when hot (often the middle rises) | |
+| MS10 | Switch off, then Remove a mesh | Each asks; the mesh leaves the list; Save takes it out of printer.cfg | |
+| MS11 | Start a job | Every mesh button is greyed with "A job is running" | Any mesh action is possible during a job |
+| MS12 | Phone | Bed mesh in the bottom bar ("Mesh"); the map's numbers are readable; nothing runs off the screen | |

@@ -5,13 +5,14 @@ import { useMaintenanceStore } from '@/stores/maintenance'
 
 const care = useMaintenanceStore()
 
-interface NavItem { to: string; label: string; icon: NavIconId }
+interface NavItem { to: string; label: string; icon: NavIconId; /** label in the phone's bottom bar, where 9 items share the width */ short?: string }
 
 const main: NavItem[] = [
   { to: '/dashboard', label: 'Dashboard', icon: 'dashboard' },
   { to: '/setup', label: 'Job setup', icon: 'prepare' },
   { to: '/preview', label: 'Preview', icon: 'preview' },
   { to: '/control', label: 'Control', icon: 'control' },
+  { to: '/mesh', label: 'Bed mesh', icon: 'mesh', short: 'Mesh' },
   { to: '/toolheads', label: 'Toolheads', icon: 'toolheads' },
   { to: '/files', label: 'Files', icon: 'files' },
   { to: '/care', label: 'Care', icon: 'care' },
@@ -35,7 +36,8 @@ const secondary: NavItem[] = [
               :aria-label="`${care.counts.overdue + care.counts.due_soon} maintenance tasks due`"
             >{{ care.counts.overdue + care.counts.due_soon }}</span>
           </span>
-          <span>{{ item.label }}</span>
+          <span class="lbl" :class="{ 'has-short': item.short }">{{ item.label }}</span>
+          <span v-if="item.short" class="lbl short">{{ item.short }}</span>
         </RouterLink>
       </li>
     </ul>
@@ -105,6 +107,7 @@ const secondary: NavItem[] = [
 .item:hover { color: var(--rs-text-strong); }
 .item:hover .well { background: var(--rs-surface); }
 .item.router-link-active { color: var(--rs-text-strong); }
+.lbl.short { display: none; }
 .item.router-link-active .well { background: var(--rs-ink); color: var(--rs-on-ink); }
 
 @media (max-width: 720px) {
@@ -121,6 +124,10 @@ const secondary: NavItem[] = [
   }
   .group { flex-direction: row; gap: 0; }
   .group:first-child { flex: 1; justify-content: space-between; }
-  .item { min-width: 44px; font-size: 10px; letter-spacing: -0.01em; }
+  .group li { flex: 1 1 0; min-width: 0; }
+  .item { min-width: 40px; font-size: 10px; letter-spacing: -0.01em; text-align: center; }
+  .well { width: 40px; }
+  .lbl.has-short { display: none; }
+  .lbl.short { display: inline; }
 }
 </style>

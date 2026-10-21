@@ -12,6 +12,8 @@ export const router = createRouter({
     { path: '/preview', component: () => import('./views/PreviewView.vue'), meta: { title: 'Preview' } },
     { path: '/control', component: () => import('./views/ControlView.vue'), meta: { title: 'Control' } },
     { path: '/device', redirect: '/control' },
+    { path: '/mesh', component: () => import('./views/BedMeshView.vue'), meta: { title: 'Bed mesh' } },
+    { path: '/heightmap', redirect: '/mesh' },
     { path: '/pendant', component: () => import('./views/PendantView.vue'), meta: { title: 'Pendant', bare: true } },
     // Toolheads: a section menu (library, wiring, setup). Adding and editing a tool open full width.
     { path: '/toolheads/new', component: () => import('./views/ToolWizardView.vue'), meta: { title: 'Add a toolhead', nav: '/toolheads' } },

@@ -41,6 +41,14 @@ describe('check (console safety)', () => {
     },
   )
 
+  it('bed mesh: making, loading and switching off ask; removing and saving profiles are not motion', () => {
+    expect(check('RHINO_MESH_CALIBRATE PROFILE=bed-60 BED=60', idle).risk).toBe('motion')
+    expect(check('BED_MESH_PROFILE LOAD=bed-60', idle).risk).toBe('motion')
+    expect(check('BED_MESH_CLEAR', idle).risk).toBe('motion')
+    expect(check('BED_MESH_PROFILE REMOVE=bed-60', idle).needsConfirm).toBe(false)
+    expect(check('SAVE_CONFIG', idle).risk).toBe('restart')
+  })
+
   it('never asks before a stop', () => {
     expect(check('M112', idle)).toMatchObject({ risk: 'stop', needsConfirm: false })
     expect(check('EMERGENCY_STOP', idle).needsConfirm).toBe(false)

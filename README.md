@@ -147,6 +147,7 @@ src/
   prepare/      Job setup parts: step bar, toolhead cards and their facts (+ tests), bed view, number fields, advanced fold-outs, CNC steps
   webcams/      camera rules (+ tests), the camera viewer, Settings → Cameras
   dashboard/    Dashboard notices (+ tests)
+  bedmesh/      bed mesh: reading Klipper's mesh, tilt and warp, which mesh a print uses (+ tests); the top-down map
   stores/       machine state, control (console, prompts, motion lock, confirmations), cameras, care, settings, theme
   components/   shell (top bar, rail, E-stop) and shared parts
   views/        one file per screen
@@ -173,7 +174,7 @@ docs/           testing on the machine
 Open **Style** in the app for the live guide. The direction is an **e-paper instrument**: every card is a small e-paper display, the whole app is one consistent set of modules (in the spirit of Mainsail's dashboard), and almost everything is drawn with two colours.
 
 - **Ink and paper** do the work. Night theme is inverted e-ink (charcoal paper, light ink); day theme is warm matte paper with black ink.
-- **Graphs may use a few simple colours.** Temperature graphs draw the reading as a thin red line and the set temperature as a grey line.
+- **Graphs may use a few simple colours.** Temperature graphs draw the reading as a thin red line and the set temperature as a grey line. The bed mesh map shades blue below the average and amber above it (`--rs-mesh-low/high`), never red, on a fixed ±0.25 mm scale that only widens when a mesh needs it, so a flat bed looks flat.
 - **Red means stop**, and nothing else is red (apart from graph lines). One exception: on the Dashboard's camera overlay, red marks what needs your attention (a question waiting, a paused job, overdue care), because text there sits on live video and needs a colour that reads over any picture.
 - **Toolhead colours** appear only as a small tab on a tool's tile or badge and the thin band under the top bar.
 - **Dither patterns** do the shading, the way e-ink displays do: progress bars, locked jog keys, care that's coming due. Overdue is solid ink.
@@ -197,6 +198,7 @@ Open **Style** in the app for the live guide. The direction is an **e-paper inst
 - Heaters: setting a temperature runs without asking (as in Mainsail), within 0-300° (hotend) and 0-130° (bed). The hotend can only be heated with a confirmed print head mounted: the hotend heater output stays wired when a laser, spindle or knife is fitted, and those tools show their body temperature (thermistor on the shared T0 input) read-only. Switching a heater off is always allowed.
 - Jobs: Start is blocked unless the mounted tool is confirmed and matches the file; files that declare no toolhead get a warning. Cancel and Resume ask; Pause doesn't.
 - Maintenance never blocks: overdue care shows in the start confirmation, nothing more.
+- Bed mesh (needs Tool Manager 1.6.0): making a mesh (RHINO_MESH_CALIBRATE: home if needed, heat, soak, level, probe) needs a confirmed print head, because the probe is on the print heads, and asks first naming each step. Using a mesh and switching it off ask first (Z follows the change from the next move). Removing asks; Save (SAVE_CONFIG) asks, says Klipper restarts and names anything pending that isn't a mesh (a probe z_offset would shift every head). None of it is offered during a job: a print loads its own mesh at the start. Looking at a mesh changes nothing on the machine. On the Rhino, a spindle never cuts with a mesh loaded (SET_Z_ZERO switches it off; the job refuses otherwise).
 - The on-screen E-stop depends on the browser, network, Pi and Moonraker. It does not replace a physical E-stop or power switch.
 - Cameras: reading the list is in `READ_ONLY_METHODS`; editing it uses a third allowlist, `CAMERA_METHODS` (`server.webcams.post_item`, `server.webcams.delete_item`), which only changes Moonraker's camera list. Deleting a camera asks first. A camera picture can lag or freeze: it is not a safety device.
 - The Dashboard is look-only: no buttons that act on the machine, and Klipper's wizard questions are answered on Control (the Dashboard shows a red notice that one is waiting). The top bar's Stop stays.

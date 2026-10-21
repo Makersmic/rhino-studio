@@ -31,6 +31,11 @@
  * starts with none, to see the empty states. Adding, editing and deleting
  * cameras works and is kept until the mock stops.
  *
+ * Bed mesh: three saved meshes (bed-60 in use, bed-100, default) and an adaptive one.
+ * RHINO_MESH_CALIBRATE, BED_MESH_PROFILE LOAD/REMOVE, BED_MESH_CLEAR, RHINO_MESH_REMOVE and
+ * SAVE_CONFIG work. MOCK_MESH=none: no [bed_mesh] section; MOCK_MESH=empty: no meshes yet;
+ * MOCK_MESH=off: meshes saved, none in use; MOCK_MESH=unsaved: bed-60 just made, not saved.
+ *
  * MOCK_AUTH=untrusted: this screen isn't in Moonraker's trusted_clients (Mainsail's
  * "Unauthorized"); the Portal refuses /api the same way and names the address.
  *
@@ -97,6 +102,61 @@ const status: Record<string, Record<string, unknown>> = {
   'output_pin Spindle_power': { value: 0 },
   'output_pin SPINDLE_SPEED': { value: 0.3 },
 }
+// ---- bed mesh -------------------------------------------------------------------
+const meshMode = process.env.MOCK_MESH ?? 'some'
+const MESH_AREA = { min_x: 40, max_x: 500, min_y: 40, max_y: 300, x_count: 5, y_count: 3 }
+/** A believable bed: tilted up to the right, a low front-left corner, and a centre that rises as it heats */
+function bedShape(bedC: number, seed: number, area = MESH_AREA): number[][] {
+  const out: number[][] = []
+  for (let j = 0; j < area.y_count; j++) {
+    const row: number[] = []
+    for (let i = 0; i < area.x_count; i++) {
+      const x = area.min_x + ((area.max_x - area.min_x) * i) / Math.max(1, area.x_count - 1)
+      const y = area.min_y + ((area.max_y - area.min_y) * j) / Math.max(1, area.y_count - 1)
+      const tilt = (x - 270) * 0.00021 + (y - 170) * 0.00008
+      const dip = -0.07 * Math.exp(-((x - 40) ** 2 + (y - 40) ** 2) / 9000)
+      const dome = (bedC / 100) * 0.09 * Math.exp(-((x - 270) ** 2 / 26000 + (y - 170) ** 2 / 12000))
+      const noise = Math.sin(seed * 12.9898 + i * 78.233 + j * 37.719) * 0.006
+      row.push(+(tilt + dip + dome + noise).toFixed(4))
+    }
+    out.push(row)
+  }
+  return out
+}
+const day = 86400
+const nowS = () => Math.floor(Date.now() / 1000)
+const meshProfiles: Record<string, { points: number[][]; mesh_params: Record<string, number> }> =
+  meshMode === 'empty' || meshMode === 'none' ? {} : {
+    'bed-60': { points: bedShape(60, 1), mesh_params: { ...MESH_AREA } },
+    'bed-100': { points: bedShape(100, 2), mesh_params: { ...MESH_AREA } },
+    default: { points: bedShape(0, 3), mesh_params: { ...MESH_AREA } },
+    'adaptive-5F2A91C0': { points: bedShape(60, 4, { min_x: 150, max_x: 350, min_y: 120, max_y: 260, x_count: 3, y_count: 3 }), mesh_params: { min_x: 150, max_x: 350, min_y: 120, max_y: 260, x_count: 3, y_count: 3 } },
+  }
+const meshMeta: Record<string, { bed: number; tool: string; when: number }> =
+  meshMode === 'empty' || meshMode === 'none' ? {} : {
+    'bed-60': { bed: 60, tool: 'BlockOne', when: nowS() - 3 * day },
+    'bed-100': { bed: 100, tool: 'BlockOne', when: nowS() - 23 * day },
+  }
+if (meshMode !== 'none') {
+  const loaded = meshMode === 'off' || meshMode === 'empty' ? '' : 'bed-60'
+  status.bed_mesh = {
+    profile_name: loaded,
+    mesh_min: loaded ? [MESH_AREA.min_x, MESH_AREA.min_y] : [0, 0],
+    mesh_max: loaded ? [MESH_AREA.max_x, MESH_AREA.max_y] : [0, 0],
+    probed_matrix: loaded ? meshProfiles[loaded]!.points : [[]],
+    profiles: meshProfiles,
+  }
+}
+status.configfile = {
+  save_config_pending: meshMode === 'unsaved',
+  save_config_pending_items: meshMode === 'unsaved' ? { 'bed_mesh bed-60': { version: '1', points: '...' } } : {},
+}
+if (scenario !== 'toolchanger') {
+  status['gcode_macro RHINO_MESH'] = { match_c: 5, cold_c: 40, soak_min: 5 }
+  ;(status.save_variables.variables as Record<string, unknown>).mesh_meta = meshMeta
+  ;(status.save_variables.variables as Record<string, unknown>).set_material_bed_temp = 60
+}
+
 if (scenario === 'toolchanger') {
   // Not a Rhino: no Rhino macros or tool pins, a [toolchanger] and [tool ...] objects instead
   for (const k of ['gcode_macro SWAP_TOOL', 'gcode_macro VARIABLES', 'gcode_macro CUSTOM_TOOLS', 'save_variables',
@@ -373,6 +433,7 @@ const RHINO_MACROS = [
   'LIST_TOOLHEADS', 'CALIBRATE_ESC', 'DEACTIVATE_LASER', 'SWITCH_T1', 'CANCEL_PRINT', 'PAUSE', 'RESUME', 'G28', 'SWITCH_T0', 'ACTIVATE_LASER', 'SET_TOOL_POWER', 'BED_COOLDOWN',
   'RHINO_POSITIONS', 'CHECK_TOOLHEADS', 'SHOW_BACKUP_LOCATION', 'TURN_ON_MOTORS', 'M0', 'SET_SERVO_ANGLE', // ones a real Rhino (1.4.x) has that no group claims
   '_LASER_START', '_LASER_ABORT', '_RESTORE_TOOL_CONFIRM', 'VARIABLES', 'CUSTOM_TOOLS',
+  'RHINO_MESH', 'RHINO_MESH_CALIBRATE', 'RHINO_MESH_REMOVE', // Tool Manager 1.6.0 (Bed mesh page)
 ]
 const MACROS = scenario === 'toolchanger'
   ? ['PAUSE', 'RESUME', 'CANCEL_PRINT', 'PRINT_START', 'PRINT_END', 'CLEAN_NOZZLE', 'CHAMBER_LIGHTS_ON', 'CHAMBER_LIGHTS_OFF', 'G28']
@@ -690,6 +751,81 @@ function runLine(raw: string) {
       update('gcode_move', { homing_origin: [...th.position], gcode_position: [0, 0, 0, 0] })
       respond('// Work zero set')
       return
+    // ---- bed mesh ----
+    case 'RHINO_MESH_CALIBRATE':
+    case 'BED_MESH_CALIBRATE': {
+      if (!status.bed_mesh) throw new Error(`Unknown command:"${cmd}"`)
+      if (status.print_stats.state === 'printing' || status.print_stats.state === 'paused') throw new Error(`${cmd}: a job is running.`)
+      const mounted = name(swap.current_tool)
+      const type = (toolheads[mounted] ?? (custom.toolheads as Record<string, { type: string }>)[mounted])?.type
+      if (cmd === 'RHINO_MESH_CALIBRATE' && type !== 'DEPOSITION')
+        throw new Error(`RHINO_MESH_CALIBRATE is for print heads, and ${mounted} is mounted - it would heat the nozzle output and move the bed toward the tool. Swap to BlockOne or SwitchFly first.`)
+      const prof = arg(line, 'PROFILE') ?? 'default'
+      const bedC = Number(arg(line, 'BED') ?? 60)
+      const when = Number(arg(line, 'WHEN') ?? 0)
+      const tilt = arg(line, 'TILT') !== '0'
+      update('idle_timeout', { state: 'Printing' })
+      if (th.homed_axes !== 'xyz') { respond('// homing'); update('toolhead', { homed_axes: 'xyz' }) }
+      if (bedC > 0) { update('heater_bed', { target: bedC }); respond(`// Mesh: heating the bed to ${bedC}°C (mock: instant)`) }
+      setTimeout(() => {
+        if (bedC > 0) update('heater_bed', { temperature: bedC })
+        if (tilt) respond('// Z_TILT_ADJUST: probed 3 points, range 0.012 mm (mock)')
+        respond('// Mesh: probing the bed')
+      }, 1200)
+      setTimeout(() => {
+        const pts = bedShape(bedC, Math.random() * 9)
+        const profiles = { ...(status.bed_mesh!.profiles as object), [prof]: { points: pts, mesh_params: { ...MESH_AREA } } }
+        update('bed_mesh', { profile_name: prof, probed_matrix: pts, mesh_min: [MESH_AREA.min_x, MESH_AREA.min_y], mesh_max: [MESH_AREA.max_x, MESH_AREA.max_y], profiles })
+        if (cmd === 'RHINO_MESH_CALIBRATE') {
+          const sv = status.save_variables.variables as Record<string, unknown>
+          const meta = { ...(sv.mesh_meta as object), [prof]: { bed: bedC, tool: mounted, when } }
+          update('save_variables', { variables: { ...sv, mesh_meta: meta } })
+        }
+        const items = { ...(status.configfile!.save_config_pending_items as object), [`bed_mesh ${prof}`]: { version: '1' } }
+        update('configfile', { save_config_pending: true, save_config_pending_items: items })
+        update('idle_timeout', { state: 'Ready' })
+        respond(`Mesh ${prof} made at ${bedC}°C with ${mounted} and loaded. Klipper keeps it until it restarts: save it (Studio, or SAVE_CONFIG) to keep it.`)
+      }, 4200)
+      return
+    }
+    case 'BED_MESH_PROFILE':
+    case 'RHINO_MESH_REMOVE': {
+      if (!status.bed_mesh) throw new Error(`Unknown command:"${cmd}"`)
+      const profiles = { ...(status.bed_mesh.profiles as Record<string, { points: number[][] }>) }
+      const load = arg(line, 'LOAD')
+      const rm = cmd === 'RHINO_MESH_REMOVE' ? arg(line, 'PROFILE') : arg(line, 'REMOVE')
+      if (load) {
+        if (!profiles[load]) throw new Error(`bed_mesh: Unknown profile [${load}]`)
+        update('bed_mesh', { profile_name: load, probed_matrix: profiles[load]!.points, mesh_min: [MESH_AREA.min_x, MESH_AREA.min_y], mesh_max: [MESH_AREA.max_x, MESH_AREA.max_y] })
+        respond(`// Mesh ${load} loaded`)
+      } else if (rm) {
+        if (!profiles[rm]) throw new Error(`RHINO_MESH_REMOVE: there is no mesh called ${rm}.`)
+        delete profiles[rm]
+        update('bed_mesh', { profiles, ...(status.bed_mesh.profile_name === rm ? { profile_name: '' } : {}) })
+        const sv = status.save_variables.variables as Record<string, unknown>
+        if (sv.mesh_meta) {
+          const meta = { ...(sv.mesh_meta as Record<string, unknown>) }
+          delete meta[rm]
+          update('save_variables', { variables: { ...sv, mesh_meta: meta } })
+        }
+        update('configfile', { save_config_pending: true })
+        respond(`Mesh ${rm} removed. Save (SAVE_CONFIG) to take it out of printer.cfg too.`)
+      }
+      return
+    }
+    case 'BED_MESH_CLEAR':
+      if (!status.bed_mesh) throw new Error(`Unknown command:"${cmd}"`)
+      update('bed_mesh', { profile_name: '', probed_matrix: [[]] })
+      respond('// Bed mesh cleared')
+      return
+    case 'RHINO_MESH':
+      respond(`Bed mesh in use: ${(status.bed_mesh?.profile_name as string) || 'none - moves are not compensated'}`)
+      return
+    case 'SAVE_CONFIG':
+      if (status.print_stats.state === 'printing' || status.print_stats.state === 'paused') throw new Error('SAVE_CONFIG: not during a job')
+      update('configfile', { save_config_pending: false, save_config_pending_items: {} })
+      respond('// SAVE_CONFIG: printer.cfg written (mock), restarting')
+    // falls through: Klipper restarts after SAVE_CONFIG
     case 'FIRMWARE_RESTART':
     case 'RESTART':
       klippy = 'shutdown'
@@ -698,6 +834,8 @@ function runLine(raw: string) {
         klippy = 'ready'
         update('webhooks', { state: 'ready', state_message: 'Printer is ready' })
         update('gcode_macro SWAP_TOOL', { current_tool: 0, pending_tool: -1 })
+        // Klipper loads no mesh at start-up (a print loads its own)
+        if (status.bed_mesh) update('bed_mesh', { profile_name: '', probed_matrix: [[]] })
         notify('notify_klippy_ready')
       }, 1500)
       return

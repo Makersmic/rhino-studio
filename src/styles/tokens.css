@@ -179,6 +179,10 @@
      Same in both themes, dark ink on it (like the swap orange). */
   --rs-fit-fill: #bfe5c3;
   --rs-on-fit: #141516;
+  /* Bed mesh map: below the average (blue) and above it (amber), shaded by how far.
+     Not red: red means stop. Same in both themes; the paper shows through near the average. */
+  --rs-mesh-low: #3f7fd8;
+  --rs-mesh-high: #e39a2d;
   /* Older names kept so every component speaks the same language */
   --rs-paper: var(--rs-surface-2);
   --rs-paper-ink: var(--rs-text-strong);
