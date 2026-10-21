@@ -8,7 +8,9 @@
  * - Row menu (right-click, long-press on a phone, or ⋯): Edit/View, Download,
  *   Rename, Duplicate, Move to folder, Delete. New file / New folder buttons.
  * - Gcode files also show the toolhead each job asks for, how its last run
- *   ended, a hollow ring when it has never run, and Start.
+ *   ended (small, under the name with the date and size), and a hollow ring
+ *   when it has never run. The toolhead pill is the Start button: Swap when
+ *   the file needs another tool.
  *
  * Safety: Moonraker roots only (the client refuses anything else). The file a
  * job is using, and its folders, can't be edited, renamed, moved or deleted.
@@ -216,6 +218,28 @@ async function start(r: Row) {
   } finally {
     starting.value = null
   }
+}
+
+/** The toolhead pill is the Start button: Swap when the file needs another tool, else Start (which checks first). */
+function toolSwaps(r: Row) {
+  const j = jobInfo(r)
+  return j.start.swapTo != null && !!j.tool
+}
+function toolDisabled(r: Row) {
+  const j = jobInfo(r)
+  if (toolSwaps(r)) return control.jobActive || !machine.klippyReady
+  return starting.value === r.rel || (!j.start.ok && j.start.block !== 'Still reading the file')
+}
+function toolTitle(r: Row) {
+  const j = jobInfo(r)
+  if (toolSwaps(r)) return `Swap to ${j.tool} (${machine.mountedName ?? 'another tool'} is mounted)`
+  if (toolDisabled(r)) return j.start.block ?? 'Can’t start now'
+  return `Start ${r.name}${j.tool ? ` with ${j.tool}` : ''}: checks the toolhead, then asks`
+}
+function toolClick(r: Row) {
+  const j = jobInfo(r)
+  if (toolSwaps(r)) void control.swapTo(j.start.swapTo!, j.tool!)
+  else void start(r)
 }
 
 /** Prepare links here with ?file=<path in gcodes> after sending: that row is marked */
@@ -682,19 +706,20 @@ defineExpose({ load })
 
     <div v-else class="list" role="table" :aria-label="`${ROOTS[root].label}${folder ? ` / ${folder}` : ''}`">
       <div class="row head" :class="{ g: gcode }" role="row">
-        <span v-if="gcode" role="columnheader">Toolhead</span>
-        <template v-for="[k, l] in SORTS" :key="k">
-          <button type="button" role="columnheader" class="sort" :class="[k, { on: sortBy === k }]" :aria-sort="sortBy === k ? (desc ? 'descending' : 'ascending') : 'none'" @click="setSort(k)">
-            {{ l }}<span class="arrow" aria-hidden="true">{{ sortBy === k ? (desc ? '↓' : '↑') : '' }}</span>
-          </button>
-        </template>
-        <span v-if="gcode" role="columnheader">Last run</span>
+        <span v-if="gcode" role="columnheader" class="tool">Toolhead <span class="muted">· press to start</span></span>
+        <span role="columnheader" class="sorts">
+          <template v-for="([k, l], i) in SORTS" :key="k">
+            <span v-if="i" class="dot" aria-hidden="true">·</span>
+            <button type="button" class="sort" :class="[k, { on: sortBy === k }]" :aria-sort="sortBy === k ? (desc ? 'descending' : 'ascending') : 'none'" @click="setSort(k)">
+              {{ l }}<span class="arrow" aria-hidden="true">{{ sortBy === k ? (desc ? '↓' : '↑') : '' }}</span>
+            </button>
+          </template>
+        </span>
         <span role="columnheader" class="sr-only">Actions</span>
       </div>
 
       <button v-if="folder" type="button" class="row up" :class="{ g: gcode }" @click="go(parentOf(folder))">
-        <span v-if="gcode" />
-        <span class="name"><span class="fold" aria-hidden="true" />.. <span class="muted small">(up to {{ parentOf(folder) || ROOTS[root].label }})</span></span>
+        <span class="name"><span class="line"><span class="fold" aria-hidden="true" />.. <span class="muted small">(up to {{ parentOf(folder) || ROOTS[root].label }})</span></span></span>
       </button>
 
       <p v-if="!loading && !sorted.length" class="muted empty">
@@ -718,54 +743,47 @@ defineExpose({ load })
         @pointerup="pcancel"
         @pointercancel="pcancel"
       >
-        <template v-if="gcode">
-          <span class="tool" role="cell">
-            <template v-if="!r.dir && isGcode(r.name)">
-              <span
-                v-if="jobInfo(r).look"
-                class="pill"
-                :class="{ fits: jobInfo(r).matches }"
-                :title="jobInfo(r).matches ? 'Uses the mounted toolhead' : jobInfo(r).needsSwap ? `Needs ${jobInfo(r).tool}; ${machine.mountedName} is mounted` : undefined"
-              ><ToolheadBadge :look="jobInfo(r).look!" size="sm" /></span>
-              <span v-else class="muted small">{{ jobInfo(r).pending ? (jobRunning ? 'Not read yet' : 'Reading…') : jobInfo(r).unreadable ? "Couldn't read" : 'Not declared' }}</span>
-            </template>
-          </span>
-        </template>
-        <span class="name" role="cell">
-          <button type="button" class="open" :title="r.dir ? `Open ${r.name}` : openMode(root, r.name, r.size).mode === 'download' ? `Download ${r.name}` : `Open ${r.name}`" @click="open(r)">
-            <span v-if="r.dir" class="fold" aria-hidden="true" />
-            <span class="nm">{{ r.name }}</span>
+        <!-- the toolhead is the Start button (or Swap, when the file needs another tool) -->
+        <span v-if="gcode" class="tool" role="cell">
+          <button
+            v-if="!r.dir && isGcode(r.name)"
+            type="button"
+            class="pill"
+            :class="{ fits: jobInfo(r).matches, plain: !jobInfo(r).look, swap: jobInfo(r).start.swapTo != null && !!jobInfo(r).tool }"
+            :disabled="toolDisabled(r)"
+            :title="toolTitle(r)"
+            :aria-label="toolTitle(r)"
+            @click="toolClick(r)"
+          >
+            <ToolheadBadge v-if="jobInfo(r).look" :look="jobInfo(r).look!" size="sm" />
+            <span v-else class="none">{{ jobInfo(r).pending ? (jobRunning ? 'Not read yet' : 'Reading…') : jobInfo(r).unreadable ? "Couldn't read" : 'No toolhead' }}</span>
+            <span class="act" aria-hidden="true">{{ starting === r.rel ? '…' : jobInfo(r).start.swapTo != null && jobInfo(r).tool ? '⇄' : '▶' }}</span>
           </button>
-          <span v-if="gcode && !r.dir && !jobInfo(r).run" class="ring" role="img" aria-label="Not run yet" title="Not run yet" />
-          <RouterLink v-if="gcode && !r.dir && jobInfo(r).care && (jobInfo(r).care!.overdue || jobInfo(r).care!.dueSoon)" to="/care" class="tag care" :title="jobInfo(r).care!.next?.title">{{ jobInfo(r).care!.overdue ? 'Care overdue' : 'Care due' }}</RouterLink>
-          <span v-if="lockOf(r)" class="tag lock" :title="lockOf(r)!">In use</span>
         </span>
-        <span class="meta date" role="cell">{{ fmtDate(r.modified) }}</span>
-        <span class="meta size" role="cell">{{ r.dir ? '' : fmtSize(r.size) }}</span>
-        <template v-if="gcode">
-          <span class="run" role="cell" :class="jobInfo(r).run?.kind ?? 'never'">
-            <template v-if="!r.dir && jobInfo(r).run">
-              <span class="mark" aria-hidden="true">{{ jobInfo(r).run!.kind === 'completed' ? '✓' : jobInfo(r).run!.kind === 'failed' ? '✕' : jobInfo(r).run!.kind === 'running' ? '•' : '–' }}</span>
-              {{ jobInfo(r).run!.label }}
-              <span class="when">{{ fmtWhen(jobInfo(r).run!.at) }}</span>
+        <span class="name" role="cell">
+          <span class="line">
+            <button type="button" class="open" :title="r.dir ? `Open ${r.name}` : openMode(root, r.name, r.size).mode === 'download' ? `Download ${r.name}` : `Open ${r.name}`" @click="open(r)">
+              <span v-if="r.dir" class="fold" aria-hidden="true" />
+              <span class="nm">{{ r.name }}</span>
+            </button>
+            <span v-if="gcode && !r.dir && !jobInfo(r).run" class="ring" role="img" aria-label="Not run yet" title="Not run yet" />
+            <RouterLink v-if="gcode && !r.dir && jobInfo(r).care && (jobInfo(r).care!.overdue || jobInfo(r).care!.dueSoon)" to="/care" class="tag care" :title="jobInfo(r).care!.next?.title">{{ jobInfo(r).care!.overdue ? 'Care overdue' : 'Care due' }}</RouterLink>
+            <span v-if="lockOf(r)" class="tag lock" :title="lockOf(r)!">In use</span>
+          </span>
+          <!-- Modified · Size · Last run, small, under the name -->
+          <span class="sub">
+            <span title="Modified">{{ fmtDate(r.modified) }}</span>
+            <template v-if="!r.dir"><span class="dot" aria-hidden="true">·</span><span title="Size">{{ fmtSize(r.size) }}</span></template>
+            <template v-if="gcode && !r.dir && jobInfo(r).run">
+              <span class="dot" aria-hidden="true">·</span>
+              <span class="run" :class="jobInfo(r).run!.kind" title="Last run">
+                <span class="mark" aria-hidden="true">{{ jobInfo(r).run!.kind === 'completed' ? '✓' : jobInfo(r).run!.kind === 'failed' ? '✕' : jobInfo(r).run!.kind === 'running' ? '•' : '–' }}</span>
+                {{ jobInfo(r).run!.label }} {{ fmtWhen(jobInfo(r).run!.at) }}
+              </span>
             </template>
           </span>
-        </template>
+        </span>
         <span class="go" role="cell">
-          <template v-if="gcode && !r.dir && isGcode(r.name)">
-            <RsButton
-              v-if="jobInfo(r).start.swapTo != null && jobInfo(r).tool"
-              variant="quiet"
-              :disabled="control.jobActive || !machine.klippyReady"
-              @click="control.swapTo(jobInfo(r).start.swapTo!, jobInfo(r).tool!)"
-            >Swap to {{ jobInfo(r).tool }}</RsButton>
-            <RsButton
-              v-else
-              :disabled="starting === r.rel || (!jobInfo(r).start.ok && jobInfo(r).start.block !== 'Still reading the file')"
-              :title="jobInfo(r).start.block ?? 'Check and start this job'"
-              @click="start(r)"
-            >Start</RsButton>
-          </template>
           <button type="button" class="more" :aria-label="`Actions for ${r.name}`" aria-haspopup="menu" @click="menuButton($event, r)">⋯</button>
         </span>
       </div>
@@ -816,10 +834,14 @@ defineExpose({ load })
 .error { color: var(--rs-danger); }
 .empty { padding: var(--rs-space-4) 0; }
 
-/* rows: Name | Modified | Size | ⋯     G-code: Toolhead | Name | Modified | Size | Last run | Start ⋯ */
-.row { display: grid; grid-template-columns: minmax(0, 1fr) 150px 80px 120px; align-items: center; gap: var(--rs-space-4); padding: 8px 6px; border-top: 1px solid var(--rs-line); border-radius: 0; }
-.row.g { grid-template-columns: 180px minmax(0, 1fr) 130px 70px 150px 170px; }
+/* rows: Name (Modified · Size under it) | ⋯     G-code: Toolhead (press to start) | Name (Modified · Size · Last run) | ⋯
+   They reflow by the list's own width, not the window's (a browser snapped to half a screen). */
+.list { container-type: inline-size; }
+.row { display: grid; grid-template-columns: minmax(0, 1fr) 36px; align-items: center; gap: 6px var(--rs-space-4); padding: 8px 6px; border-top: 1px solid var(--rs-line); border-radius: 0; }
+.row.g { grid-template-columns: 200px minmax(0, 1fr) 36px; }
 .row.head { padding-top: 0; padding-bottom: 6px; border-top: 0; font-size: var(--rs-text-xs); font-weight: var(--rs-weight-medium); color: var(--rs-text-muted); }
+.sorts { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.dot { color: var(--rs-text-muted); }
 .row.up { width: 100%; border: 0; border-top: 1px solid var(--rs-line); background: none; font: inherit; text-align: left; cursor: pointer; color: var(--rs-text-strong); }
 .row.up:hover { background: var(--rs-surface-2); }
 .sort { justify-self: start; display: inline-flex; gap: 4px; border: 0; padding: 0; background: none; font: inherit; color: inherit; cursor: pointer; }
@@ -828,7 +850,9 @@ defineExpose({ load })
 .row:not(.head):hover { background: color-mix(in srgb, var(--rs-ink) 3%, transparent); }
 .row.drop { outline: 2px dashed var(--rs-ink); outline-offset: -2px; border-radius: var(--rs-radius-md); background: var(--rs-surface-2); }
 .row.highlight { outline: 2px solid var(--rs-ink); outline-offset: -2px; border-radius: var(--rs-radius-md); }
-.name { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; min-width: 0; }
+.name { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.line { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; min-width: 0; }
+.sub { display: flex; flex-wrap: wrap; align-items: center; gap: 0 6px; font-size: var(--rs-text-xs); color: var(--rs-text-muted); }
 .open { display: inline-flex; align-items: center; gap: 8px; min-width: 0; max-width: 100%; padding: 2px 0; border: 0; background: none; color: var(--rs-text-strong); font: inherit; text-align: left; cursor: pointer; }
 .open .nm { overflow-wrap: anywhere; }
 .open:hover .nm { text-decoration: underline; text-underline-offset: 3px; }
@@ -837,21 +861,31 @@ defineExpose({ load })
 .fold::before { content: ''; position: absolute; left: -1.5px; top: -5px; width: 8px; height: 4px; border: 1.5px solid var(--rs-text-strong); border-bottom: 0; border-radius: 2px 2px 0 0; }
 /* never run: a small hollow ring after the name */
 .ring { flex-shrink: 0; width: 10px; height: 10px; border: 1.5px solid var(--rs-ink); border-radius: 50%; }
-.meta { font-size: var(--rs-text-xs); color: var(--rs-text-muted); white-space: nowrap; }
 .go { display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
 .more { width: 32px; height: 32px; border: 1px solid transparent; border-radius: 8px; background: none; color: var(--rs-text-strong); font-size: 18px; line-height: 1; cursor: pointer; }
 .more:hover, .more:focus-visible { border-color: var(--rs-line-strong); background: var(--rs-surface-2); outline: none; }
 .tag { font-size: var(--rs-text-xs); font-weight: var(--rs-weight-medium); padding: 2px 9px; border-radius: var(--rs-radius-pill); white-space: nowrap; }
 .tag.care { background: var(--rs-warn-fill); color: var(--rs-on-ink); text-decoration: none; }
 .tag.lock { border: 1px solid var(--rs-ink); color: var(--rs-text-strong); }
-.pill { display: inline-flex; align-items: center; max-width: 100%; padding: 3px 14px 3px 3px; border-radius: var(--rs-radius-pill); }
+.pill {
+  display: inline-flex; align-items: center; gap: 10px; max-width: 100%; min-height: 40px; padding: 3px 12px 3px 3px;
+  border: 1px solid var(--rs-line-strong); border-radius: var(--rs-radius-pill); background: none; color: var(--rs-text-strong);
+  font: inherit; cursor: pointer;
+}
+.pill:hover:not(:disabled), .pill:focus-visible { border-color: var(--rs-ink); box-shadow: inset 0 0 0 1px var(--rs-ink); outline: none; }
+.pill:disabled { cursor: not-allowed; opacity: 0.55; }
+.pill.plain { padding-left: 14px; }
+.pill .none { font-size: var(--rs-text-sm); color: var(--rs-text-muted); white-space: nowrap; }
+.pill .act { margin-left: auto; font-size: 12px; line-height: 1; }
+.pill.fits { border-color: transparent; }
+.row.g .pill { width: 100%; }
+.pill.fits .act { color: var(--rs-on-fit); }
 .pill.fits { background: var(--rs-fit-fill); }
 .pill.fits :deep(.name) { color: var(--rs-on-fit); }
 .pill.fits :deep(.disc) { border-radius: 999px; }
-.run { font-size: var(--rs-text-sm); color: var(--rs-text-strong); white-space: nowrap; }
-.run .mark { display: inline-block; width: 1em; font-weight: var(--rs-weight-medium); }
-.run .when { margin-left: 4px; font-size: var(--rs-text-xs); color: var(--rs-text-muted); }
-.run.cancelled { color: var(--rs-text-muted); }
+.run { color: var(--rs-text); white-space: nowrap; }
+.run .mark { font-weight: var(--rs-weight-medium); }
+.run.completed { color: var(--rs-text-strong); }
 .run.failed { color: var(--rs-danger); }
 .small { font-size: var(--rs-text-sm); }
 .note { margin-top: var(--rs-space-3); }
@@ -862,15 +896,13 @@ defineExpose({ load })
   .dropzone:not(:disabled) { display: none; }
   .top { flex-direction: column; align-items: stretch; }
 }
-@media (max-width: 900px) {
-  .row, .row.g { grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; }
-  .row.head { display: none; }
-  .row .tool { grid-column: 1; grid-row: 2; }
-  .row .name { grid-column: 1 / -1; grid-row: 1; }
-  .row .date { grid-column: 1; }
-  .row .size { display: none; }
-  .row .run { grid-column: 1; }
-  .row .go { grid-column: 2; grid-row: 2 / span 3; align-self: center; }
-  .row.up { grid-template-columns: 1fr; }
+/* narrow list: the toolhead goes under the name */
+@container (max-width: 520px) {
+  .row.g { grid-template-columns: minmax(0, 1fr) 36px; }
+  .row.head .tool { display: none; }
+  .row.g .name { grid-column: 1; grid-row: 1; }
+  .row.g .tool { grid-column: 1; grid-row: 2; }
+  .row.g .pill { width: auto; }
+  .row.g .go { grid-column: 2; grid-row: 1 / span 2; }
 }
 </style>
