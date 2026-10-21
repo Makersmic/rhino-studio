@@ -21,7 +21,7 @@ const LEAD: Record<Tab, string> = {
   gcodes: 'Jobs on the Rhino: the toolhead each one asks for (green when it’s the mounted one), how it last ran, and a ring on the ones never run. Press a file’s toolhead to start it: Studio checks it against the mounted one first, or offers the swap.',
   config: 'Klipper’s config folder. Saving keeps a copy of the file as it was (in studio_backups) and never restarts Klipper by itself.',
   logs: 'Klipper and Moonraker logs, read-only. Settings › Logs finds the last error in them.',
-  history: 'Every job Moonraker has kept, newest first. Reprint checks the toolhead like Start does.',
+  history: 'Every job Moonraker has kept, newest first. Reprint checks the toolhead first, the same as starting from Gcode files.',
 }
 
 const machine = useMachineStore()

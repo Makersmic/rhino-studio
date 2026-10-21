@@ -80,24 +80,22 @@ const when = (s: number) => new Date(s * 1000).toLocaleString(undefined, { month
     <p v-if="error" class="error">Couldn't read the job history: {{ error }}</p>
     <p v-else-if="!loading && !jobs.length" class="muted">No jobs yet. Finished, cancelled and failed jobs show up here.</p>
     <div v-else class="list" role="table" aria-label="Job history">
-      <div class="row head" role="row">
-        <span role="columnheader">File</span><span role="columnheader">Ended</span><span role="columnheader">Started</span>
-        <span role="columnheader">Printing</span><span role="columnheader">Filament</span><span role="columnheader" class="sr-only">Reprint</span>
-      </div>
       <div v-for="{ j, run } in rows" :key="j.job_id" class="row" role="row">
         <span class="file" role="cell">
           <RouterLink v-if="j.exists !== false" :to="{ path: '/files', query: { tab: 'gcodes', file: j.filename } }">{{ j.filename }}</RouterLink>
           <span v-else class="gone" title="The file has been deleted or moved since">{{ j.filename }}</span>
+          <!-- how it ended, when, how long and how much filament: small, under the name (as on Gcode files) -->
+          <span class="sub">
+            <span class="run" :class="run.kind" :title="run.detail"><span class="mark" aria-hidden="true">{{ run.kind === 'completed' ? '✓' : run.kind === 'failed' ? '✕' : run.kind === 'running' ? '•' : '–' }}</span>{{ run.label }}</span>
+            <span class="dot" aria-hidden="true">·</span><span title="Started">{{ when(j.start_time) }}</span>
+            <span class="dot" aria-hidden="true">·</span><span title="Printing time">{{ dur(j.print_duration) }}</span>
+            <template v-if="j.filament_used"><span class="dot" aria-hidden="true">·</span><span title="Filament used">{{ metres(j.filament_used) }}</span></template>
+          </span>
         </span>
-        <span class="run" :class="run.kind" role="cell" :title="run.detail">
-          <span class="mark" aria-hidden="true">{{ run.kind === 'completed' ? '✓' : run.kind === 'failed' ? '✕' : run.kind === 'running' ? '•' : '–' }}</span>{{ run.label }}
-        </span>
-        <span class="meta" role="cell">{{ when(j.start_time) }}</span>
-        <span class="meta" role="cell">{{ dur(j.print_duration) }}</span>
-        <span class="meta" role="cell">{{ metres(j.filament_used) }}</span>
         <span class="go" role="cell">
           <RsButton
             v-if="run.kind !== 'running'"
+            size="sm"
             :disabled="j.exists === false || control.jobActive || starting === j.job_id"
             :title="j.exists === false ? 'The file is gone' : control.jobActive ? 'A job is running' : 'Start this file again (checks the toolhead first)'"
             @click="reprint(j)"
@@ -116,25 +114,20 @@ const when = (s: number) => new Date(s * 1000).toLocaleString(undefined, { month
 .val { font-size: 1.3rem; color: var(--rs-text-strong); }
 .val.rs-num { font-size: 1.6rem; }
 .refresh { margin-left: auto; align-self: center; }
-.row { display: grid; grid-template-columns: minmax(0, 1fr) 130px 140px 110px 90px 110px; align-items: center; gap: var(--rs-space-4); padding: 8px 6px; border-top: 1px solid var(--rs-line); }
-.row.head { padding-top: 0; border-top: 0; font-size: var(--rs-text-xs); font-weight: var(--rs-weight-medium); color: var(--rs-text-muted); }
-.file { overflow-wrap: anywhere; }
+.row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--rs-space-4); padding: 8px 6px; border-top: 1px solid var(--rs-line); }
+.row:first-child { border-top: 0; }
+.file { display: flex; flex-direction: column; gap: 2px; min-width: 0; overflow-wrap: anywhere; }
+.sub { display: flex; flex-wrap: wrap; align-items: center; gap: 0 6px; font-size: var(--rs-text-xs); color: var(--rs-text-muted); }
+.dot { color: var(--rs-text-muted); }
 .file a { color: var(--rs-text-strong); text-underline-offset: 3px; }
 .gone { color: var(--rs-text-muted); text-decoration: line-through; }
-.run { font-size: var(--rs-text-sm); color: var(--rs-text-strong); white-space: nowrap; }
-.run .mark { display: inline-block; width: 1.1em; font-weight: var(--rs-weight-medium); }
+.run { color: var(--rs-text-strong); white-space: nowrap; }
+.run .mark { margin-right: 3px; font-weight: var(--rs-weight-medium); }
 .run.cancelled { color: var(--rs-text-muted); }
 .run.failed { color: var(--rs-danger); }
-.meta { font-size: var(--rs-text-xs); color: var(--rs-text-muted); white-space: nowrap; }
 .go { display: flex; justify-content: flex-end; }
 .msg { font-size: var(--rs-text-sm); color: var(--rs-text-strong); }
 .error { color: var(--rs-danger); }
 .small { font-size: var(--rs-text-sm); margin-top: var(--rs-space-3); }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
-@media (max-width: 900px) {
-  .row { grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px; }
-  .row.head { display: none; }
-  .file { grid-column: 1 / -1; }
-  .go { grid-column: 2; grid-row: 2 / span 4; align-self: center; }
-}
 </style>
