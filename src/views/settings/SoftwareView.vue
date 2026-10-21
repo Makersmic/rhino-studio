@@ -16,6 +16,7 @@ import { useUpdatesStore } from '@/stores/updates'
 import { useMachineStore } from '@/stores/machine'
 import { updatePlan } from '@/system/updates'
 import ZipUpdatePanel from '@/system/ZipUpdatePanel.vue'
+import RunLog from '@/components/RunLog.vue'
 
 const up = useUpdatesStore()
 const machine = useMachineStore()
@@ -64,7 +65,7 @@ const libs = __BUILT_WITH__
             </li>
           </ol>
           <p v-if="up.runError" class="msg bad">{{ up.runError }}</p>
-          <pre v-if="up.progress.length" class="log">{{ up.progress.slice(-6).join('\n') }}</pre>
+          <RunLog v-if="up.progress.length" :lines="up.progress" label="Update log" />
         </div>
 
         <table class="pk">

@@ -363,3 +363,12 @@ Studio has no login, like Mainsail: Moonraker's `[authorization] trusted_clients
 | TC7 | On your phone with Tailscale on and Wi-Fi off, open `http://<rhino's tailscale name or 100.x address>:5001` | Studio connects; Mainsail at the same address works too | The "doesn't trust" card shows |
 | TC8 | During a print: try to Add or Remove | Refused: "A job is running…"; Moonraker not restarted | Moonraker restarts during the print |
 | TC9 | Add `printer.local`, then `0.0.0.0/0` | Both refused with a clear message | Either is written |
+
+## 0.6.4: Mike's layout notes (Oct 21)
+
+| # | Do | Pass | Stop if |
+|---|---|---|---|
+| SW1 | Settings › Software › Install from zip after any install | Log (scrolls, all lines, Copy), then a one-line status bar, then the drop area. Status bar: Ready / Installing … step n of 6 with a bar / stopped at step n / Up to date | The log cuts off older lines |
+| SW2 | Scroll the log up during an install | It stays where you are; "Jump to newest" brings it back | It jumps to the bottom while you read |
+| CM1 | Settings › Cameras | Previews about 300 px wide on a PC, full width on a phone; still one picture a second | The Pi slows down on this page |
+| NW1 | Settings › Network on the Pi 3B (bullseye) | Says the network is run by dhcpcd, that nothing is wrong, and to use raspi-config | |

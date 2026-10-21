@@ -103,7 +103,7 @@ async function toggle(cam: Webcam) {
           <strong>{{ cam.name }}<em v-if="!cam.enabled">Off</em><em v-if="cam.source === 'config'">moonraker.conf</em></strong>
           <span>{{ serviceLabel(cam.service) }} · <code>{{ viewMode(cam.service) === 'snapshot' ? cam.snapshotUrl : cam.streamUrl }}</code></span>
         </div>
-        <!-- a small live picture, left of Turn off: one still a second, only while on screen (easy on a Pi 3B) -->
+        <!-- a live picture, left of Turn off (about 2.5x the 0.6.2 size; still one still a second): one still a second, only while on screen (easy on a Pi 3B) -->
         <div class="thumb" :class="{ blank: !cam.enabled }" :aria-label="cam.enabled ? `Live picture from ${cam.name}` : `${cam.name} is off`">
           <WebcamView v-if="cam.enabled && form?.uid !== cam.uid" :key="`${cam.uid}|${cam.service}|${cam.streamUrl}|${cam.snapshotUrl}`" :cam="cam" fit="cover" fill thumb />
           <span v-else-if="!cam.enabled" class="muted">Off</span>
@@ -205,12 +205,17 @@ code { font-family: var(--rs-font-mono); font-size: 0.92em; }
 .txt em { font-style: normal; font-size: var(--rs-text-xs); font-weight: var(--rs-weight-medium); padding: 0 6px; border-radius: var(--rs-radius-sm); box-shadow: inset 0 0 0 1px var(--rs-line-strong); color: var(--rs-text-muted); }
 .txt > span { font-size: var(--rs-text-xs); color: var(--rs-text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .acts { display: flex; gap: 4px; flex: none; }
-.thumb { position: relative; flex: none; width: 112px; aspect-ratio: 16 / 9; overflow: hidden; border-radius: var(--rs-radius-sm, 6px); background: var(--rs-surface-2); box-shadow: inset 0 0 0 1px var(--rs-line); display: grid; place-items: center; }
+.thumb { position: relative; flex: none; width: clamp(220px, 24vw, 300px); aspect-ratio: 16 / 9; overflow: hidden; border-radius: var(--rs-radius-sm, 6px); background: var(--rs-surface-2); box-shadow: inset 0 0 0 1px var(--rs-line); display: grid; place-items: center; }
 .thumb > :deep(*) { width: 100%; height: 100%; }
 .thumb.blank .muted { font-size: var(--rs-text-xs); }
-@media (max-width: 720px) {
+@media (max-width: 1100px) {
   .list li { flex-wrap: wrap; }
-  .thumb { width: 96px; }
+  .txt { flex-basis: calc(100% - 60px); }
+  .thumb { order: 3; width: min(100%, 340px); margin-left: calc(36px + var(--rs-space-3)); }
+  .acts { order: 4; align-self: flex-end; margin-left: auto; }
+}
+@media (max-width: 720px) {
+  .thumb { width: 100%; margin-left: 0; }
 }
 
 .editor { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--rs-space-5); margin-top: var(--rs-space-3); padding-top: var(--rs-space-4); background: radial-gradient(var(--rs-dot-faint) 0.9px, transparent 1.1px) 0 0 / 5px 2px repeat-x; }

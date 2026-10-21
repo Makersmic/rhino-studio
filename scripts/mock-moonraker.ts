@@ -1071,6 +1071,22 @@ const upd = {
   status: { state: 'idle' } as Record<string, unknown>,
   restartingUntil: 0,
 }
+// MOCK_UPDATE_RUN=failed: start with a stopped install and a long log (the avahi-utils 404 of Oct 2026)
+if (process.env.MOCK_UPDATE_RUN === 'failed') {
+  const log = ['Zip checked: Rhino Tool Manager 1.5.4', 'No job running (standby)', 'BACKUP_CFG done', 'Unpacked to ~/printer_data/rhino_data/update/work/1.5.4',
+    '[1] Checking this Pi', '   OK   config folder: /home/pi/printer_data/config', '   OK   new files: /home/pi/printer_data/rhino_data/update/work/1.5.4',
+    '   OK   login: pi (home /home/pi)', '   OK   no job running (standby)', '   note avahi-utils is missing - it will be installed (announces rhinostudio.local)',
+    ...Array.from({ length: 18 }, (_, k) => `   OK   check ${k + 1}: fine`),
+    '[2] Installing: avahi-utils', 'Reading package lists...', 'Building dependency tree...', 'Reading state information...', 'The following NEW packages will be installed:', '  avahi-utils',
+    '0 upgraded, 1 newly installed, 0 to remove and 135 not upgraded.', 'Need to get 60.6 kB of archives.', 'After this operation, 153 kB of additional disk space will be used.',
+    'Err:1 http://security.debian.org/debian-security bullseye-security/main arm64 avahi-utils arm64 0.8-5+deb11u3', '  404  Not Found [IP: 2a04:4e42:200::644 80]',
+    'E: Failed to fetch http://security.debian.org/debian-security/pool/updates/main/a/avahi/avahi-utils_0.8-5%2bdeb11u3_arm64.deb  404  Not Found [IP: 2a04:4e42:200::644 80]',
+    'E: Unable to fetch some archives, maybe run apt-get update or try with --fix-missing?', 'STOPPED: apt could not install avahi-utils.', 'Nothing after this point was changed.']
+  upd.status = { state: 'failed', zip: 'rhino-config-1.5.4.zip', version: '1.5.4', from_version: upd.installed, steps: UPD_STEPS, step: 4, step_name: UPD_STEPS[4],
+    started: Date.now() / 1000 - 90, finished: Date.now() / 1000 - 30, updated: Date.now() / 1000, log,
+    error: 'install.sh stopped (code 1). Your config folder is as the install left it; the last lines above say why. Undo with rhino.sh option 4.' }
+}
+
 function updRun(zip: string) {
   const version = /rhino-config-([\d.]+)\.zip/.exec(zip)![1]!
   const log: string[] = []

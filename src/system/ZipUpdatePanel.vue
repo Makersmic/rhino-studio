@@ -11,6 +11,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import RsPanel from '@/components/RsPanel.vue'
 import RsButton from '@/components/RsButton.vue'
 import Icon from '@/icons/Icon.vue'
+import RunLog from '@/components/RunLog.vue'
 import type { UpdateState } from '@/portal/client'
 import { useMaintenanceStore } from '@/stores/maintenance'
 import { useMachineStore } from '@/stores/machine'
@@ -76,6 +77,26 @@ const block = computed(() =>
 )
 const back = computed(() => (st.value ? goBackZip(st.value) : null))
 const steps = computed(() => stepMarks(run.value))
+
+/** The status bar between the log and the drop area: what's happening, in one line */
+const status = computed<{ tone: 'ok' | 'busy' | 'bad' | 'idle'; text: string; detail: string; frac: number | null }>(() => {
+  const r = run.value
+  const total = r.steps?.length ?? 0
+  const at = Math.min((r.step ?? 0) + 1, total || 1)
+  if (uploading.value) return { tone: 'busy', text: 'Uploading and checking the zip…', detail: '', frac: null }
+  if (r.state === 'running') {
+    return { tone: 'busy', text: `Installing ${r.version ?? ''}`.trim() + (total ? ` · step ${at} of ${total}: ${r.step_name ?? ''}` : '…'),
+      detail: reachable.value ? '' : 'Portal restarting (expected)', frac: total ? (at - 0.5) / total : null }
+  }
+  if (reloadIn.value != null) return { tone: 'ok', text: `Installed ${r.version}`, detail: `reloading in ${reloadIn.value} s`, frac: 1 }
+  if (r.state === 'failed') {
+    return { tone: 'bad', text: `Install of ${r.version ?? 'the zip'} stopped` + (total ? ` at step ${at} of ${total}: ${r.step_name ?? ''}` : ''),
+      detail: ago(r.finished), frac: null }
+  }
+  if (picked.value) return { tone: 'idle', text: `${picked.value.zip} checked, ready to install`, detail: '', frac: null }
+  if (r.state === 'done') return { tone: 'ok', text: `Up to date · Tool Manager ${st.value?.installed ?? r.version}`, detail: `installed ${ago(r.finished)}`, frac: null }
+  return { tone: 'idle', text: `Ready · Tool Manager ${st.value?.installed ?? '?'} installed`, detail: '', frac: null }
+})
 
 async function upload(files: FileList | null) {
   const f = files?.[0]
@@ -157,8 +178,16 @@ const ago = (t?: number | null) => (t ? new Date(t * 1000).toLocaleString(undefi
         </ol>
         <p v-else-if="running" class="muted small">{{ run.step_name ?? 'Starting…' }}</p>
         <p v-if="run.error" class="err">{{ run.error }}</p>
-        <pre v-if="run.log?.length && run.state !== 'done'" class="log">{{ run.log.slice(-10).join('\n') }}</pre>
+        <RunLog v-if="run.log?.length" :lines="run.log" label="Install log" />
         <p v-if="reloadIn != null" class="small strong">Done. Reloading Studio in {{ reloadIn }} s so the new version is the one running…</p>
+      </div>
+
+      <!-- status bar: between the log and the drop area -->
+      <div class="statusbar" :class="status.tone" role="status" aria-live="polite">
+        <span class="dot" aria-hidden="true"></span>
+        <span class="stxt">{{ status.text }}</span>
+        <span v-if="status.detail" class="sdet">{{ status.detail }}</span>
+        <span v-if="status.frac != null" class="sprog" aria-hidden="true"><span :style="{ width: `${Math.round(status.frac * 100)}%` }"></span></span>
       </div>
 
       <!-- drop area -->
@@ -218,7 +247,18 @@ const ago = (t?: number | null) => (t ? new Date(t * 1000).toLocaleString(undefi
 .steps li.failed { color: var(--rs-danger); font-weight: var(--rs-weight-medium); }
 .mk { display: inline-block; width: 1.3em; }
 .err { margin: var(--rs-space-2) 0 0; color: var(--rs-danger); font-size: var(--rs-text-sm); }
-.log { margin: var(--rs-space-2) 0 0; padding: 8px 10px; border-radius: var(--rs-radius-sm); background: var(--rs-surface); font-family: var(--rs-font-code); font-size: 11px; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--rs-text); }
+.statusbar { display: flex; align-items: center; gap: var(--rs-space-2); min-height: 34px; margin-bottom: var(--rs-space-3); padding: 6px 12px; border: 1px solid var(--rs-line-strong); border-radius: var(--rs-radius-md); font-size: var(--rs-text-sm); color: var(--rs-text-strong); }
+.statusbar .dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--rs-text-muted); }
+.statusbar.ok .dot { background: var(--rs-ink); }
+.statusbar.busy .dot { background: var(--rs-ink); animation: rs-blink 1s steps(2, start) infinite; }
+.statusbar.bad { border-color: var(--rs-danger); }
+.statusbar.bad .dot { background: var(--rs-danger); }
+.statusbar .stxt { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: var(--rs-weight-medium); }
+.statusbar .sdet { flex: none; color: var(--rs-text-muted); font-size: var(--rs-text-xs); }
+.statusbar .sprog { flex: none; width: 90px; height: 6px; border-radius: 3px; background: var(--rs-surface-2); box-shadow: inset 0 0 0 1px var(--rs-line-strong); overflow: hidden; }
+.statusbar .sprog span { display: block; height: 100%; background: var(--rs-ink); transition: width 0.4s; }
+@keyframes rs-blink { to { visibility: hidden; } }
+@media (prefers-reduced-motion: reduce) { .statusbar.busy .dot { animation: none; } }
 .strong { color: var(--rs-text-strong); margin: var(--rs-space-2) 0 0; }
 .goback { display: flex; align-items: center; gap: var(--rs-space-2); margin-top: var(--rs-space-3); flex-wrap: wrap; }
 .goback :deep(.btn) { margin-left: -12px; }
