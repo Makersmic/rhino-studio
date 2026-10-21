@@ -379,3 +379,13 @@ Studio has no login, like Mainsail: Moonraker's `[authorization] trusted_clients
 |---|---|---|---|
 | NW2 | Snap the browser to half the screen; open Toolheads › Board pins and outputs, Tool connector, then every other page | Nothing runs past a panel's edge and the page never scrolls sideways; Outputs shows two lines per output | Text runs off the panel |
 | NW3 | Make the window narrower step by step down to phone width, watching the top bar | The red **Stop** button stays whole and on screen at every width; the logo text and "mounted" go first, then the tool name shortens with … | Stop is cut off or pushed off screen |
+
+## 0.6.6: Update from GitHub, one Tool Manager row, PrusaSlicer keeps itself up to date (Tool Manager 1.5.8)
+
+| # | Do | Pass | Stop if |
+|---|---|---|---|
+| GU1 | Settings › Software | No separate Rhino Studio row; Rhino Tool Manager says "…and Rhino Studio 0.6.6"; Latest shows GitHub's newest release | |
+| GU2 | When a newer release is on GitHub: press Update on Rhino Tool Manager, confirm | The Rhino downloads it (button says Downloading…), then Install from zip shows the run: log, status bar, steps; Studio reloads at the end on the new version | It installs without asking, or during a job |
+| GU3 | Install from zip with a downloaded zip | Works as before | |
+| GU4 | PrusaSlicer row (a host with PrusaSlicer installed) | "Keep it up to date while I use it" ticked, with when it last updated itself; unticking sticks after a reload | |
+| GU5 | After a PrusaSlicer update, press Go back | It doesn't reinstall that version by itself; the next newer one it does | It flips back to the version you left |

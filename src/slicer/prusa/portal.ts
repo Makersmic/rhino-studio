@@ -10,6 +10,17 @@
 import type { PortalClient } from '@/portal/client'
 import type { Phase } from '../engine'
 import { prusaStats, toStl } from './config'
+/** PrusaSlicer keeps itself up to date while it's used (Tool Manager 1.5.8) */
+export interface EngineAuto {
+  on: boolean
+  last_used: number | null
+  /** sliced with it within used_days */
+  in_use: boolean
+  used_days: number
+  /** the last automatic update */
+  last?: { from: string | null; to: string | null; at: number; ok: boolean; error?: string | null } | null
+}
+
 export interface SlicerState {
   engine: {
     name: string
@@ -32,6 +43,8 @@ export interface SlicerState {
     source?: string
     arch: string
   }
+  /** automatic updates while it's being used (Tool Manager 1.5.8+) */
+  auto?: EngineAuto
   host: { mem_total_mb: number; cpus: number; small: boolean }
   /** the job slicing now, if any */
   busy: string | null

@@ -1,7 +1,10 @@
 /**
- * Settings / Software: Moonraker's update manager, plus the two Rhino pieces
- * it doesn't manage (the Rhino Tool Manager config, installed from a zip, and
- * Rhino Studio while it runs from a PC).
+ * Settings / Software: Moonraker's update manager, plus the Rhino pieces it
+ * doesn't manage: the Rhino Tool Manager (config, macros, the Portal, and the
+ * Rhino Studio served from the Rhino, all in one release zip: Update installs
+ * GitHub's newest release on the Rhino, Install from zip takes a downloaded
+ * one), the PrusaSlicer engine (it can keep itself up to date while it's
+ * used), and Rhino Studio only while it runs from a PC.
  *
  * Updating goes through src/system/updates.ts (order, what restarts, when
  * it's refused) and asks first. Moonraker restarting mid-run is expected:
@@ -15,9 +18,10 @@ import { useControlStore } from './control'
 import { useMaintenanceStore } from './maintenance'
 import { brand } from '@/brand/brand'
 import type { SlicerState } from '@/slicer/prusa/portal'
+import type { UpdateState } from '@/portal/client'
 
 export interface ExtraRow {
-  name: 'rhino-tool-manager' | 'rhino-studio-pc' | 'rhino-studio-pi' | 'prusaslicer'
+  name: 'rhino-tool-manager' | 'rhino-studio-pc' | 'prusaslicer'
   label: string
   note: string
   installed: string | null
@@ -25,7 +29,7 @@ export interface ExtraRow {
   needsUpdate: boolean
   how: string
   /** Studio can run it (through the Portal): the button acts instead of showing `how` */
-  action?: 'engine'
+  action?: 'engine' | 'github'
   actionLabel?: string
   busy?: boolean
   /** what a running install is doing */
@@ -35,6 +39,8 @@ export interface ExtraRow {
   /** Studio can't install or update it on this host (`how` says why) */
   blocked?: boolean
   error?: string | null
+  /** PrusaSlicer: keeps itself up to date while it's used (1.5.8) */
+  auto?: { on: boolean; note: string } | null
 }
 
 /** Public raw files: the latest released version of each Rhino repo. */
@@ -112,10 +118,18 @@ export const useUpdatesStore = defineStore('updates', () => {
       /* Portal not reachable: shown as ? */
     }
     tmVersion.value = c.version
+    try {
+      tmUpdate.value = await c.updateState()
+      if (tmUpdate.value.installed) tmVersion.value = tmUpdate.value.installed
+    } catch {
+      tmUpdate.value = null // before 1.5.3: no /api/update
+    }
   }
+  /** GET /api/update: installed, the updater, GitHub's newest release */
+  const tmUpdate = shallowRef<UpdateState | null>(null)
 
   async function loadLatest() {
-    void loadTm()
+    const tmRead = loadTm()
     void loadEngine()
     const get = async (url: string) => {
       try {
@@ -125,8 +139,8 @@ export const useUpdatesStore = defineStore('updates', () => {
         return null // offline, or a private repo
       }
     }
-    const [tm, st] = await Promise.all([get(LATEST_URLS.toolManager), get(LATEST_URLS.studio)])
-    latestTm.value = tm?.trim().split(/\s/)[0] || null
+    const [tm, st] = await Promise.all([get(LATEST_URLS.toolManager), get(LATEST_URLS.studio), tmRead])
+    latestTm.value = tmUpdate.value?.latest?.version ?? (tm?.trim().split(/\s/)[0] || null)
     try {
       latestStudio.value = st ? ((JSON.parse(st) as { version?: string }).version ?? null) : null
     } catch {
@@ -153,16 +167,28 @@ export const useUpdatesStore = defineStore('updates', () => {
   const extras = computed<ExtraRow[]>(() => {
     const rows: ExtraRow[] = []
     const tmv = tmVersion.value
+    const rel = tmUpdate.value?.latest ?? null
+    const canGitHub = !!tmUpdate.value?.helper && !!rel?.version && newer(tmv, rel.version)
+    const servedHere = !import.meta.env.DEV
     rows.push({
       name: 'rhino-tool-manager',
       label: 'Rhino Tool Manager',
-      note: 'Config, macros and the Portal',
+      // Studio served by the Rhino comes in the same zip, so it isn't a row of its own
+      note: servedHere ? `Config, macros, the Portal and Rhino Studio ${brand.version}` : 'Config, macros and the Portal',
       installed: tmv,
       latest: latestTm.value,
       needsUpdate: newer(tmv, latestTm.value),
-      how:
-        `Download rhino-config-${latestTm.value ?? '<version>'}.zip and drop it on Install from zip, below: it backs up, installs and restarts Klipper. ` +
-        'Before 1.5.3 (no Install from zip yet): upload it in Mainsail (Machine), run rhino.sh option 3, then FIRMWARE_RESTART.',
+      action: canGitHub ? 'github' : undefined,
+      actionLabel: 'Update',
+      busy: tmBusy.value,
+      error: tmError.value ?? (rel?.error && rel.error !== 'No releases on GitHub yet.' ? rel.error : null),
+      how: !tmUpdate.value
+        ? `This Rhino's Tool Manager is older than 1.5.3: install rhino-config-${latestTm.value ?? '<version>'}.zip once with rhino.sh option 3 (upload it in Mainsail, Machine), then FIRMWARE_RESTART.`
+        : !tmUpdate.value.helper
+          ? 'The updater isn’t set up on this Rhino yet: install the zip once by hand (rhino.sh option 3); after that Update works from here.'
+          : rel?.error === 'No releases on GitHub yet.'
+            ? 'There’s no release on GitHub yet. Drop a downloaded zip on Install from zip, below.'
+            : `Download rhino-config-${latestTm.value ?? '<version>'}.zip and drop it on Install from zip, below.`,
     })
     const e = engine.value?.engine
     rows.push({
@@ -180,31 +206,19 @@ export const useUpdatesStore = defineStore('updates', () => {
       back: e && e.can_install && !e.installing ? e.previous ?? null : null,
       blocked: !!e?.blocked && !e.installing,
       error: e?.install_error ?? engineError.value,
+      auto: e?.installed && engine.value?.auto ? { on: engine.value.auto.on, note: autoNote(engine.value.auto) } : null,
     })
-    if (!hasStudioOnPi.value)
-      rows.push(
-        import.meta.env.DEV
-          ? {
-              name: 'rhino-studio-pc',
-              label: 'Rhino Studio',
-              note: 'This app, running from your PC',
-              installed: brand.version,
-              latest: latestStudio.value,
-              needsUpdate: newer(brand.version, latestStudio.value),
-              how: 'Studio is running from your PC. In its folder: git pull, then npm ci, then start it again with npm run dev.',
-            }
-          : {
-              name: 'rhino-studio-pi',
-              label: 'Rhino Studio',
-              note: 'This app, served by the Rhino',
-              installed: brand.version,
-              latest: latestStudio.value,
-              needsUpdate: newer(brand.version, latestStudio.value),
-              how:
-                'Studio comes with the Rhino Tool Manager: installing its next zip (row above) updates Studio too. ' +
-                'Reload this page afterwards.',
-            },
-      )
+    // Studio has a row only while it runs from a PC; served by the Rhino it comes with the Tool Manager (row above)
+    if (import.meta.env.DEV && !hasStudioOnPi.value)
+      rows.push({
+        name: 'rhino-studio-pc',
+        label: 'Rhino Studio',
+        note: 'This app, running from your PC',
+        installed: brand.version,
+        latest: latestStudio.value,
+        needsUpdate: newer(brand.version, latestStudio.value),
+        how: 'Studio is running from your PC. In its folder: git pull, then npm ci, then start it again with npm run dev.',
+      })
     return rows
   })
 
@@ -373,6 +387,61 @@ export const useUpdatesStore = defineStore('updates', () => {
     await waitEngine()
   }
 
+  // ---- Rhino Tool Manager from GitHub (1.5.8) ------------------------------
+  const tmBusy = ref(false)
+  const tmError = ref<string | null>(null)
+  /** Download GitHub's newest release on the Rhino and install it, like a dropped zip. */
+  async function runGitHub() {
+    const c = useMaintenanceStore().portal()
+    const rel = tmUpdate.value?.latest
+    if (!c || !rel?.version) return
+    if (jobActive.value) return (tmError.value = 'Not while a job is running')
+    const ok = await useControlStore().confirm({
+      title: `Update the Rhino Tool Manager to ${rel.version}?`,
+      body:
+        `The Rhino downloads rhino-config-${rel.version}.zip from GitHub, checks it against the release's SHA256, then installs it ` +
+        'the same way as Install from zip: your config folder is backed up first (rhino.sh option 4 undoes it), the Portal and Klipper ' +
+        'restart (heaters off, axes need homing), and Studio reloads itself with the version inside the zip.',
+      confirmLabel: 'Update',
+      tone: 'normal',
+    })
+    if (!ok) return
+    tmBusy.value = true
+    tmError.value = null
+    try {
+      await c.installFromGitHub(rel.version)
+      window.dispatchEvent(new CustomEvent('rhino:update-started')) // Install from zip follows the run
+    } catch (err) {
+      tmError.value = (err as Error).message
+    } finally {
+      tmBusy.value = false
+    }
+  }
+
+  // ---- PrusaSlicer keeps itself up to date (1.5.8) ---------------------------
+  function autoNote(a: NonNullable<SlicerState['auto']>): string {
+    const when = (t: number) => new Date(t * 1000).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+    const last = a.last
+      ? a.last.ok
+        ? ` Last: ${a.last.from ?? '?'} → ${a.last.to ?? '?'} on ${when(a.last.at)}.`
+        : ` Last try on ${when(a.last.at)} didn't work, so it stayed on ${a.last.from ?? 'the old version'}.`
+      : ''
+    if (!a.on) return 'Off: updates only when you press Update.'
+    return (a.in_use
+      ? 'Updates itself when Flathub has a new version, never during a job or a slice; Go back stays available.'
+      : `On, but resting: it only updates while you use it (a slice in the last ${a.used_days} days).`) + last
+  }
+  async function setEngineAuto(on: boolean) {
+    const c = useMaintenanceStore().portal()
+    if (!c) return
+    try {
+      await c.setEngineAuto(on)
+      await loadEngine()
+    } catch (err) {
+      engineError.value = (err as Error).message
+    }
+  }
+
   // Fresh numbers whenever the connection comes back
   watch(
     () => machine.online,
@@ -381,6 +450,6 @@ export const useUpdatesStore = defineStore('updates', () => {
 
   return {
     packages, extras, busy, loading, checkedAt, error, running, runPlan, doneSteps, progress, runError,
-    readyCount, runnableCount, byHandCount, engineCount, engine, runEngine, rollBackEngine, block, hasStudioOnPi, load, refresh, run, onStatus, onProgress,
+    readyCount, runnableCount, byHandCount, engineCount, engine, runEngine, rollBackEngine, runGitHub, setEngineAuto, tmUpdate, block, hasStudioOnPi, load, refresh, run, onStatus, onProgress,
   }
 })

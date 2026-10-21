@@ -42,7 +42,7 @@
  */
 import type { JobsWeeks, MaintHistory, MaintOverview, TaskLibrary, MaintLists, TaskDef, BookDef, StatusEdit } from '@/maintenance/types'
 import type { NetState, WifiNetwork } from '@/system/network'
-import type { SliceJobState, SlicerState } from '@/slicer/prusa/portal'
+import type { EngineAuto, SliceJobState, SlicerState } from '@/slicer/prusa/portal'
 import type { PortalState, PreviewResult, ToolDetail, ToolLists, ToolOptions, ToolSheetData, WriteResult } from '@/toolmgr/types'
 
 /** GET /api/update (Tool Manager 1.5.3+) */
@@ -67,6 +67,8 @@ export interface UpdateState {
   zips: { zip: string; version: string; size: number; at: number }[]
   busy: boolean
   status: UpdateRun
+  /** GitHub's newest release (Tool Manager 1.5.8+), or why it can't say */
+  latest?: { version?: string; zip?: string; published?: string; notes_url?: string; error?: string } | null
 }
 
 export const PORTAL_WRITES = ['done', 'snooze'] as const
@@ -88,9 +90,9 @@ export const PORTAL_HARDWARE = ['preview-hardware', 'hardware-save', 'hardware-d
 export const PORTAL_LABELS = ['label-preview', 'label-save', 'label-delete', 'label-use'] as const
 /** The Rhino's network (config 1.4.8+). Each change switches back after a while unless kept. */
 /** PrusaSlicer on the Rhino (config 1.5.0+): slicing jobs and the engine's own updates. */
-export const PORTAL_SLICER = ['slice', 'slice-cancel', 'engine-check', 'engine-update', 'engine-rollback'] as const
+export const PORTAL_SLICER = ['slice', 'slice-cancel', 'engine-check', 'engine-update', 'engine-rollback', 'engine-auto'] as const
 /** Install a Tool Manager release zip through the root-owned updater (config 1.5.3+). */
-export const PORTAL_UPDATE = ['update-upload', 'update-install'] as const
+export const PORTAL_UPDATE = ['update-upload', 'update-install', 'update-github'] as const
 /** Moonraker's trusted_clients (Tool Manager 1.5.4). Each restarts Moonraker; the Portal refuses during a job. */
 export const PORTAL_TRUST = ['trust-add', 'trust-remove'] as const
 export const PORTAL_NETWORK = ['net-hostname', 'net-ipv4', 'net-wifi', 'net-powersave', 'net-keep', 'net-undo'] as const
@@ -164,6 +166,8 @@ export const WRITE_ROUTES: Record<WriteKind, { method: 'POST' | 'DELETE'; path: 
   'engine-rollback': { method: 'POST', path: /^\/api\/slicer\/engine\/rollback$/ },
   'update-upload': { method: 'POST', path: /^\/api\/update\/upload$/ },
   'update-install': { method: 'POST', path: /^\/api\/update\/install$/ },
+  'update-github': { method: 'POST', path: /^\/api\/update\/github$/ },
+  'engine-auto': { method: 'POST', path: /^\/api\/slicer\/engine\/auto$/ },
   'trust-add': { method: 'POST', path: /^\/api\/moonraker-trust$/ },
   'trust-remove': { method: 'DELETE', path: /^\/api\/moonraker-trust$/ },
 }
@@ -486,6 +490,14 @@ export class PortalClient {
     return this.write('engine-update', 'POST', '/api/slicer/engine/update', {})
   }
   /** Put back the PrusaSlicer version from before the last update (Tool Manager 1.5.2+). */
+  /** Keep PrusaSlicer up to date by itself while it's being used (Tool Manager 1.5.8). */
+  setEngineAuto(on: boolean): Promise<{ ok: boolean; auto: EngineAuto }> {
+    return this.write('engine-auto', 'POST', '/api/slicer/engine/auto', { on })
+  }
+  /** Download GitHub's newest release on the Rhino, check it, and install it (Tool Manager 1.5.8). */
+  installFromGitHub(version: string): Promise<{ ok: boolean; zip: string }> {
+    return this.write('update-github', 'POST', '/api/update/github', { version })
+  }
   rollbackEngine(): Promise<WriteResult> {
     return this.write('engine-rollback', 'POST', '/api/slicer/engine/rollback', {})
   }

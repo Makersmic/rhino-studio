@@ -55,8 +55,19 @@ function schedule(ms: number) {
   if (timer) clearTimeout(timer)
   timer = setTimeout(() => void poll(), ms)
 }
-onMounted(() => void poll())
-onBeforeUnmount(() => timer && clearTimeout(timer))
+// Update (GitHub) in the Packages table starts the same run: follow it here at once
+const onStarted = () => {
+  watchedRun = true
+  void poll()
+}
+onMounted(() => {
+  void poll()
+  window.addEventListener('rhino:update-started', onStarted)
+})
+onBeforeUnmount(() => {
+  if (timer) clearTimeout(timer)
+  window.removeEventListener('rhino:update-started', onStarted)
+})
 
 function startReload() {
   watchedRun = false
@@ -160,7 +171,7 @@ const ago = (t?: number | null) => (t ? new Date(t * 1000).toLocaleString(undefi
     <template v-else-if="st">
       <p class="muted small lead">
         Installed: <strong class="mono">{{ st.installed }}</strong>.
-        Drop a <span class="mono">rhino-config-1.5.x.zip</span> here; it's checked before anything happens, and nothing installs until you press Install.
+        For a zip you downloaded (or no internet on the Rhino): drop <span class="mono">rhino-config-1.5.x.zip</span> here; it's checked before anything happens, and nothing installs until you press Install. Update in the table above fetches the newest one from GitHub instead.
       </p>
 
       <!-- running / finished -->

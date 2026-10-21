@@ -34,7 +34,7 @@ const summary = computed(() => {
   if (!machine.online) return 'Not connected to the machine'
   const parts = []
   if (up.runnableCount) parts.push(`${up.runnableCount} update${up.runnableCount > 1 ? 's' : ''} ready`)
-  if (up.engineCount) parts.push('PrusaSlicer update ready')
+  for (const r of up.extras.filter((x) => x.needsUpdate && x.action)) parts.push(`${r.label} ${r.latest ?? ''} ready`.replace('  ', ' '))
   if (up.byHandCount) parts.push(`${up.byHandCount} to install by hand`)
   return parts.length ? parts.join(' · ') : 'Everything is up to date'
 })
@@ -97,8 +97,8 @@ const libs = __BUILT_WITH__
                 <td class="mono">{{ r.installed ?? '?' }}</td>
                 <td class="mono">{{ r.latest ?? 'Can’t check' }}</td>
                 <td class="st">
-                  <button v-if="r.action && (r.needsUpdate || !r.installed)" type="button" class="upd" :disabled="r.busy || !!up.block" :title="up.block ?? ''" @click="up.runEngine()">
-                    {{ r.busy ? 'Installing…' : r.actionLabel }}
+                  <button v-if="r.action && (r.needsUpdate || !r.installed)" type="button" class="upd" :disabled="r.busy || !!up.block" :title="up.block ?? (r.action === 'github' ? 'Download it from GitHub and install it on the Rhino' : '')" @click="r.action === 'github' ? up.runGitHub() : up.runEngine()">
+                    {{ r.busy ? (r.action === 'github' ? 'Downloading…' : 'Installing…') : r.actionLabel }}
                   </button>
                   <button v-else-if="r.needsUpdate" type="button" class="upd" :aria-expanded="open === r.name" @click="open = open === r.name ? null : r.name">Update</button>
                   <span v-else-if="r.blocked" class="chip quiet">Not offered</span>
@@ -114,6 +114,14 @@ const libs = __BUILT_WITH__
               </tr>
               <tr v-if="r.error" class="how">
                 <td colspan="4">{{ r.error }}</td>
+              </tr>
+              <tr v-if="r.auto" class="how">
+                <td colspan="4">
+                  <label class="autochk">
+                    <input type="checkbox" :checked="r.auto.on" @change="up.setEngineAuto(($event.target as HTMLInputElement).checked)" />
+                    <span><strong>Keep it up to date while I use it.</strong> {{ r.auto.note }}</span>
+                  </label>
+                </td>
               </tr>
               <tr v-if="r.back" class="how">
                 <td colspan="4">
@@ -132,7 +140,7 @@ const libs = __BUILT_WITH__
           <ol class="steps quiet">
             <li>System packages</li><li>Moonraker</li><li>Config and helper repos</li><li>Klipper, restarted once</li><li>Web apps</li>
           </ol>
-          <span class="muted small">Up-to-date steps are skipped. Refused while a job runs. Mainsail isn't listed or updated here. The PrusaSlicer engine comes from Flathub and updates on its own button: it restarts nothing, and the version before can be put back. The Rhino Tool Manager installs from its release zip (Install from zip, below; the first time with <code>rhino.sh</code>), and Rhino Studio comes in the same zip when it is served from the Rhino.</span>
+          <span class="muted small">Up-to-date steps are skipped. Refused while a job runs. Mainsail isn't listed or updated here. The PrusaSlicer engine comes from Flathub and can keep itself up to date while you use it: it restarts nothing, and the version before can be put back. The Rhino Tool Manager's Update downloads its newest release from GitHub onto the Rhino and installs it; Install from zip, below, takes one you downloaded. Rhino Studio comes in the same zip, so it updates with the Tool Manager.</span>
         </div>
       </RsPanel>
 
@@ -190,6 +198,9 @@ const libs = __BUILT_WITH__
 .steps.quiet { counter-reset: s; margin: 6px 0; }
 .steps.quiet li::before { counter-increment: s; content: counter(s); width: 18px; height: 18px; display: inline-grid; place-items: center; border-radius: 50%; box-shadow: inset 0 0 0 1px var(--rs-line-strong); font-size: 10px; }
 .log { margin: var(--rs-space-2) 0 0; padding: 8px 10px; max-height: 120px; overflow: auto; border-radius: var(--rs-radius-sm); background: var(--rs-surface); font-family: var(--rs-font-code); font-size: 11px; color: var(--rs-text-muted); white-space: pre-wrap; }
+.autochk { display: flex; gap: 8px; align-items: flex-start; cursor: pointer; line-height: 1.45; }
+.autochk input { width: 16px; height: 16px; margin-top: 1px; flex: none; accent-color: var(--rs-text-strong); }
+.autochk strong { font-weight: var(--rs-weight-medium); color: var(--rs-text-strong); }
 .order { margin-top: var(--rs-space-4); padding-top: var(--rs-space-3); border-top: 1px dotted var(--rs-line-strong); display: flex; flex-direction: column; gap: 2px; }
 @media (max-width: 720px) {
   .pk th:nth-child(2), .pk td:nth-child(2) { display: none; }

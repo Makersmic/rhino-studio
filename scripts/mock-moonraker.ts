@@ -1014,6 +1014,9 @@ const prusaSchema = JSON.parse(readFileSync(new URL('../src/slicer/prusa/schema.
 const prusaKeys = [...Object.keys(prusaSchema.options), 'bed_shape', 'autoemit_temperature_commands', 'start_gcode', 'end_gcode', 'post_process', 'gcode_substitutions']
 const engine = { installed: process.env.MOCK_PRUSA === '0' ? null as string | null : '2.9.5', latest: '2.9.6', installing: false,
   phase: null as string | null, previous: null as string | null }
+// PrusaSlicer keeps itself up to date while it's used (1.5.8)
+const engineAuto = { on: true, last_used: Date.now() / 1000 - 2 * 86400, in_use: true, used_days: 30,
+  last: { from: '2.9.4', to: '2.9.5', at: Date.now() / 1000 - 9 * 86400, ok: true, error: null } as Record<string, unknown> | null }
 // Why the Portal (1.5.2) wouldn't offer the engine: MOCK_SMALL=1 (a Pi 3B), MOCK_FLATPAK=0 (no flatpak yet)
 const engineBlocked = process.env.MOCK_SMALL === '1'
   ? 'PrusaSlicer needs a host with 2 GB of memory or more. Kiri:Moto in the browser still slices on this one.'
@@ -1159,7 +1162,21 @@ async function portal(req: IncomingMessage, res: import('node:http').ServerRespo
     if (process.env.MOCK_UPDATER === 'old') return json(res, 404, { ok: false, error: 'Not found' }), true
     if (Date.now() < upd.restartingUntil) return res.writeHead(502).end(), true
     const busy = upd.status.state === 'running'
-    if (req.method === 'GET' && url === '/api/update') return json(res, 200, { ok: true, installed: upd.installed, helper: process.env.MOCK_UPDATER !== '0', zips: upd.zips, busy, status: upd.status }), true
+    // GitHub's newest release (Tool Manager 1.5.8): MOCK_RELEASE=1.5.9 (default), MOCK_RELEASE=none for none yet
+    const relV = process.env.MOCK_RELEASE ?? '1.5.9'
+    const latest = relV === 'none' ? { error: 'No releases on GitHub yet.' } : { version: relV, zip: `rhino-config-${relV}.zip`, published: '2026-10-21T16:00:00Z' }
+    if (req.method === 'GET' && url === '/api/update') return json(res, 200, { ok: true, installed: upd.installed, helper: process.env.MOCK_UPDATER !== '0', zips: upd.zips, busy, status: upd.status, latest }), true
+    if (req.method === 'POST' && url === '/api/update/github') {
+      const body = await readBody(req)
+      if (busy) return json(res, 400, { ok: false, error: 'An install is already running.' }), true
+      if (body.version !== relV) return json(res, 400, { ok: false, error: `GitHub's newest release is now ${relV}, not ${body.version}. Check again.` }), true
+      await new Promise((r) => setTimeout(r, 1500)) // downloading
+      const zip = `rhino-config-${relV}.zip`
+      if (!upd.zips.some((z) => z.zip === zip)) upd.zips.push({ zip, version: relV, size: 4_200_000, at: Date.now() / 1000 })
+      console.log(`  UPDATE from GitHub ${zip}`)
+      updRun(zip)
+      return json(res, 200, { ok: true, zip }), true
+    }
     if (req.headers['x-rhino-token'] !== PORTAL_TOKEN) return json(res, 400, { ok: false, error: 'This page is out of date (the portal was restarted). Reload the page and try again.' }), true
     if (req.method === 'POST' && url === '/api/update/upload') {
       const chunks: Buffer[] = []
@@ -1220,6 +1237,7 @@ async function portal(req: IncomingMessage, res: import('node:http').ServerRespo
       update_available: !engineBlocked && (!engine.installed || engine.installed !== engine.latest),
       installing: engine.installing, install_phase: engine.phase, install_error: null, can_install: !engineBlocked, blocked: engineBlocked,
       previous: engine.previous, arch: process.env.MOCK_SMALL === '1' ? 'aarch64' : 'x86_64' },
+      auto: engineAuto,
       host: { mem_total_mb: process.env.MOCK_SMALL === '1' ? 906 : 15800, cpus: process.env.MOCK_SMALL === '1' ? 4 : 8, small: process.env.MOCK_SMALL === '1' },
       busy: Object.values(sliceJobs).find((j) => j.state === 'running')?.id ?? null, refuse: printing && process.env.MOCK_SMALL === '1' ? 'This host has under 2 GB of memory.' : null }), true
   }
@@ -1255,6 +1273,10 @@ async function portal(req: IncomingMessage, res: import('node:http').ServerRespo
       console.log(`  ENGINE install ${engine.latest} from Flathub`)
       mockInstall(engine.latest, engine.installed)
       return json(res, 200, { ok: true, version: engine.latest }), true
+    }
+    if (url === '/api/slicer/engine/auto') {
+      engineAuto.on = !!(await readBody(req)).on
+      return json(res, 200, { ok: true, auto: engineAuto }), true
     }
     if (url === '/api/slicer/engine/rollback') {
       if (!engine.previous) return json(res, 400, { ok: false, error: "There's no earlier PrusaSlicer to go back to." }), true
