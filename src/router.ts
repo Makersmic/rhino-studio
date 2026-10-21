@@ -59,6 +59,7 @@ export const router = createRouter({
       children: [
         { path: '', component: () => import('./views/settings/AppearanceView.vue'), meta: { title: 'Settings', heading: 'Appearance', lead: 'Day or night for this screen, and the colour theme every screen shares.' } },
         { path: 'connection', component: () => import('./views/settings/ConnectionView.vue'), meta: { title: 'Connection', lead: 'Where this screen finds Moonraker and the Rhino Portal.' } },
+        { path: 'trust', component: () => import('./views/settings/TrustView.vue'), meta: { title: 'Trusted addresses', lead: 'Which screens Moonraker lets in (trusted_clients), the same list Mainsail uses.' } },
         { path: 'tools', component: () => import('./views/settings/ToolChangingView.vue'), meta: { title: 'Tool changing', lead: 'How this machine changes tools, and how Studio reads which one is mounted.' } },
         { path: 'cameras', component: () => import('./views/settings/CamerasView.vue'), meta: { title: 'Cameras', lead: 'The camera list in Moonraker, shared with every screen.' } },
         { path: 'software', component: () => import('./views/settings/SoftwareView.vue'), meta: { title: 'Software and updates', lead: 'What Studio runs on, and what it is built with.' } },

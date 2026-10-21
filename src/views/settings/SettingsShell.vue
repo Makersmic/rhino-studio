@@ -2,7 +2,7 @@
 /**
  * Settings, with its own menu like Care:
  *   Appearance
- *   Machine   Connection, Tool changing, Cameras
+ *   Machine   Connection, Trusted addresses, Tool changing, Cameras
  *   System    Software (with the number of updates ready), Network, Host, Logs
  *   About
  * Each page gets its title and one line about it from the route.
@@ -24,6 +24,7 @@ const groups = computed<SectionGroup[]>(() => [
     label: 'Machine',
     items: [
       { to: '/settings/connection', label: 'Connection' },
+      { to: '/settings/trust', label: 'Trusted addresses' },
       { to: '/settings/tools', label: 'Tool changing' },
       { to: '/settings/cameras', label: 'Cameras' },
     ],

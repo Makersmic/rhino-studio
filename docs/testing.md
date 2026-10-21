@@ -341,3 +341,25 @@ Klipper ready. Keep Mainsail open on another screen to compare. **Stop if** anyt
 | LG1 | Settings › Cameras | Thumbnails change about once a second (snapshots), not a full stream; Control and the Dashboard still stream | |
 | LG2 | Open a Toolheads page, start a print, watch the Portal log (or the network tab) for a minute | No /api/state reads every 10 s while printing; they resume when the job ends; a change you make still refreshes at once | |
 | LG3 | During a print: upload a G-code file; open a G-code file over 1 MB | Each asks first ("…is printing… can make a small host stutter"); Cancel does nothing; small config files open without asking | It uploads or reads without asking |
+
+## 0.6.3: trusted_clients, as Mainsail (needs Tool Manager 1.5.4 for the Portal part)
+
+Studio has no login, like Mainsail: Moonraker's `[authorization] trusted_clients` decides. Before: note your
+`trusted_clients` lines so you can put them back.
+
+| # | Do | Pass | Stop if |
+|---|---|---|---|
+| TC1 | Open Studio as you run it today | No card; connects as before | The "doesn't trust this screen" card shows on a screen Mainsail works on |
+| TC2 | Take your network's range out of `trusted_clients`, restart Moonraker, open Studio (and Mainsail) | Mainsail says Unauthorized; Studio shows "Moonraker doesn't trust this screen" with this screen's address and a `/24` to add; top bar "Not trusted"; Moonraker's log shows no reconnect storm | Studio keeps reconnecting, or shows the page with no data |
+| TC3 | Same state: open `http://<rhino>:5000` (the old Portal page) and try any change | Every action says "Moonraker doesn't trust this address (…)" | A change goes through |
+| TC4 | Put the range back (Copy the lines helps), restart Moonraker, press Try again | Connects; Toolheads and Care load | |
+
+### Trusted addresses (Settings) and Tailscale
+
+| # | Do | Pass | Stop if |
+|---|---|---|---|
+| TC5 | Settings › Trusted addresses | Lists `trusted_clients`; "This screen is <address>, let in by <entry>"; no Remove on that entry or on 127.0.0.0/8 | |
+| TC6 | Install Tailscale on the Pi (`curl -fsSL https://tailscale.com/install.sh \| sh`, `sudo tailscale up`); reload the page | **100.64.0.0/10 Tailscale** offered; Add, confirm: Moonraker restarts, screens reconnect, the list shows it; `ls ~/printer_data/rhino_data/config_backups` has a `moonraker.conf.*` copy | Moonraker doesn't come back (send `journalctl -u moonraker -n 30`) |
+| TC7 | On your phone with Tailscale on and Wi-Fi off, open `http://<rhino's tailscale name or 100.x address>:5001` | Studio connects; Mainsail at the same address works too | The "doesn't trust" card shows |
+| TC8 | During a print: try to Add or Remove | Refused: "A job is running…"; Moonraker not restarted | Moonraker restarts during the print |
+| TC9 | Add `printer.local`, then `0.0.0.0/0` | Both refused with a clear message | Either is written |

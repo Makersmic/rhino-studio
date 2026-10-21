@@ -255,3 +255,64 @@ describe('file manager allowlist (FILE_METHODS)', () => {
     expect(c.rootUrl('config', 'my rhino/a.cfg')).toBe('http://rhino.test/server/files/config/my%20rhino/a.cfg')
   })
 })
+
+describe('MoonrakerClient and trusted_clients (0.6.3, as Mainsail)', () => {
+  function withTrust(t: () => Promise<'off' | 'trusted' | 'untrusted' | 'unreachable'>) {
+    const states: [string, string | undefined][] = []
+    const c = new MoonrakerClient('http://rhino.test', { onState: (s, d) => states.push([s, d]) }, { WebSocketImpl: FakeSocket as unknown as new (url: string) => WebSocket, trust: t })
+    return { c, states }
+  }
+  it('trusted: connects as before', async () => {
+    FakeSocket.last = null
+    const { c, states } = withTrust(async () => 'trusted')
+    c.connect()
+    await flush(); await flush(); await flush()
+    expect(FakeSocket.last).not.toBeNull()
+    expect(states.map((s) => s[0])).toContain('online')
+    c.disconnect()
+  })
+  it('untrusted: no socket, no retry loop, says Unauthorized', async () => {
+    vi.useFakeTimers()
+    FakeSocket.last = null
+    const trust = vi.fn(async () => 'untrusted' as const)
+    const { c, states } = withTrust(trust)
+    c.connect()
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(FakeSocket.last).toBeNull()
+    expect(trust).toHaveBeenCalledTimes(1)
+    expect(c.untrusted).toBe(true)
+    expect(states.at(-1)).toEqual(['error', 'Unauthorized'])
+  })
+  it('"Unauthorized" from identify (Mainsail\'s case) stops retrying too', async () => {
+    vi.useFakeTimers()
+    FakeSocket.last = null
+    const orig = FakeSocket.prototype.send
+    FakeSocket.prototype.send = function (this: FakeSocket, raw: string) {
+      const msg = JSON.parse(raw)
+      if (msg.method === 'server.connection.identify') {
+        queueMicrotask(() => this.onmessage?.({ data: JSON.stringify({ jsonrpc: '2.0', id: msg.id, error: { code: 401, message: 'Unauthorized' } }) }))
+        return
+      }
+      orig.call(this, raw)
+    }
+    const { c, states } = withTrust(async () => 'unreachable')
+    c.connect()
+    await vi.advanceTimersByTimeAsync(30_000)
+    FakeSocket.prototype.send = orig
+    expect(c.untrusted).toBe(true)
+    expect(states.at(-1)).toEqual(['error', 'Unauthorized'])
+    const sockets = FakeSocket.last
+    await vi.advanceTimersByTimeAsync(30_000)
+    expect(FakeSocket.last).toBe(sockets)
+  })
+  it('a late trust answer after disconnect() never opens a socket', async () => {
+    FakeSocket.last = null
+    let release: (t: 'trusted') => void = () => undefined
+    const { c } = withTrust(() => new Promise((r) => (release = r)))
+    c.connect()
+    c.disconnect()
+    release('trusted')
+    await flush()
+    expect(FakeSocket.last).toBeNull()
+  })
+})

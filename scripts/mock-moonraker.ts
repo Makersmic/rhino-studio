@@ -31,6 +31,9 @@
  * starts with none, to see the empty states. Adding, editing and deleting
  * cameras works and is kept until the mock stops.
  *
+ * MOCK_AUTH=untrusted: this screen isn't in Moonraker's trusted_clients (Mainsail's
+ * "Unauthorized"); the Portal refuses /api the same way and names the address.
+ *
  * It also pretends to be the Rhino Portal's maintenance API, using a real
  * overview from the Portal's year-of-use demo (scripts/fixtures). Run the
  * dev server with PORTAL=http://localhost:7125 as well. One task (the laser
@@ -1091,6 +1094,44 @@ function updRun(zip: string) {
   setTimeout(tick, 1200)
 }
 
+const UNTRUSTED = process.env.MOCK_AUTH === 'untrusted'
+/** Moonraker's [authorization] with this screen not in trusted_clients */
+function untrusted(req: IncomingMessage, res: import('node:http').ServerResponse, url: string): boolean {
+  if (url === '/access/info') {
+    json(res, UNTRUSTED ? 200 : 404, UNTRUSTED ? { result: { default_source: 'moonraker', available_sources: ['moonraker'], login_required: false, trusted: false } } : {})
+    return true
+  }
+  if (!UNTRUSTED || url.startsWith('/webcam') || url === '/') return false
+  if (url.startsWith('/api/')) return (json(res, 401, { ok: false, error: "Moonraker doesn't trust this address (192.168.86.31). Add it to trusted_clients in moonraker.conf and restart Moonraker.", untrusted: true, address: '192.168.86.31' }), true)
+  if (/^\/(server|printer|machine|access)\//.test(url)) return (json(res, 401, { error: { code: 401, message: 'Unauthorized' } }), true)
+  return false
+}
+
+// Settings > Trusted addresses (Tool Manager 1.5.4): an in-memory trusted_clients
+const trusted = ['127.0.0.0/8', '192.168.86.0/24']
+async function trustRoutes(req: IncomingMessage, res: import('node:http').ServerResponse, url: string): Promise<boolean> {
+  if (url !== '/api/moonraker-trust') return false
+  const state = () => ({ ok: true, configured: true, force_logins: false, include: false, entries: trusted, address: '192.168.86.31', covered: true,
+    suggestions: trusted.includes('100.64.0.0/10') ? [] : [{ entry: '100.64.0.0/10', why: 'Tailscale (any device on your tailnet)' }] })
+  if (req.method === 'GET') return (json(res, 200, state()), true)
+  const entry = String((await readBody(req)).entry ?? '').trim()
+  await new Promise((r) => setTimeout(r, 1200)) // Moonraker restarting
+  if (req.method === 'POST') {
+    if (!/^[\d.:a-fA-F]+(\/\d+)?$/.test(entry)) return (json(res, 400, { ok: false, error: `"${entry}" isn't an address or a range (for example 192.168.1.50 or 192.168.1.0/24).` }), true)
+    if (!trusted.includes(entry)) trusted.push(entry)
+    console.log(`  TRUST + ${entry} (Moonraker restarted)`)
+    return (json(res, 200, state()), true)
+  }
+  if (req.method === 'DELETE') {
+    if (entry === '192.168.86.0/24') return (json(res, 400, { ok: false, error: `${entry} is what lets this screen (192.168.86.31) in. Remove it from another trusted screen, or over SSH.` }), true)
+    const i = trusted.indexOf(entry)
+    if (i >= 0) trusted.splice(i, 1)
+    console.log(`  TRUST - ${entry} (Moonraker restarted)`)
+    return (json(res, 200, state()), true)
+  }
+  return false
+}
+
 async function portal(req: IncomingMessage, res: import('node:http').ServerResponse, url: string): Promise<boolean> {
   if (req.method === 'GET' && url === '/') {
     res.writeHead(200, { 'content-type': 'text/html' }).end(
@@ -1292,6 +1333,8 @@ async function portal(req: IncomingMessage, res: import('node:http').ServerRespo
 const server = createServer(async (req, res) => {
   const url = decodeURIComponent((req.url ?? '').split('?')[0]!)
   if (!url.startsWith("/webcam")) console.log(`HTTP ${req.method} ${url}${req.headers.range ? ` (${req.headers.range})` : ''}`)
+  if (untrusted(req, res, url)) return
+  if (await trustRoutes(req, res, url)) return
   if (await portal(req, res, url)) return
   if (req.method === 'POST' && url === '/printer/emergency_stop') {
     emergencyStop('http')
@@ -1374,6 +1417,11 @@ wss.on('connection', (ws) => {
   ws.on('message', (data) => {
     const msg = JSON.parse(String(data)) as { id: number; method: string; params?: Record<string, unknown> }
     console.log(`  -> ${msg.method}`)
+    if (UNTRUSTED) {
+      // As Moonraker answers an untrusted socket: every call is refused
+      ws.send(JSON.stringify({ jsonrpc: '2.0', id: msg.id, error: { code: 401, message: 'Unauthorized' } }))
+      return
+    }
     if (msg.method === 'machine.update.upgrade') {
       const name = String(msg.params?.name ?? '')
       console.log(`  UPDATE ${name}`)

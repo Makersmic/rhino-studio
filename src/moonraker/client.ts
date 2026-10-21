@@ -27,6 +27,7 @@ import type { CheckedScript } from '@/control/commands'
  */
 
 import { watchedForAll } from '@/tools/adapters'
+import type { Trust } from './trust'
 import { brand } from '@/brand/brand'
 
 export type ConnectionState = 'offline' | 'connecting' | 'online' | 'error'
@@ -242,6 +243,14 @@ export class MoonrakerClient {
   /** '' = same site as the app (dev proxy, or served from the Pi). Otherwise e.g. http://192.168.1.50 */
   readonly baseUrl: string
   private ws: WebSocket | null = null
+  private readonly trust: (() => Promise<Trust>) | null
+  /**
+   * Moonraker doesn't trust this screen (trusted_clients). Like Mainsail, stop
+   * retrying until connect() is called again; the app says how to fix it.
+   */
+  untrusted = false
+  /** Bumped by every open() and disconnect(), so a late trust answer never opens a stale socket */
+  private attempt = 0
   private nextId = 1
   private pending = new Map<number, Pending>()
   private wanted = false
@@ -253,7 +262,8 @@ export class MoonrakerClient {
   private version: string
   private delays = [1000, 2000, 4000, 8000, 10000]
 
-  constructor(baseUrl: string, handlers: ClientHandlers, opts: { WebSocketImpl?: WsCtor; version?: string } = {}) {
+  constructor(baseUrl: string, handlers: ClientHandlers, opts: { WebSocketImpl?: WsCtor; version?: string; trust?: () => Promise<Trust> } = {}) {
+    this.trust = opts.trust ?? null
     this.baseUrl = baseUrl.replace(/\/+$/, '')
     this.handlers = handlers
     this.WS = opts.WebSocketImpl ?? WebSocket
@@ -294,6 +304,7 @@ export class MoonrakerClient {
 
   disconnect(): void {
     this.wanted = false
+    this.attempt++
     this.clearTimers()
     this.ws?.close()
     this.ws = null
@@ -589,6 +600,24 @@ export class MoonrakerClient {
   private open() {
     this.clearTimers()
     this.handlers.onState?.('connecting')
+    if (!this.trust) return this.openSocket()
+    const attempt = ++this.attempt
+    void this.trust().then((t) => {
+      if (attempt !== this.attempt || !this.wanted) return
+      if (t === 'untrusted') return this.refused()
+      this.openSocket()
+    })
+  }
+
+  /** Moonraker said this screen isn't trusted: no retry loop, the app shows the fix */
+  private refused() {
+    this.untrusted = true
+    this.clearTimers()
+    this.handlers.onState?.('error', 'Unauthorized')
+  }
+
+  private openSocket() {
+    this.untrusted = false
     let ws: WebSocket
     try {
       ws = new this.WS(this.wsUrl)
@@ -610,7 +639,9 @@ export class MoonrakerClient {
       this.handlers.onStatus?.({}, true)
       this.handlers.onKlippy?.('unknown')
       this.handlers.onWebcams?.([])
-      if (this.wanted) {
+      if (this.untrusted) {
+        this.handlers.onState?.('error', 'Unauthorized')
+      } else if (this.wanted) {
         this.handlers.onState?.('error', `Can't reach Moonraker at ${this.wsUrl}`)
         this.scheduleReconnect()
       } else {
@@ -630,7 +661,13 @@ export class MoonrakerClient {
         type: 'web',
         url: 'https://github.com/Makersmic/rhino-studio',
       })
-    } catch {
+    } catch (e) {
+      // Mainsail does the same: "Unauthorized" here means trusted_clients doesn't cover this screen
+      if (/unauthori[sz]ed/i.test((e as Error).message)) {
+        this.refused()
+        this.ws?.close() // onclose sees untrusted and doesn't retry
+        return
+      }
       /* older Moonraker without identify: carry on */
     }
     this.handlers.onState?.('online')

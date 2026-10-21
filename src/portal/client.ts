@@ -91,6 +91,8 @@ export const PORTAL_LABELS = ['label-preview', 'label-save', 'label-delete', 'la
 export const PORTAL_SLICER = ['slice', 'slice-cancel', 'engine-check', 'engine-update', 'engine-rollback'] as const
 /** Install a Tool Manager release zip through the root-owned updater (config 1.5.3+). */
 export const PORTAL_UPDATE = ['update-upload', 'update-install'] as const
+/** Moonraker's trusted_clients (Tool Manager 1.5.4). Each restarts Moonraker; the Portal refuses during a job. */
+export const PORTAL_TRUST = ['trust-add', 'trust-remove'] as const
 export const PORTAL_NETWORK = ['net-hostname', 'net-ipv4', 'net-wifi', 'net-powersave', 'net-keep', 'net-undo'] as const
 
 export type WriteKind =
@@ -106,6 +108,7 @@ export type WriteKind =
   | (typeof PORTAL_NETWORK)[number]
   | (typeof PORTAL_SLICER)[number]
   | (typeof PORTAL_UPDATE)[number]
+  | (typeof PORTAL_TRUST)[number]
 
 /** The one request each write kind may make. */
 export const WRITE_ROUTES: Record<WriteKind, { method: 'POST' | 'DELETE'; path: RegExp }> = {
@@ -161,13 +164,27 @@ export const WRITE_ROUTES: Record<WriteKind, { method: 'POST' | 'DELETE'; path: 
   'engine-rollback': { method: 'POST', path: /^\/api\/slicer\/engine\/rollback$/ },
   'update-upload': { method: 'POST', path: /^\/api\/update\/upload$/ },
   'update-install': { method: 'POST', path: /^\/api\/update\/install$/ },
+  'trust-add': { method: 'POST', path: /^\/api\/moonraker-trust$/ },
+  'trust-remove': { method: 'DELETE', path: /^\/api\/moonraker-trust$/ },
 }
 
 const ALLOWED = new Set<string>([
   ...PORTAL_WRITES, ...PORTAL_TOOL_CHECKS, ...PORTAL_TOOL_WRITES, ...PORTAL_RESTART,
-  ...PORTAL_CARE_WRITES, ...PORTAL_CARE_SETUP, ...PORTAL_TOOL_SETUP, ...PORTAL_HARDWARE, ...PORTAL_LABELS, ...PORTAL_NETWORK, ...PORTAL_SLICER, ...PORTAL_UPDATE,
+  ...PORTAL_CARE_WRITES, ...PORTAL_CARE_SETUP, ...PORTAL_TOOL_SETUP, ...PORTAL_HARDWARE, ...PORTAL_LABELS, ...PORTAL_NETWORK, ...PORTAL_SLICER, ...PORTAL_UPDATE, ...PORTAL_TRUST,
 ])
 const enc = encodeURIComponent
+
+/** GET /api/moonraker-trust (Tool Manager 1.5.4) */
+export interface TrustState {
+  configured: boolean
+  force_logins: boolean
+  include: boolean
+  entries: string[]
+  /** This screen's address as Moonraker sees it, and whether an entry covers it */
+  address: string
+  covered: boolean
+  suggestions: { entry: string; why: string }[]
+}
 
 export class PortalClient {
   /** e.g. '/portal' (dev proxy or nginx on the Pi) or 'http://192.168.1.50:5000' */
@@ -487,6 +504,23 @@ export class PortalClient {
   /** Ask the root-owned updater to install a kept zip (also how "Go back" works). */
   installUpdate(zip: string): Promise<WriteResult> {
     return this.write('update-install', 'POST', '/api/update/install', { zip })
+  }
+
+  /** Moonraker's trusted_clients; null from a Tool Manager before 1.5.4. */
+  async trust(): Promise<TrustState | null> {
+    try {
+      return await this.getJson<TrustState>('/api/moonraker-trust')
+    } catch (e) {
+      if (/not found/i.test((e as Error).message)) return null
+      throw e
+    }
+  }
+  /** Add an address or range; the Portal restarts Moonraker and waits for it. */
+  addTrust(entry: string): Promise<TrustState> {
+    return this.write('trust-add', 'POST', '/api/moonraker-trust', { entry })
+  }
+  removeTrust(entry: string): Promise<TrustState> {
+    return this.write('trust-remove', 'DELETE', '/api/moonraker-trust', { entry })
   }
 
   /** Reads the token and version from the Portal's home page. */

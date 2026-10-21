@@ -23,7 +23,7 @@ const connection = computed(() => {
         ? { tone: 'ok' as const, text: 'Connected' }
         : { tone: machine.klippy === 'shutdown' || machine.klippy === 'error' ? ('danger' as const) : ('warn' as const), text: `Klipper ${machine.klippy}` }
     case 'connecting': return { tone: 'warn' as const, text: 'Connecting' }
-    case 'error': return { tone: 'danger' as const, text: "Can't reach machine" }
+    case 'error': return machine.untrusted ? { tone: 'danger' as const, text: 'Not trusted' } : { tone: 'danger' as const, text: "Can't reach machine" }
     default: return { tone: 'neutral' as const, text: 'Not connected' }
   }
 })

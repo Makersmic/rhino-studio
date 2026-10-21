@@ -26,6 +26,7 @@ import { useTempsStore } from './temps'
 import { useUpdatesStore } from './updates'
 import { useNetworkStore } from './network'
 import { readExtruder, type ExtruderStatus } from '@/control/extruder'
+import { checkTrust } from '@/moonraker/trust'
 
 export type { ConnectionState, KlippyState }
 
@@ -98,7 +99,7 @@ export const useMachineStore = defineStore('machine', () => {
           triggerRef(status)
         },
       },
-      { version: brand.version },
+      { version: brand.version, trust: () => checkTrust(lastBase) },
     )
     client.setReconnectDelays(useNetworkStore().reconnectDelays)
     client.connect()
@@ -114,6 +115,8 @@ export const useMachineStore = defineStore('machine', () => {
   }
 
   const online = computed(() => connection.value === 'online')
+  /** Moonraker doesn't trust this screen (trusted_clients), as Mainsail's "Unauthorized" */
+  const untrusted = computed(() => connection.value === 'error' && connectionDetail.value === 'Unauthorized')
   const klippyReady = computed(() => online.value && klippy.value === 'ready')
 
   /** Klipper's own shutdown/error message, if it has one. */
@@ -329,6 +332,7 @@ export const useMachineStore = defineStore('machine', () => {
   const setReconnectDelays = (d: number[]) => client?.setReconnectDelays(d)
 
   return {
+    untrusted,
     connection,
     connectionDetail,
     klippy,

@@ -7,6 +7,7 @@ import AppAlerts from '@/components/AppAlerts.vue'
 import ConfirmDialog from '@/control/ConfirmDialog.vue'
 import PromptDialog from '@/control/PromptDialog.vue'
 import PanelColorDialog from '@/components/PanelColorDialog.vue'
+import UntrustedCard from '@/components/UntrustedCard.vue'
 import { useMachineStore } from '@/stores/machine'
 import { useThemeStore } from '@/stores/theme'
 import { useSettingsStore, portalBase } from '@/stores/settings'
@@ -42,7 +43,10 @@ watchEffect(() => {
 
 <template>
   <!-- Pendant mode is full screen: no top bar or nav (it has its own Stop) -->
-  <RouterView v-if="route.meta.bare" />
+  <template v-if="route.meta.bare">
+    <UntrustedCard v-if="machine.untrusted" />
+    <RouterView v-else />
+  </template>
   <template v-else>
     <a class="skip" href="#main">Skip to content</a>
     <AppTopBar />
@@ -50,8 +54,12 @@ watchEffect(() => {
       <AppRail />
       <main id="main" tabindex="-1">
         <!-- The Dashboard shows the same alerts as its own notices -->
-        <AppAlerts v-if="!route.meta.ownAlerts" />
-        <RouterView />
+        <!-- Moonraker doesn't trust this screen (Mainsail's "Unauthorized"): say how to fix it -->
+        <UntrustedCard v-if="machine.untrusted" />
+        <template v-else>
+          <AppAlerts v-if="!route.meta.ownAlerts" />
+          <RouterView />
+        </template>
       </main>
     </div>
   </template>
