@@ -94,7 +94,6 @@ const caption = computed(() => {
 }
 .home { text-decoration: none; display: inline-flex; border-radius: var(--rs-radius-md); }
 .mounted {
-  flex: none;
   display: flex;
   align-items: center;
   gap: var(--rs-space-2);
@@ -116,7 +115,16 @@ const caption = computed(() => {
 .tool-btn:hover:not(:disabled) { background: var(--rs-surface-2); }
 .tool-btn.primary { background: var(--rs-ink); border-color: var(--rs-ink); color: var(--rs-on-ink); }
 .tool-btn:disabled { opacity: 0.35; cursor: not-allowed; }
-.right { margin-left: auto; display: flex; align-items: center; gap: var(--rs-space-2); }
+/* Stop never leaves the screen: the right group never shrinks; the tool name gives way first (ellipsis) */
+.right { margin-left: auto; display: flex; align-items: center; gap: var(--rs-space-2); flex: none; }
+.mounted { flex: 0 1 auto; overflow: hidden; }
+.mounted :deep(.text) { min-width: 0; overflow: hidden; }
+.mounted :deep(.text) > * { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Mid-size windows (a browser snapped to half a screen): drop the logo text and "mounted" first */
+@media (max-width: 1000px) {
+  .home :deep(.name) { display: none; }
+  .caption { display: none; }
+}
 @media (max-width: 720px) {
   .topbar { gap: var(--rs-space-3); padding-left: var(--rs-space-3); }
   .caption { display: none; }

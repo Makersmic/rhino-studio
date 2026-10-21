@@ -197,9 +197,12 @@ async function useLabel(r: RawPinLine) {
                 </template>
                 <span v-else class="mono sm">{{ c.pin || '—' }}</span>
               </span>
-              <span class="sm">{{ c.contact ? `Contact ${c.contact}` : c.hardware ? 'System hardware' : '—' }}</span>
-              <span class="mono sm">{{ c.value == null ? '—' : c.value }}</span>
-              <span class="sm">{{ c.shared_with || '—' }}</span>
+              <!-- one grid cell each when wide; one wrapped line under the output when the panel is narrow -->
+              <span class="meta">
+                <span class="sm" :class="{ empty: !c.contact && !c.hardware }"><span v-if="c.contact" class="k">Contact </span>{{ c.contact ? c.contact : c.hardware ? 'System hardware' : '—' }}</span>
+                <span class="mono sm"><span class="k">Idle </span>{{ c.value == null ? '—' : c.value }}</span>
+                <span class="sm also" :class="{ empty: !c.shared_with }">{{ c.shared_with || '—' }}</span>
+              </span>
             </li>
           </ul>
         </div>
@@ -235,7 +238,15 @@ async function useLabel(r: RawPinLine) {
 </template>
 
 <style scoped>
-.ocols { grid-template-columns: minmax(150px, 1.1fr) 70px minmax(180px, 1.3fr) minmax(90px, 0.7fr) 70px minmax(140px, 1.3fr); align-items: center; }
+/* The page reflows by its own width (container queries), not the window's: with the rail and the Toolheads menu
+   beside it, a half-screen window leaves the panel far narrower than the window. */
+.fb { container-type: inline-size; }
+.ocols { grid-template-columns: minmax(130px, 1.1fr) 70px minmax(170px, 1.3fr) minmax(80px, 0.7fr) 64px minmax(120px, 1.3fr); align-items: center; }
+.ocols > * { min-width: 0; }
+.meta { display: contents; }
+.meta .k { display: none; }
+.meta .sm:first-child .k { display: inline; }
+.also { overflow-wrap: anywhere; }
 .lcols { grid-template-columns: minmax(150px, 1fr) minmax(170px, 1fr) minmax(0, 1.6fr) 90px; align-items: center; }
 .end { display: flex; justify-content: flex-end; }
 .pincell { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; min-width: 0; }
@@ -267,11 +278,26 @@ async function useLabel(r: RawPinLine) {
 .legend span { display: inline-flex; align-items: center; gap: 6px; }
 .legend .sq, .sq.small { min-width: 0; width: 14px; height: 14px; padding: 0; border-radius: 3px; font-size: 0; }
 .sq.small { margin-right: 8px; vertical-align: -2px; }
-@media (max-width: 760px) {
-  .sx-colhead { display: none; }
-  .ocols, .lcols { grid-template-columns: 1fr auto; }
+/* Outputs: under ~860 px of panel, two lines per output (name · type · pin, then contact · idle · also used by) */
+@container (max-width: 860px) {
+  .ocols { grid-template-columns: minmax(120px, 1fr) 64px minmax(150px, 1.6fr); row-gap: 4px; }
+  .sx-colhead.ocols > :nth-child(n + 4) { display: none; }
+  .meta { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 14px; padding-bottom: 2px; color: var(--rs-text-muted); }
+  .meta .k { display: inline; color: var(--rs-text-muted); }
+  .meta .also { flex: 1 1 220px; color: var(--rs-text); }
+  .meta .empty { display: none; }
+}
+/* Labels table: name and pin, then what uses it */
+@container (max-width: 620px) {
+  .lcols { grid-template-columns: 1fr auto; }
   .lcols > :nth-child(n + 3) { grid-column: 1 / -1; }
-  .ocols > :nth-child(n + 3) { grid-column: 1 / -1; }
+  .sx-colhead.lcols { display: none; }
+}
+/* Phone-narrow: everything stacks, no column headings */
+@container (max-width: 520px) {
+  .sx-colhead { display: none; }
+  .ocols { grid-template-columns: 1fr auto; }
+  .ocols > .pincell { grid-column: 1 / -1; }
   .pcols { grid-template-columns: 60px 1fr; }
   .pcols > :nth-child(3) { grid-column: 1 / -1; }
 }

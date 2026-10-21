@@ -372,3 +372,10 @@ Studio has no login, like Mainsail: Moonraker's `[authorization] trusted_clients
 | SW2 | Scroll the log up during an install | It stays where you are; "Jump to newest" brings it back | It jumps to the bottom while you read |
 | CM1 | Settings › Cameras | Previews about 300 px wide on a PC, full width on a phone; still one picture a second | The Pi slows down on this page |
 | NW1 | Settings › Network on the Pi 3B (bullseye) | Says the network is run by dhcpcd, that nothing is wrong, and to use raspi-config | |
+
+## 0.6.5: narrow windows (browser snapped to half a screen)
+
+| # | Do | Pass | Stop if |
+|---|---|---|---|
+| NW2 | Snap the browser to half the screen; open Toolheads › Board pins and outputs, Tool connector, then every other page | Nothing runs past a panel's edge and the page never scrolls sideways; Outputs shows two lines per output | Text runs off the panel |
+| NW3 | Make the window narrower step by step down to phone width, watching the top bar | The red **Stop** button stays whole and on screen at every width; the logo text and "mounted" go first, then the tool name shortens with … | Stop is cut off or pushed off screen |

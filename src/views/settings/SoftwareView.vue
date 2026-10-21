@@ -160,7 +160,8 @@ const libs = __BUILT_WITH__
 .summary { display: flex; align-items: center; gap: var(--rs-space-3); flex-wrap: wrap; padding-bottom: var(--rs-space-3); }
 .sum-text { flex: 1; min-width: 200px; display: flex; flex-direction: column; gap: 2px; }
 .sum-text strong { font-weight: var(--rs-weight-medium); color: var(--rs-text-strong); }
-.pk { width: 100%; border-collapse: collapse; font-size: var(--rs-text-sm); }
+.pk { width: 100%; border-collapse: collapse; font-size: var(--rs-text-sm); table-layout: fixed; }
+.pk td { overflow-wrap: anywhere; }
 .pk th { text-align: left; font-size: var(--rs-text-xs); font-weight: var(--rs-weight-medium); color: var(--rs-text-muted); padding: 6px 8px; border-bottom: 1px solid var(--rs-line); }
 .pk td { padding: 9px 8px; border-bottom: 1px solid var(--rs-line); vertical-align: middle; }
 .pk tbody tr:last-child td { border-bottom: 0; }
@@ -193,5 +194,7 @@ const libs = __BUILT_WITH__
 @media (max-width: 720px) {
   .pk th:nth-child(2), .pk td:nth-child(2) { display: none; }
   .st { width: auto; }
+  .pk th, .pk td { padding-left: 4px; padding-right: 4px; }
+  .pk .mono { font-size: 11px; }
 }
 </style>

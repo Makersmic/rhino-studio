@@ -93,6 +93,8 @@ const pick = (n: number) => (sel.value = sel.value === n ? null : n)
 </template>
 
 <style scoped>
+/* Reflow by the page's own width, not the window's (the rail and the Toolheads menu sit beside it) */
+.view { container-type: inline-size; }
 .top { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(240px, 1fr); gap: var(--rs-gap); align-items: stretch; }
 .card { display: flex; flex-direction: column; gap: var(--rs-space-3); padding: var(--rs-space-4) var(--rs-space-5); border: 1px solid var(--rs-line); border-radius: var(--rs-radius-lg); background: var(--rs-surface); min-width: 0; }
 .fig { align-items: center; justify-content: center; }
@@ -100,7 +102,8 @@ const pick = (n: number) => (sel.value = sel.value === n ? null : n)
 .det dl { display: grid; grid-template-columns: auto 1fr; gap: 6px var(--rs-space-4); margin: 0; font-size: var(--rs-text-sm); }
 .det dt { color: var(--rs-text-muted); }
 .det dd { margin: 0; color: var(--rs-text-strong); overflow-wrap: anywhere; }
-.cols { grid-template-columns: 60px minmax(160px, 1.4fr) 90px minmax(140px, 1.4fr) minmax(140px, 1.2fr); align-items: start; }
+.cols { grid-template-columns: 44px minmax(140px, 1.4fr) 80px minmax(120px, 1.4fr) minmax(110px, 1.2fr); align-items: start; }
+.cols > * { min-width: 0; overflow-wrap: anywhere; }
 .row { display: grid; gap: var(--rs-space-4); padding: var(--rs-space-2) var(--rs-space-2); cursor: pointer; border-radius: var(--rs-radius-sm); font-size: var(--rs-text-sm); }
 .row:hover { background: var(--rs-surface-2); }
 .row.sel { box-shadow: inset 3px 0 0 var(--rs-ink); background: var(--rs-surface-2); }
@@ -110,10 +113,12 @@ const pick = (n: number) => (sel.value = sel.value === n ? null : n)
 .mono { font-family: var(--rs-font-code); font-size: var(--rs-text-xs); color: var(--rs-text-strong); }
 .sm { font-size: var(--rs-text-xs); }
 .wl { font-family: var(--rs-font-ui); }
-@media (max-width: 900px) {
+@container (max-width: 820px) {
   .top { grid-template-columns: minmax(0, 1fr); }
+}
+@container (max-width: 700px) {
   .sx-colhead { display: none; }
-  .cols { grid-template-columns: 40px 1fr 1fr; }
+  .cols { grid-template-columns: 40px 1fr 1fr; row-gap: 4px; }
   .cols > :nth-child(4), .cols > :nth-child(5) { grid-column: 2 / span 2; }
 }
 </style>
