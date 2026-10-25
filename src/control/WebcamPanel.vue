@@ -32,7 +32,7 @@ function onKey(e: KeyboardEvent) {
 <template>
   <RsPanel title="Camera" panel-id="control.camera" :status="status" flush>
     <div v-if="webcams.current" class="gallery" tabindex="0" aria-roledescription="carousel" :aria-label="`Cameras, showing ${webcams.current.name}`" @keydown="onKey">
-      <WebcamView :key="webcams.current.uid" :cam="webcams.current">
+      <WebcamView :key="webcams.current.uid" :cam="webcams.current" fit="cover" fill>
         <span class="name">{{ webcams.current.name }}</span>
         <template v-if="count > 1">
           <button type="button" class="arrow prev" aria-label="Previous camera" @click="webcams.show(-1)">
@@ -71,6 +71,11 @@ function onKey(e: KeyboardEvent) {
 <style scoped>
 .gallery { position: relative; border-radius: 0 0 var(--rs-radius-lg) var(--rs-radius-lg); overflow: hidden; outline: none; }
 .gallery:focus-visible { box-shadow: inset var(--rs-focus); }
+/* The picture fills the card, and the card is as tall as Motion beside it (Mike, 2026-10-25: the card ran
+   about 7 mm taller / left a gap). Stacked (one column), it keeps a 16:9 shape instead. */
+:deep(.body) { display: flex; flex-direction: column; }
+.gallery { flex: 1; min-height: 220px; }
+@media (max-width: 1100px) { .gallery { flex: none; min-height: 0; aspect-ratio: 16 / 9; } }
 .name {
   position: absolute;
   left: 14px;

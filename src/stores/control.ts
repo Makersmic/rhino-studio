@@ -365,6 +365,7 @@ export const useControlStore = defineStore('control', () => {
 
   async function setFlow(percent: number) {
     if (tuneBlocked.value) return log('error', `Flow not set: ${tuneBlocked.value}`), false
+    if (!tuneUnlocked.value) return log('error', 'Flow not set: unlock tuning first'), false
     const b = flowScript(percent)
     if ('error' in b) return log('error', b.error), false
     return send(b.script, { label: `Flow ${Math.round(percent)}%` })
@@ -372,6 +373,7 @@ export const useControlStore = defineStore('control', () => {
 
   async function setPressureAdvance(advance: number, smooth: number) {
     if (tuneBlocked.value) return log('error', `Pressure advance not set: ${tuneBlocked.value}`), false
+    if (!tuneUnlocked.value) return log('error', 'Pressure advance not set: unlock tuning first'), false
     const b = pressureAdvanceScript(advance, smooth)
     if ('error' in b) return log('error', b.error), false
     return send(b.script, { label: `Pressure advance ${advance} s, smooth ${smooth} s` })

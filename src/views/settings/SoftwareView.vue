@@ -30,6 +30,8 @@ const ago = computed(() => {
   return m < 1 ? 'Checked just now' : `Checked ${m} min ago`
 })
 const summary = computed(() => {
+  const tm = up.extras.find((x) => x.action === 'github' && x.busy)
+  if (tm) return `Updating ${tm.label} to ${tm.latest ?? 'the new version'}… Studio reloads itself when it's done`
   if (up.running) return `Updating ${up.packages.find((p) => p.name === up.running)?.label ?? up.running}…${machine.online ? '' : ' (waiting for it to restart)'}`
   if (!machine.online) return 'Not connected to the machine'
   const parts = []
@@ -98,7 +100,7 @@ const libs = __BUILT_WITH__
                 <td class="mono">{{ r.latest ?? 'Can’t check' }}</td>
                 <td class="st">
                   <button v-if="r.action && (r.needsUpdate || !r.installed)" type="button" class="upd" :disabled="r.busy || !!up.block" :title="up.block ?? (r.action === 'github' ? 'Download it from GitHub and install it on the Rhino' : '')" @click="r.action === 'github' ? up.runGitHub() : up.runEngine()">
-                    {{ r.busy ? (r.action === 'github' ? 'Downloading…' : 'Installing…') : r.actionLabel }}
+                    {{ r.busy ? (r.action === 'github' ? 'Updating…' : 'Installing…') : r.actionLabel }}
                   </button>
                   <button v-else-if="r.needsUpdate" type="button" class="upd" :aria-expanded="open === r.name" @click="open = open === r.name ? null : r.name">Update</button>
                   <span v-else-if="r.blocked" class="chip quiet">Not offered</span>

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
- * G-code console: Klipper's output and a command line.
- * Typed commands go through the safety check: moves, tool power, tool-state
+ * G-code console: a command line on top, Klipper's output under it with the
+ * newest line first (Mike, 2026-10-25). Typed commands go through the safety check: moves, tool power, tool-state
  * changes, restarts and internal macros ask first.
  */
 import { computed, nextTick, ref, watch } from 'vue'
@@ -17,8 +17,10 @@ const input = ref('')
 const history = ref<string[]>([])
 let histPos = -1
 const logEl = ref<HTMLElement | null>(null)
-const stick = ref(true)
+const stick = ref(true) // at the top: keep showing the newest line
 
+// newest first; the store keeps oldest-first order
+const shown = computed(() => [...control.lines].reverse())
 const suggestions = computed(() => [...control.help.keys()].sort())
 
 async function submit() {
@@ -38,14 +40,14 @@ function recall(dir: 1 | -1) {
 
 function onScroll() {
   const el = logEl.value
-  if (el) stick.value = el.scrollHeight - el.scrollTop - el.clientHeight < 24
+  if (el) stick.value = el.scrollTop < 24
 }
 watch(
   () => control.lines.length,
   async () => {
     if (!stick.value) return
     await nextTick()
-    logEl.value?.scrollTo({ top: logEl.value.scrollHeight })
+    logEl.value?.scrollTo({ top: 0 })
   },
 )
 
@@ -55,12 +57,6 @@ const fmtTime = (t: number) => new Date(t * 1000).toLocaleTimeString(undefined, 
 <template>
   <RsPanel title="Console" panel-id="control.console" :status="control.running ? `Running ${control.running}…` : undefined">
       <div class="console">
-        <div ref="logEl" class="log" role="log" aria-live="polite" @scroll="onScroll">
-          <div v-for="l in control.lines" :key="l.id" class="line" :class="l.kind">
-            <time>{{ fmtTime(l.time) }}</time>
-            <span>{{ l.kind === 'sent' ? '› ' : '' }}{{ l.text }}</span>
-          </div>
-        </div>
         <form class="input" @submit.prevent="submit">
           <input
             v-model="input"
@@ -79,6 +75,12 @@ const fmtTime = (t: number) => new Date(t * 1000).toLocaleTimeString(undefined, 
           <RsButton type="submit" :disabled="!machine.online || !input.trim()">Send</RsButton>
         </form>
         <p class="note">Moves, tool power, tool-state changes and restarts ask before they're sent. ↑ recalls earlier commands.</p>
+        <div ref="logEl" class="log" role="log" aria-live="polite" @scroll="onScroll">
+          <div v-for="l in shown" :key="l.id" class="line" :class="l.kind">
+            <time>{{ fmtTime(l.time) }}</time>
+            <span>{{ l.kind === 'sent' ? '› ' : '' }}{{ l.text }}</span>
+          </div>
+        </div>
       </div>
   </RsPanel>
 </template>

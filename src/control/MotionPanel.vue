@@ -10,6 +10,7 @@
 import { computed, onBeforeUnmount, ref } from 'vue'
 import RsButton from '@/components/RsButton.vue'
 import RsPanel from '@/components/RsPanel.vue'
+import PadLock from '@/components/PadLock.vue'
 import { useControlStore } from '@/stores/control'
 import { useMachineStore } from '@/stores/machine'
 import type { Axis } from './commands'
@@ -38,11 +39,14 @@ onBeforeUnmount(() => control.lockMotion())
 <template>
   <RsPanel title="Motion" panel-id="control.motion" :live="armed">
     <template #actions>
-      <!-- one toggle: Unlock, or the time left with Lock -->
-      <RsButton v-if="armed" size="sm" :aria-label="`Unlocked, locks in ${control.unlockSecondsLeft} seconds. Lock now`" @click="control.lockMotion()">
-        <span class="live-dot" aria-hidden="true" />Unlocked · {{ control.unlockSecondsLeft }} s · Lock
-      </RsButton>
-      <RsButton v-else size="sm" variant="primary" :disabled="!!control.motionBlock" @click="control.unlockMotion()">Unlock</RsButton>
+      <!-- the red padlock, as on Speed and Flow; the seconds left show beside it while unlocked -->
+      <PadLock
+        :open="armed"
+        :disabled="!armed && !!control.motionBlock"
+        :text="armed ? `${control.unlockSecondsLeft} s` : undefined"
+        :label="armed ? `Unlocked, locks in ${control.unlockSecondsLeft} seconds. Tap to lock now` : control.motionBlock ? `Locked: ${control.motionBlock}` : 'Locked. Tap to unlock jogging for 60 s'"
+        @toggle="armed ? control.lockMotion() : control.unlockMotion()"
+      />
     </template>
 
 
@@ -73,7 +77,7 @@ onBeforeUnmount(() => control.lockMotion())
         </fieldset>
         <p class="hint">
           <template v-if="control.motionBlock">{{ control.motionBlock }}.</template>
-          <template v-else-if="!armed">Unlock to jog. It locks again 60 s after your last move.</template>
+          <template v-else-if="!armed">Tap the red padlock to jog. It locks again 60 s after your last move.</template>
           <template v-else>Z+ opens the gap between tool and bed.</template>
         </p>
         <div class="homes">

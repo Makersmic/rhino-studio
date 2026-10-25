@@ -44,6 +44,10 @@ async function poll() {
     tooOld.value = false
     if (s.status.state === 'running') watchedRun = true
     else if (watchedRun && s.status.state === 'done' && reloadIn.value == null) startReload()
+    else if (watchedRun && s.status.state === 'failed') {
+      watchedRun = false
+      window.dispatchEvent(new CustomEvent('rhino:update-ended')) // Update in Packages stops saying Updating…
+    }
   } catch (e) {
     reachable.value = false
     // An older Portal has no /api/update; a restarting one just doesn't answer for a bit

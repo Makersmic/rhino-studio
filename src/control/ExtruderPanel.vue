@@ -1,6 +1,8 @@
 <script setup lang="ts">
 /**
- * Extruder block, under the status box while a print head is mounted.
+ * Flow panel (extruder), under the status box while a print head is mounted.
+ * Flow and pressure advance sit behind the same red padlock as Speed (2026-10-25);
+ * feeding filament doesn't (it has its own hot-hotend check).
  * Same height, paper and dividers as the status box; four columns:
  *
  *   Flow (M221)  | Pressure advance | Feed filament: path, length, speed | Extrude / Retract
@@ -13,10 +15,18 @@ import { computed, ref, watch } from 'vue'
 import { useMachineStore } from '@/stores/machine'
 import { useControlStore } from '@/stores/control'
 import StepInput from './StepInput.vue'
+import RsPanel from '@/components/RsPanel.vue'
+import PadLock from '@/components/PadLock.vue'
 import { ADVANCE, FEED_LENGTHS, FEED_SPEED, FLOW, SMOOTH, volumetric } from './extruder'
 
 const machine = useMachineStore()
 const control = useControlStore()
+// Flow and pressure advance: the tuning padlock (shared with Speed)
+const tuneOff = computed(() => !control.tuneUnlocked || !!control.tuneBlocked)
+const lockLabel = computed(() =>
+  control.tuneUnlocked ? 'Unlocked: flow and pressure advance apply at once. Tap to lock' : control.tuningBlock ? `Locked: ${control.tuningBlock}` : 'Locked. Tap to change flow or pressure advance',
+)
+const toggleLock = () => (control.tuneUnlocked ? control.lockTuning() : control.unlockTuning())
 const ex = computed(() => machine.extruder)
 
 // ---- flow -----------------------------------------------------------------
@@ -79,13 +89,16 @@ watch(() => machine.mountedName, () => (length.value = 25))
 </script>
 
 <template>
+  <RsPanel title="Flow" panel-id="control.flow" flush collapsible :live="control.tuneUnlocked" @collapse="control.lockTuning()">
+    <template #actions>
+      <PadLock :open="control.tuneUnlocked" :disabled="!control.tuneUnlocked && !!control.tuningBlock" :label="lockLabel" @toggle="toggleLock" />
+    </template>
   <section class="ext" aria-label="Extruder">
     <!-- Flow -->
     <div class="col flow">
-      <span class="k">Flow</span>
-      <span class="big rs-num" :class="{ empty: shownFlow == null }">{{ shownFlow ?? '—' }}<small v-if="shownFlow != null">%</small></span>
-      <div class="slider" :class="{ off: !!control.tuneBlocked }">
-        <button type="button" class="pm" aria-label="Flow down 1%" :disabled="!!control.tuneBlocked" @click="nudgeFlow(-1)">−</button>
+      <span class="big rs-num first" :class="{ empty: shownFlow == null }">{{ shownFlow ?? '—' }}<small v-if="shownFlow != null">%</small></span>
+      <div class="slider" :class="{ off: tuneOff }">
+        <button type="button" class="pm" aria-label="Flow down 1%" :disabled="tuneOff" @click="nudgeFlow(-1)">−</button>
         <input
           type="range"
           :min="FLOW.min"
@@ -93,12 +106,12 @@ watch(() => machine.mountedName, () => (length.value = 25))
           :step="FLOW.step"
           :value="shownFlow ?? 100"
           :style="{ '--fill': `${flowPct}%` }"
-          :disabled="!!control.tuneBlocked"
+          :disabled="tuneOff"
           aria-label="Flow"
           @input="dragging = Number(($event.target as HTMLInputElement).value)"
           @change="commitFlow(Number(($event.target as HTMLInputElement).value))"
         />
-        <button type="button" class="pm" aria-label="Flow up 1%" :disabled="!!control.tuneBlocked" @click="nudgeFlow(1)">+</button>
+        <button type="button" class="pm" aria-label="Flow up 1%" :disabled="tuneOff" @click="nudgeFlow(1)">+</button>
       </div>
     </div>
 
@@ -108,11 +121,11 @@ watch(() => machine.mountedName, () => (length.value = 25))
       <div class="rows">
         <label class="row">
           <span class="rl">Advance</span>
-          <StepInput :model-value="ex.advance" v-bind="ADVANCE" :decimals="3" unit="s" label="Pressure advance" :disabled="!!control.tuneBlocked" @commit="setAdvance" />
+          <StepInput :model-value="ex.advance" v-bind="ADVANCE" :decimals="3" unit="s" label="Pressure advance" :disabled="tuneOff" @commit="setAdvance" />
         </label>
         <label class="row">
           <span class="rl">Smooth</span>
-          <StepInput :model-value="ex.smooth" v-bind="SMOOTH" :decimals="3" unit="s" label="Smooth time" :disabled="!!control.tuneBlocked" @commit="setSmooth" />
+          <StepInput :model-value="ex.smooth" v-bind="SMOOTH" :decimals="3" unit="s" label="Smooth time" :disabled="tuneOff" @commit="setSmooth" />
         </label>
       </div>
     </div>
@@ -163,17 +176,14 @@ watch(() => machine.mountedName, () => (length.value = 25))
       <span class="sub">{{ statusSub }}</span>
     </div>
   </section>
+  </RsPanel>
 </template>
 
 <style scoped>
 .ext {
   display: grid;
   grid-template-columns: minmax(150px, 0.9fr) minmax(178px, 1fr) minmax(300px, 1.7fr) minmax(150px, 0.8fr);
-  border: 1px solid var(--rs-line);
-  border-radius: var(--rs-radius-lg);
-  background: var(--rs-surface);
-  min-height: 135px;
-  overflow: hidden;
+  min-height: 100px;
 }
 .col { position: relative; display: flex; flex-direction: column; gap: 6px; padding: var(--rs-space-3) var(--rs-space-5); min-width: 0; }
 /* dotted divider, as in the status box */
@@ -189,6 +199,7 @@ watch(() => machine.mountedName, () => (length.value = 25))
 .big { font-size: 2.4rem; line-height: 0.9; margin-top: 12px; white-space: nowrap; }
 .big small { font-family: var(--rs-font-ui); font-size: 0.4em; color: var(--rs-text-muted); margin-left: -0.04em; vertical-align: top; }
 .big.empty { color: var(--rs-text-muted); }
+.big.first { margin-top: 4px; }
 .slider { display: flex; align-items: center; gap: 6px; margin-top: auto; }
 .slider.off { opacity: 0.45; }
 .pm { width: 22px; height: 22px; padding: 0; border: 1px solid var(--rs-line); border-radius: var(--rs-radius-sm); background: transparent; color: var(--rs-text-strong); font-size: 14px; line-height: 1; cursor: pointer; }

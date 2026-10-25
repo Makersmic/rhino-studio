@@ -14,7 +14,7 @@ import RsButton from '@/components/RsButton.vue'
 import StepInput from '@/control/StepInput.vue'
 import { useNetworkStore } from '@/stores/network'
 import { useMachineStore } from '@/stores/machine'
-import { CAMERA_LINK, RECONNECT, SNAPSHOT_FPS, hostnameError, ipv4Errors, rate, signalWord, type CameraLink, type Ipv4Form, type NetInterface, type ReconnectProfile } from '@/system/network'
+import { CAMERA_LINK, RECONNECT, SNAPSHOT_FPS, ipv4Errors, rate, signalWord, type CameraLink, type Ipv4Form, type NetInterface, type ReconnectProfile } from '@/system/network'
 
 const net = useNetworkStore()
 const machine = useMachineStore()
@@ -48,9 +48,6 @@ const cameraOpts: { value: CameraLink; label: string }[] = [
 ]
 
 // ---- the Rhino's network ------------------------------------------------------
-const hostname = ref('')
-watch(() => net.pi?.hostname, (h) => h && !hostname.value && (hostname.value = h), { immediate: true })
-const hostErr = computed(() => (hostname.value && hostname.value !== net.pi?.hostname ? hostnameError(hostname.value) : null))
 
 const forms = reactive<Record<string, Ipv4Form>>({})
 function formFor(i: NetInterface): Ipv4Form {
@@ -161,16 +158,7 @@ const mmss = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, 
         <template v-if="net.pi?.supported">
           <p v-if="net.changeBlock && !net.pending" class="muted small">{{ net.changeBlock }}</p>
 
-          <h3 class="sub-h">Name on the network</h3>
-          <form class="row" @submit.prevent="net.setHostname(hostname.trim())">
-            <label class="field grow">
-              <span class="visually-hidden">Hostname</span>
-              <input v-model="hostname" type="text" class="mono" maxlength="63" autocomplete="off" spellcheck="false" />
-            </label>
-            <span class="muted small">.local</span>
-            <RsButton type="submit" :disabled="!hostname.trim() || hostname.trim() === net.pi.hostname || !!hostErr || !!net.changeBlock || net.applying">Rename</RsButton>
-          </form>
-          <p v-if="hostErr" class="err small">{{ hostErr }}</p>
+          <p class="muted small">The Rhino’s name on the network is in Settings › Host.</p>
 
           <template v-for="i in net.pi.interfaces" :key="i.name">
             <h3 class="sub-h">{{ i.type === 'wifi' ? 'Wi-Fi' : 'Wired' }} <span class="mono iname">{{ i.name }}</span> <span class="badge">{{ i.state }}</span></h3>

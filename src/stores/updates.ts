@@ -411,12 +411,22 @@ export const useUpdatesStore = defineStore('updates', () => {
     tmError.value = null
     try {
       await c.installFromGitHub(rel.version)
+      // The install keeps going after the download (Portal and Klipper restart), so the button keeps
+      // saying Updating… until Studio reloads itself, or Install from zip reports that the run stopped.
+      window.addEventListener('rhino:update-ended', endTmRun, { once: true })
+      tmTimer = setTimeout(endTmRun, 20 * 60_000) // never stuck on Updating… for good
       window.dispatchEvent(new CustomEvent('rhino:update-started')) // Install from zip follows the run
     } catch (err) {
       tmError.value = (err as Error).message
-    } finally {
       tmBusy.value = false
     }
+  }
+  let tmTimer: ReturnType<typeof setTimeout> | null = null
+  function endTmRun() {
+    if (tmTimer) clearTimeout(tmTimer)
+    tmTimer = null
+    window.removeEventListener('rhino:update-ended', endTmRun)
+    tmBusy.value = false
   }
 
   // ---- PrusaSlicer keeps itself up to date (1.5.8) ---------------------------

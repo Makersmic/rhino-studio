@@ -1,11 +1,14 @@
 <script setup lang="ts">
 /**
  * Live tuning on Control, print heads only: speed factor, Z offset
- * baby-steps, velocity and acceleration limits. A small red padlock in the
- * corner: locked, nothing here works; unlocked, everything does, without
+ * baby-steps, velocity and acceleration limits. A panel like the others (fold
+ * and ⋮ menu, 2026-10-25); the red padlock sits in its header and also
+ * covers Flow and pressure advance: locked, nothing works; unlocked, everything does, without
  * asking (src/control/tuning.ts has the safety notes). It locks again when
  * you leave Control. Flow and pressure advance stay in the extruder block.
  */
+import RsPanel from '@/components/RsPanel.vue'
+import PadLock from '@/components/PadLock.vue'
 import { computed, onBeforeUnmount, ref } from 'vue'
 import StepInput from './StepInput.vue'
 import { useControlStore } from '@/stores/control'
@@ -41,32 +44,24 @@ function toggle() {
   if (control.tuneUnlocked) control.lockTuning()
   else control.unlockTuning()
 }
-const lockLabel = computed(() => (control.tuneUnlocked ? 'Tuning unlocked. Lock it' : control.tuningBlock ? `Tuning locked: ${control.tuningBlock}` : 'Unlock tuning'))
+const lockLabel = computed(() =>
+  control.tuneUnlocked
+    ? 'Unlocked: speed, flow, Z offset and limits apply at once, job or not. Tap to lock'
+    : control.tuningBlock
+      ? `Locked: ${control.tuningBlock}`
+      : 'Locked. Tap to tune; each change then goes straight to the machine. Locks again when you leave Control',
+)
 </script>
 
 <template>
-  <section class="tune" :class="{ live, 'rs-live': control.tuneUnlocked }" aria-label="Live tuning">
-    <button
-      type="button"
-      class="lock"
-      :class="{ open: control.tuneUnlocked }"
-      :disabled="!control.tuneUnlocked && !!control.tuningBlock"
-      :aria-pressed="control.tuneUnlocked"
-      :aria-label="lockLabel"
-      :title="lockLabel"
-      @click="toggle"
-    >
-      <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
-        <path v-if="control.tuneUnlocked" d="M5 7V4.8a3 3 0 0 1 5.8-1.1" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
-        <path v-else d="M5 7V5a3 3 0 0 1 6 0v2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
-        <rect x="3" y="7" width="10" height="7.5" rx="1.6" fill="currentColor" />
-      </svg>
-    </button>
-
+  <RsPanel title="Speed" panel-id="control.speed" flush collapsible :live="control.tuneUnlocked" @collapse="control.lockTuning()">
+    <template #actions>
+      <PadLock :open="control.tuneUnlocked" :disabled="!control.tuneUnlocked && !!control.tuningBlock" :label="lockLabel" @toggle="toggle" />
+    </template>
+  <section class="tune" :class="{ live }" aria-label="Live tuning">
     <!-- Speed -->
     <div class="col">
-      <span class="k">Speed</span>
-      <span class="big rs-num" :class="{ empty: shownSpeed == null }">{{ shownSpeed ?? '—' }}<small v-if="shownSpeed != null">%</small></span>
+      <span class="big rs-num first" :class="{ empty: shownSpeed == null }">{{ shownSpeed ?? '—' }}<small v-if="shownSpeed != null">%</small></span>
       <div class="slider" :class="{ off }">
         <button type="button" class="pm" aria-label="Speed down 5%" :disabled="off" @click="nudgeSpeed(-5)">−</button>
         <input
@@ -114,12 +109,8 @@ const lockLabel = computed(() => (control.tuneUnlocked ? 'Tuning unlocked. Lock 
       </div>
     </div>
 
-    <p class="foot">
-      <template v-if="control.tuningBlock">{{ control.tuningBlock }}.</template>
-      <template v-else-if="!control.tuneUnlocked">Locked. Tap the red padlock to tune; each change then goes straight to the machine.</template>
-      <template v-else>Unlocked: changes apply at once, job or not. Locks again when you leave Control.</template>
-    </p>
   </section>
+  </RsPanel>
 </template>
 
 <style scoped>
@@ -127,11 +118,7 @@ const lockLabel = computed(() => (control.tuneUnlocked ? 'Tuning unlocked. Lock 
   position: relative;
   display: grid;
   grid-template-columns: minmax(170px, 0.9fr) minmax(300px, 1.6fr) minmax(220px, 1fr);
-  border: 1px solid var(--rs-line);
-  border-radius: var(--rs-radius-lg);
-  background: var(--rs-surface);
-  min-height: 135px;
-  overflow: hidden;
+  min-height: 100px;
 }
 .col { position: relative; display: flex; flex-direction: column; gap: 6px; padding: var(--rs-space-3) var(--rs-space-5); min-width: 0; }
 .col + .col::before {
@@ -141,19 +128,8 @@ const lockLabel = computed(() => (control.tuneUnlocked ? 'Tuning unlocked. Lock 
 .k { font-size: var(--rs-text-xs); line-height: 18px; height: 18px; color: var(--rs-text-muted); font-weight: var(--rs-weight-medium); white-space: nowrap; }
 .sub { font-size: 11px; color: var(--rs-text-muted); font-weight: 400; }
 
-/* the padlock: small, red, top-right corner */
-.lock {
-  position: absolute; top: 10px; right: 10px; z-index: 1;
-  width: 30px; height: 30px; padding: 0; display: grid; place-items: center;
-  border-radius: var(--rs-radius-md); border: 1.5px solid var(--rs-danger);
-  background: var(--rs-danger); color: var(--rs-on-danger); cursor: pointer;
-}
-.lock.open { background: transparent; color: var(--rs-danger); }
-.lock:hover:not(:disabled) { background: var(--rs-danger-strong); border-color: var(--rs-danger-strong); color: var(--rs-on-danger); }
-.lock:focus-visible { box-shadow: var(--rs-focus); outline: none; }
-.lock:disabled { opacity: 0.45; cursor: not-allowed; }
-
 .big { font-size: 2.4rem; line-height: 0.9; margin-top: 12px; white-space: nowrap; }
+.big.first { margin-top: 4px; }
 .big small { font-family: var(--rs-font-ui); font-size: 0.4em; color: var(--rs-text-muted); margin-left: -0.04em; vertical-align: top; }
 .big.empty { color: var(--rs-text-muted); }
 .slider { display: flex; align-items: center; gap: 6px; margin-top: auto; }
@@ -170,7 +146,7 @@ input[type='range']::-moz-range-thumb { width: 10px; height: 10px; border-radius
 /* Z: position in mono, never seven-segment */
 .zval { font-family: var(--rs-font-code); font-size: 1.3rem; color: var(--rs-text-strong); margin-top: 8px; }
 .zval small { font-family: var(--rs-font-ui); font-size: 11px; color: var(--rs-text-muted); }
-.zrow { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: auto; padding-right: 30px; }
+.zrow { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: auto; }
 .zbtn, .reset { height: 26px; padding: 0 10px; border: 1px solid var(--rs-line-strong); border-radius: var(--rs-radius-sm); background: transparent; color: var(--rs-text-strong); font: inherit; font-size: 12px; cursor: pointer; white-space: nowrap; }
 .zbtn:hover:not(:disabled) { background: var(--rs-ink); color: var(--rs-on-ink); border-color: var(--rs-ink); }
 .reset { border-color: transparent; text-decoration: underline; text-underline-offset: 3px; }
@@ -182,11 +158,9 @@ input[type='range']::-moz-range-thumb { width: 10px; height: 10px; border-radius
 .row { display: flex; align-items: center; gap: 8px; height: 28px; }
 .rl { flex: none; width: 56px; font-size: 11px; color: var(--rs-text-muted); }
 
-.foot { grid-column: 1 / -1; margin: 0; padding: 0 var(--rs-space-5) 10px; font-size: 11px; color: var(--rs-text-muted); }
-/* locked: the controls fade back; the padlock stays bright */
+/* locked: the controls fade back; the padlock (in the header) stays bright */
 .tune:not(.live) .col { opacity: 0.5; }
 .tune:not(.live) .off { opacity: 1; }
-.live .foot { color: var(--rs-text-strong); }
 
 @media (max-width: 900px) {
   .tune { grid-template-columns: 1fr; }
