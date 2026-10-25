@@ -45,7 +45,7 @@ export interface ExtraRow {
 
 /** Public raw files: the latest released version of each Rhino repo. */
 const LATEST_URLS = {
-  toolManager: 'https://raw.githubusercontent.com/Makersmic/toolhead_manager/main/VERSION',
+  toolManager: 'https://raw.githubusercontent.com/Makersmic/Toolhead_Manager/main/VERSION',
   studio: 'https://raw.githubusercontent.com/Makersmic/rhino-studio/main/package.json',
 }
 
@@ -186,8 +186,9 @@ export const useUpdatesStore = defineStore('updates', () => {
         ? `This Rhino's Tool Manager is older than 1.5.3: install rhino-config-${latestTm.value ?? '<version>'}.zip once with rhino.sh option 3 (upload it in Mainsail, Machine), then FIRMWARE_RESTART.`
         : !tmUpdate.value.helper
           ? 'The updater isn’t set up on this Rhino yet: install the zip once by hand (rhino.sh option 3); after that Update works from here.'
-          : rel?.error === 'No releases on GitHub yet.'
-            ? 'There’s no release on GitHub yet. Drop a downloaded zip on Install from zip, below.'
+          : !rel?.version || !newer(tmv, rel.version)
+            ? // main says a newer version, but GitHub has no release of it to download (yet)
+              `Tool Manager ${latestTm.value ?? ''} is on GitHub, but its release isn’t published yet. It’s published by itself a few minutes after a new version is pushed (Tool Manager 1.6.2+); check again then, or drop a downloaded zip on Install from zip, below.`
             : `Download rhino-config-${latestTm.value ?? '<version>'}.zip and drop it on Install from zip, below.`,
     })
     const e = engine.value?.engine
