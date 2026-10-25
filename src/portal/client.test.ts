@@ -86,7 +86,7 @@ describe('PortalClient', () => {
     const posts = p.calls.filter((x) => x.init?.method === 'POST')
     expect(posts.map((x) => x.url)).toEqual(['/portal/api/backup', '/portal/api/restore'])
     expect(posts.every((x) => (x.init?.headers as Record<string, string>)['X-Rhino-Token'] === 'tok-1')).toBe(true)
-    expect(JSON.parse(String(posts[1].init?.body))).toEqual({ archive: 'rhino-pi-20261025-120000.zip', item: 'all', confirm: 'pi' })
+    expect(JSON.parse(String(posts[1]?.init?.body))).toEqual({ archive: 'rhino-pi-20261025-120000.zip', item: 'all', confirm: 'pi' })
     expect(c.backupUrl('rhino-pi-1.zip')).toBe('/portal/api/backup/file/rhino-pi-1.zip')
   })
 
