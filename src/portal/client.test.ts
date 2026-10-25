@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
-  PORTAL_CARE_SETUP, PORTAL_CARE_WRITES, PORTAL_HARDWARE, PORTAL_LABELS, PORTAL_NETWORK, PORTAL_SLICER, PORTAL_UPDATE, PORTAL_TRUST, PORTAL_RESTART, PORTAL_TOOL_CHECKS, PORTAL_TOOL_SETUP, PORTAL_TOOL_WRITES, PORTAL_WRITES, PortalClient, WRITE_ROUTES,
+  PORTAL_BACKUP, PORTAL_CARE_SETUP, PORTAL_CARE_WRITES, PORTAL_HARDWARE, PORTAL_LABELS, PORTAL_NETWORK, PORTAL_SLICER, PORTAL_UPDATE, PORTAL_TRUST, PORTAL_RESTART, PORTAL_TOOL_CHECKS, PORTAL_TOOL_SETUP, PORTAL_TOOL_WRITES, PORTAL_WRITES, PortalClient, WRITE_ROUTES,
 } from './client'
 import type { TaskDef } from '@/maintenance/types'
 
@@ -72,9 +72,22 @@ describe('PortalClient', () => {
     const kinds = [
       ...PORTAL_WRITES, ...PORTAL_TOOL_CHECKS, ...PORTAL_TOOL_WRITES, ...PORTAL_RESTART,
       ...PORTAL_CARE_WRITES, ...PORTAL_CARE_SETUP, ...PORTAL_TOOL_SETUP, ...PORTAL_HARDWARE, ...PORTAL_LABELS, ...PORTAL_NETWORK, ...PORTAL_SLICER, ...PORTAL_UPDATE, ...PORTAL_TRUST,
+      ...PORTAL_BACKUP,
     ]
     expect(new Set(kinds).size).toBe(kinds.length)
     expect(Object.keys(WRITE_ROUTES).sort()).toEqual([...kinds].sort())
+  })
+
+  it('backups: each write goes to its one fixed request, with the token (INV-A7)', async () => {
+    const p = fakePortal()
+    const c = new PortalClient('/portal')
+    await c.backupNow()
+    await c.restore('rhino-pi-20261025-120000.zip', 'all', 'pi')
+    const posts = p.calls.filter((x) => x.init?.method === 'POST')
+    expect(posts.map((x) => x.url)).toEqual(['/portal/api/backup', '/portal/api/restore'])
+    expect(posts.every((x) => (x.init?.headers as Record<string, string>)['X-Rhino-Token'] === 'tok-1')).toBe(true)
+    expect(JSON.parse(String(posts[1].init?.body))).toEqual({ archive: 'rhino-pi-20261025-120000.zip', item: 'all', confirm: 'pi' })
+    expect(c.backupUrl('rhino-pi-1.zip')).toBe('/portal/api/backup/file/rhino-pi-1.zip')
   })
 
   it('tool writes go to their fixed requests, with the token', async () => {

@@ -408,3 +408,10 @@ Start with BlockOne mounted and confirmed, the bed clear, a hand near Stop. Mesh
 | MS10 | Switch off, then Remove a mesh | Each asks; the mesh leaves the list; Save takes it out of printer.cfg | |
 | MS11 | Start a job | Every mesh button is greyed with "A job is running" | Any mesh action is possible during a job |
 | MS12 | Phone | Bed mesh in the bottom bar ("Mesh"); the map's numbers are readable; nothing runs off the screen | |
+
+## 0.8.0: Backups (needs Tool Manager 1.7.0 on the Rhino)
+
+The checks are Tool Manager's **B1-B6** (Settings › Host › Backups). Also, in Studio:
+- [ ] **BK1** With an older Tool Manager the panel says backups need 1.7, and nothing else on Host changes.
+- [ ] **BK2** During a job, Back up now and Restore… are off and say "Not during a job".
+- [ ] **BK3** Half-screen (~760 px) and phone: each backup's details sit under its name; Download and Restore… stay usable.

@@ -3,11 +3,13 @@
  * Settings / Host: restart Klipper and services, reboot or shut down the host.
  * Every action confirms, and all are refused during a job (src/system/power.ts).
  * Replaces Mainsail's power menu. Nothing here moves the machine.
+ * Backups (Tool Manager 1.7): Back up now and restore, src/system/BackupPanel.vue.
  */
 import './settings.css'
 import { computed, ref } from 'vue'
 import RsPanel from '@/components/RsPanel.vue'
 import RsButton from '@/components/RsButton.vue'
+import BackupPanel from '@/system/BackupPanel.vue'
 import { useMachineStore } from '@/stores/machine'
 import { useControlStore } from '@/stores/control'
 import { POWER_ACTIONS, powerBlock, type PowerAction } from '@/system/power'
@@ -67,6 +69,7 @@ async function run(a: PowerAction) {
           </li>
         </ul>
       </RsPanel>
+      <BackupPanel />
     </div>
   </div>
 </template>

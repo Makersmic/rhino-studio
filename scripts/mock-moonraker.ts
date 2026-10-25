@@ -1289,6 +1289,15 @@ async function trustRoutes(req: IncomingMessage, res: import('node:http').Server
   return false
 }
 
+const BK_ITEMS = { maintenance: 'Maintenance (tasks, work log, meters)', tools: 'Tool registry, lists and umbilical', studio: 'Rhino Studio settings', images: 'Toolhead photos' }
+const bk: { archives: { name: string; size: number; time: number; complete: boolean; host?: string; reason?: string; tool_manager?: string; files?: number }[]; github: { state: string; last: { ok: boolean; code: number | null; time: number; tail: string[] } | null } } = {
+  archives: process.env.MOCK_BACKUP === 'none' ? [] : [
+    { name: 'rhino-mainsailos-20261024-221510.zip', size: 3_398_112, time: Date.now() / 1000 - 19 * 3600, complete: true, host: 'mainsailos', reason: 'after_long_job', tool_manager: '1.7.0', files: 212 },
+    { name: 'rhino-mainsailos-20261019-090200.zip', size: 3_351_870, time: Date.now() / 1000 - 6 * 86400, complete: true, host: 'mainsailos', reason: 'BACKUP_CFG', tool_manager: '1.7.0', files: 209 },
+  ],
+  github: process.env.MOCK_BACKUP === 'nogh' ? { state: 'not_installed', last: null } : { state: 'failed', last: { ok: false, code: 128, time: Date.now() / 1000 - 19 * 3600, tail: ['fatal: Authentication failed'] } },
+}
+
 async function portal(req: IncomingMessage, res: import('node:http').ServerResponse, url: string): Promise<boolean> {
   if (req.method === 'GET' && url === '/') {
     res.writeHead(200, { 'content-type': 'text/html' }).end(
@@ -1336,6 +1345,43 @@ async function portal(req: IncomingMessage, res: import('node:http').ServerRespo
       updRun(String(body.zip))
       return json(res, 200, { ok: true, zip: body.zip }), true
     }
+  }
+  // Backups (Tool Manager 1.7). MOCK_BACKUP=none (no archives) | old (Portal before 1.7) | nogh (no klipper-backup)
+  if (url.startsWith('/api/backup') || url.startsWith('/api/restore')) {
+    if (process.env.MOCK_BACKUP === 'old') return json(res, 404, { ok: false, error: 'Not found' }), true
+    const busy = status.print_stats.state === 'printing' || status.print_stats.state === 'paused'
+    if (req.method === 'GET' && url === '/api/backup') {
+      return json(res, 200, { ok: true, archives: bk.archives, keep: 10, folder: '/home/pi/rhino-backups', items: BK_ITEMS, github: { ...bk.github, running: false } }), true
+    }
+    if (req.method === 'GET' && url.startsWith('/api/backup/file/')) return res.writeHead(200, { 'content-type': 'application/zip' }).end('PK'), true
+    if (req.headers['x-rhino-token'] !== PORTAL_TOKEN) return json(res, 400, { ok: false, error: 'This page is out of date (the portal was restarted). Reload the page and try again.' }), true
+    if (busy && req.method === 'POST' && url !== '/api/restore/plan') return json(res, 400, { ok: false, error: 'Not during a job: a backup waits until the job is finished.' }), true
+    if (req.method === 'POST' && url === '/api/backup') {
+      await new Promise((r) => setTimeout(r, 900))
+      const t = Date.now() / 1000
+      const d = new Date(t * 1000)
+      const p2 = (n: number) => String(n).padStart(2, '0')
+      const name = `rhino-mainsailos-${d.getFullYear()}${p2(d.getMonth() + 1)}${p2(d.getDate())}-${p2(d.getHours())}${p2(d.getMinutes())}${p2(d.getSeconds())}.zip`
+      const a = { name, size: 3_412_000, time: t, complete: true, host: 'mainsailos', reason: 'button', tool_manager: TM_VERSION, files: 214 }
+      bk.archives = [a, ...bk.archives].slice(0, 10)
+      if (process.env.MOCK_BACKUP !== 'nogh') bk.github = { state: 'ok', last: { ok: true, code: 0, time: t, tail: [] } }
+      return json(res, 200, { ok: true, archive: a }), true
+    }
+    if (req.method === 'POST' && url === '/api/restore/plan') {
+      const b = await readBody(req)
+      const all = b.item === 'all'
+      const plan = all
+        ? { archive: b.archive, item: 'all', this_host: 'mainsailos', host: 'mainsailos', add: ['config/myrhino/umbilical.json'], replace: ['config/printer.cfg', 'config/variables.save', 'config/myrhino/maintenance/history.json'], same: Array.from({ length: 180 }, (_, i) => `f${i}`), keep: ['config/my_extra.cfg'], missing_serial: process.env.MOCK_BACKUP === 'serial' ? [{ file: 'printer.cfg', section: 'mcu', serial: '/dev/serial/by-id/usb-Klipper_stm32f446xx_old-if00' }] : [], history_jobs: 412, backup_version: '1.7.0', installed_version: TM_VERSION }
+        : { archive: b.archive, item: b.item, this_host: 'mainsailos', add: [], replace: b.item === 'studio' ? ['theme'] : ['config/myrhino/maintenance/tasks.json'], same: ['config/myrhino/maintenance/meters.json'], keep: [] }
+      return json(res, 200, { ok: true, plan }), true
+    }
+    if (req.method === 'POST' && url === '/api/restore') {
+      const b = await readBody(req)
+      if (b.item === 'all' && b.confirm !== 'mainsailos') return json(res, 400, { ok: false, error: "Type this machine's name (mainsailos) to confirm a full restore" }), true
+      await new Promise((r) => setTimeout(r, 900))
+      return json(res, 200, { ok: true, item: b.item, before: 'rhino-mainsailos-before.zip', restored: 3, note: b.item === 'tools' ? 'Restart Klipper to use the restored tools.' : '' }), true
+    }
+    if (req.method === 'POST' && url === '/api/backup/upload') return json(res, 400, { ok: false, error: 'That backup can\'t be used: config/printer.cfg is damaged (checksum differs).' }), true
   }
   if (req.method === 'GET' && url === '/api/maint') return json(res, 200, maint), true
   if (req.method === 'GET' && url === '/api/maint/history') return json(res, 200, maintHistory), true

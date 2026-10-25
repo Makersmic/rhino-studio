@@ -30,6 +30,10 @@
  *                        codes. Maintenance records only.
  *   PORTAL_TOOL_SETUP    the add-a-tool lists (kinds of tool, material names,
  *                        nozzle sizes, hardware categories). Portal data only.
+ *   PORTAL_BACKUP        Back up now, add a backup from another Rhino, show
+ *                        what a restore would change, restore (Tool Manager
+ *                        1.7). Refused during a job; a full restore needs the
+ *                        machine's name typed and backs up first.
  *   PORTAL_HARDWARE      check, save and remove system hardware (fans,
  *                        lights, pumps on the board). Writes custom_tools.cfg,
  *                        live after the next Klipper restart, like tools.
@@ -95,6 +99,8 @@ export const PORTAL_SLICER = ['slice', 'slice-cancel', 'engine-check', 'engine-u
 export const PORTAL_UPDATE = ['update-upload', 'update-install', 'update-github'] as const
 /** Moonraker's trusted_clients (Tool Manager 1.5.4). Each restarts Moonraker; the Portal refuses during a job. */
 export const PORTAL_TRUST = ['trust-add', 'trust-remove'] as const
+/** Backups (Tool Manager 1.7, INV-B3/B4): a complete archive or none; restore one item or everything. */
+export const PORTAL_BACKUP = ['backup-now', 'backup-upload', 'restore-plan', 'restore'] as const
 export const PORTAL_NETWORK = ['net-hostname', 'net-ipv4', 'net-wifi', 'net-powersave', 'net-keep', 'net-undo'] as const
 
 export type WriteKind =
@@ -111,6 +117,7 @@ export type WriteKind =
   | (typeof PORTAL_SLICER)[number]
   | (typeof PORTAL_UPDATE)[number]
   | (typeof PORTAL_TRUST)[number]
+  | (typeof PORTAL_BACKUP)[number]
 
 /** The one request each write kind may make. */
 export const WRITE_ROUTES: Record<WriteKind, { method: 'POST' | 'DELETE'; path: RegExp }> = {
@@ -170,11 +177,16 @@ export const WRITE_ROUTES: Record<WriteKind, { method: 'POST' | 'DELETE'; path: 
   'engine-auto': { method: 'POST', path: /^\/api\/slicer\/engine\/auto$/ },
   'trust-add': { method: 'POST', path: /^\/api\/moonraker-trust$/ },
   'trust-remove': { method: 'DELETE', path: /^\/api\/moonraker-trust$/ },
+  'backup-now': { method: 'POST', path: /^\/api\/backup$/ },
+  'backup-upload': { method: 'POST', path: /^\/api\/backup\/upload$/ },
+  'restore-plan': { method: 'POST', path: /^\/api\/restore\/plan$/ },
+  restore: { method: 'POST', path: /^\/api\/restore$/ },
 }
 
 const ALLOWED = new Set<string>([
   ...PORTAL_WRITES, ...PORTAL_TOOL_CHECKS, ...PORTAL_TOOL_WRITES, ...PORTAL_RESTART,
   ...PORTAL_CARE_WRITES, ...PORTAL_CARE_SETUP, ...PORTAL_TOOL_SETUP, ...PORTAL_HARDWARE, ...PORTAL_LABELS, ...PORTAL_NETWORK, ...PORTAL_SLICER, ...PORTAL_UPDATE, ...PORTAL_TRUST,
+  ...PORTAL_BACKUP,
 ])
 const enc = encodeURIComponent
 
@@ -188,6 +200,53 @@ export interface TrustState {
   address: string
   covered: boolean
   suggestions: { entry: string; why: string }[]
+}
+
+/** One archive in ~/rhino-backups (GET /api/backup, Tool Manager 1.7) */
+export interface BackupArchive {
+  name: string
+  size: number
+  time: number
+  complete: boolean
+  host?: string
+  reason?: string
+  tool_manager?: string
+  files?: number
+}
+export interface BackupState {
+  archives: BackupArchive[]
+  keep: number
+  folder: string
+  items: Record<string, string>
+  /** klipper-backup's GitHub copy. Never "ok" unless the last push really worked (INV-B8). */
+  github: {
+    state: 'not_installed' | 'no_env' | 'never' | 'ok' | 'failed'
+    running: boolean
+    last: { ok: boolean; code: number | null; time: number; tail: string[] } | null
+  }
+}
+export interface RestorePlan {
+  archive: string
+  item: string
+  made?: number
+  host?: string
+  this_host: string
+  add: string[]
+  replace: string[]
+  same: string[]
+  keep: string[]
+  missing_serial?: { file: string; section: string; serial: string }[]
+  history_jobs?: number
+  backup_version?: string
+  installed_version?: string
+}
+export interface RestoreResult {
+  ok: boolean
+  item: string
+  before: string
+  note: string
+  restored: string[] | number
+  kept?: string[]
 }
 
 export class PortalClient {
@@ -533,6 +592,37 @@ export class PortalClient {
   }
   removeTrust(entry: string): Promise<TrustState> {
     return this.write('trust-remove', 'DELETE', '/api/moonraker-trust', { entry })
+  }
+
+  // ---- backups (Tool Manager 1.7) -------------------------------------------
+
+  /** null from a Tool Manager before 1.7 */
+  async backups(): Promise<BackupState | null> {
+    try {
+      return await this.getJson<BackupState>('/api/backup')
+    } catch (e) {
+      if (/not found/i.test((e as Error).message)) return null
+      throw e
+    }
+  }
+  backupNow(): Promise<{ ok: boolean; archive: BackupArchive }> {
+    return this.write('backup-now', 'POST', '/api/backup', {})
+  }
+  /** A link the browser downloads (a GET, so not a write) */
+  backupUrl(name: string): string {
+    return `${this.baseUrl}/api/backup/file/${enc(name)}`
+  }
+  uploadBackup(file: File): Promise<{ ok: boolean; archive: BackupArchive }> {
+    const f = new FormData()
+    f.append('archive', file, file.name)
+    return this.write('backup-upload', 'POST', '/api/backup/upload', f)
+  }
+  /** What a restore would change. Changes nothing. */
+  async restorePlan(archive: string, item: string): Promise<RestorePlan> {
+    return (await this.write<{ ok: boolean; plan: RestorePlan }>('restore-plan', 'POST', '/api/restore/plan', { archive, item })).plan
+  }
+  restore(archive: string, item: string, confirm = ''): Promise<RestoreResult> {
+    return this.write('restore', 'POST', '/api/restore', { archive, item, confirm })
   }
 
   /** Reads the token and version from the Portal's home page. */
