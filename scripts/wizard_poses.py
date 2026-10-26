@@ -31,6 +31,7 @@ def part(d, fill, line=True, closed_fill=True, w=1.5, tf=''):
 
 
 def arm(sx, sy, px, py, bend=0.0, paw=11, far=False):
+    sx = sx - 16 if sx < 120 else sx + 14   # broad chest: shoulders sit wider
     c = FAR if far else LIMB
     return [part(tube(sx, sy, px, py, 12, bend), c), part(circ(px, py, paw), c)]
 
@@ -48,21 +49,17 @@ def view_front():
     v = {}
     v['ears'] = [part('M66 74 C46 58 56 44 74 58 Z', EAR), part('M174 74 C194 58 184 44 166 58 Z', EAR)]
     v['back'] = []
-    v['body'] = [part('M58 200 C46 186 48 172 62 160 C58 146 62 130 76 122 C92 112 148 112 164 122 C178 130 182 146 178 160 C192 172 194 186 182 200 C164 216 76 216 58 200 Z', BODY)]
-    v['belt'] = [part('M50 156 C90 170 150 170 190 156 L190 170 C150 184 90 184 50 170 Z', '#8a5a3b'),
-                 part('M110 162 h20 v16 h-20 Z M115 166 h10 v8 h-10 Z', '#d8b25a', w=1.3),
-                 part('M150 170 h20 v22 C170 198 150 198 150 192 Z', '#7a4e33', w=1.3)]
-    v['folds'] = [stroke('M78 136 q9 -5 16 2 M146 138 q8 -6 16 -1', 1.1), stroke('M84 192 q36 10 72 0', 1.1),
-                  stroke('M100 128 q20 8 40 0', 1)]
+    v['body'] = [part('M74 204 C66 190 66 176 72 166 C50 160 40 140 50 126 C64 110 92 108 120 108 C148 108 176 110 190 126 C200 140 190 160 168 166 C174 176 174 190 166 204 C150 216 90 216 74 204 Z', BODY)]
+    v['belt'] = []
+    v['folds'] = [stroke('M84 140 q18 10 34 2 M122 142 q18 8 34 -2', 1.1), stroke('M96 188 q24 8 48 0', 1)]
     v['shade'] = 'M150 112 C204 124 206 196 172 214 L232 216 L232 100 Z'
-    v['legs'] = [part(ell(88, 206, 24, 17), LIMB), part(ell(152, 206, 24, 17), LIMB),
-                 stroke('M74 213 q4 5 8 0 M86 215 q4 5 8 0 M138 215 q4 5 8 0 M150 213 q4 5 8 0', 1.2)]
+    v['legs'] = [part(ell(96, 208, 24, 17), LIMB), part(ell(144, 208, 24, 17), LIMB),
+                 stroke('M82 215 q4 5 8 0 M94 217 q4 5 8 0 M130 217 q4 5 8 0 M142 215 q4 5 8 0', 1.2)]
     v['head'] = [part('M64 86 C60 52 90 40 120 40 C150 40 180 52 176 86 C174 110 150 130 120 130 C90 130 66 110 64 86 Z', HEAD),
                  part(ell(120, 106, 40, 24), SNOUT)]
     v['face'] = [blob(ell(108, 106, 4, 3), LINE), blob(ell(132, 106, 4, 3), LINE),
-                 part('M110 116 Q120 128 130 116 Q120 119 110 116 Z', '#8a3c4a', w=1.3),
-                 blob(ell(72, 103, 10, 6), '#ee9aa699'), blob(ell(168, 103, 10, 6), '#ee9aa699'),
-                 stroke('M66 106 l4 -6 M71 106 l4 -6 M76 106 l4 -6 M162 106 l4 -6 M167 106 l4 -6 M172 106 l4 -6', .9)]
+                 part('M104 114 Q120 134 136 114 Q120 121 104 114 Z', '#8a3c4a', w=1.4),
+                 blob(ell(72, 103, 10, 6), '#ee9aa666'), blob(ell(168, 103, 10, 6), '#ee9aa666')]
     v['bangs'] = [part('M92 60 l6 -10 l5 8 l6 -12 l5 11 l6 -9 l4 12 Z', HEAD, w=1.2)]
     v['eyes'] = [(84, 80, 9.5, 12), (156, 80, 9.5, 12)]
     v['lenses'] = [(66, 64, 36, 30), (138, 64, 36, 30)]
@@ -78,20 +75,17 @@ def view_q():
     """Three-quarter view, facing right: near side on the left, far side foreshortened."""
     v = {}
     v['ears'] = [part('M74 76 C52 60 62 44 84 58 Z', EAR), part('M168 64 C180 48 172 40 160 52 Z', FAR)]
-    v['back'] = [part(ell(150, 204, 22, 16), FAR)]                       # far leg, behind the body
-    v['body'] = [part('M62 200 C50 186 52 172 66 160 C62 146 66 130 80 122 C96 112 146 112 162 122 C174 130 178 146 176 160 C188 172 190 186 180 200 C162 216 80 216 62 200 Z', BODY)]
-    v['belt'] = [part('M54 156 C92 170 148 170 186 154 L186 168 C148 184 92 184 54 170 Z', '#8a5a3b'),
-                 part('M128 164 h18 v15 h-18 Z M132 168 h10 v7 h-10 Z', '#d8b25a', w=1.3),
-                 part('M70 170 h18 v22 C88 198 70 198 70 192 Z', '#7a4e33', w=1.3)]
-    v['folds'] = [stroke('M82 136 q9 -5 16 2', 1.1), stroke('M90 192 q34 10 66 -2', 1.1), stroke('M108 128 q18 8 36 -1', 1)]
+    v['back'] = [part(ell(144, 205, 22, 16), FAR)]                       # far leg, behind the body
+    v['body'] = [part('M78 204 C70 190 70 176 76 166 C54 160 44 140 54 126 C68 110 96 108 124 108 C150 108 176 110 188 126 C196 140 186 160 166 166 C172 176 172 190 164 204 C148 216 94 216 78 204 Z', BODY)]
+    v['belt'] = []
+    v['folds'] = [stroke('M90 140 q18 10 34 2 M128 142 q14 6 28 -2', 1.1), stroke('M100 188 q22 8 44 0', 1)]
     v['shade'] = 'M146 114 C196 124 198 196 168 214 L232 216 L232 100 Z'
-    v['legs'] = [part(ell(92, 208, 26, 17), LIMB), stroke('M76 215 q4 5 8 0 M88 217 q4 5 8 0 M100 216 q4 5 8 0', 1.2)]
+    v['legs'] = [part(ell(100, 209, 26, 17), LIMB), stroke('M84 216 q4 5 8 0 M96 218 q4 5 8 0 M108 217 q4 5 8 0', 1.2)]
     v['head'] = [part('M68 88 C64 52 96 40 126 40 C156 40 178 54 176 88 C174 112 154 130 126 130 C96 130 70 110 68 88 Z', HEAD),
                  part(ell(150, 106, 38, 23), SNOUT)]                       # snout pushes past the head outline
     v['face'] = [blob(ell(152, 110, 4, 3.2), LINE), blob(ell(176, 108, 3, 2.6), LINE),
-                 part('M142 120 Q152 131 162 119 Q152 122 142 120 Z', '#8a3c4a', w=1.3),
-                 blob(ell(84, 103, 10, 6), '#ee9aa699'), blob(ell(170, 99, 6, 5), '#ee9aa677'),
-                 stroke('M78 107 l4 -6 M83 107 l4 -6 M88 107 l4 -6', .9)]
+                 part('M136 118 Q152 136 168 116 Q152 124 136 118 Z', '#8a3c4a', w=1.4),
+                 blob(ell(84, 103, 10, 6), '#ee9aa666'), blob(ell(170, 99, 6, 5), '#ee9aa655')]
     v['bangs'] = [part('M100 60 l6 -10 l5 8 l6 -12 l5 11 l6 -9 l4 12 Z', HEAD, w=1.2)]
     v['eyes'] = [(100, 80, 9.5, 12), (150, 78, 6.5, 11)]                  # far eye foreshortened
     v['lenses'] = [(82, 64, 36, 30), (138, 64, 24, 28)]
