@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * A screen with its own section menu: Care and Toolheads.
+ * A screen with its own section menu: Care and Assets.
  *
  * Desktop: a menu down the left (groups fold, and the whole menu folds to a
  * slim strip; both are remembered in this browser). Phone and narrow windows:
@@ -166,7 +166,8 @@ const groupCount = (g: SectionGroup) => g.items.reduce((n, i) => n + (typeof i.c
 .phone { display: none; }
 
 @media (max-width: 900px) {
-  .sl, .sl.slim { grid-template-columns: minmax(0, 1fr); }
+  /* one column: rows stay at the top (the grid fills the height, and stretched rows pushed a short page down) */
+  .sl, .sl.slim { grid-template-columns: minmax(0, 1fr); align-content: start; }
   .phone { display: block; padding: var(--rs-space-3) var(--rs-space-3) 0; }
   .pick {
     display: flex; align-items: center; gap: 8px; width: 100%; min-height: 44px; padding: 0 var(--rs-space-4);

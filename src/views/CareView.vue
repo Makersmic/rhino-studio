@@ -93,7 +93,7 @@ const log = computed(() => care.history.filter((r) => !onlyTool.value || r.asset
 
       <div v-if="onlyTool" class="filter">
         <span>Showing <strong>{{ onlyTool }}</strong> only</span>
-        <RouterLink :to="`/toolheads/${encodeURIComponent(onlyTool)}`">Its page</RouterLink>
+        <RouterLink :to="`/assets/toolheads/${encodeURIComponent(onlyTool)}`">Its page</RouterLink>
         <RouterLink :to="{ path: '/care/tasks', query: { for: `tool:${onlyTool}` } }">All its tasks</RouterLink>
         <button type="button" @click="router.replace({ path: '/care' })">Show everything</button>
       </div>

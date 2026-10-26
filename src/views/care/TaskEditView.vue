@@ -364,7 +364,7 @@ const rulesNow = computed(() => task.value?.status?.rules ?? [])
             <RsButton v-if="task.status" size="sm" variant="quiet" @click="statusFor = task">{{ task.status.hold ? 'Change status' : 'Set status' }}</RsButton>
           </div>
           <button v-if="!linked" type="button" class="sx-link" @click="toLibrary">Add this task to the Task Library</button>
-          <RouterLink v-if="toolOf(task.asset)" class="sx-link" :to="`/toolheads/${encodeURIComponent(toolOf(task.asset)!)}`">{{ toolOf(task.asset) }}'s page</RouterLink>
+          <RouterLink v-if="toolOf(task.asset)" class="sx-link" :to="`/assets/toolheads/${encodeURIComponent(toolOf(task.asset)!)}`">{{ toolOf(task.asset) }}'s page</RouterLink>
         </div>
 
         <div v-if="lib" class="card">

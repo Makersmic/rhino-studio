@@ -124,7 +124,7 @@ async function remove() {
         <p>Things wired to the board rather than the tool connector: enclosure fans and lights, an air or vacuum pump, a door switch. They're there whichever tool is mounted, and each can have its own care tasks.</p>
       </div>
       <div class="acts">
-        <RouterLink v-if="wizardOk" class="sx-link" to="/toolheads/hardware/new">Add hardware (wizard)</RouterLink>
+        <RouterLink v-if="wizardOk" class="sx-link" to="/assets/hardware/new">Add hardware (wizard)</RouterLink>
         <RsButton variant="primary" :disabled="!tm.state" @click="open(null)">Add system hardware</RsButton>
       </div>
     </div>

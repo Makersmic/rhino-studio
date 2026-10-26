@@ -327,7 +327,7 @@ Klipper ready. Keep Mainsail open on another screen to compare. **Stop if** anyt
 | C1 | Settings › Cameras | Each camera row has a small live picture left of Turn off; a turned-off camera shows "Off"; scrolling it out of view stops its stream (crowsnest log or network tab) | |
 | R1 | Control: tap the tuning padlock; Motion: Unlock | Each panel turns red (#c0281d) with white text and white-on-red controls; the padlock turns white; locking turns it back to paper and ink | |
 | R2 | Pendant | Unchanged (Hold still inverts the keys; no red) | |
-| PL1 | Toolheads › Wiring › Board pins (Tool Manager 1.5.3): Add label ENCLOSURE_LIGHT on a free header pin | Listed under Pin labels; the restart banner lists it; `myrhino/custom_tools.cfg` has `[board_pins rhino]` with it | Klipper restarts by itself |
+| PL1 | Assets › Hardware › Board pins and outputs (Tool Manager 1.5.3): Add label ENCLOSURE_LIGHT on a free header pin | Listed under Pin labels; the restart banner lists it; `myrhino/custom_tools.cfg` has `[board_pins rhino]` with it | Klipper restarts by itself |
 | PL2 | In printer.cfg (Files › Config) add `[output_pin enclosure_light]` with `pin: ENCLOSURE_LIGHT`, save, Restart Klipper | Klipper starts; the label shows "Used by printer.cfg [output_pin enclosure_light]"; SET_PIN PIN=enclosure_light VALUE=1 lights it | Klipper reports an alias error |
 | PL3 | Click the label's pin, pick another free pin | A save icon appears beside it and "was <old pin>" under it; press save: the banner says "<old> -> <new>" | |
 | PL4 | Outputs: Label it on an output written with a raw pin, name it, Use | That one line in its file now says `pin: <label>` (prefix and comment kept); a copy is in `~/printer_data/rhino_data/config_backups`; Klipper starts after the restart | Any other line changed |
@@ -377,7 +377,7 @@ Studio has no login, like Mainsail: Moonraker's `[authorization] trusted_clients
 
 | # | Do | Pass | Stop if |
 |---|---|---|---|
-| NW2 | Snap the browser to half the screen; open Toolheads › Board pins and outputs, Tool connector, then every other page | Nothing runs past a panel's edge and the page never scrolls sideways; Outputs shows two lines per output | Text runs off the panel |
+| NW2 | Snap the browser to half the screen; open Assets › Board pins and outputs, Tool connector, then every other page | Nothing runs past a panel's edge and the page never scrolls sideways; Outputs shows two lines per output | Text runs off the panel |
 | NW3 | Make the window narrower step by step down to phone width, watching the top bar | The red **Stop** button stays whole and on screen at every width; the logo text and "mounted" go first, then the tool name shortens with … | Stop is cut off or pushed off screen |
 
 ## 0.6.6: Update from GitHub, one Tool Manager row, PrusaSlicer keeps itself up to date (Tool Manager 1.5.8)
@@ -445,3 +445,7 @@ Control › Hardware and macro values (needs Tool Manager 1.9.2):
 - [ ] **HC4** Macro buttons that take values show a small sliders icon. `DRIVER_FAN_SET` opens a prompt with SPEED, a 0-1 slider and the line it will send; Run sends it. A macro that moves or powers a tool still asks for confirmation after Run.
 - [ ] **HC5** A macro without values (Lights full) still runs straight away.
 - **Stop if:** a Hardware control drives a tool output (laser, spindle ESC, SERVO_LASER), or a live item changes while the padlock is closed.
+
+Assets (was Toolheads; Mike, Oct 26):
+- [ ] **AS1** The rail says Assets (phone bottom bar too). Its menu: Toolheads (Library, Tool connector, Kinds of tool), Hardware (System hardware, Board pins and outputs), Parts (Materials, Nozzles, Categories). Each Parts page shows only its own list and saves it.
+- [ ] **AS2** An old address still works: `#/toolheads`, `#/toolheads/BlockOne`, `#/toolheads/wiring/hardware` and `#/toolheads/setup/lists` land on the new pages (Library, BlockOne's page, System hardware, Materials). A tool's page lights Assets in the rail and Library in the menu.

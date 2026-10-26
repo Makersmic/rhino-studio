@@ -116,7 +116,7 @@ export function notices(i: NoticeInput): Notice[] {
       })
       break
     case 'unmapped':
-      add({ id: 'tool', tone: 'alert', title: `Slot ${i.toolState.slot} isn't in the tool list`, to: '/toolheads' })
+      add({ id: 'tool', tone: 'alert', title: `Slot ${i.toolState.slot} isn't in the tool list`, to: '/assets/toolheads' })
       break
     case 'swapping':
       if (i.autoTools && (i.job.state === 'printing' || i.job.state === 'paused')) break
@@ -178,7 +178,7 @@ export function notices(i: NoticeInput): Notice[] {
 
   // --- fans -------------------------------------------------------------------
   for (const f of i.stalledFans ?? []) {
-    add({ id: `fan-${f.name}`, tone: 'alert', title: `${f.label} isn't turning`, detail: `It's set to ${Math.round(f.speed * 100)} % but its speed signal reads nothing. Check it before the next job.`, to: '/toolheads/wiring/hardware' })
+    add({ id: `fan-${f.name}`, tone: 'alert', title: `${f.label} isn't turning`, detail: `It's set to ${Math.round(f.speed * 100)} % but its speed signal reads nothing. Check it before the next job.`, to: '/assets/hardware' })
   }
 
   // --- care -------------------------------------------------------------------

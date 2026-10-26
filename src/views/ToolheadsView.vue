@@ -58,7 +58,7 @@ const source = computed(() =>
         <h1>Toolheads</h1>
         <p>{{ source }} Select a tool for its connector, materials, macros and care.</p>
       </div>
-      <RsButton v-if="fromPortal" variant="primary" @click="router.push('/toolheads/new')">Add a toolhead</RsButton>
+      <RsButton v-if="fromPortal" variant="primary" @click="router.push('/assets/toolheads/new')">Add a toolhead</RsButton>
     </div>
 
     <RestartBanner />
@@ -73,7 +73,7 @@ const source = computed(() =>
         :caption="t.caption"
         :mounted="machine.mountedName === t.name"
         :care="care.forTool(t.name)"
-        :to="`/toolheads/${encodeURIComponent(t.name)}`"
+        :to="`/assets/toolheads/${encodeURIComponent(t.name)}`"
       />
     </div>
 
@@ -87,9 +87,9 @@ const source = computed(() =>
         :caption="t.caption"
         :mounted="machine.mountedName === t.name"
         :care="care.forTool(t.name)"
-        :to="`/toolheads/${encodeURIComponent(t.name)}`"
+        :to="`/assets/toolheads/${encodeURIComponent(t.name)}`"
       />
-      <RouterLink v-if="fromPortal" to="/toolheads/new" class="add">
+      <RouterLink v-if="fromPortal" to="/assets/toolheads/new" class="add">
         <span class="plus" aria-hidden="true">+</span>
         <strong>Add a toolhead</strong>
         <span>Slot {{ tm.options?.next_slot ?? (added.length ? Math.max(...added.map((a) => a.slot)) + 1 : 6) }} and up: a print-head clone, a powered tool (hot wire, needle, dispenser) or a passive one (pen, probe)</span>

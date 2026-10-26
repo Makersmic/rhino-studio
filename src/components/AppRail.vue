@@ -13,7 +13,7 @@ const main: NavItem[] = [
   { to: '/preview', label: 'Preview', icon: 'preview' },
   { to: '/control', label: 'Control', icon: 'control' },
   { to: '/mesh', label: 'Bed mesh', icon: 'mesh', short: 'Mesh' },
-  { to: '/toolheads', label: 'Toolheads', icon: 'toolheads' },
+  { to: '/assets', label: 'Assets', icon: 'toolheads' },
   { to: '/files', label: 'Files', icon: 'files' },
   { to: '/care', label: 'Care', icon: 'care' },
 ]

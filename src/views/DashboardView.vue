@@ -125,7 +125,7 @@ const rail = computed<RailItem[]>(() => {
   // fans with a speed signal: rpm, red when driven but not turning
   for (const f of machine.fans) {
     const stalled = stalledFans.value.some((x) => x.id === f.id)
-    items.push({ id: f.id, label: f.label, value: `${rpmText(f.rpm)} rpm`, sub: stalled ? 'Not turning' : `${Math.round(f.speed * 100)} %`, alert: stalled, to: '/toolheads/wiring/hardware' })
+    items.push({ id: f.id, label: f.label, value: `${rpmText(f.rpm)} rpm`, sub: stalled ? 'Not turning' : `${Math.round(f.speed * 100)} %`, alert: stalled, to: '/assets/hardware' })
   }
   const c = care.counts
   items.push({
@@ -187,7 +187,7 @@ const list = computed(() =>
 
       <!-- top: the tool on the left, the machine state on the right -->
       <header class="top">
-        <RouterLink to="/toolheads" class="tool" :style="{ '--accent': `var(${machine.mountedLook.accentVar})` }" :class="{ alert: toolAlert, unverified: !machine.mountedVerified }">
+        <RouterLink to="/assets/toolheads" class="tool" :style="{ '--accent': `var(${machine.mountedLook.accentVar})` }" :class="{ alert: toolAlert, unverified: !machine.mountedVerified }">
           <span class="emblem"><Icon :tool="machine.mountedLook.icon" :size="30" /></span>
           <span class="col">
             <strong class="name">{{ machine.mountedVerified ? machine.mountedName : 'Unknown tool' }}</strong>

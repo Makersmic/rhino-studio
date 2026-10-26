@@ -84,7 +84,7 @@ function pick(n: number) {
 
 <template>
   <div class="view">
-    <RouterLink to="/toolheads" class="back">‹ Toolheads</RouterLink>
+    <RouterLink to="/assets/toolheads" class="back">‹ Toolheads</RouterLink>
 
     <p v-if="error" class="err">{{ error }}</p>
     <p v-else-if="!d" class="muted">Loading {{ name }}…</p>
@@ -103,7 +103,7 @@ function pick(n: number) {
         </div>
         <div class="actions">
           <RsButton @click="router.push({ path: '/care', query: { tool: d.name } })">Care tasks</RsButton>
-          <RsButton v-if="!d.builtin" variant="primary" @click="router.push(`/toolheads/${encodeURIComponent(d.name)}/edit`)">Edit tool</RsButton>
+          <RsButton v-if="!d.builtin" variant="primary" @click="router.push(`/assets/toolheads/${encodeURIComponent(d.name)}/edit`)">Edit tool</RsButton>
         </div>
       </header>
 

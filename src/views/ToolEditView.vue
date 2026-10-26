@@ -98,10 +98,10 @@ async function save() {
     await tm.client().editTool(current, editBody(t.value, f, rows.value, removed.value, controls.value, macros.value))
     await tm.changed()
     pristine = snapshot()
-    router.push(`/toolheads/${encodeURIComponent(current)}`)
+    router.push(`/assets/toolheads/${encodeURIComponent(current)}`)
   } catch (e) {
     error.value = (e as Error).message
-    if (current !== name.value) router.replace(`/toolheads/${encodeURIComponent(current)}/edit`)
+    if (current !== name.value) router.replace(`/assets/toolheads/${encodeURIComponent(current)}/edit`)
     await tm.changed().catch(() => {})
   } finally {
     saving.value = false
@@ -122,7 +122,7 @@ async function remove() {
   try {
     await tm.client().deleteTool(name.value)
     await tm.changed()
-    router.push('/toolheads')
+    router.push('/assets/toolheads')
   } catch (e) {
     error.value = (e as Error).message
   }
@@ -159,13 +159,13 @@ async function deletePhoto(fn: string) {
 }
 
 function cancel() {
-  router.push(`/toolheads/${encodeURIComponent(name.value)}`)
+  router.push(`/assets/toolheads/${encodeURIComponent(name.value)}`)
 }
 </script>
 
 <template>
   <div class="view">
-    <RouterLink :to="`/toolheads/${encodeURIComponent(name)}`" class="back">‹ {{ name }}</RouterLink>
+    <RouterLink :to="`/assets/toolheads/${encodeURIComponent(name)}`" class="back">‹ {{ name }}</RouterLink>
     <div class="view-head">
       <h1>Edit {{ name }}</h1>
       <p>Changes are checked against your Klipper config when you save, and go live at the next Klipper restart.</p>

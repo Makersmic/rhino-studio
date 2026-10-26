@@ -199,7 +199,7 @@ const fmt = (s: HwSetting) => (s.kind === 'num' && s.min != null ? `${s.min} to 
 
 <template>
   <div class="view">
-    <RouterLink to="/toolheads/wiring/hardware" class="back">‹ System hardware</RouterLink>
+    <RouterLink to="/assets/hardware" class="back">‹ System hardware</RouterLink>
     <div class="view-head">
       <h1>Add hardware</h1>
       <p>Five questions. The Portal offers only pins that can do the job, checks the result against your whole Klipper config, and writes it. It's live after the next Klipper restart.</p>
@@ -216,7 +216,7 @@ const fmt = (s: HwSetting) => (s.kind === 'num' && s.min != null ? `${s.min} to 
           <p class="tm-hint">Restart Klipper to make it live (the banner above does it, or waits for the job to end).</p>
           <div class="acts">
             <RsButton variant="primary" @click="another">Add more hardware</RsButton>
-            <RsButton @click="router.push('/toolheads/wiring/hardware')">System hardware</RsButton>
+            <RsButton @click="router.push('/assets/hardware')">System hardware</RsButton>
           </div>
         </div>
       </div></div>
@@ -446,7 +446,7 @@ const fmt = (s: HwSetting) => (s.kind === 'num' && s.min != null ? `${s.min} to 
           {{ step === 'Check' ? (saving ? 'Saving…' : 'Save') : 'Next' }}
         </RsButton>
         <span class="tm-hint">Step {{ at + 1 }} of {{ steps.length }}</span>
-        <RsButton class="cancel" variant="quiet" @click="router.push('/toolheads/wiring/hardware')">Cancel</RsButton>
+        <RsButton class="cancel" variant="quiet" @click="router.push('/assets/hardware')">Cancel</RsButton>
       </footer>
     </template>
     <p v-else-if="error" class="tm-err">{{ error }}</p>

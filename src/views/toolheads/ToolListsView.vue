@@ -1,9 +1,8 @@
 <script setup lang="ts">
 /**
- * The other lists Add a toolhead offers: material names (suggested in the
- * materials tables, by category; any other name can still be typed), the
- * nozzle sizes for a new print head, and how system hardware is grouped.
- * Each saves on its own.
+ * Assets › Parts: one page per list (part = materials | nozzles | categories, from the route).
+ * Material names (suggested in the materials tables, by category; any other name can still be typed), the
+ * nozzle sizes for a new print head, and how system hardware is grouped. Each saves on its own.
  */
 import { computed, onMounted, reactive, ref } from 'vue'
 import RsButton from '@/components/RsButton.vue'
@@ -11,6 +10,14 @@ import TagInput from '@/components/TagInput.vue'
 import { useToolMgrStore } from '@/stores/toolmgr'
 import '@/maintenance/care.css'
 import '@/toolmgr/forms.css'
+
+const props = defineProps<{ part: 'materials' | 'nozzles' | 'categories' }>()
+const HEAD = {
+  materials: { title: 'Materials', text: 'Material names suggested in the materials tables of Add a toolhead and Edit, by tool category.' },
+  nozzles: { title: 'Nozzles', text: 'Nozzle sizes offered when you add a print head.' },
+  categories: { title: 'Categories', text: 'How System hardware is grouped.' },
+}
+const head = computed(() => HEAD[props.part])
 
 const tm = useToolMgrStore()
 const L = computed(() => tm.lists)
@@ -61,15 +68,15 @@ const catUse = (id: string) => (id ? (L.value?.in_use.hw_categories[id] ?? []) :
   <div class="view">
     <div class="sx-head">
       <div>
-        <h1>Materials, nozzles, categories</h1>
-        <p>The other lists Add a toolhead and System hardware choose from.</p>
+        <h1>{{ head.title }}</h1>
+        <p>{{ head.text }}</p>
       </div>
     </div>
     <p v-if="loadError" class="tm-err">{{ loadError }}</p>
     <p v-else-if="!L || !ready" class="muted">Loading…</p>
 
     <template v-else>
-      <section class="card">
+      <section v-if="part === 'materials'" class="card">
         <h2>Material names</h2>
         <p class="tm-hint">Suggested in the materials tables of Add a toolhead and Edit, by category. Any other name can still be typed. Letters, digits and _; spaces become _.</p>
         <div class="mrow">
@@ -85,8 +92,8 @@ const catUse = (id: string) => (id ? (L.value?.in_use.hw_categories[id] ?? []) :
         </footer>
       </section>
 
-      <div class="two">
-        <section class="card">
+      <div class="one">
+        <section v-if="part === 'nozzles'" class="card">
           <h2>Nozzle sizes</h2>
           <p class="tm-hint">Offered as tick boxes when you add a print head, in mm ({{ L.limits.nozzle?.[0] }} to {{ L.limits.nozzle?.[1] }}).</p>
           <TagInput v-model="nozzles" label="nozzle sizes" numeric placeholder="0.4" />
@@ -97,7 +104,7 @@ const catUse = (id: string) => (id ? (L.value?.in_use.hw_categories[id] ?? []) :
           </footer>
         </section>
 
-        <section class="card">
+        <section v-if="part === 'categories'" class="card">
           <h2>System hardware categories</h2>
           <p class="tm-hint">How System hardware is grouped. A category with hardware in it can't be removed.</p>
           <ul class="ed">
@@ -124,7 +131,7 @@ const catUse = (id: string) => (id ? (L.value?.in_use.hw_categories[id] ?? []) :
 .card h2 { margin: 0; font-size: var(--rs-text-md); font-weight: var(--rs-weight-medium); color: var(--rs-text-strong); }
 .mrow { display: grid; gap: var(--rs-space-4); grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
 .n { margin-left: 4px; font-variant-numeric: tabular-nums; color: var(--rs-text-muted); font-weight: var(--rs-weight-body); }
-.two { display: grid; gap: var(--rs-gap); grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); align-items: start; }
+.one { max-width: 640px; }
 .ed { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .ed li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: var(--rs-space-3); align-items: center; }
 .use { font-size: var(--rs-text-xs); color: var(--rs-text-muted); white-space: nowrap; }

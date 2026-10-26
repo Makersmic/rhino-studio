@@ -1,7 +1,24 @@
-import { createRouter, createWebHashHistory } from 'vue-router'
+import { createRouter, createWebHashHistory, type RouteRecordRaw } from 'vue-router'
 
 // Hash history (#/prepare) so the built app runs from any static folder on
 // the Pi without nginx rewrite rules.
+/** /toolheads/... (before Assets, Oct 26) -> /assets/...; the exact pages first, then any tool's page. */
+export const OLD_TOOLHEADS: [string, string][] = [
+  ['/toolheads/wiring/connector', '/assets/connector'],
+  ['/toolheads/wiring/pins', '/assets/pins'],
+  ['/toolheads/wiring/hardware', '/assets/hardware'],
+  ['/toolheads/hardware/new', '/assets/hardware/new'],
+  ['/toolheads/setup/kinds', '/assets/kinds'],
+  ['/toolheads/setup/lists', '/assets/materials'],
+  ['/toolheads/new', '/assets/toolheads/new'],
+  ['/toolheads', '/assets/toolheads'],
+]
+const OLD_TOOLHEADS_PATHS: RouteRecordRaw[] = [
+  ...OLD_TOOLHEADS.map(([from, to]): RouteRecordRaw => ({ path: from, redirect: (r) => ({ path: to, query: r.query }) })),
+  { path: '/toolheads/:name/edit', redirect: (r) => `/assets/toolheads/${encodeURIComponent(String(r.params.name))}/edit` },
+  { path: '/toolheads/:name', redirect: (r) => `/assets/toolheads/${encodeURIComponent(String(r.params.name))}` },
+]
+
 export const router = createRouter({
   history: createWebHashHistory(),
   routes: [
@@ -15,24 +32,30 @@ export const router = createRouter({
     { path: '/mesh', component: () => import('./views/BedMeshView.vue'), meta: { title: 'Bed mesh' } },
     { path: '/heightmap', redirect: '/mesh' },
     { path: '/pendant', component: () => import('./views/PendantView.vue'), meta: { title: 'Pendant', bare: true } },
-    // Toolheads: a section menu (library, wiring, setup). Adding and editing a tool open full width.
-    { path: '/toolheads/new', component: () => import('./views/ToolWizardView.vue'), meta: { title: 'Add a toolhead', nav: '/toolheads' } },
-    { path: '/toolheads/hardware/new', component: () => import('./views/toolheads/HardwareWizardView.vue'), meta: { title: 'Add hardware', nav: '/toolheads' } },
+    // Assets (was Toolheads; Mike, Oct 26): Toolheads (library, connector, kinds), Hardware (system hardware, board
+    // pins), Parts (materials, nozzles, categories). Adding or editing a tool and Add hardware open full width.
+    { path: '/assets/toolheads/new', component: () => import('./views/ToolWizardView.vue'), meta: { title: 'Add a toolhead', nav: '/assets' } },
+    { path: '/assets/hardware/new', component: () => import('./views/toolheads/HardwareWizardView.vue'), meta: { title: 'Add hardware', nav: '/assets' } },
+    { path: '/assets/toolheads/:name/edit', component: () => import('./views/ToolEditView.vue'), meta: { title: 'Edit toolhead', nav: '/assets' } },
     {
-      path: '/toolheads',
-      component: () => import('./views/toolheads/ToolheadsShell.vue'),
-      meta: { nav: '/toolheads' },
+      path: '/assets',
+      component: () => import('./views/toolheads/AssetsShell.vue'),
+      meta: { nav: '/assets' },
       children: [
-        { path: '', component: () => import('./views/ToolheadsView.vue'), meta: { title: 'Toolheads' } },
-        { path: 'wiring/connector', component: () => import('./views/toolheads/ConnectorView.vue'), meta: { title: 'Tool connector' } },
-        { path: 'wiring/pins', component: () => import('./views/toolheads/PinsView.vue'), meta: { title: 'Board pins and outputs' } },
-        { path: 'wiring/hardware', component: () => import('./views/toolheads/HardwareView.vue'), meta: { title: 'System hardware' } },
-        { path: 'setup/kinds', component: () => import('./views/toolheads/KindsView.vue'), meta: { title: 'Kinds of tool' } },
-        { path: 'setup/lists', component: () => import('./views/toolheads/ToolListsView.vue'), meta: { title: 'Materials, nozzles, categories' } },
-        { path: ':name', component: () => import('./views/ToolPageView.vue'), meta: { title: 'Toolhead' } },
+        { path: '', redirect: '/assets/toolheads' },
+        { path: 'toolheads', component: () => import('./views/ToolheadsView.vue'), meta: { title: 'Toolheads' } },
+        { path: 'toolheads/:name', component: () => import('./views/ToolPageView.vue'), meta: { title: 'Toolhead' } },
+        { path: 'connector', component: () => import('./views/toolheads/ConnectorView.vue'), meta: { title: 'Tool connector' } },
+        { path: 'kinds', component: () => import('./views/toolheads/KindsView.vue'), meta: { title: 'Kinds of tool' } },
+        { path: 'hardware', component: () => import('./views/toolheads/HardwareView.vue'), meta: { title: 'System hardware' } },
+        { path: 'pins', component: () => import('./views/toolheads/PinsView.vue'), meta: { title: 'Board pins and outputs' } },
+        { path: 'materials', component: () => import('./views/toolheads/ToolListsView.vue'), props: { part: 'materials' }, meta: { title: 'Materials' } },
+        { path: 'nozzles', component: () => import('./views/toolheads/ToolListsView.vue'), props: { part: 'nozzles' }, meta: { title: 'Nozzles' } },
+        { path: 'categories', component: () => import('./views/toolheads/ToolListsView.vue'), props: { part: 'categories' }, meta: { title: 'Categories' } },
       ],
     },
-    { path: '/toolheads/:name/edit', component: () => import('./views/ToolEditView.vue'), meta: { title: 'Edit toolhead', nav: '/toolheads' } },
+    // Old addresses (bookmarks, links in notes): every /toolheads/... page has a new home
+    ...OLD_TOOLHEADS_PATHS,
     { path: '/files', component: () => import('./views/FilesView.vue'), meta: { title: 'Files' } },
     // Care: a section menu (overview, tasks, library, log, meters, setup)
     {

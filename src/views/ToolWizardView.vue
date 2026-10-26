@@ -144,7 +144,7 @@ async function create() {
       }
     }
     await tm.changed()
-    router.push({ path: `/toolheads/${encodeURIComponent(name)}`, query: failed ? { photos_failed: String(failed) } : {} })
+    router.push({ path: `/assets/toolheads/${encodeURIComponent(name)}`, query: failed ? { photos_failed: String(failed) } : {} })
   } catch (e) {
     error.value = (e as Error).message
   } finally {
@@ -176,7 +176,7 @@ function onPhotos(e: Event) {
 
 <template>
   <div class="view">
-    <RouterLink to="/toolheads" class="back">‹ Toolheads</RouterLink>
+    <RouterLink to="/assets/toolheads" class="back">‹ Toolheads</RouterLink>
     <div class="view-head">
       <h1>Add a toolhead</h1>
       <p>The Portal checks every step against your Klipper config before anything is written. The new tool works after the next Klipper restart.</p>
@@ -344,7 +344,7 @@ function onPhotos(e: Event) {
           {{ step === 'Review' ? (creating ? 'Creating…' : 'Create tool') : 'Next' }}
         </RsButton>
         <span class="tm-hint">Step {{ at + 1 }} of {{ steps.length }}</span>
-        <RsButton class="cancel" variant="quiet" @click="router.push('/toolheads')">Cancel</RsButton>
+        <RsButton class="cancel" variant="quiet" @click="router.push('/assets/toolheads')">Cancel</RsButton>
       </footer>
     </template>
     <p v-else-if="error" class="tm-err">{{ error }}</p>
