@@ -6,9 +6,12 @@
  *                  wears the tool's accent tab, like the status box tile
  *   kind="shared"  system macros; the same whatever is mounted
  *
- * Each button goes through the same safety check as the console.
+ * Each button goes through the same safety check as the console. A macro that takes values (params.X in its
+ * definition) asks for them first, with a slider when its description gives a range (src/control/macroParams.ts).
  */
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
+import MacroParamsDialog from './MacroParamsDialog.vue'
+import { macroParams, type MacroParam } from './macroParams'
 import RsPanel from '@/components/RsPanel.vue'
 import { useControlStore } from '@/stores/control'
 import { useMachineStore } from '@/stores/machine'
@@ -45,7 +48,34 @@ function toggleFold(g: MacroGroup) {
 const status = computed(() => (props.kind === 'tool' && toolName.value ? 'Changes with the tool' : undefined))
 const accent = computed(() => (props.kind === 'tool' && machine.mountedVerified ? `var(${machine.mountedLook.accentVar})` : undefined))
 
-const runMacro = (name: string, label: string) => control.send(name, { label })
+// The macros' definitions, read once (machine.macroDefinitions caches them per Klipper start)
+const defs = ref<Record<string, { gcode: string; description: string }>>({})
+async function loadDefs() {
+  if (!machine.klippyReady) return
+  try {
+    defs.value = await machine.macroDefinitions()
+  } catch {
+    defs.value = {} // older Moonraker or not allowed: buttons run as before
+  }
+}
+onMounted(loadDefs)
+watch(() => machine.klippyReady, loadDefs)
+const paramsOf = (name: string): MacroParam[] => {
+  const d = defs.value[name]
+  return d ? macroParams(d.gcode, d.description) : []
+}
+
+const asking = ref<{ name: string; label: string; description: string; params: MacroParam[] } | null>(null)
+function runMacro(name: string, label: string) {
+  const params = paramsOf(name)
+  if (!params.length) return control.send(name, { label })
+  asking.value = { name, label, description: defs.value[name]?.description ?? '', params }
+}
+function runWith(line: string) {
+  const label = asking.value?.label
+  asking.value = null
+  void control.send(line, { label })
+}
 </script>
 
 <template>
@@ -70,7 +100,10 @@ const runMacro = (name: string, label: string) => control.send(name, { label })
             :title="control.macros.get(b.name) || b.name"
             @click="runMacro(b.name, b.label)"
           >
-            {{ b.label }}
+            <span class="lbl">{{ b.label }}</span>
+            <svg v-if="paramsOf(b.name).length" class="asks" viewBox="0 0 12 12" width="12" height="12" role="img" aria-label="asks for values">
+              <path d="M1 3h10M1 9h10" stroke="currentColor" stroke-width="1.2" fill="none" /><circle cx="4" cy="3" r="1.6" fill="currentColor" /><circle cx="8" cy="9" r="1.6" fill="currentColor" />
+            </svg>
           </button>
         </div>
       </section>
@@ -89,6 +122,7 @@ const runMacro = (name: string, label: string) => control.send(name, { label })
       </template>
       <template v-else>Swap (with the list of toolheads) and Confirm tool are in the top bar. Pause and Cancel are with the job.</template>
     </p>
+    <MacroParamsDialog :macro="asking" @close="asking = null" @run="runWith" />
   </RsPanel>
 </template>
 
@@ -106,6 +140,9 @@ const runMacro = (name: string, label: string) => control.send(name, { label })
   background: var(--accent);
 }
 .macros { display: flex; flex-direction: column; gap: var(--rs-space-4); }
+.macro:has(.asks) { display: inline-flex; align-items: center; justify-content: space-between; gap: 6px; }
+.macro .lbl { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.asks { flex: none; opacity: 0.7; }
 h3 { font-size: var(--rs-text-xs); font-weight: var(--rs-weight-medium); color: var(--rs-text-muted); margin-bottom: var(--rs-space-2); }
 .buttons { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 6px; }
 .macro {

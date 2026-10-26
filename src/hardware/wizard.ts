@@ -236,7 +236,7 @@ export function settingShown(key: string, d: Draft): boolean {
 
 /** Help under each fan pin, in place of the pin kind's general help. */
 export function fanPinHelp(slot: string, wires: string): string | null {
-  if (slot === 'pin') return wires === '4' ? 'The blue wire. 3.3 V logic drives it fine for most fans.' : "The fan's power: a fan or heater header switches it."
+  if (slot === 'pin') return wires === '4' ? 'The blue wire: a logic pin, or a fan header used inverted (like the Rhino\'s part fan, !PA8 at 25 kHz).' : "The fan's power: a fan or heater header switches it."
   if (slot === 'tach') return 'The yellow wire. The wizard adds the pull-up it needs.'
   if (slot === 'power') return "A fan header that switches the fan's power, so it stops at 0 %. Leave empty for an always-on port."
   return null
@@ -246,7 +246,7 @@ export function fanPinHelp(slot: string, wires: string): string | null {
 export const WIRES_HELP: Record<string, string> = {
   '2': 'Power only. Its speed is set by switching the power on a fan header.',
   '3': 'Power plus a speed signal back (yellow). The reading is only right at full speed on a switched header.',
-  '4': 'Power, a speed signal back, and a speed input (blue) on a logic pin. Power comes from an always-on port, or a fan header as its power pin.',
+  '4': 'Power, a speed signal back, and a speed input (blue). Power comes from an always-on port, or a fan header as its power pin. The fan\'s spec is 25 kHz (PWM cycle 0.00004).',
 }
 
 export function newDraft(dev: HwDevice, followsBuilt: string[]): Draft {

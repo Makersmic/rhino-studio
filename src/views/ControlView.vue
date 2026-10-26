@@ -15,6 +15,7 @@ import Icon from '@/icons/Icon.vue'
 import StatusStrip from '@/control/StatusStrip.vue'
 import MotionPanel from '@/control/MotionPanel.vue'
 import WebcamPanel from '@/control/WebcamPanel.vue'
+import HardwarePanel from '@/control/HardwarePanel.vue'
 import MacroPanel from '@/control/MacroPanel.vue'
 import ConsolePanel from '@/control/ConsolePanel.vue'
 import ExtruderPanel from '@/control/ExtruderPanel.vue'
@@ -48,6 +49,7 @@ const machine = useMachineStore()
         <!-- On desktop the tool's macros run along the bottom of the status box instead -->
         <MacroPanel kind="tool" class="tool-macro-panel" />
         <MacroPanel kind="shared" />
+        <HardwarePanel />
       </div>
       <ConsolePanel />
     </div>

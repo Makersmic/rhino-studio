@@ -78,18 +78,24 @@ async function loadPins() {
 watch([step, () => d.value?.sensor_type, () => d.value?.settings.source, () => d.value?.settings.wires], () => {
   if (step.value === 'Wiring') loadPins().catch((e) => (error.value = (e as Error).message))
 })
-/** A 4-wire fan's speed input must be a logic pin; its power pin a fan / heater header. */
+/** A 4-wire fan's power pin is a fan / heater header; its speed input can be either (a header pulls it to ground, inverted). */
 const fan4 = computed(() => String(d.value?.settings.wires) === '4')
 function choicesFor(slot: string, kind: string): PinChoice[] {
   const all = choices.value[kind] ?? []
-  if (fan4.value && slot === 'pin') return all.filter((p) => !p.mosfet)
   if (fan4.value && slot === 'power') return all.filter((p) => p.mosfet)
   return all
 }
 const slotLabel = (slot: string) => (fan4.value && slot === 'pin' ? 'Speed input (blue wire)' : slot === 'tach' ? 'Speed signal (yellow wire)' : pinLabel(slot))
 const pinHelp = (slot: string, kind: string) => (asksWires.value ? fanPinHelp(slot, String(d.value?.settings.wires)) : null) ?? cat.value?.pin_kinds[kind]?.help
 /** A 4-wire fan's speed input is meant to be a logic pin: the "logic pin, not a load" note doesn't apply. */
-const pinWarnings = (slot: string, kind: string) => (chosen(slot, kind)?.warnings ?? []).filter((w) => !(fan4.value && slot === 'pin' && w.includes('3.3 V logic pin')))
+const pinWarnings = (slot: string, kind: string) => {
+  const ws = (chosen(slot, kind)?.warnings ?? []).filter((w) => !(fan4.value && slot === 'pin' && (w.includes('3.3 V logic pin') || w.includes('switches supply voltage'))))
+  const c = chosen(slot, kind)
+  if (fan4.value && slot === 'pin' && c?.mosfet) {
+    ws.push(`${c.header || c.pin} is a fan header: connect only its − pin to the blue wire, leave + unconnected, and tick "The speed input is inverted" below (the header pulls the signal to ground).`)
+  }
+  return ws
+}
 const chosen = (slot: string, kind: string) => (choices.value[kind] ?? []).find((p) => p.pin === d.value?.pins[slot]) ?? typedCheck.value[slot] ?? null
 async function checkTyped(slot: string, kind: string) {
   if (!d.value?.pins[slot]) return
@@ -292,7 +298,7 @@ const fmt = (s: HwSetting) => (s.kind === 'num' && s.min != null ? `${s.min} to 
                 <span class="tm-hint">{{ WIRES_HELP[String(d.settings.wires)] }}</span>
               </fieldset>
               <div v-for="[slot, kind, required] in pinsShown(dev, d)" :key="slot" class="tm-fld">
-                <label :for="`hw-pin-${slot}`">{{ slotLabel(slot) }}{{ required ? '' : ' (optional)' }} <span class="kind">{{ fan4 && slot === 'pin' ? 'Logic pin (PWM)' : cat.pin_kinds[kind]?.label }}</span></label>
+                <label :for="`hw-pin-${slot}`">{{ slotLabel(slot) }}{{ required ? '' : ' (optional)' }} <span class="kind">{{ fan4 && slot === 'pin' ? 'Logic pin or fan header (PWM)' : cat.pin_kinds[kind]?.label }}</span></label>
                 <div class="pinrow">
                   <select v-if="!typed[slot]" :id="`hw-pin-${slot}`" v-model="d.pins[slot]" class="tm-sel">
                     <option value="">{{ required ? 'Choose a pin…' : 'None' }}</option>

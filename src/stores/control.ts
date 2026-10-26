@@ -6,6 +6,7 @@
  * approve) or fromPrompt() for wizard buttons. Confirmations are shown by
  * ConfirmDialog.vue, which this store drives.
  */
+import { hardwareBlock, hardwareScript, isHardwareScript, type HwItem } from '@/control/hardware'
 import { defineStore } from 'pinia'
 import { computed, ref, shallowRef, watch } from 'vue'
 import { speedScript, zStepScript, zResetScript, limitsScript, isTuningScript } from '@/control/tuning'
@@ -354,6 +355,36 @@ export const useControlStore = defineStore('control', () => {
       return false
     }
   }
+  // ---- Control › Hardware (src/control/hardware.ts) ----------------------------------------------------
+  /** The padlock for live hardware (spindles, laser-style power, heaters). Relocks like tuning does. */
+  const hwUnlocked = ref(false)
+  const lockHardware = () => (hwUnlocked.value = false)
+  const unlockHardware = () => machine.klippyReady && (hwUnlocked.value = true)
+  watch(() => machine.klippyReady, (r) => !r && lockHardware())
+  watch(() => machine.mountedName, lockHardware)
+  watch(jobActive, (a) => a && lockHardware())
+
+  /**
+   * Set one piece of hardware. The panel's own command for a known item, in range, is its own confirmation
+   * (fans, lights, switches); a live item also needs the padlock open. Anything else is refused here.
+   */
+  async function sendHardware(item: HwItem, value: number, items: HwItem[]): Promise<boolean> {
+    const block = hardwareBlock(item, { ready: machine.klippyReady, mountedSlot: machine.mountedSlot, unlocked: hwUnlocked.value })
+    if (block) return log('error', `${item.label}: ${block}`), false
+    const b = hardwareScript(item, value)
+    if ('error' in b) return log('error', `${item.label}: ${b.error}`), false
+    if (!isHardwareScript(b.script, items)) return log('error', `${item.label}: not a hardware command`), false
+    const c = check(b.script, { jobActive: jobActive.value, macros: new Set(macros.value.keys()) })
+    log('sent', b.script)
+    try {
+      await machine.runChecked(approve(c, true))
+      return true
+    } catch (e) {
+      log('error', `${item.label}: ${(e as Error).message}`)
+      return false
+    }
+  }
+
   function tuneBuilt(b: { script: string } | { error: string }, label: string) {
     if ('error' in b) return log('error', `${label}: ${b.error}`), Promise.resolve(false)
     return sendTuning(b.script, label)
@@ -607,6 +638,10 @@ export const useControlStore = defineStore('control', () => {
     pathBlocked,
     tuneBlocked,
     tuneUnlocked,
+    hwUnlocked,
+    lockHardware,
+    unlockHardware,
+    sendHardware,
     tuningBlock,
     lockTuning,
     unlockTuning,

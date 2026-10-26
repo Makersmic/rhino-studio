@@ -299,7 +299,7 @@ const step = computed(() => (c.value?.dir === 'out' ? 4 : 3))
             <div class="tm-row">
               <label class="tm-fld"><span class="tm-lbl">Maximum %</span><input v-model="c.max_pct" class="tm-in" type="number" min="5" max="100" @input="schedule()" /><span class="tm-hint">Ceiling for the _SET macro.</span></label>
               <label v-if="c.role === 'fan'" class="tm-fld"><span class="tm-lbl">Kick-start (s)</span><input v-model="c.kick_start" class="tm-in" type="number" step="any" @input="schedule()" /><span class="tm-hint">Full power this long to get it spinning.</span></label>
-              <label class="tm-fld"><span class="tm-lbl">PWM cycle time (s)</span><input v-model="c.cycle" class="tm-in" type="number" step="any" @input="schedule()" /><span class="tm-hint">0.01 (100 Hz) for heaters and most drivers; 0.001 for LED dimmers.</span></label>
+              <label class="tm-fld"><span class="tm-lbl">PWM cycle time (s)</span><input v-model="c.cycle" class="tm-in" type="number" step="any" @input="schedule()" /><span class="tm-hint">0.01 (100 Hz) for heaters and most drivers; 0.001 for LED dimmers; 0.00004 (25 kHz) for a 4-wire fan's speed wire.</span></label>
             </div>
             <label class="tm-check"><input v-model="c.invert" type="checkbox" @change="schedule(0)" /> Inverted output</label>
           </template>

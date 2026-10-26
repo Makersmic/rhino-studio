@@ -437,3 +437,11 @@ UI batch:
 - [ ] **UI5** Camera card is level with Motion on a wide screen, and 16:9 on the phone.
 - [ ] **UI6** Settings › Host › Name on the network renames the Rhino (Keep/Undo as before). Network no longer has the field.
 - [ ] **UI7** Settings › Software › Update on the Tool Manager row says "Updating…" until Studio reloads itself.
+
+Control › Hardware and macro values (needs Tool Manager 1.9.2):
+- [ ] **HC1** Control shows a Hardware panel listing your system hardware. The driver fan has a slider, a % field and Off. Type 50, Enter: the console shows `SET_FAN_SPEED FAN=<name> SPEED=0.5`, no confirm, and the fan changes speed. Off stops it (or slows it to its floor, for a 4-wire fan with no power pin).
+- [ ] **HC2** A switch (a light) has Off / On and follows what Klipper reports after a restart.
+- [ ] **HC3** A heater or spindle added with the wizard sits behind the padlock: its controls are greyed until unlocked; the panel turns red while unlocked and locks again on a tool swap, at the start of a job, or when you leave Control.
+- [ ] **HC4** Macro buttons that take values show a small sliders icon. `DRIVER_FAN_SET` opens a prompt with SPEED, a 0-1 slider and the line it will send; Run sends it. A macro that moves or powers a tool still asks for confirmation after Run.
+- [ ] **HC5** A macro without values (Lights full) still runs straight away.
+- **Stop if:** a Hardware control drives a tool output (laser, spindle ESC, SERVO_LASER), or a live item changes while the padlock is closed.

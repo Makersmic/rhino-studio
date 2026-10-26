@@ -28,6 +28,7 @@ import type { CheckedScript } from '@/control/commands'
 
 import { watchedForAll } from '@/tools/adapters'
 import { fanWatch } from '@/hardware/fans'
+import { hardwareWatch } from '@/control/hardware'
 import type { Trust } from './trust'
 import { brand } from '@/brand/brand'
 
@@ -49,6 +50,8 @@ export const READ_ONLY_METHODS: ReadonlySet<string> = new Set([
   'printer.gcode.help',
   'server.webcams.list',
   'server.temperature_store',
+  // One read of the config's macro definitions, for macro buttons that take values (src/control/macroParams.ts)
+  'printer.objects.query',
   // Settings / Software and Network: versions, interfaces, load. Nothing here changes anything.
   'machine.update.status',
   'machine.system_info',
@@ -321,6 +324,21 @@ export class MoonrakerClient {
    * Moonraker's job history, newest first (read only). Returns [] when the
    * history component isn't loaded, so Files simply shows no results.
    */
+  /**
+   * The gcode and description of each [gcode_macro] in the config (configfile settings, read once and cached
+   * by the store). Read only: macro buttons use it to ask for the macro's parameters.
+   */
+  async macroDefinitions(): Promise<Record<string, { gcode: string; description: string }>> {
+    const r = (await this.call('printer.objects.query', { objects: { configfile: ['settings'] } })) as
+      { status?: { configfile?: { settings?: Record<string, Record<string, unknown>> } } }
+    const out: Record<string, { gcode: string; description: string }> = {}
+    for (const [sec, v] of Object.entries(r?.status?.configfile?.settings ?? {})) {
+      if (!sec.startsWith('gcode_macro ')) continue
+      out[sec.slice('gcode_macro '.length).toUpperCase()] = { gcode: String(v.gcode ?? ''), description: String(v.description ?? '') }
+    }
+    return out
+  }
+
   /** Moonraker's running totals over every job it has kept. */
   async historyTotals(): Promise<HistoryTotals | null> {
     try {
@@ -706,7 +724,8 @@ export class MoonrakerClient {
     const present = new Set(list.objects ?? [])
     this.handlers.onObjects?.(list.objects ?? [])
     // every fan section: speed, and rpm when it has a speed signal (Tool Manager 1.9 fans)
-    const objects: Record<string, string[] | null> = { ...fanWatch(list.objects ?? []), ...watchedForAll(list.objects ?? []) }
+    // ...and the hardware Control › Hardware shows (src/control/hardware.ts)
+    const objects: Record<string, string[] | null> = { ...hardwareWatch(list.objects ?? []), ...fanWatch(list.objects ?? []), ...watchedForAll(list.objects ?? []) }
     for (const [name, fields] of Object.entries(WATCHED_OBJECTS)) {
       if (present.has(name)) objects[name] = fields
     }

@@ -11,7 +11,7 @@
  */
 import { fanReadings } from '@/hardware/fans'
 import { defineStore } from 'pinia'
-import { computed, ref, shallowRef, triggerRef } from 'vue'
+import { computed, ref, shallowRef, triggerRef, watch } from 'vue'
 import { MoonrakerClient, type ConnectionState, type KlippyState, type Status } from '@/moonraker/client'
 import { describeToolState } from '@/moonraker/toolState'
 import { pickAdapter, type AdapterChoice } from '@/tools/adapters'
@@ -288,6 +288,17 @@ export const useMachineStore = defineStore('machine', () => {
     return client.listHistory(limit)
   }
 
+  /** Macro definitions, read once per Klipper start (they only change with the config). */
+  let macroDefs: Promise<Record<string, { gcode: string; description: string }>> | null = null
+  watch(klippyReady, () => (macroDefs = null))
+  function macroDefinitions() {
+    macroDefs ??= need().macroDefinitions().catch((e) => {
+      macroDefs = null
+      throw e
+    })
+    return macroDefs
+  }
+
   function historyTotals() {
     if (!client) return Promise.resolve(null)
     return client.historyTotals()
@@ -378,6 +389,7 @@ export const useMachineStore = defineStore('machine', () => {
     listFiles,
     listHistory,
     historyTotals,
+    macroDefinitions,
     listLogs,
     logUrl,
     power,

@@ -108,6 +108,16 @@ const status: Record<string, Record<string, unknown>> = {
         'heater_fan hotend_cool': { speed: 0, rpm: null },
       }
     : {}),
+  // MOCK_HARDWARE=1: system hardware for Control › Hardware (add the same names in the Portal: driver_fan as a
+  // fan, case_light as a switch, chamber as a heater, lid as an interlock)
+  ...(process.env.MOCK_HARDWARE
+    ? {
+        'fan_generic driver_fan': { speed: 0.6, rpm: null },
+        'output_pin case_light': { value: 1 },
+        'heater_generic chamber': { temperature: 38.4, target: 0, power: 0 },
+        'gcode_button lid': { state: 'RELEASED' },
+      }
+    : {}),
   'output_pin LASER_INITIALIZE': { value: 0 },
   'output_pin SERVO_LASER': { value: 0 },
   'output_pin Spindle_power': { value: 0 },
@@ -446,10 +456,17 @@ const RHINO_MACROS = [
   '_LASER_START', '_LASER_ABORT', '_RESTORE_TOOL_CONFIRM', 'VARIABLES', 'CUSTOM_TOOLS',
   'RHINO_MESH', 'RHINO_MESH_CALIBRATE', 'RHINO_MESH_REMOVE', // Tool Manager 1.6.0 (Bed mesh page)
 ]
+const HW_MACROS: Record<string, { gcode: string; description: string }> = process.env.MOCK_HARDWARE
+  ? {
+      DRIVER_FAN_SET: { description: 'Driver fan: driver_fan speed SPEED=0..1', gcode: '{% set v = [[params.SPEED|default(1)|float, 0.0]|max, 1.0]|min %}\nSET_FAN_SPEED FAN=driver_fan SPEED={v}' },
+      DRIVER_FAN_OFF: { description: 'Driver fan: driver_fan off', gcode: 'SET_FAN_SPEED FAN=driver_fan SPEED=0' },
+    }
+  : {}
 const MACROS = scenario === 'toolchanger'
   ? ['PAUSE', 'RESUME', 'CANCEL_PRINT', 'PRINT_START', 'PRINT_END', 'CLEAN_NOZZLE', 'CHAMBER_LIGHTS_ON', 'CHAMBER_LIGHTS_OFF', 'G28']
-  : RHINO_MACROS
+  : [...RHINO_MACROS, ...Object.keys(HW_MACROS)]
 const HELP: Record<string, string> = Object.fromEntries(MACROS.map((m) => [m, `${scenario === 'toolchanger' ? 'Macro' : 'Rhino macro'} ${m}`]))
+Object.assign(HELP, Object.fromEntries(Object.entries(HW_MACROS).map(([k, v]) => [k, v.description])))
 Object.assign(HELP, { G1: 'Move', M105: 'Report temperatures', SET_HEATER_TEMPERATURE: 'Set a heater target', FIRMWARE_RESTART: 'Restart firmware', STATUS: 'Report status' })
 
 const gcodeStore: { message: string; time: number; type: 'command' | 'response' }[] = [
@@ -616,10 +633,20 @@ function runLine(raw: string) {
       respond('// Motors off')
       return
     case 'SET_HEATER_TEMPERATURE': {
+      if (status[`heater_generic ${arg(line, 'HEATER')}`]) return update(`heater_generic ${arg(line, 'HEATER')}`, { target: Number(arg(line, 'TARGET') ?? 0) })
       const h = arg(line, 'HEATER') === 'heater_bed' ? 'heater_bed' : 'extruder'
       update(h, { target: Number(arg(line, 'TARGET') ?? 0) })
       return
     }
+    case 'SET_FAN_SPEED': {
+      const f = `fan_generic ${arg(line, 'FAN')}`
+      if (status[f]) update(f, { speed: Number(arg(line, 'SPEED') ?? 0) })
+      respond(`// ${line} (mock)`)
+      return
+    }
+    case 'DRIVER_FAN_SET':
+      if (status['fan_generic driver_fan']) update('fan_generic driver_fan', { speed: Math.max(0, Math.min(1, Number(arg(line, 'SPEED') ?? 1))) })
+      return
     case 'SET_PIN': {
       const pinName = arg(line, 'PIN')
       if (pinName && status[`output_pin ${pinName}`]) update(`output_pin ${pinName}`, { value: Number(arg(line, 'VALUE') ?? 0) })
@@ -1059,6 +1086,11 @@ function handle(method: string, params: Record<string, unknown> | undefined): un
     case 'printer.emergency_stop':
       emergencyStop('websocket')
       return 'ok'
+    case 'printer.objects.query': {
+      // only what Studio asks for: the macro definitions (configfile settings)
+      const settings = Object.fromEntries(Object.entries(HW_MACROS).map(([k, v]) => [`gcode_macro ${k.toLowerCase()}`, v]))
+      return { eventtime: Date.now() / 1000, status: { configfile: { settings } } }
+    }
     default:
       throw new Error(`Method not found: ${method}`)
   }
