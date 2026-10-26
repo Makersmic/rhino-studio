@@ -426,7 +426,7 @@ Profiles (Job setup › Settings, and Settings › Slice profiles):
 - [ ] **SP5** Settings › Slice profiles › History › Go back to this. The old settings are the newest revision, and what they replaced is in the history.
 - [ ] **SP6** Export all, delete a profile, then Import… the file. Everything is back, and a clashing name gets " (2)". Deleted profiles show under "Deleted in the last 30 days" with Bring back.
 - [ ] **SP7** Back up now, then restore only "Slice profiles and saved Prepare jobs". The profiles and jobs are as they were at the backup.
-- [ ] **SP8** On a browser that used Job setup before 0.9.0, the one-time offer appears. "Bring them to the Rhino" makes "Imported …" profiles, and the offer doesn't come back.
+- [ ] **SP8** On a browser that used Job setup before 0.9.0, a prompt "Unsaved settings in this browser" appears in Job setup. **Import** makes "Imported …" profiles and the prompt doesn't come back. **Not now** stops it for good on that browser. × asks again next visit.
 - **Stop if:** a profile or job change sends anything to Klipper (the console shows a line), or a save quietly overwrites a newer revision.
 
 UI batch:

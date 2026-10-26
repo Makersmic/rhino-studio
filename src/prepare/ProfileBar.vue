@@ -6,6 +6,7 @@
  */
 import { computed, ref } from 'vue'
 import RsButton from '@/components/RsButton.vue'
+import RsDialog from '@/components/RsDialog.vue'
 import { usePrepareStore } from '@/stores/prepare'
 import { useSliceProfilesStore } from '@/stores/sliceProfiles'
 import { builtinProfile, engineOf, profilesFor, statusText } from '@/slicer/sliceProfiles'
@@ -55,12 +56,16 @@ const saveNew = () => run(async () => {
 const keepMine = () => {
   if (job.value && prep.profile) job.value.profileRev = prep.profile.rev
 }
+// The one-time import asks in a prompt. Not now: never again on this browser. × or Esc: ask again next visit.
+const askedThisVisit = ref(false)
+const showImport = computed(() => store.online && !!store.importOffer && !askedThisVisit.value)
 const importing = ref(false)
 const imported = ref<number | null>(null)
 const runImport = () => run(async () => {
   importing.value = true
   try {
     imported.value = await store.runImport()
+    askedThisVisit.value = true
   } finally {
     importing.value = false
   }
@@ -70,14 +75,14 @@ const runImport = () => run(async () => {
 <template>
   <div v-if="job" class="pbar">
     <!-- the one-time offer: settings this browser saved before profiles existed -->
-    <div v-if="store.online && store.importOffer" class="offer" role="status">
-      <p><strong>This browser has saved settings from before profiles.</strong> Bring them to the Rhino, so they survive a cleared browser or another device? Each different set becomes a profile named “Imported …”.</p>
-      <div class="row">
-        <RsButton size="sm" variant="primary" :disabled="busy" @click="runImport">{{ importing ? 'Bringing them over…' : 'Bring them to the Rhino' }}</RsButton>
-        <RsButton size="sm" variant="quiet" :disabled="busy" @click="store.dismissImport()">Don’t ask again</RsButton>
-      </div>
-    </div>
-    <p v-if="imported != null" class="note" role="status">{{ imported }} profile{{ imported === 1 ? '' : 's' }} made on the Rhino from this browser’s settings.</p>
+    <RsDialog :open="showImport" title="Unsaved settings in this browser" :error="importing ? null : err" @close="askedThisVisit = true" @submit="runImport">
+      <p class="dlg">Import them to the Rhino for future setups.</p>
+      <template #actions>
+        <RsButton variant="quiet" :disabled="busy" @click="store.dismissImport()">Not now</RsButton>
+        <RsButton type="submit" variant="primary" :disabled="busy">{{ importing ? 'Importing…' : 'Import' }}</RsButton>
+      </template>
+    </RsDialog>
+    <p v-if="imported != null" class="note" role="status">Imported: {{ imported }} profile{{ imported === 1 ? '' : 's' }} on the Rhino, named “Imported …”.</p>
 
     <div class="row top">
       <label class="pick">
@@ -127,8 +132,7 @@ select, .name { height: 34px; padding: 0 10px; border-radius: var(--rs-radius-md
 .status.saved .dot { background: currentColor; }
 .status.changed, .status.stale { color: var(--rs-text-strong); font-weight: var(--rs-weight-medium); }
 .chk { display: inline-flex; align-items: center; gap: 6px; font-size: var(--rs-text-sm); }
-.offer { padding: var(--rs-space-3); border: 1px solid var(--rs-line-strong); border-radius: var(--rs-radius-md); }
-.offer p { margin: 0 0 var(--rs-space-2); font-size: var(--rs-text-sm); }
+.dlg { margin: 0; }
 .note { margin: 0; font-size: var(--rs-text-sm); }
 .err { margin: 0; font-size: var(--rs-text-sm); color: var(--rs-danger-strong); font-weight: var(--rs-weight-medium); }
 </style>
