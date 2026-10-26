@@ -27,6 +27,7 @@ import type { CheckedScript } from '@/control/commands'
  */
 
 import { watchedForAll } from '@/tools/adapters'
+import { fanWatch } from '@/hardware/fans'
 import type { Trust } from './trust'
 import { brand } from '@/brand/brand'
 
@@ -153,7 +154,7 @@ export const WATCHED_OBJECTS: Record<string, string[] | null> = {
   heater_bed: ['temperature', 'target'],
   // Tool state: whatever the tool-change adapters read (src/tools/adapters), added at subscribe time
   // Tool outputs, read only (names from the Rhino config; only those Klipper has are watched)
-  fan: ['speed'],
+  fan: ['speed', 'rpm'],
   'output_pin LASER_INITIALIZE': ['value'], // laser power rail
   'output_pin SERVO_LASER': ['value'], // laser power (LightSaber) / filament path servo (SwitchFly)
   'output_pin Spindle_power': ['value'], // spindle relay
@@ -704,7 +705,8 @@ export class MoonrakerClient {
     const list = (await this.call('printer.objects.list')) as { objects?: string[] }
     const present = new Set(list.objects ?? [])
     this.handlers.onObjects?.(list.objects ?? [])
-    const objects: Record<string, string[] | null> = { ...watchedForAll(list.objects ?? []) }
+    // every fan section: speed, and rpm when it has a speed signal (Tool Manager 1.9 fans)
+    const objects: Record<string, string[] | null> = { ...fanWatch(list.objects ?? []), ...watchedForAll(list.objects ?? []) }
     for (const [name, fields] of Object.entries(WATCHED_OBJECTS)) {
       if (present.has(name)) objects[name] = fields
     }

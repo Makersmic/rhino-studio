@@ -90,4 +90,12 @@ describe('tool changes on machines that change tools themselves', () => {
     const idle = notices({ ...base, autoTools: true, toolState: swapping })
     expect(idle.some((n) => n.id === 'tool')).toBe(true)
   })
+
+  it('a fan that is driven but not turning is a red notice that names it', () => {
+    const n = notices({ ...base, stalledFans: [{ name: 'drivers', label: 'Drivers fan', speed: 1 }] })
+    const f = n.find((x) => x.id === 'fan-drivers')
+    expect(f?.tone).toBe('alert')
+    expect(f?.title).toBe("Drivers fan isn't turning")
+    expect(f?.detail).toMatch(/100 %/)
+  })
 })

@@ -16,8 +16,8 @@ import RsButton from '@/components/RsButton.vue'
 import RsPanel from '@/components/RsPanel.vue'
 import RestartBanner from '@/toolmgr/RestartBanner.vue'
 import {
-  STEP_HELP, STEP_LABEL, STEP_POSE, WIRING_KEYS, WIZ_STEPS, asksSensorType, checkStep, newDraft, payload, pinLabel, pinText, pinsShown,
-  settingLabel, type BoardsState, type DevicePreview, type Draft, type HwCatalog, type HwDevice, type HwSetting, type PinChoice, type WizStep,
+  STEP_HELP, STEP_LABEL, STEP_POSE, WIRES_HELP, fanPinHelp, WIRING_KEYS, WIZ_STEPS, asksSensorType, checkStep, newDraft, payload, pinLabel, pinText, pinsShown,
+  settingLabel, settingShown, type BoardsState, type DevicePreview, type Draft, type HwCatalog, type HwDevice, type HwSetting, type PinChoice, type WizStep,
 } from '@/hardware/wizard'
 import { useToolMgrStore } from '@/stores/toolmgr'
 import '@/toolmgr/forms.css'
@@ -75,9 +75,21 @@ async function loadPins() {
   }
   choices.value = out
 }
-watch([step, () => d.value?.sensor_type, () => d.value?.settings.source], () => {
+watch([step, () => d.value?.sensor_type, () => d.value?.settings.source, () => d.value?.settings.wires], () => {
   if (step.value === 'Wiring') loadPins().catch((e) => (error.value = (e as Error).message))
 })
+/** A 4-wire fan's speed input must be a logic pin; its power pin a fan / heater header. */
+const fan4 = computed(() => String(d.value?.settings.wires) === '4')
+function choicesFor(slot: string, kind: string): PinChoice[] {
+  const all = choices.value[kind] ?? []
+  if (fan4.value && slot === 'pin') return all.filter((p) => !p.mosfet)
+  if (fan4.value && slot === 'power') return all.filter((p) => p.mosfet)
+  return all
+}
+const slotLabel = (slot: string) => (fan4.value && slot === 'pin' ? 'Speed input (blue wire)' : slot === 'tach' ? 'Speed signal (yellow wire)' : pinLabel(slot))
+const pinHelp = (slot: string, kind: string) => (asksWires.value ? fanPinHelp(slot, String(d.value?.settings.wires)) : null) ?? cat.value?.pin_kinds[kind]?.help
+/** A 4-wire fan's speed input is meant to be a logic pin: the "logic pin, not a load" note doesn't apply. */
+const pinWarnings = (slot: string, kind: string) => (chosen(slot, kind)?.warnings ?? []).filter((w) => !(fan4.value && slot === 'pin' && w.includes('3.3 V logic pin')))
 const chosen = (slot: string, kind: string) => (choices.value[kind] ?? []).find((p) => p.pin === d.value?.pins[slot]) ?? typedCheck.value[slot] ?? null
 async function checkTyped(slot: string, kind: string) {
   if (!d.value?.pins[slot]) return
@@ -91,7 +103,8 @@ async function checkTyped(slot: string, kind: string) {
 }
 const needsIsolation = computed(() => !!dev.value && !!d.value && pinsShown(dev.value, d.value).some(([slot, kind]) => kind === 'digital_in' && cat.value?.sensor_types[d.value!.sensor_type]?.refuse_direct && d.value!.pins[slot]))
 const sensorTypes = computed(() => Object.entries(cat.value?.sensor_types ?? {}).filter(([, s]) => s.pin_kind === 'digital_in'))
-const wiringSettings = computed(() => (dev.value?.settings ?? []).filter((s) => WIRING_KEYS.has(s.key)))
+const wiringSettings = computed(() => (dev.value?.settings ?? []).filter((s) => WIRING_KEYS.has(s.key) && s.key !== 'wires' && settingShown(s.key, d.value!)))
+const asksWires = computed(() => (dev.value?.settings ?? []).some((s) => s.key === 'wires'))
 const behaviourSettings = computed(() => (dev.value?.settings ?? []).filter((s) => !WIRING_KEYS.has(s.key)))
 
 // ---------------------------------------------------------------- for which tools
@@ -268,18 +281,28 @@ const fmt = (s: HwSetting) => (s.kind === 'num' && s.min != null ? `${s.min} to 
                 <span class="tm-hint">{{ cat.sensor_types[d.sensor_type]?.note || cat.sensor_types[d.sensor_type]?.warn || 'The wizard writes the pull-up and invert for you.' }}</span>
                 <span v-if="dev.purpose === 'interlock'" class="tm-hint">For an interlock, "triggered" means the door is open.</span>
               </div>
+              <fieldset v-if="asksWires" class="tm-set">
+                <legend>How many wires does the fan have?</legend>
+                <div class="cats wires">
+                  <label v-for="w in ['2', '3', '4']" :key="w" class="tm-radio" :class="{ on: d.settings.wires === w }">
+                    <input v-model="d.settings.wires" type="radio" :value="w" />
+                    <span><strong>{{ w }} wires</strong></span>
+                  </label>
+                </div>
+                <span class="tm-hint">{{ WIRES_HELP[String(d.settings.wires)] }}</span>
+              </fieldset>
               <div v-for="[slot, kind, required] in pinsShown(dev, d)" :key="slot" class="tm-fld">
-                <label :for="`hw-pin-${slot}`">{{ pinLabel(slot) }}{{ required ? '' : ' (optional)' }} <span class="kind">{{ cat.pin_kinds[kind]?.label }}</span></label>
+                <label :for="`hw-pin-${slot}`">{{ slotLabel(slot) }}{{ required ? '' : ' (optional)' }} <span class="kind">{{ fan4 && slot === 'pin' ? 'Logic pin (PWM)' : cat.pin_kinds[kind]?.label }}</span></label>
                 <div class="pinrow">
                   <select v-if="!typed[slot]" :id="`hw-pin-${slot}`" v-model="d.pins[slot]" class="tm-sel">
                     <option value="">{{ required ? 'Choose a pin…' : 'None' }}</option>
-                    <option v-for="p in choices[kind] ?? []" :key="p.pin" :value="p.pin" :disabled="Object.entries(d.pins).some(([k, v]) => k !== slot && v === p.pin)">{{ pinText(p) }}</option>
+                    <option v-for="p in choicesFor(slot, kind)" :key="p.pin" :value="p.pin" :disabled="Object.entries(d.pins).some(([k, v]) => k !== slot && v === p.pin)">{{ pinText(p) }}</option>
                   </select>
                   <input v-else :id="`hw-pin-${slot}`" v-model.trim="d.pins[slot]" class="tm-in mono" placeholder="board:PA1" @blur="checkTyped(slot, kind)" />
                   <button type="button" class="tm-link" @click="typed[slot] = !typed[slot]; d.pins[slot] = ''">{{ typed[slot] ? 'Pick from the list' : 'Type a pin' }}</button>
                 </div>
-                <span class="tm-hint">{{ cat.pin_kinds[kind]?.help }}</span>
-                <div v-for="(w, i) in chosen(slot, kind)?.warnings ?? []" :key="i" class="tm-warn">{{ w }}</div>
+                <span class="tm-hint">{{ pinHelp(slot, kind) }}</span>
+                <div v-for="(w, i) in pinWarnings(slot, kind)" :key="i" class="tm-warn">{{ w }}</div>
               </div>
               <label v-if="needsIsolation" class="tm-check">
                 <input v-model="d.isolated" type="checkbox" />

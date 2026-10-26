@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { WIZ_STEPS, STEP_POSE, asksSensorType, checkStep, newDraft, payload, pinText, pinsShown, type HwDevice } from './wizard'
+import { WIZ_STEPS, STEP_POSE, asksSensorType, checkStep, newDraft, payload, pinText, pinsShown, settingShown, type HwDevice } from './wizard'
 
 const BUILT = ['gcode', 'heater', 'manual', 'motors', 'temperature']
 const dev = (over: Partial<HwDevice>): HwDevice => ({
@@ -74,5 +74,28 @@ describe('Add hardware wizard', () => {
   it('describes a pin choice in one line', () => {
     expect(pinText({ pin: 'PD15', board: 'main', header: 'FAN5', use: 'fan', mosfet: true, adc: false, five_v: 'yes', warnings: [] })).toBe('PD15 · FAN5 (MOSFET)')
     expect(pinText({ pin: 'ebb:PA3', board: 'ebb', header: '', use: 'thermistor', mosfet: false, adc: true, five_v: 'yes', warnings: [] })).toBe('ebb:PA3 · thermistor (analog)')
+  })
+
+  it('fans: the tach and power pins follow the wire count, and a hidden pin is never sent', () => {
+    const f = dev({
+      id: 'controller_fan', live: false,
+      pins: [['pin', 'pwm_out', true], ['tach', 'tach', false], ['power', 'digital_out', false]],
+      pin_when: { tach: { wires: ['3', '4'] }, power: { wires: ['4'] } },
+      settings: [{ key: 'wires', kind: 'choice', default: '2', options: ['2', '3', '4'] }, { key: 'tach_ppr', kind: 'num', default: 2, min: 1, max: 12 }],
+    })
+    const d = newDraft(f, BUILT)
+    expect(pinsShown(f, d).map((p) => p[0])).toEqual(['pin'])
+    d.settings.wires = '3'
+    expect(pinsShown(f, d).map((p) => p[0])).toEqual(['pin', 'tach'])
+    d.settings.wires = '4'
+    expect(pinsShown(f, d).map((p) => p[0])).toEqual(['pin', 'tach', 'power'])
+    Object.assign(d, { name: 'drivers', pins: { pin: 'PB1', tach: 'PG12', power: 'PD15' } })
+    d.settings.wires = '2'
+    expect(payload(d, f).pins).toEqual({ pin: 'PB1' })
+    d.pins.tach = 'PB1'
+    expect(checkStep('Wiring', f, d, [], BUILT)).toBeNull() // a hidden pin can't clash
+    expect(settingShown('signal_inverted', d)).toBe(false)
+    d.settings.wires = '4'
+    expect(settingShown('signal_inverted', d)).toBe(true)
   })
 })

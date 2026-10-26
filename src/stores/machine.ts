@@ -9,6 +9,7 @@
  * - Commands reach the machine only as CheckedScripts from the control store
  *   (src/stores/control.ts), never as raw strings.
  */
+import { fanReadings } from '@/hardware/fans'
 import { defineStore } from 'pinia'
 import { computed, ref, shallowRef, triggerRef } from 'vue'
 import { MoonrakerClient, type ConnectionState, type KlippyState, type Status } from '@/moonraker/client'
@@ -230,6 +231,9 @@ export const useMachineStore = defineStore('machine', () => {
     }
   })
 
+  /** Fans with a speed signal (3- and 4-wire fans added in Tool Manager 1.9): speed and rpm. */
+  const fans = computed(() => fanReadings(status.value))
+
   /** What kind of tool is mounted, and which readouts apply to it (src/toolheads/readouts.ts). */
   const toolKind = computed<ToolKind>(() => kindOf(toolState.value.kind === 'mounted' ? toolState.value.type : null, toolState.value.kind === 'mounted'))
   const plan = computed<ReadoutPlan>(() =>
@@ -332,6 +336,7 @@ export const useMachineStore = defineStore('machine', () => {
   const setReconnectDelays = (d: number[]) => client?.setReconnectDelays(d)
 
   return {
+    fans,
     untrusted,
     connection,
     connectionDetail,

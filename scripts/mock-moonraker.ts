@@ -31,6 +31,9 @@
  * starts with none, to see the empty states. Adding, editing and deleting
  * cameras works and is kept until the mock stops.
  *
+ * Fans: MOCK_FANS=1 adds a driver fan and an exhaust fan with speed signals (rpm); MOCK_FANS=stall makes the
+ * driver fan read 0 rpm while driven, for the Dashboard's "isn't turning" notice.
+ *
  * Bed mesh: three saved meshes (bed-60 in use, bed-100, default) and an adaptive one.
  * RHINO_MESH_CALIBRATE, BED_MESH_PROFILE LOAD/REMOVE, BED_MESH_CLEAR, RHINO_MESH_REMOVE and
  * SAVE_CONFIG work. MOCK_MESH=none: no [bed_mesh] section; MOCK_MESH=empty: no meshes yet;
@@ -97,6 +100,14 @@ const status: Record<string, Record<string, unknown>> = {
   },
   // Tool outputs, as in the Rhino config
   fan: { speed: 0 },
+  // MOCK_FANS=1: fans with a speed signal (Tool Manager 1.9); MOCK_FANS=stall: the driver fan has seized
+  ...(process.env.MOCK_FANS
+    ? {
+        'controller_fan drivers': { speed: 1, rpm: process.env.MOCK_FANS === 'stall' ? 0 : 4870 },
+        'fan_generic exhaust': { speed: 0.6, rpm: 2310 },
+        'heater_fan hotend_cool': { speed: 0, rpm: null },
+      }
+    : {}),
   'output_pin LASER_INITIALIZE': { value: 0 },
   'output_pin SERVO_LASER': { value: 0 },
   'output_pin Spindle_power': { value: 0 },

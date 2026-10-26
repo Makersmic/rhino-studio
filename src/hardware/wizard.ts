@@ -34,6 +34,8 @@ export interface HwDevice {
   live: boolean
   hardware_only: boolean
   help: string
+  /** a pin asked for only when a setting has one of these values, e.g. a fan's tach only on 3 and 4 wires */
+  pin_when?: Record<string, Record<string, string[]>>
 }
 
 export interface SensorType {
@@ -130,11 +132,18 @@ export const STEP_POSE: Record<WizStep, string> = {
 
 /** Settings that describe the wiring; the rest describe behaviour and go under Follows. */
 export const WIRING_KEYS = new Set([
+  'wires', 'tach_ppr', 'signal_inverted',
   'thermistor', 'pullup_resistor', 'active_low', 'dir_active_low', 'enable_active_low', 'cycle_time', 'cycle',
   'chain_count', 'color_order', 'microsteps', 'rotation_distance', 'source', 'extruder',
 ])
 
 const SETTING_LABEL: Record<string, string> = {
+  wires: 'Wires on the fan',
+  tach_ppr: 'Speed signal pulses per turn',
+  signal_inverted: 'The speed input is inverted (a transistor in between)',
+  heater: 'Heater it follows',
+  heater_temp: 'Turns on above (°C)',
+  off_below: 'Off below (0-1)',
   fan_speed: 'Fan speed (0-1)',
   idle_timeout: 'Keeps running after the motors stop (s)',
   kick_start: 'Kick-start time (s)',
@@ -176,6 +185,7 @@ const PIN_LABEL: Record<string, string> = {
   direction: 'Direction (optional)',
   enable: 'Enable',
   tach: 'Speed signal (optional)',
+  power: 'Power',
   red: 'Red channel',
   green: 'Green channel',
   blue: 'Blue channel',
@@ -212,7 +222,31 @@ export function asksSensorType(dev: HwDevice): boolean {
 /** The pins this draft shows: for a temperature readout, the sensor pin only when it reads a thermistor. */
 export function pinsShown(dev: HwDevice, d: Draft): [string, PinKind, boolean][] {
   if (dev.id === 'temp_sensor') return d.settings.source === 'thermistor' ? dev.pins.map((p) => [p[0], p[1], true]) : []
-  return dev.pins
+  return dev.pins.filter(([name]) => whenMet(dev.pin_when?.[name], d))
+}
+
+const whenMet = (when: Record<string, string[]> | undefined, d: Draft) => !when || Object.entries(when).every(([k, v]) => v.includes(String(d.settings[k])))
+
+/** Settings that only mean something for some wiring: a 4-wire fan's inverted input, pulses per turn with a tach. */
+export function settingShown(key: string, d: Draft): boolean {
+  if (key === 'signal_inverted') return String(d.settings.wires) === '4'
+  if (key === 'tach_ppr') return ['3', '4'].includes(String(d.settings.wires)) && !!d.pins.tach
+  return true
+}
+
+/** Help under each fan pin, in place of the pin kind's general help. */
+export function fanPinHelp(slot: string, wires: string): string | null {
+  if (slot === 'pin') return wires === '4' ? 'The blue wire. 3.3 V logic drives it fine for most fans.' : "The fan's power: a fan or heater header switches it."
+  if (slot === 'tach') return 'The yellow wire. The wizard adds the pull-up it needs.'
+  if (slot === 'power') return "A fan header that switches the fan's power, so it stops at 0 %. Leave empty for an always-on port."
+  return null
+}
+
+/** One line under the wire count: what each fan wiring means. */
+export const WIRES_HELP: Record<string, string> = {
+  '2': 'Power only. Its speed is set by switching the power on a fan header.',
+  '3': 'Power plus a speed signal back (yellow). The reading is only right at full speed on a switched header.',
+  '4': 'Power, a speed signal back, and a speed input (blue) on a logic pin. Power comes from an always-on port, or a fan header as its power pin.',
 }
 
 export function newDraft(dev: HwDevice, followsBuilt: string[]): Draft {
@@ -247,7 +281,8 @@ export function checkStep(step: WizStep, dev: HwDevice | null, d: Draft | null, 
   if (step === 'Wiring') {
     for (const [name, , required] of pinsShown(dev, d)) if (required && !d.pins[name]) return `Choose a pin for ${pinLabel(name).toLowerCase()}.`
     if (dev.id === 'led' && !['red', 'green', 'blue', 'white'].some((c) => d.pins[c])) return 'Choose at least one colour pin.'
-    const used = Object.values(d.pins).filter(Boolean)
+    const shownPins = new Set(pinsShown(dev, d).map((p) => p[0]))
+    const used = Object.entries(d.pins).filter(([k, v]) => v && shownPins.has(k)).map(([, v]) => v)
     if (new Set(used).size !== used.length) return 'Each pin can only be used once.'
     for (const s of dev.settings ?? []) {
       if (!WIRING_KEYS.has(s.key)) continue
@@ -278,7 +313,8 @@ export function checkSetting(s: HwSetting, v: unknown): string | null {
 /** The body for POST /api/hardware/devices (and its preview). */
 export function payload(d: Draft, dev: HwDevice): Record<string, unknown> {
   const kinds = Object.fromEntries((dev.settings ?? []).map((s) => [s.key, s.kind]))
-  const pins = Object.fromEntries(Object.entries(d.pins).filter(([, v]) => v))
+  const shown = new Set(pinsShown(dev, d).map((p) => p[0]))
+  const pins = Object.fromEntries(Object.entries(d.pins).filter(([k, v]) => v && shown.has(k)))
   const body: Record<string, unknown> = {
     device: d.device,
     name: d.name,

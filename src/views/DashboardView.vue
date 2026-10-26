@@ -20,7 +20,8 @@
  * Text sits straight on live video, so it uses the overlay tokens: white
  * with a soft shadow, red only for what needs attention.
  */
-import { computed, onBeforeUnmount, ref } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { fanStalls, rpmText, type FanReading } from '@/hardware/fans'
 import Icon from '@/icons/Icon.vue'
 import WebcamView from '@/webcams/WebcamView.vue'
 import DashReports from '@/dashboard/DashReports.vue'
@@ -121,6 +122,11 @@ const rail = computed<RailItem[]>(() => {
     to: '/control',
     mono: true,
   })
+  // fans with a speed signal: rpm, red when driven but not turning
+  for (const f of machine.fans) {
+    const stalled = stalledFans.value.some((x) => x.id === f.id)
+    items.push({ id: f.id, label: f.label, value: `${rpmText(f.rpm)} rpm`, sub: stalled ? 'Not turning' : `${Math.round(f.speed * 100)} %`, alert: stalled, to: '/toolheads/wiring/hardware' })
+  }
   const c = care.counts
   items.push({
     id: 'care',
@@ -132,6 +138,15 @@ const rail = computed<RailItem[]>(() => {
   return items
 })
 const elapsed = computed(() => formatDuration(job.value.duration))
+
+// A fan driven but not turning for 10 s (fans.ts); checked as readings arrive and on the 5 s clock
+const fanSince = ref<Record<string, number>>({})
+const stalledFans = ref<FanReading[]>([])
+watch([() => machine.fans, now], () => {
+  const r = fanStalls(machine.fans, fanSince.value, Date.now())
+  fanSince.value = r.since
+  stalledFans.value = r.stalled
+}, { immediate: true })
 
 const list = computed(() =>
   notices({
@@ -147,6 +162,7 @@ const list = computed(() =>
     hotend: machine.hotend,
     bed: machine.bed,
     care: care.mountedCare ? { overdue: care.mountedCare.overdue, dueSoon: care.mountedCare.dueSoon, text: careText(care.mountedCare) } : null,
+    stalledFans: stalledFans.value,
   })
     // The hero already says the job is running and how far along; keep the job notice only when it needs you
     .filter((n) => !(n.id === 'job' && n.tone === 'info' && jobActive.value))

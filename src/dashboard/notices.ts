@@ -34,6 +34,8 @@ export interface NoticeInput {
   hotend: { temp: number | null; target: number | null }
   bed: { temp: number | null; target: number | null }
   care: { overdue: number; dueSoon: number; text: string } | null
+  /** fans Klipper drives whose speed signal reads nothing (src/hardware/fans.ts) */
+  stalledFans?: { name: string; label: string; speed: number }[]
 }
 
 /** What a job is called for each kind of tool. */
@@ -173,6 +175,11 @@ export function notices(i: NoticeInput): Notice[] {
     // The hotend heater output is still wired to the tool connector
     add({ id: 'hotend', tone: 'alert', title: `Hotend heater on with ${tool.name} mounted`, detail: 'Switch it off on Control.', to: '/control' })
   heater('bed', 'bed', i.bed, 45)
+
+  // --- fans -------------------------------------------------------------------
+  for (const f of i.stalledFans ?? []) {
+    add({ id: `fan-${f.name}`, tone: 'alert', title: `${f.label} isn't turning`, detail: `It's set to ${Math.round(f.speed * 100)} % but its speed signal reads nothing. Check it before the next job.`, to: '/toolheads/wiring/hardware' })
+  }
 
   // --- care -------------------------------------------------------------------
   if (i.care && tool) {
