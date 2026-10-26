@@ -32,7 +32,7 @@ def part(d, fill, line=True, closed_fill=True, w=1.5, tf=''):
 
 
 def arm(sx, sy, px, py, bend=0.0, paw=11, far=False):
-    sx = sx - 16 if sx < 120 else sx + 14   # broad chest: shoulders sit wider
+    sx = sx - 24 if sx < 120 else sx + 22   # broad chest: shoulders sit wider
     sleeve, hand = (JACKET_FAR, FAR) if far else (JACKET, LIMB)
     return [part(tube(sx, sy, px, py, 12, bend), sleeve), part(circ(px, py, paw + 2.5), CUFF, w=1.2), part(circ(px, py, paw), hand)]
 
@@ -50,15 +50,15 @@ def view_front():
     v = {}
     v['ears'] = [part('M66 74 C46 58 56 44 74 58 Z', EAR), part('M174 74 C194 58 184 44 166 58 Z', EAR)]
     v['back'] = []
-    v['body'] = [part('M74 204 C66 190 66 176 72 166 C50 160 40 140 50 126 C64 110 92 108 120 108 C148 108 176 110 190 126 C200 140 190 160 168 166 C174 176 174 190 166 204 C150 216 90 216 74 204 Z', JACKET)]
+    v['body'] = [part('M88 204 C82 192 82 178 86 168 C58 160 30 142 40 126 C56 108 90 106 120 106 C150 106 184 108 200 126 C210 142 182 160 154 168 C158 178 158 192 152 204 C140 214 100 214 88 204 Z', JACKET)]
     v['belt'] = []
     v['folds'] = [stroke('M120 136 L120 206', 1.4), part('M116 140 h8 v12 h-8 Z', '#c9cdd3', w=1),       # zip + pull
                   part('M130 148 h22 v20 h-22 Z', JACKET, w=1.2), stroke('M130 154 h22', 1),               # chest pocket
-                  stroke('M70 196 q50 12 100 0', 1.2), stroke('M60 132 q10 -8 26 -10 M180 132 q-10 -8 -26 -10', 1)]
+                  stroke('M86 198 q34 10 68 0', 1.2), stroke('M50 130 q10 -8 28 -12 M190 130 q-10 -8 -28 -12', 1)]
     v['collar'] = [part('M88 128 L116 138 L104 152 Z', COLLAR, w=1.3), part('M152 128 L124 138 L136 152 Z', COLLAR, w=1.3)]
     v['shade'] = 'M150 112 C204 124 206 196 172 214 L232 216 L232 100 Z'
-    v['legs'] = [part(ell(96, 208, 24, 17), LIMB), part(ell(144, 208, 24, 17), LIMB),
-                 stroke('M82 215 q4 5 8 0 M94 217 q4 5 8 0 M130 217 q4 5 8 0 M142 215 q4 5 8 0', 1.2)]
+    v['legs'] = [part(ell(104, 209, 19, 14), LIMB), part(ell(136, 209, 19, 14), LIMB),
+                 stroke('M93 215 q4 5 8 0 M103 217 q4 5 8 0 M129 217 q4 5 8 0 M139 215 q4 5 8 0', 1.2)]
     v['head'] = [part('M64 86 C60 52 90 40 120 40 C150 40 180 52 176 86 C174 110 150 130 120 130 C90 130 66 110 64 86 Z', HEAD),
                  part(ell(120, 106, 40, 24), SNOUT)]
     v['face'] = [blob(ell(108, 106, 4, 3), LINE), blob(ell(132, 106, 4, 3), LINE),
@@ -71,7 +71,7 @@ def view_front():
     v['horn'] = [part('M104 104 C102 84 110 64 128 50 C124 70 132 88 136 104 Z', HORN_C), stroke('M114 86 q4 -3 8 0', 1.1)]
     v['hat'] = [part('M72 52 C72 14 168 14 168 52 Z', HAT), stroke('M120 20 L120 48', 1.2),
                 part('M54 54 C54 46 186 46 186 54 C186 60 54 60 54 54 Z', BRIM)]
-    v['ground'] = ell(120, 224, 74, 7)
+    v['ground'] = ell(120, 224, 54, 6)
     return v
 
 
@@ -79,15 +79,15 @@ def view_q():
     """Three-quarter view, facing right: near side on the left, far side foreshortened."""
     v = {}
     v['ears'] = [part('M74 76 C52 60 62 44 84 58 Z', EAR), part('M168 64 C180 48 172 40 160 52 Z', FAR)]
-    v['back'] = [part(ell(144, 205, 22, 16), FAR)]                       # far leg, behind the body
-    v['body'] = [part('M78 204 C70 190 70 176 76 166 C54 160 44 140 54 126 C68 110 96 108 124 108 C150 108 176 110 188 126 C196 140 186 160 166 166 C172 176 172 190 164 204 C148 216 94 216 78 204 Z', JACKET)]
+    v['back'] = [part(ell(140, 206, 18, 13), FAR)]                       # far leg, behind the body
+    v['body'] = [part('M92 204 C86 192 86 178 90 168 C62 160 34 142 44 126 C60 108 94 106 124 106 C152 106 184 108 196 126 C204 142 182 160 158 168 C162 178 162 192 156 204 C144 214 104 214 92 204 Z', JACKET)]
     v['belt'] = []
     v['folds'] = [stroke('M132 136 C134 160 134 184 130 206', 1.4), part('M128 140 h8 v12 h-8 Z', '#c9cdd3', w=1),
                   part('M92 148 h22 v20 h-22 Z', JACKET, w=1.2), stroke('M92 154 h22', 1),
-                  stroke('M76 196 q48 12 92 0', 1.2), stroke('M64 132 q10 -8 26 -10', 1)]
+                  stroke('M92 198 q32 10 62 0', 1.2), stroke('M54 130 q10 -8 28 -12', 1)]
     v['collar'] = [part('M100 128 L128 138 L116 152 Z', COLLAR, w=1.3), part('M160 126 L136 138 L146 150 Z', COLLAR, w=1.3)]
     v['shade'] = 'M146 114 C196 124 198 196 168 214 L232 216 L232 100 Z'
-    v['legs'] = [part(ell(100, 209, 26, 17), LIMB), stroke('M84 216 q4 5 8 0 M96 218 q4 5 8 0 M108 217 q4 5 8 0', 1.2)]
+    v['legs'] = [part(ell(108, 210, 21, 14), LIMB), stroke('M95 216 q4 5 8 0 M105 218 q4 5 8 0 M115 217 q4 5 8 0', 1.2)]
     v['head'] = [part('M68 88 C64 52 96 40 126 40 C156 40 178 54 176 88 C174 112 154 130 126 130 C96 130 70 110 68 88 Z', HEAD),
                  part(ell(150, 106, 38, 23), SNOUT)]                       # snout pushes past the head outline
     v['face'] = [blob(ell(152, 110, 4, 3.2), LINE), blob(ell(176, 108, 3, 2.6), LINE),
@@ -100,7 +100,7 @@ def view_q():
     v['horn'] = [part('M150 102 C150 84 164 66 190 56 C182 74 184 90 182 100 Z', HORN_C), stroke('M162 86 q5 -3 9 0', 1.1)]
     v['hat'] = [part('M78 52 C80 14 170 12 172 50 Z', HAT), stroke('M128 18 C132 30 132 40 130 48', 1.2),
                 part('M58 56 C58 46 190 42 190 50 C190 58 58 62 58 56 Z', BRIM)]
-    v['ground'] = ell(124, 224, 72, 7)
+    v['ground'] = ell(124, 224, 52, 6)
     return v
 
 
