@@ -633,8 +633,9 @@ export class PortalClient {
 
   // ---- install a release zip (config 1.5.3+) ----------------------------------
 
-  async updateState(): Promise<UpdateState> {
-    return this.getJson<UpdateState & { ok: boolean }>('/api/update')
+  /** fresh: Check now, so the Portal asks GitHub again instead of its hourly answer (Tool Manager 1.9.4+; older ignore it) */
+  async updateState(fresh = false): Promise<UpdateState> {
+    return this.getJson<UpdateState & { ok: boolean }>(fresh ? '/api/update?refresh=1' : '/api/update')
   }
   /** Upload a rhino-config-<version>.zip; the Portal checks and keeps it. Nothing is installed yet. */
   uploadUpdate(zip: File): Promise<{ ok: boolean; zip: string; version: string; installed: string }> {

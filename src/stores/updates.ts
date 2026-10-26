@@ -109,7 +109,7 @@ export const useUpdatesStore = defineStore('updates', () => {
     void loadLatest()
   }
 
-  async function loadTm() {
+  async function loadTm(fresh = false) {
     const c = useMaintenanceStore().portal()
     if (!c) return
     try {
@@ -119,7 +119,7 @@ export const useUpdatesStore = defineStore('updates', () => {
     }
     tmVersion.value = c.version
     try {
-      tmUpdate.value = await c.updateState()
+      tmUpdate.value = await c.updateState(fresh)
       if (tmUpdate.value.installed) tmVersion.value = tmUpdate.value.installed
     } catch {
       tmUpdate.value = null // before 1.5.3: no /api/update
@@ -128,8 +128,8 @@ export const useUpdatesStore = defineStore('updates', () => {
   /** GET /api/update: installed, the updater, GitHub's newest release */
   const tmUpdate = shallowRef<UpdateState | null>(null)
 
-  async function loadLatest() {
-    const tmRead = loadTm()
+  async function loadLatest(fresh = false) {
+    const tmRead = loadTm(fresh)
     void loadEngine()
     const get = async (url: string) => {
       try {
@@ -161,7 +161,7 @@ export const useUpdatesStore = defineStore('updates', () => {
     } finally {
       loading.value = false
     }
-    void loadLatest()
+    void loadLatest(true) // Check now: every row, the Tool Manager's GitHub release too
   }
 
   const extras = computed<ExtraRow[]>(() => {
