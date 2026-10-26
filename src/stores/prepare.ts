@@ -32,6 +32,11 @@ import { GCODE_TYPES, readJobFile, withToolhead, type JobFileInfo } from '@/slic
 import { buildIni, loadSchema, valueOf, type RhinoCtx, type Schema } from '@/slicer/prusa/config'
 import { runPrusa, type SlicerState } from '@/slicer/prusa/portal'
 import { useMaintenanceStore } from './maintenance'
+import { useSliceProfilesStore } from './sliceProfiles'
+import {
+  applyProfile, builtinId, defaultsFor, diffSettings, engineOf, isBuiltin, jobSettings, profileStatus, setJobSettings,
+  type AnySettings, type SavedJob,
+} from '@/slicer/sliceProfiles'
 
 /** Flat drawings (SVG, DXF) are outlines: only cut processes can use them. */
 export function suits(process: Process, flat: boolean): boolean {
@@ -64,18 +69,9 @@ export interface PrepResult {
   kiriFilament: number | null
 }
 
-const SAVE_KEY = 'rs.prepare.jobs'
+// Phase 1: saved settings live on the Rhino (stores/sliceProfiles.ts), not in this browser.
+// The store below keeps only this session's memory of each tool's last settings.
 const STUDIO_VERSION = typeof __APP_VERSION__ === 'string' ? __APP_VERSION__ : 'dev'
-
-function loadSaved(): Record<string, PrepareJob> {
-  try {
-    const v = JSON.parse(localStorage.getItem(SAVE_KEY) ?? '{}') as Record<string, PrepareJob>
-    return v && typeof v === 'object' ? v : {}
-  } catch {
-    return {}
-  }
-}
-
 /** Plain copy of a job (reactive proxies can't go through structuredClone) */
 const clone = <T>(v: T): T => JSON.parse(JSON.stringify(v)) as T
 
@@ -140,10 +136,34 @@ export const usePrepareStore = defineStore('prepare', () => {
   const step = computed<'file' | 'process' | 'setup'>(() => (!raw.value && !uploaded.value ? 'file' : confirmed.value ? 'setup' : 'process'))
 
   // ---- the job
-  const saved = loadSaved()
+  const profilesStore = useSliceProfilesStore()
+  /** this session only: each tool's settings as last left (the Rhino keeps the durable copy) */
+  const saved: Record<string, PrepareJob> = {}
   const job = ref<PrepareJob | null>(null)
   const materialsOf = (tool: string) => materialsFor(tool, toolheadsTable.value).list
   const materials = computed<{ list: Material[]; live: boolean }>(() => (job.value ? materialsFor(job.value.toolhead, toolheadsTable.value) : { list: [], live: false }))
+
+  /** The settings a job's profile gives, before its own changes: defaults filled in under the profile's */
+  function baseSettings(j: PrepareJob): AnySettings {
+    const engine = engineOf(j)
+    const d = defaultsFor(j.process, engine)
+    const p = isBuiltin(j.profileId) ? null : profilesStore.byId(j.profileId)
+    if (!p?.settings) return d
+    return engine === 'prusa' ? { ...p.settings } : applyProfile(d, p.settings, {})
+  }
+
+  /** A job saved on the Rhino (for this file, else this tool's last one) onto j */
+  function fromRhino(j: PrepareJob, keys: string[]): boolean {
+    const s = keys.map((k) => profilesStore.jobs[k]).find((x) => x && x.process === j.process)
+    if (!s) return false
+    if (j.process === 'fdm') j.engine = s.engine
+    if (s.material && materialsOf(j.toolhead).some((m) => m.key === s.material)) j.material = s.material
+    const known = s.profileId && (isBuiltin(s.profileId) || profilesStore.byId(s.profileId))
+    j.profileId = known ? s.profileId : builtinId(j.process, engineOf(j))
+    j.profileRev = known ? s.profileRev : null
+    setJobSettings(j, { ...baseSettings(j), ...s.overrides })
+    return true
+  }
 
   function pickTool(name: string) {
     const t = tools.value.find((x) => x.name === name)
@@ -154,7 +174,12 @@ export const usePrepareStore = defineStore('prepare', () => {
     if (prev && prev.schema === 1 && prev.process === t.process) {
       j = normalizeJob(clone(prev))
       if (!mats.some((m) => m.key === j.material) && mats[0]) applyMaterial(j, mats[0])
-    } else j = newJob(t.name, t.process, mats)
+    } else {
+      j = newJob(t.name, t.process, mats)
+      j.profileId = builtinId(t.process, engineOf(j))
+      j.profileRev = null
+      fromRhino(j, [...(fileName.value ? [fileName.value] : []), `tool/${t.name}`])
+    }
     if (job.value) j.placement = { ...job.value.placement }
     if (t.process === 'laser' || t.process === 'dragknife') {
       j.laser.cutHeight = j.knife.cutHeight = flat.value ? 1 : j.laser.cutHeight
@@ -178,17 +203,97 @@ export const usePrepareStore = defineStore('prepare', () => {
     { immediate: true },
   )
 
-  // Remember settings per tool on this device
+  // The Rhino's profiles arrive after the first tool is picked: set it up again from them, unless already edited
+  void profilesStore.load()
+  watch(
+    () => profilesStore.online,
+    (on) => {
+      const j = job.value
+      if (on && j && !saved[j.toolhead] && isBuiltin(j.profileId) && !Object.keys(overrides.value).length) {
+        fromRhino(j, [...(fileName.value ? [fileName.value] : []), `tool/${j.toolhead}`])
+      }
+    },
+  )
+
+  // Switching engine (PrusaSlicer / Kiri) switches profiles too: a profile is one engine's settings
+  watch(
+    () => [job.value?.toolhead, job.value?.engine] as const,
+    ([tool, eng], [oldTool, oldEng]) => {
+      const j = job.value
+      if (j && tool === oldTool && eng !== oldEng) {
+        j.profileId = builtinId(j.process, engineOf(j))
+        j.profileRev = null
+      }
+    },
+  )
+
+  // ---- profiles: which one, what changed, save
+  const overrides = computed<AnySettings>(() => (job.value ? diffSettings(baseSettings(job.value), jobSettings(job.value)) : {}))
+  const profile = computed(() => (job.value && !isBuiltin(job.value.profileId) ? profilesStore.byId(job.value.profileId) : null))
+  const profileState = computed(() =>
+    job.value
+      ? profileStatus({
+          online: profilesStore.online,
+          builtin: !profile.value,
+          overrides: Object.keys(overrides.value).length,
+          jobRev: job.value.profileRev ?? null,
+          profileRev: profile.value?.rev ?? null,
+        })
+      : null,
+  )
+
+  /** Use a profile: its settings replace the current ones (Reset does the same for the one in use) */
+  function useProfile(id: string) {
+    const j = job.value
+    if (!j) return
+    j.profileId = id
+    j.profileRev = isBuiltin(id) ? null : profilesStore.byId(id)?.rev ?? null
+    setJobSettings(j, baseSettings(j))
+  }
+  const resetToProfile = () => job.value && useProfile(job.value.profileId ?? builtinId(job.value.process, engineOf(job.value)))
+  /** Take a newer revision of the profile, keeping this job's own changes on top */
+  function takeNewRevision() {
+    const j = job.value
+    if (!j || !profile.value) return
+    const ov = overrides.value
+    j.profileRev = profile.value.rev
+    setJobSettings(j, { ...baseSettings(j), ...ov })
+  }
+  async function saveToProfile() {
+    const j = job.value
+    const p = profile.value
+    if (!j || !p) return
+    const next = await profilesStore.save(p.id, { name: p.name, engine: p.engine, process: p.process, toolhead: p.toolhead, material: p.material, notes: p.notes, settings: jobSettings(j) }, j.profileRev ?? p.rev)
+    j.profileRev = next.rev
+  }
+  async function saveAsNew(name: string, forThisTool: boolean) {
+    const j = job.value
+    if (!j) return
+    const p = await profilesStore.create({
+      name, engine: engineOf(j), process: j.process, toolhead: forThisTool ? j.toolhead : null, material: j.material || null, notes: '', settings: jobSettings(j),
+    })
+    j.profileId = p.id
+    j.profileRev = p.rev
+  }
+
+  // Remember settings: this session per tool, and on the Rhino per tool and per file
   watch(
     job,
     (j) => {
       if (!j) return
       saved[j.toolhead] = clone(j)
-      try {
-        localStorage.setItem(SAVE_KEY, JSON.stringify(saved))
-      } catch {
-        /* storage blocked: settings just aren't remembered */
+      const s: SavedJob = {
+        profileId: j.profileId ?? builtinId(j.process, engineOf(j)),
+        profileRev: j.profileRev ?? null,
+        process: j.process,
+        engine: engineOf(j),
+        toolhead: j.toolhead,
+        material: j.material || null,
+        overrides: overrides.value,
+        placement: { ...j.placement },
       }
+      profilesStore.saveJobSoon(`tool/${j.toolhead}`, s)
+      if (raw.value && fileName.value) profilesStore.saveJobSoon(fileName.value, s)
     },
     { deep: true },
   )
@@ -472,6 +577,14 @@ export const usePrepareStore = defineStore('prepare', () => {
   const fileKind = computed(() => (uploaded.value ? 'Ready-made job file (G-code)' : raw.value ? (flat.value ? '2D drawing' : '3D model') : null))
 
   return {
+    overrides,
+    profile,
+    profileState,
+    useProfile,
+    resetToProfile,
+    takeNewRevision,
+    saveToProfile,
+    saveAsNew,
     uploaded,
     step,
     confirmed,

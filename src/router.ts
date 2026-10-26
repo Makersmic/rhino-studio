@@ -64,6 +64,7 @@ export const router = createRouter({
         { path: 'trust', component: () => import('./views/settings/TrustView.vue'), meta: { title: 'Trusted addresses', lead: 'Which screens Moonraker lets in (trusted_clients), the same list Mainsail uses.' } },
         { path: 'tools', component: () => import('./views/settings/ToolChangingView.vue'), meta: { title: 'Tool changing', lead: 'How this machine changes tools, and how Studio reads which one is mounted.' } },
         { path: 'cameras', component: () => import('./views/settings/CamerasView.vue'), meta: { title: 'Cameras', lead: 'The camera list in Moonraker, shared with every screen.' } },
+        { path: 'profiles', component: () => import('./views/settings/ProfilesView.vue'), meta: { title: 'Slice profiles', lead: 'Your slicing settings, saved on the Rhino so a cleared browser or a new host keeps them.' } },
         { path: 'software', component: () => import('./views/settings/SoftwareView.vue'), meta: { title: 'Software and updates', lead: 'What Studio runs on, and what it is built with.' } },
         { path: 'host', component: () => import('./views/settings/HostView.vue'), meta: { title: 'Host', heading: 'Host, restarts and backups', lead: 'Restart Klipper and services, reboot or shut down the host, back up and restore. Never during a job.' } },
         { path: 'logs', component: () => import('./views/settings/LogsView.vue'), meta: { title: 'Logs', lead: 'Klipper and Moonraker logs, and the last error in them.' } },

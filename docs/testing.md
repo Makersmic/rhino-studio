@@ -415,3 +415,25 @@ The checks are Tool Manager's **B1-B6** (Settings › Host › Backups). Also, i
 - [ ] **BK1** With an older Tool Manager the panel says backups need 1.7, and nothing else on Host changes.
 - [ ] **BK2** During a job, Back up now and Restore… are off and say "Not during a job".
 - [ ] **BK3** Half-screen (~760 px) and phone: each backup's details sit under its name; Download and Restore… stay usable.
+
+## 0.9.0: Slice profiles (needs Tool Manager 1.8.0 on the Rhino), plus the Oct 25 UI batch
+
+Profiles (Job setup › Settings, and Settings › Slice profiles):
+- [ ] **SP1** In Job setup, change a setting and press **Save as new**. The status says "Saved on the Rhino", and the profile appears in Settings › Slice profiles.
+- [ ] **SP2** On a second device (the phone), open Job setup for the same toolhead. The same profile and settings come up.
+- [ ] **SP3** Clear this browser's site data, reload, and load the same file. The profile and your changed settings come back from the Rhino.
+- [ ] **SP4** Open the same profile on two devices, Save to profile on one, then on the other. The second save is refused with "changed on another device". After a reload it saves.
+- [ ] **SP5** Settings › Slice profiles › History › Go back to this. The old settings are the newest revision, and what they replaced is in the history.
+- [ ] **SP6** Export all, delete a profile, then Import… the file. Everything is back, and a clashing name gets " (2)". Deleted profiles show under "Deleted in the last 30 days" with Bring back.
+- [ ] **SP7** Back up now, then restore only "Slice profiles and saved Prepare jobs". The profiles and jobs are as they were at the backup.
+- [ ] **SP8** On a browser that used Job setup before 0.9.0, the one-time offer appears. "Bring them to the Rhino" makes "Imported …" profiles, and the offer doesn't come back.
+- **Stop if:** a profile or job change sends anything to Klipper (the console shows a line), or a save quietly overwrites a newer revision.
+
+UI batch:
+- [ ] **UI1** Motion, Speed and Flow each have the red padlock in the header. Unlocked, the panel turns red. Motion shows the seconds left.
+- [ ] **UI2** Flow and pressure advance only change while the padlock is open. Feed filament doesn't need it.
+- [ ] **UI3** Folding Speed or Flow locks tuning. The fold is remembered after a reload.
+- [ ] **UI4** Console: input on top, newest line first.
+- [ ] **UI5** Camera card is level with Motion on a wide screen, and 16:9 on the phone.
+- [ ] **UI6** Settings › Host › Name on the network renames the Rhino (Keep/Undo as before). Network no longer has the field.
+- [ ] **UI7** Settings › Software › Update on the Tool Manager row says "Updating…" until Studio reloads itself.

@@ -22,6 +22,7 @@ import StepBar from '@/prepare/StepBar.vue'
 import FdmAdvanced from '@/prepare/FdmAdvanced.vue'
 import FoldGroup from '@/prepare/FoldGroup.vue'
 import PrusaPanel from '@/prepare/PrusaPanel.vue'
+import ProfileBar from '@/prepare/ProfileBar.vue'
 import { rhinoBase, firstOf } from '@/slicer/prusa/config'
 import CncOps from '@/prepare/CncOps.vue'
 import ToolCard from '@/prepare/ToolCard.vue'
@@ -354,6 +355,7 @@ const engineNote = computed(() => {
 
         <!-- settings -->
         <RsPanel v-if="job && !up" panel-id="prepare.settings" title="Settings" :status="proc ? processWord[proc] : undefined">
+          <ProfileBar />
           <!-- FDM: which engine slices -->
           <div v-if="proc === 'fdm'" class="engine">
             <fieldset class="eng-seg" aria-label="Slicing engine">

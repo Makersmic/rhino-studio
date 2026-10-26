@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
-  PORTAL_BACKUP, PORTAL_CARE_SETUP, PORTAL_CARE_WRITES, PORTAL_HARDWARE, PORTAL_LABELS, PORTAL_NETWORK, PORTAL_SLICER, PORTAL_UPDATE, PORTAL_TRUST, PORTAL_RESTART, PORTAL_TOOL_CHECKS, PORTAL_TOOL_SETUP, PORTAL_TOOL_WRITES, PORTAL_WRITES, PortalClient, WRITE_ROUTES,
+  PORTAL_BACKUP, PORTAL_PROFILES, PORTAL_CARE_SETUP, PORTAL_CARE_WRITES, PORTAL_HARDWARE, PORTAL_LABELS, PORTAL_NETWORK, PORTAL_SLICER, PORTAL_UPDATE, PORTAL_TRUST, PORTAL_RESTART, PORTAL_TOOL_CHECKS, PORTAL_TOOL_SETUP, PORTAL_TOOL_WRITES, PORTAL_WRITES, PortalClient, WRITE_ROUTES,
 } from './client'
 import type { TaskDef } from '@/maintenance/types'
 
@@ -72,7 +72,7 @@ describe('PortalClient', () => {
     const kinds = [
       ...PORTAL_WRITES, ...PORTAL_TOOL_CHECKS, ...PORTAL_TOOL_WRITES, ...PORTAL_RESTART,
       ...PORTAL_CARE_WRITES, ...PORTAL_CARE_SETUP, ...PORTAL_TOOL_SETUP, ...PORTAL_HARDWARE, ...PORTAL_LABELS, ...PORTAL_NETWORK, ...PORTAL_SLICER, ...PORTAL_UPDATE, ...PORTAL_TRUST,
-      ...PORTAL_BACKUP,
+      ...PORTAL_BACKUP, ...PORTAL_PROFILES,
     ]
     expect(new Set(kinds).size).toBe(kinds.length)
     expect(Object.keys(WRITE_ROUTES).sort()).toEqual([...kinds].sort())
@@ -88,6 +88,29 @@ describe('PortalClient', () => {
     expect(posts.every((x) => (x.init?.headers as Record<string, string>)['X-Rhino-Token'] === 'tok-1')).toBe(true)
     expect(JSON.parse(String(posts[1]?.init?.body))).toEqual({ archive: 'rhino-pi-20261025-120000.zip', item: 'all', confirm: 'pi' })
     expect(c.backupUrl('rhino-pi-1.zip')).toBe('/portal/api/backup/file/rhino-pi-1.zip')
+  })
+
+  it('slice profiles: ids are p_ plus letters and digits only, and nothing else reaches the routes', () => {
+    expect(WRITE_ROUTES['profile-save']!.path.test('/api/slice-profiles/p_8f3k2a')).toBe(true)
+    for (const bad of ['/api/slice-profiles/../backup', '/api/slice-profiles/p_a%2Fb', '/api/slice-profiles/builtin:fdm', '/api/slice-profiles/']) {
+      expect(WRITE_ROUTES['profile-save']!.path.test(bad), bad).toBe(false)
+      expect(WRITE_ROUTES['profile-delete']!.path.test(bad), bad).toBe(false)
+    }
+    expect(WRITE_ROUTES['job-save']).toEqual({ method: 'POST', path: /^\/api\/prepare-jobs$/ })
+  })
+
+  it('slice profile writes go to their fixed requests, with the token and the revision', async () => {
+    const p = fakePortal()
+    const c = new PortalClient('/portal')
+    await c.saveProfile('p_abc123', { name: 'PLA', engine: 'kiri', process: 'fdm', toolhead: null, material: null, settings: {}, notes: '' }, 4)
+    await c.deleteProfile('p_abc123')
+    await c.saveJob('tool/BlockOne', { profileId: 'p_abc123', profileRev: 4, process: 'fdm', engine: 'kiri', toolhead: 'BlockOne', material: 'PLA', overrides: {}, placement: { x: 0, y: 0, rotate: 0, scale: 1 } })
+    const writes = p.calls.filter((x) => x.init?.method === 'POST' || x.init?.method === 'DELETE')
+    expect(writes.map((x) => `${x.init?.method} ${x.url}`)).toEqual([
+      'POST /portal/api/slice-profiles/p_abc123', 'DELETE /portal/api/slice-profiles/p_abc123', 'POST /portal/api/prepare-jobs',
+    ])
+    expect(JSON.parse(String(writes[0]?.init?.body)).rev).toBe(4)
+    expect(writes.every((x) => (x.init?.headers as Record<string, string>)['X-Rhino-Token'] === 'tok-1')).toBe(true)
   })
 
   it('tool writes go to their fixed requests, with the token', async () => {

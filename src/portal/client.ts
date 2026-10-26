@@ -34,6 +34,10 @@
  *                        what a restore would change, restore (Tool Manager
  *                        1.7). Refused during a job; a full restore needs the
  *                        machine's name typed and backs up first.
+ *   PORTAL_PROFILES      slice profiles and saved Prepare jobs (Tool Manager
+ *                        1.8): save with the revision it started from, delete
+ *                        (undo for 30 days), revert, import. Nothing reaches
+ *                        Klipper; the Portal checks every setting again.
  *   PORTAL_HARDWARE      check, save and remove system hardware (fans,
  *                        lights, pumps on the board). Writes custom_tools.cfg,
  *                        live after the next Klipper restart, like tools.
@@ -47,6 +51,7 @@
 import type { JobsWeeks, MaintHistory, MaintOverview, TaskLibrary, MaintLists, TaskDef, BookDef, StatusEdit } from '@/maintenance/types'
 import type { NetState, WifiNetwork } from '@/system/network'
 import type { EngineAuto, SliceJobState, SlicerState } from '@/slicer/prusa/portal'
+import type { ProfileDraft, ProfileList, SavedJob, SliceProfile } from '@/slicer/sliceProfiles'
 import type { PortalState, PreviewResult, ToolDetail, ToolLists, ToolOptions, ToolSheetData, WriteResult } from '@/toolmgr/types'
 
 /** GET /api/update (Tool Manager 1.5.3+) */
@@ -101,6 +106,10 @@ export const PORTAL_UPDATE = ['update-upload', 'update-install', 'update-github'
 export const PORTAL_TRUST = ['trust-add', 'trust-remove'] as const
 /** Backups (Tool Manager 1.7, INV-B3/B4): a complete archive or none; restore one item or everything. */
 export const PORTAL_BACKUP = ['backup-now', 'backup-upload', 'restore-plan', 'restore'] as const
+/** Slice profiles and saved Prepare jobs (Tool Manager 1.8). Files on the Rhino only; nothing reaches Klipper. */
+export const PORTAL_PROFILES = [
+  'profile-create', 'profile-save', 'profile-delete', 'profile-revert', 'profile-undelete', 'profile-import', 'job-save', 'job-delete',
+] as const
 export const PORTAL_NETWORK = ['net-hostname', 'net-ipv4', 'net-wifi', 'net-powersave', 'net-keep', 'net-undo'] as const
 
 export type WriteKind =
@@ -118,6 +127,7 @@ export type WriteKind =
   | (typeof PORTAL_UPDATE)[number]
   | (typeof PORTAL_TRUST)[number]
   | (typeof PORTAL_BACKUP)[number]
+  | (typeof PORTAL_PROFILES)[number]
 
 /** The one request each write kind may make. */
 export const WRITE_ROUTES: Record<WriteKind, { method: 'POST' | 'DELETE'; path: RegExp }> = {
@@ -181,12 +191,20 @@ export const WRITE_ROUTES: Record<WriteKind, { method: 'POST' | 'DELETE'; path: 
   'backup-upload': { method: 'POST', path: /^\/api\/backup\/upload$/ },
   'restore-plan': { method: 'POST', path: /^\/api\/restore\/plan$/ },
   restore: { method: 'POST', path: /^\/api\/restore$/ },
+  'profile-create': { method: 'POST', path: /^\/api\/slice-profiles$/ },
+  'profile-save': { method: 'POST', path: /^\/api\/slice-profiles\/p_[a-z0-9]+$/ },
+  'profile-delete': { method: 'DELETE', path: /^\/api\/slice-profiles\/p_[a-z0-9]+$/ },
+  'profile-revert': { method: 'POST', path: /^\/api\/slice-profiles\/p_[a-z0-9]+\/revert$/ },
+  'profile-undelete': { method: 'POST', path: /^\/api\/slice-profiles\/p_[a-z0-9]+\/undelete$/ },
+  'profile-import': { method: 'POST', path: /^\/api\/slice-profiles-import$/ },
+  'job-save': { method: 'POST', path: /^\/api\/prepare-jobs$/ },
+  'job-delete': { method: 'DELETE', path: /^\/api\/prepare-jobs$/ },
 }
 
 const ALLOWED = new Set<string>([
   ...PORTAL_WRITES, ...PORTAL_TOOL_CHECKS, ...PORTAL_TOOL_WRITES, ...PORTAL_RESTART,
   ...PORTAL_CARE_WRITES, ...PORTAL_CARE_SETUP, ...PORTAL_TOOL_SETUP, ...PORTAL_HARDWARE, ...PORTAL_LABELS, ...PORTAL_NETWORK, ...PORTAL_SLICER, ...PORTAL_UPDATE, ...PORTAL_TRUST,
-  ...PORTAL_BACKUP,
+  ...PORTAL_BACKUP, ...PORTAL_PROFILES,
 ])
 const enc = encodeURIComponent
 
@@ -623,6 +641,60 @@ export class PortalClient {
   }
   restore(archive: string, item: string, confirm = ''): Promise<RestoreResult> {
     return this.write('restore', 'POST', '/api/restore', { archive, item, confirm })
+  }
+
+  // ---- slice profiles and saved Prepare jobs (Tool Manager 1.8) ---------------
+
+  /** null from a Tool Manager before 1.8 */
+  async sliceProfiles(full = false): Promise<ProfileList | null> {
+    try {
+      const r = await fetch(`${this.baseUrl}/api/slice-profiles${full ? '?full=1' : ''}`, { headers: { Accept: 'application/json' } })
+      if (r.status === 404) return null
+      const d = (await r.json().catch(() => null)) as ProfileList | null
+      if (!d) throw new Error(`Portal error (HTTP ${r.status})`)
+      return d // ok:false with an error when the file can't be read
+    } catch (e) {
+      if (/not found/i.test((e as Error).message)) return null
+      throw e instanceof TypeError ? new Error("Can't reach the Rhino Portal - is it running?") : e
+    }
+  }
+  async sliceProfile(id: string): Promise<SliceProfile> {
+    return (await this.getJson<{ profile: SliceProfile }>(`/api/slice-profiles/${enc(id)}`)).profile
+  }
+  async profileHistory(id: string): Promise<SliceProfile[]> {
+    return (await this.getJson<{ revisions: SliceProfile[] }>(`/api/slice-profiles/${enc(id)}/history`)).revisions
+  }
+  async createProfile(p: ProfileDraft): Promise<SliceProfile> {
+    return (await this.write<{ profile: SliceProfile }>('profile-create', 'POST', '/api/slice-profiles', p)).profile
+  }
+  /** rev: the revision this edit started from; a newer one on the Rhino is refused */
+  async saveProfile(id: string, p: ProfileDraft, rev: number): Promise<SliceProfile> {
+    return (await this.write<{ profile: SliceProfile }>('profile-save', 'POST', `/api/slice-profiles/${enc(id)}`, { profile: p, rev })).profile
+  }
+  deleteProfile(id: string): Promise<WriteResult> {
+    return this.write('profile-delete', 'DELETE', `/api/slice-profiles/${enc(id)}`)
+  }
+  async revertProfile(id: string, to: number): Promise<SliceProfile> {
+    return (await this.write<{ profile: SliceProfile }>('profile-revert', 'POST', `/api/slice-profiles/${enc(id)}/revert`, { to })).profile
+  }
+  async undeleteProfile(id: string): Promise<SliceProfile> {
+    return (await this.write<{ profile: SliceProfile }>('profile-undelete', 'POST', `/api/slice-profiles/${enc(id)}/undelete`, {})).profile
+  }
+  /** A link the browser downloads (a GET, so not a write) */
+  profilesExportUrl(id?: string): string {
+    return `${this.baseUrl}/api/slice-profiles-export${id ? `?id=${enc(id)}` : ''}`
+  }
+  async importProfiles(data: object): Promise<{ id: string; name: string }[]> {
+    return (await this.write<{ added: { id: string; name: string }[] }>('profile-import', 'POST', '/api/slice-profiles-import', data)).added
+  }
+  async prepareJobs(): Promise<Record<string, SavedJob>> {
+    return (await this.getJson<{ jobs: Record<string, SavedJob> }>('/api/prepare-jobs')).jobs
+  }
+  async saveJob(file: string, job: SavedJob): Promise<SavedJob> {
+    return (await this.write<{ job: SavedJob }>('job-save', 'POST', '/api/prepare-jobs', { file, job })).job
+  }
+  deleteJob(file: string): Promise<WriteResult> {
+    return this.write('job-delete', 'DELETE', '/api/prepare-jobs', { file })
   }
 
   /** Reads the token and version from the Portal's home page. */

@@ -191,6 +191,10 @@ export interface PrepareJob {
   knife: KnifeSettings
   cnc: CncSettings
   placement: Placement
+  /** Phase 1: the profile on the Rhino these settings came from (builtin:<process> = the defaults) */
+  profileId?: string | null
+  /** its revision when this job was set up */
+  profileRev?: number | null
 }
 
 /** What Studio knows about the machine, read live from Klipper when connected. */

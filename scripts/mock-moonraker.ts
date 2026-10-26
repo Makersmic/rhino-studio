@@ -1135,6 +1135,21 @@ function recount() {
 }
 recount()
 
+const sp: {
+  profiles: { id: string; name: string; engine: string; process: string; toolhead: string | null; material: string | null; settings: Record<string, unknown>; notes: string; header: Record<string, unknown>; created: number; updated: number; rev: number }[]
+  deleted: { id: string; name: string; engine: string; process: string; deleted_at: number }[]
+  history: Record<string, unknown[]>
+  jobs: Record<string, unknown>
+} = { profiles: [], deleted: [], history: {}, jobs: {} }
+if (process.env.MOCK_PROFILES !== 'none') {
+  const t = Math.floor(Date.now() / 1000) - 86400 * 3
+  sp.profiles.push(
+    { id: 'p_pla02', name: 'PLA 0.2 everyday', engine: 'kiri', process: 'fdm', toolhead: null, material: 'PLA', settings: { nozzle: 0.4, layerHeight: 0.2, walls: 3, infill: 0.2, speed: 60 }, notes: 'The one that just works.', header: { nozzle: 0.4, layerHeight: 0.2, walls: 3, infill: 0.2, speed: 60 }, created: t, updated: t, rev: 3 },
+    { id: 'p_petgs', name: 'PETG strong', engine: 'kiri', process: 'fdm', toolhead: 'BlockOne', material: 'PETG', settings: { nozzle: 0.4, layerHeight: 0.24, walls: 5, infill: 0.4, speed: 45 }, notes: '', header: { nozzle: 0.4, layerHeight: 0.24, walls: 5, infill: 0.4, speed: 45 }, created: t, updated: t, rev: 1 },
+    { id: 'p_ply3m', name: 'Plywood 3 mm cut', engine: 'kiri', process: 'laser', toolhead: null, material: 'PLYWOOD', settings: { power: 0.9, feed: 300, passes: 2 }, notes: '', header: { power: 0.9, feed: 300, passes: 2 }, created: t, updated: t, rev: 2 },
+  )
+  sp.history.p_pla02 = [{ ...sp.profiles[0]!, rev: 2, settings: { ...sp.profiles[0]!.settings, walls: 2 }, header: { ...sp.profiles[0]!.header, walls: 2 } }]
+}
 const readBody = (req: IncomingMessage) =>
   new Promise<Record<string, unknown>>((resolve) => {
     let b = ''
@@ -1345,6 +1360,49 @@ async function portal(req: IncomingMessage, res: import('node:http').ServerRespo
       updRun(String(body.zip))
       return json(res, 200, { ok: true, zip: body.zip }), true
     }
+  }
+  // Slice profiles and saved Prepare jobs (Tool Manager 1.8). MOCK_PROFILES=old (Portal before 1.8) | none (no profiles yet)
+  if (url.startsWith('/api/slice-profiles') || url.startsWith('/api/prepare-jobs')) {
+    if (process.env.MOCK_PROFILES === 'old') return json(res, 404, { ok: false, error: 'Not found' }), true
+    const path = url.split('?')[0]!
+    const pub = (p: (typeof sp.profiles)[number]) => p
+    if (req.method === 'GET' && path === '/api/slice-profiles') return json(res, 200, { ok: true, profiles: sp.profiles.map(pub), deleted: sp.deleted }), true
+    if (req.method === 'GET' && path === '/api/prepare-jobs') return json(res, 200, { ok: true, jobs: sp.jobs }), true
+    const hm = /^\/api\/slice-profiles\/(p_[a-z0-9]+)\/history$/.exec(path)
+    if (req.method === 'GET' && hm) return json(res, 200, { ok: true, revisions: sp.history[hm[1]!] ?? [] }), true
+    if (req.method === 'GET' && path === '/api/slice-profiles-export') return json(res, 200, { rhino_slice_profiles: 1, profiles: sp.profiles }), true
+    if (req.headers['x-rhino-token'] !== PORTAL_TOKEN) return json(res, 400, { ok: false, error: 'This page is out of date (the portal was restarted). Reload the page and try again.' }), true
+    const body = req.method === 'POST' || req.method === 'DELETE' ? await readBody(req) : {}
+    const now = Math.floor(Date.now() / 1000)
+    const header = (s: Record<string, unknown>) => Object.fromEntries(['nozzle', 'layerHeight', 'walls', 'infill', 'speed', 'power', 'feed', 'passes'].filter((k) => k in s).map((k) => [k, s[k]]))
+    if (req.method === 'POST' && path === '/api/slice-profiles') {
+      const p = { ...(body as Record<string, unknown>), id: `p_${Math.random().toString(36).slice(2, 8)}`, rev: 1, created: now, updated: now, header: header((body.settings ?? {}) as Record<string, unknown>) } as (typeof sp.profiles)[number]
+      sp.profiles.push(p)
+      return json(res, 200, { ok: true, profile: p }), true
+    }
+    const m = /^\/api\/slice-profiles\/(p_[a-z0-9]+)(\/revert|\/undelete)?$/.exec(path)
+    if (m) {
+      const i = sp.profiles.findIndex((x) => x.id === m[1])
+      if (req.method === 'DELETE' && i >= 0) {
+        const [gone] = sp.profiles.splice(i, 1)
+        sp.deleted.unshift({ id: gone!.id, name: gone!.name, engine: gone!.engine, process: gone!.process, deleted_at: now })
+        return json(res, 200, { ok: true, deleted: gone!.id }), true
+      }
+      if (req.method === 'POST' && !m[2] && i >= 0) {
+        const old = sp.profiles[i]!
+        if (body.rev !== old.rev) return json(res, 400, { ok: false, error: `${old.name} was changed on another device (now revision ${old.rev}). Reload it, then save again.` }), true
+        const p = { ...old, ...(body.profile as Record<string, unknown>), id: old.id, rev: old.rev + 1, updated: now } as (typeof sp.profiles)[number]
+        p.header = header(p.settings)
+        ;(sp.history[old.id] ??= []).unshift(old)
+        sp.profiles[i] = p
+        return json(res, 200, { ok: true, profile: p }), true
+      }
+    }
+    if (req.method === 'POST' && path === '/api/prepare-jobs') {
+      sp.jobs[String(body.file)] = { ...(body.job as Record<string, unknown>), saved: now }
+      return json(res, 200, { ok: true, job: sp.jobs[String(body.file)] }), true
+    }
+    return json(res, 400, { ok: false, error: 'Not in the pretend Portal' }), true
   }
   // Backups (Tool Manager 1.7). MOCK_BACKUP=none (no archives) | old (Portal before 1.7) | nogh (no klipper-backup)
   if (url.startsWith('/api/backup') || url.startsWith('/api/restore')) {
