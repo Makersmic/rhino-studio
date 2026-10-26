@@ -41,6 +41,11 @@
  *   PORTAL_HARDWARE      check, save and remove system hardware (fans,
  *                        lights, pumps on the board). Writes custom_tools.cfg,
  *                        live after the next Klipper restart, like tools.
+ *   PORTAL_HW_WIZARD     the Add hardware wizard (Tool Manager 1.9): check a
+ *                        typed pin, check / save / remove a device or a second
+ *                        board ([mcu name]). Same file and restart rule as
+ *                        system hardware. Job hooks are not here: they wait for
+ *                        the reviewed macro change.
  *
  * Nothing here moves the machine or switches a tool on.
  *
@@ -52,6 +57,7 @@ import type { JobsWeeks, MaintHistory, MaintOverview, TaskLibrary, MaintLists, T
 import type { NetState, WifiNetwork } from '@/system/network'
 import type { EngineAuto, SliceJobState, SlicerState } from '@/slicer/prusa/portal'
 import type { ProfileDraft, ProfileList, SavedJob, SliceProfile } from '@/slicer/sliceProfiles'
+import type { BoardsState, DevicePreview, HwCatalog, PinChoice, PinChoices } from '@/hardware/wizard'
 import type { PortalState, PreviewResult, ToolDetail, ToolLists, ToolOptions, ToolSheetData, WriteResult } from '@/toolmgr/types'
 
 /** GET /api/update (Tool Manager 1.5.3+) */
@@ -91,6 +97,7 @@ export const PORTAL_CARE_WRITES = [
 export const PORTAL_CARE_SETUP = ['areas', 'maint-lists', 'statuses'] as const
 export const PORTAL_TOOL_SETUP = ['tool-lists'] as const
 export const PORTAL_HARDWARE = ['preview-hardware', 'hardware-save', 'hardware-delete'] as const
+export const PORTAL_HW_WIZARD = ['hw-pin-check', 'device-preview', 'device-save', 'device-delete', 'board-preview', 'board-save', 'board-delete'] as const
 /**
  * PORTAL_LABELS (Tool Manager 1.5.3+): pin labels, Klipper aliases in [board_pins rhino].
  * Save/remove only change the Portal's generated file; label-use rewrites ONE pin line in a
@@ -122,6 +129,7 @@ export type WriteKind =
   | (typeof PORTAL_CARE_SETUP)[number]
   | (typeof PORTAL_TOOL_SETUP)[number]
   | (typeof PORTAL_HARDWARE)[number]
+  | (typeof PORTAL_HW_WIZARD)[number]
   | (typeof PORTAL_NETWORK)[number]
   | (typeof PORTAL_SLICER)[number]
   | (typeof PORTAL_UPDATE)[number]
@@ -170,6 +178,13 @@ export const WRITE_ROUTES: Record<WriteKind, { method: 'POST' | 'DELETE'; path: 
   'label-save': { method: 'POST', path: /^\/api\/pins\/label$/ },
   'label-delete': { method: 'DELETE', path: /^\/api\/pins\/label\/[A-Za-z0-9_]+$/ },
   'label-use': { method: 'POST', path: /^\/api\/pins\/label\/use$/ },
+  'hw-pin-check': { method: 'POST', path: /^\/api\/hardware\/pins\/check$/ },
+  'device-preview': { method: 'POST', path: /^\/api\/preview\/hardware\/devices$/ },
+  'device-save': { method: 'POST', path: /^\/api\/hardware\/devices$/ },
+  'device-delete': { method: 'DELETE', path: /^\/api\/hardware\/devices\/[a-z][a-z0-9_]{1,31}$/ },
+  'board-preview': { method: 'POST', path: /^\/api\/preview\/hardware\/boards$/ },
+  'board-save': { method: 'POST', path: /^\/api\/hardware\/boards$/ },
+  'board-delete': { method: 'DELETE', path: /^\/api\/hardware\/boards\/[a-z][a-z0-9_]{1,15}$/ },
   'net-hostname': { method: 'POST', path: /^\/api\/net\/hostname$/ },
   'net-ipv4': { method: 'POST', path: /^\/api\/net\/ipv4$/ },
   'net-wifi': { method: 'POST', path: /^\/api\/net\/wifi$/ },
@@ -203,7 +218,7 @@ export const WRITE_ROUTES: Record<WriteKind, { method: 'POST' | 'DELETE'; path: 
 
 const ALLOWED = new Set<string>([
   ...PORTAL_WRITES, ...PORTAL_TOOL_CHECKS, ...PORTAL_TOOL_WRITES, ...PORTAL_RESTART,
-  ...PORTAL_CARE_WRITES, ...PORTAL_CARE_SETUP, ...PORTAL_TOOL_SETUP, ...PORTAL_HARDWARE, ...PORTAL_LABELS, ...PORTAL_NETWORK, ...PORTAL_SLICER, ...PORTAL_UPDATE, ...PORTAL_TRUST,
+  ...PORTAL_CARE_WRITES, ...PORTAL_CARE_SETUP, ...PORTAL_TOOL_SETUP, ...PORTAL_HARDWARE, ...PORTAL_HW_WIZARD, ...PORTAL_LABELS, ...PORTAL_NETWORK, ...PORTAL_SLICER, ...PORTAL_UPDATE, ...PORTAL_TRUST,
   ...PORTAL_BACKUP, ...PORTAL_PROFILES,
 ])
 const enc = encodeURIComponent
@@ -489,6 +504,43 @@ export class PortalClient {
 
   async deleteHardware(name: string): Promise<WriteResult> {
     return this.write('hardware-delete', 'DELETE', `/api/hardware/${enc(name)}`)
+  }
+
+  // ---- Add hardware wizard (Tool Manager 1.9) -----------------------------------
+
+  async hwCatalog(): Promise<HwCatalog> {
+    return this.getJson<HwCatalog>('/api/hardware/catalog')
+  }
+  async hwPins(kind: string, sensor?: string): Promise<PinChoices> {
+    const q = new URLSearchParams({ kind, ...(sensor ? { sensor } : {}) })
+    return this.getJson<PinChoices>(`/api/hardware/pins?${q}`)
+  }
+  async hwBoards(): Promise<BoardsState> {
+    return this.getJson<BoardsState>('/api/hardware/boards')
+  }
+  async hwDevices(): Promise<{ ok: boolean; devices: (Record<string, unknown> & { name: string; device: string; label: string })[] }> {
+    return this.getJson('/api/hardware/devices')
+  }
+  async checkPin(body: { pin: string; kind: string; sensor?: string; isolated?: boolean }): Promise<PinChoice & { ok: boolean }> {
+    return this.write<PinChoice & { ok: boolean }>('hw-pin-check', 'POST', '/api/hardware/pins/check', body)
+  }
+  async previewDevice(body: Record<string, unknown>): Promise<DevicePreview> {
+    return this.write<DevicePreview>('device-preview', 'POST', '/api/preview/hardware/devices', body)
+  }
+  async saveDevice(body: Record<string, unknown>): Promise<WriteResult> {
+    return this.write('device-save', 'POST', '/api/hardware/devices', body)
+  }
+  async deleteDevice(name: string): Promise<WriteResult> {
+    return this.write('device-delete', 'DELETE', `/api/hardware/devices/${enc(name)}`)
+  }
+  async previewBoard(body: Record<string, unknown>): Promise<{ ok: boolean; name: string; cfg: string; warnings: string[] }> {
+    return this.write<{ ok: boolean; name: string; cfg: string; warnings: string[] }>('board-preview', 'POST', '/api/preview/hardware/boards', body)
+  }
+  async saveBoard(body: Record<string, unknown>): Promise<WriteResult> {
+    return this.write('board-save', 'POST', '/api/hardware/boards', body)
+  }
+  async deleteBoard(name: string): Promise<WriteResult> {
+    return this.write('board-delete', 'DELETE', `/api/hardware/boards/${enc(name)}`)
   }
 
   // ---- pin labels (Tool Manager 1.5.3+) ----------------------------------------

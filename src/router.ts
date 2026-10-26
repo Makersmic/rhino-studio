@@ -17,6 +17,7 @@ export const router = createRouter({
     { path: '/pendant', component: () => import('./views/PendantView.vue'), meta: { title: 'Pendant', bare: true } },
     // Toolheads: a section menu (library, wiring, setup). Adding and editing a tool open full width.
     { path: '/toolheads/new', component: () => import('./views/ToolWizardView.vue'), meta: { title: 'Add a toolhead', nav: '/toolheads' } },
+    { path: '/toolheads/hardware/new', component: () => import('./views/toolheads/HardwareWizardView.vue'), meta: { title: 'Add hardware', nav: '/toolheads' } },
     {
       path: '/toolheads',
       component: () => import('./views/toolheads/ToolheadsShell.vue'),

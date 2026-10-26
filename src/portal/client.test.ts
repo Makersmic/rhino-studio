@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
-  PORTAL_BACKUP, PORTAL_PROFILES, PORTAL_CARE_SETUP, PORTAL_CARE_WRITES, PORTAL_HARDWARE, PORTAL_LABELS, PORTAL_NETWORK, PORTAL_SLICER, PORTAL_UPDATE, PORTAL_TRUST, PORTAL_RESTART, PORTAL_TOOL_CHECKS, PORTAL_TOOL_SETUP, PORTAL_TOOL_WRITES, PORTAL_WRITES, PortalClient, WRITE_ROUTES,
+  PORTAL_BACKUP, PORTAL_PROFILES, PORTAL_CARE_SETUP, PORTAL_CARE_WRITES, PORTAL_HARDWARE, PORTAL_HW_WIZARD, PORTAL_LABELS, PORTAL_NETWORK, PORTAL_SLICER, PORTAL_UPDATE, PORTAL_TRUST, PORTAL_RESTART, PORTAL_TOOL_CHECKS, PORTAL_TOOL_SETUP, PORTAL_TOOL_WRITES, PORTAL_WRITES, PortalClient, WRITE_ROUTES,
 } from './client'
 import type { TaskDef } from '@/maintenance/types'
 
@@ -68,10 +68,18 @@ describe('PortalClient', () => {
     expect(WRITE_ROUTES['label-use']).toEqual({ method: 'POST', path: /^\/api\/pins\/label\/use$/ })
   })
 
+  it('wizard writes: device and board names are checked in the path, nothing else is reachable', () => {
+    expect(WRITE_ROUTES['device-delete']!.path.test('/api/hardware/devices/chamber_fan')).toBe(true)
+    expect(WRITE_ROUTES['board-delete']!.path.test('/api/hardware/boards/ebb')).toBe(true)
+    for (const bad of ['/api/hardware/devices/../boards/ebb', '/api/hardware/devices/Chamber', '/api/hardware/devices/', '/api/hardware/boards/a%2Fb'])
+      expect(WRITE_ROUTES['device-delete']!.path.test(bad) || WRITE_ROUTES['board-delete']!.path.test(bad), bad).toBe(false)
+    expect(Object.keys(WRITE_ROUTES).some((k) => /hook/.test(k))).toBe(false) // job hooks wait for the macro review
+  })
+
   it('every write kind has exactly one route, and the lists cover them all', () => {
     const kinds = [
       ...PORTAL_WRITES, ...PORTAL_TOOL_CHECKS, ...PORTAL_TOOL_WRITES, ...PORTAL_RESTART,
-      ...PORTAL_CARE_WRITES, ...PORTAL_CARE_SETUP, ...PORTAL_TOOL_SETUP, ...PORTAL_HARDWARE, ...PORTAL_LABELS, ...PORTAL_NETWORK, ...PORTAL_SLICER, ...PORTAL_UPDATE, ...PORTAL_TRUST,
+      ...PORTAL_CARE_WRITES, ...PORTAL_CARE_SETUP, ...PORTAL_TOOL_SETUP, ...PORTAL_HARDWARE, ...PORTAL_HW_WIZARD, ...PORTAL_LABELS, ...PORTAL_NETWORK, ...PORTAL_SLICER, ...PORTAL_UPDATE, ...PORTAL_TRUST,
       ...PORTAL_BACKUP, ...PORTAL_PROFILES,
     ]
     expect(new Set(kinds).size).toBe(kinds.length)

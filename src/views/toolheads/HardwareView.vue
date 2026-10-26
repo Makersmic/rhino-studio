@@ -25,6 +25,39 @@ const error = ref<string | null>(null)
 onMounted(() => tm.loadOptions().catch((e) => (error.value = (e as Error).message)))
 
 const list = computed(() => tm.pins?.hardware ?? [])
+
+// Hardware added with the Add hardware wizard (Tool Manager 1.9): listed here, removed here, added in the wizard
+type WizardItem = { name: string; device: string; label: string; purpose?: string; pins: Record<string, string>; headers?: Record<string, string>; macros?: string[]; live?: boolean }
+const wizardItems = ref<WizardItem[]>([])
+const wizardOk = ref(false)
+async function loadWizard() {
+  try {
+    wizardItems.value = (await tm.client().hwDevices()).devices as unknown as WizardItem[]
+    wizardOk.value = true
+  } catch {
+    wizardOk.value = false // an older Tool Manager: the wizard isn't there yet
+  }
+}
+onMounted(loadWizard)
+const pinsOf = (x: WizardItem) => Object.entries(x.pins).map(([k, p]) => `${p}${x.headers?.[k] ? ` · ${x.headers[k]}` : ''}`).join(', ')
+async function removeWizard(x: WizardItem) {
+  const ok = await control.confirm({
+    title: `Remove ${x.name}?`,
+    body: 'Its section is taken out of custom_tools.cfg at the next Klipper restart.',
+    feature: x.name,
+    confirmLabel: `Remove ${x.name}`,
+    tone: 'danger',
+  })
+  if (!ok) return
+  try {
+    await tm.client().deleteDevice(x.name)
+    await tm.changed()
+    await loadWizard()
+    say(`${x.name} removed. Restart Klipper to apply.`)
+  } catch (e) {
+    error.value = (e as Error).message
+  }
+}
 const groups = computed(() => {
   const out: { label: string; items: SystemHardware[] }[] = []
   for (const x of list.value) {
@@ -90,7 +123,10 @@ async function remove() {
         <h1>System hardware</h1>
         <p>Things wired to the board rather than the tool connector: enclosure fans and lights, an air or vacuum pump, a door switch. They're there whichever tool is mounted, and each can have its own care tasks.</p>
       </div>
-      <div class="acts"><RsButton variant="primary" :disabled="!tm.state" @click="open(null)">Add system hardware</RsButton></div>
+      <div class="acts">
+        <RouterLink v-if="wizardOk" class="sx-link" to="/toolheads/hardware/new">Add hardware (wizard)</RouterLink>
+        <RsButton variant="primary" :disabled="!tm.state" @click="open(null)">Add system hardware</RsButton>
+      </div>
     </div>
 
     <RestartBanner />
@@ -98,7 +134,7 @@ async function remove() {
     <p v-if="error" class="tm-err" role="alert">{{ error }}</p>
     <p v-if="!tm.state" class="muted">{{ tm.error ? `Can't reach the Rhino Portal: ${tm.error}` : 'Loading…' }}</p>
 
-    <div v-else-if="!list.length" class="sx-empty">
+    <div v-else-if="!list.length && !wizardItems.length" class="sx-empty">
       <strong>No system hardware yet.</strong>
       <span>Add anything on a spare board header: the Portal finds a free pin, writes the Klipper section and its on/off macros, and checks it against the whole config first.</span>
       <RsButton @click="open(null)">Add system hardware</RsButton>
@@ -120,6 +156,25 @@ async function remove() {
             <RsButton size="sm" @click="open(x)">Edit</RsButton>
             <RouterLink class="sx-link" :to="{ path: '/care/tasks', query: { for: `hw:${x.name}` } }">Care tasks{{ careOf(x.name).length ? ` (${careOf(x.name).length})` : '' }}</RouterLink>
             <span v-if="dueOf(x.name)" class="sx-count strong" :title="`${dueOf(x.name)} due`">{{ dueOf(x.name) }}</span>
+          </footer>
+        </article>
+      </div>
+    </template>
+
+    <template v-if="wizardItems.length">
+      <h2 class="gh"><span>Added with the wizard</span><span class="sx-count">{{ wizardItems.length }}</span><span class="rs-rule leader" /></h2>
+      <div class="cards">
+        <article v-for="x in wizardItems" :key="x.name" class="hw">
+          <header class="top">
+            <span class="name">{{ x.name }}</span>
+            <span class="sx-tag plain pin">{{ pinsOf(x) || 'no pin' }}</span>
+          </header>
+          <p class="purpose">{{ x.purpose || x.label }}</p>
+          <p v-if="x.purpose" class="tm-hint">{{ x.label }}{{ x.live ? ' · behind the padlock' : '' }}</p>
+          <div v-if="x.macros?.length" class="sx-tags"><span v-for="m in x.macros" :key="m" class="sx-tag plain mono">{{ m }}</span></div>
+          <footer class="tm-actions">
+            <RsButton size="sm" variant="danger-outline" @click="removeWizard(x)">Remove</RsButton>
+            <RouterLink class="sx-link" :to="{ path: '/care/tasks', query: { for: `hw:${x.name}` } }">Care tasks{{ careOf(x.name).length ? ` (${careOf(x.name).length})` : '' }}</RouterLink>
           </footer>
         </article>
       </div>
