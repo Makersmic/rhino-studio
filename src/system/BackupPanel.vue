@@ -224,7 +224,7 @@ async function doRestore() {
 
       <div class="add">
         <RsButton variant="quiet" size="sm" :disabled="!!working" @click="picker?.click()">{{ working === 'upload' ? 'Checking…' : 'Add a backup from another Rhino…' }}</RsButton>
-        <span class="muted small">For moving to a new host: a rhino-&lt;name&gt;-&lt;date&gt;.zip, checked before it’s listed.</span>
+        <span class="muted small">For moving to a new host: a rhino_studio_os-&lt;date&gt;.zip (or an older rhino-&lt;name&gt;-&lt;date&gt;.zip), checked before it’s listed.</span>
         <input ref="picker" type="file" accept=".zip" class="visually-hidden" @change="upload(($event.target as HTMLInputElement).files)" />
       </div>
     </div>
