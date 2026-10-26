@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" role="img" aria-labelledby="t">
+  <title id="t">Rhino mascot</title>
+  <defs>
+    <radialGradient id="body" cx="45%" cy="35%" r="70%">
+      <stop offset="0" stop-color="#d9d0ef"/>
+      <stop offset="1" stop-color="#a99bd3"/>
+    </radialGradient>
+  </defs>
+  <g stroke="#5b4d86" stroke-width="3" stroke-linejoin="round" stroke-linecap="round">
+    <!-- legs -->
+    <ellipse cx="88" cy="206" rx="24" ry="17" fill="#b3a6dc"/>
+    <ellipse cx="152" cy="206" rx="24" ry="17" fill="#b3a6dc"/>
+    <path d="M74 213 q4 5 8 0 M86 215 q4 5 8 0 M138 215 q4 5 8 0 M150 213 q4 5 8 0" fill="none" stroke-width="2.5"/>
+    <!-- body -->
+    <path d="M58 196 C46 150 70 112 120 112 C170 112 194 150 182 196 C164 214 76 214 58 196 Z" fill="url(#body)"/>
+    <!-- left arm resting -->
+    <path d="M70 150 C58 160 60 180 74 182 C84 182 86 168 84 158" fill="#b9addf"/>
+    <!-- ears -->
+    <path d="M70 52 C56 30 74 22 86 44 Z" fill="#b9addf"/>
+    <path d="M73 46 C68 36 75 33 80 42" fill="#f3b7cf" stroke="none"/>
+    <path d="M170 52 C184 30 166 22 154 44 Z" fill="#b9addf"/>
+    <path d="M167 46 C172 36 165 33 160 42" fill="#f3b7cf" stroke="none"/>
+    <!-- head -->
+    <path d="M64 86 C60 50 90 38 120 38 C150 38 180 50 176 86 C174 110 150 130 120 130 C90 130 66 110 64 86 Z" fill="#cfc4ec"/>
+    <!-- muzzle -->
+    <ellipse cx="120" cy="104" rx="38" ry="24" fill="#e6def6"/>
+    <!-- horns: big one on the snout, small one behind -->
+    <path d="M114 46 C116 40 124 40 126 46 L124 56 L116 56 Z" fill="#fff4dc" stroke-width="2.5"/>
+    <path d="M106 92 C106 74 114 60 120 52 C126 60 134 74 134 92 Z" fill="#fff4dc"/>
+    <!-- nostrils -->
+    <ellipse cx="108" cy="104" rx="4" ry="3" fill="#5b4d86" stroke="none"/>
+    <ellipse cx="132" cy="104" rx="4" ry="3" fill="#5b4d86" stroke="none"/>
+    <!-- smile -->
+    <path d="M106 114 Q120 126 134 114" fill="none" stroke-width="3"/>
+    <!-- eyes -->
+    <ellipse cx="82" cy="78" rx="11" ry="13" fill="#3b2f63" stroke="none"/>
+    <ellipse cx="158" cy="78" rx="11" ry="13" fill="#3b2f63" stroke="none"/>
+    <circle cx="86" cy="73" r="4.5" fill="#fff" stroke="none"/>
+    <circle cx="162" cy="73" r="4.5" fill="#fff" stroke="none"/>
+    <circle cx="79" cy="83" r="2" fill="#fff" stroke="none"/>
+    <circle cx="155" cy="83" r="2" fill="#fff" stroke="none"/>
+    <path d="M70 62 q12 -6 22 0 M148 62 q12 -6 22 0" fill="none" stroke-width="2.5"/>
+    <!-- cheeks -->
+    <ellipse cx="74" cy="100" rx="9" ry="6" fill="#f6a9c6" stroke="none" opacity=".85"/>
+    <ellipse cx="166" cy="100" rx="9" ry="6" fill="#f6a9c6" stroke="none" opacity=".85"/>
+    <!-- wrench, held up in right paw -->
+    <g transform="rotate(22 186 150)">
+      <rect x="180" y="118" width="12" height="54" rx="5" fill="#ffd27a"/>
+      <path d="M186 92 a16 16 0 1 0 0.1 0 Z M180 92 L180 106 L192 106 L192 92 Z" fill="#ffd27a" fill-rule="evenodd"/>
+    </g>
+    <path d="M168 148 C176 140 190 136 196 146 C200 156 186 162 176 160" fill="#b9addf"/>
+    <!-- sparkles -->
+    <path d="M30 70 l4 -10 l4 10 l10 4 l-10 4 l-4 10 l-4 -10 l-10 -4 Z" fill="#ffe08a" stroke-width="2"/>
+    <path d="M206 40 l3 -7 l3 7 l7 3 l-7 3 l-3 7 l-3 -7 l-7 -3 Z" fill="#a8e3d4" stroke-width="2"/>
+  </g>
+</svg>
