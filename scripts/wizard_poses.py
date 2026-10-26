@@ -9,7 +9,8 @@ import math, os, sys
 
 OUT = sys.argv[1] if len(sys.argv) > 1 else 'src/assets/wizard'
 LINE, BODY, LIMB, FAR, HEAD, SNOUT, EAR = '#34465a', '#a3b8cc', '#8fa6bd', '#7f97ae', '#b0c3d5', '#cfdbe6', '#94aac0'
-HORN_C, HAT, BRIM, SHADE = '#f4ead2', '#f5c542', '#f0b830', '#6f879f'
+HORN_C, HAT, BRIM, SHADE = '#f4ead2', '#f5c542', '#f0b830', '#5d4428'
+JACKET, JACKET_FAR, CUFF, COLLAR = '#b98a4e', '#a37741', '#8f6535', '#6b4a2e'   # tan canvas work jacket, no logo
 
 
 def circ(cx, cy, r): return f'M{cx-r:.1f} {cy:.1f} a{r} {r} 0 1 0 {2*r} 0 a{r} {r} 0 1 0 {-2*r} 0 Z'
@@ -32,8 +33,8 @@ def part(d, fill, line=True, closed_fill=True, w=1.5, tf=''):
 
 def arm(sx, sy, px, py, bend=0.0, paw=11, far=False):
     sx = sx - 16 if sx < 120 else sx + 14   # broad chest: shoulders sit wider
-    c = FAR if far else LIMB
-    return [part(tube(sx, sy, px, py, 12, bend), c), part(circ(px, py, paw), c)]
+    sleeve, hand = (JACKET_FAR, FAR) if far else (JACKET, LIMB)
+    return [part(tube(sx, sy, px, py, 12, bend), sleeve), part(circ(px, py, paw + 2.5), CUFF, w=1.2), part(circ(px, py, paw), hand)]
 
 
 def stroke(d, w=1.5):  # a drawn mark with no fill (smile, toes, hat seam)
@@ -49,9 +50,12 @@ def view_front():
     v = {}
     v['ears'] = [part('M66 74 C46 58 56 44 74 58 Z', EAR), part('M174 74 C194 58 184 44 166 58 Z', EAR)]
     v['back'] = []
-    v['body'] = [part('M74 204 C66 190 66 176 72 166 C50 160 40 140 50 126 C64 110 92 108 120 108 C148 108 176 110 190 126 C200 140 190 160 168 166 C174 176 174 190 166 204 C150 216 90 216 74 204 Z', BODY)]
+    v['body'] = [part('M74 204 C66 190 66 176 72 166 C50 160 40 140 50 126 C64 110 92 108 120 108 C148 108 176 110 190 126 C200 140 190 160 168 166 C174 176 174 190 166 204 C150 216 90 216 74 204 Z', JACKET)]
     v['belt'] = []
-    v['folds'] = [stroke('M84 140 q18 10 34 2 M122 142 q18 8 34 -2', 1.1), stroke('M96 188 q24 8 48 0', 1)]
+    v['folds'] = [stroke('M120 136 L120 206', 1.4), part('M116 140 h8 v12 h-8 Z', '#c9cdd3', w=1),       # zip + pull
+                  part('M130 148 h22 v20 h-22 Z', JACKET, w=1.2), stroke('M130 154 h22', 1),               # chest pocket
+                  stroke('M70 196 q50 12 100 0', 1.2), stroke('M60 132 q10 -8 26 -10 M180 132 q-10 -8 -26 -10', 1)]
+    v['collar'] = [part('M88 128 L116 138 L104 152 Z', COLLAR, w=1.3), part('M152 128 L124 138 L136 152 Z', COLLAR, w=1.3)]
     v['shade'] = 'M150 112 C204 124 206 196 172 214 L232 216 L232 100 Z'
     v['legs'] = [part(ell(96, 208, 24, 17), LIMB), part(ell(144, 208, 24, 17), LIMB),
                  stroke('M82 215 q4 5 8 0 M94 217 q4 5 8 0 M130 217 q4 5 8 0 M142 215 q4 5 8 0', 1.2)]
@@ -76,9 +80,12 @@ def view_q():
     v = {}
     v['ears'] = [part('M74 76 C52 60 62 44 84 58 Z', EAR), part('M168 64 C180 48 172 40 160 52 Z', FAR)]
     v['back'] = [part(ell(144, 205, 22, 16), FAR)]                       # far leg, behind the body
-    v['body'] = [part('M78 204 C70 190 70 176 76 166 C54 160 44 140 54 126 C68 110 96 108 124 108 C150 108 176 110 188 126 C196 140 186 160 166 166 C172 176 172 190 164 204 C148 216 94 216 78 204 Z', BODY)]
+    v['body'] = [part('M78 204 C70 190 70 176 76 166 C54 160 44 140 54 126 C68 110 96 108 124 108 C150 108 176 110 188 126 C196 140 186 160 166 166 C172 176 172 190 164 204 C148 216 94 216 78 204 Z', JACKET)]
     v['belt'] = []
-    v['folds'] = [stroke('M90 140 q18 10 34 2 M128 142 q14 6 28 -2', 1.1), stroke('M100 188 q22 8 44 0', 1)]
+    v['folds'] = [stroke('M132 136 C134 160 134 184 130 206', 1.4), part('M128 140 h8 v12 h-8 Z', '#c9cdd3', w=1),
+                  part('M92 148 h22 v20 h-22 Z', JACKET, w=1.2), stroke('M92 154 h22', 1),
+                  stroke('M76 196 q48 12 92 0', 1.2), stroke('M64 132 q10 -8 26 -10', 1)]
+    v['collar'] = [part('M100 128 L128 138 L116 152 Z', COLLAR, w=1.3), part('M160 126 L136 138 L146 150 Z', COLLAR, w=1.3)]
     v['shade'] = 'M146 114 C196 124 198 196 168 214 L232 216 L232 100 Z'
     v['legs'] = [part(ell(100, 209, 26, 17), LIMB), stroke('M84 216 q4 5 8 0 M96 218 q4 5 8 0 M108 217 q4 5 8 0', 1.2)]
     v['head'] = [part('M68 88 C64 52 96 40 126 40 C156 40 178 54 176 88 C174 112 154 130 126 130 C96 130 70 110 68 88 Z', HEAD),
@@ -221,7 +228,7 @@ def build(name, p):
     layers.append(f'<g clip-path="url(#bc-{name})">' + ''.join(draw(x) for x in v['folds'] + v['belt']) + '</g>')
     layers += [draw(x) for x in v['legs'] + v['head'] + v['face']]
     layers.append(eyes_and_glasses(v, mood))
-    layers += [draw(x) for x in v['horn'] + v['bangs'] + v['hat']]
+    layers += [draw(x) for x in v['collar'] + v['horn'] + v['bangs'] + v['hat']]
     for d in p.get('wires', []):
         layers.append(f'<g fill="none" stroke-linecap="round" filter="url(#wob)"><path d="{d}" stroke="#c9463d" stroke-width="3.2"/>'
                       f'<path d="{d}" transform="translate(0 4)" stroke="#2e2f33" stroke-width="3.2"/></g>')
