@@ -1,82 +1,129 @@
-"""Wizard poses for the Add hardware wizard: one original Rhino Studio rhino, six poses.
-Hand-drawn look: grainy pencil fill, ink lines that swell and thin along their length (pressure),
-plus a lighter offset sketch pass. Only arms and props change between poses."""
-import math, os, sys
-OUT = sys.argv[1] if len(sys.argv) > 1 else 'src/assets/wizard'
-LINE, BODY, LIMB, HEAD, SNOUT, EAR = '#34465a', '#a3b8cc', '#8fa6bd', '#b0c3d5', '#cfdbe6', '#94aac0'
-HORN_C, HAT, BRIM = '#f4ead2', '#f5c542', '#f0b830'
+"""Wizard poses for the Add hardware wizard: one original Rhino Studio rhino, six poses, two views.
 
-def P(d, f='none'): return f'<path d="{d}" fill="{f}"/>'
+Hand-drawn look: grainy pencil fill, ink lines that swell and thin along their length (pressure),
+and a lighter offset sketch pass. Every part is filled and outlined together, back to front, so a
+nearer part hides the lines behind it. Views: 'front' and 'q' (three-quarter, facing right; set
+mirror=True to face left). Light comes from the upper left, so the right side gets a form shadow.
+Usage: python3 scripts/wizard_poses.py [out_dir]"""
+import math, os, sys
+
+OUT = sys.argv[1] if len(sys.argv) > 1 else 'src/assets/wizard'
+LINE, BODY, LIMB, FAR, HEAD, SNOUT, EAR = '#34465a', '#a3b8cc', '#8fa6bd', '#7f97ae', '#b0c3d5', '#cfdbe6', '#94aac0'
+HORN_C, HAT, BRIM, SHADE = '#f4ead2', '#f5c542', '#f0b830', '#6f879f'
+
 
 def circ(cx, cy, r): return f'M{cx-r:.1f} {cy:.1f} a{r} {r} 0 1 0 {2*r} 0 a{r} {r} 0 1 0 {-2*r} 0 Z'
+def ell(cx, cy, rx, ry): return f'M{cx-rx:.1f} {cy:.1f} a{rx} {ry} 0 1 0 {2*rx} 0 a{rx} {ry} 0 1 0 {-2*rx} 0 Z'
+
 
 def tube(sx, sy, px, py, w=12, bend=0.0, tip=None):
-    """Tapered tube from (sx,sy) to (px,py); bend pushes the middle sideways (an elbow)."""
+    """Tapered tube from (sx,sy) to (px,py). bend pushes the middle sideways (an elbow).
+    Returned open at the shoulder, so its outline never cuts across the body it grows from."""
     tip = w * .8 if tip is None else tip
     a = math.atan2(py - sy, px - sx); nx, ny = -math.sin(a), math.cos(a)
     mx, my = (sx + px) / 2 + nx * bend, (sy + py) / 2 + ny * bend
     return (f'M{sx+nx*w:.1f} {sy+ny*w:.1f} Q{mx+nx*w:.1f} {my+ny*w:.1f} {px+nx*tip:.1f} {py+ny*tip:.1f} '
-            f'L{px-nx*tip:.1f} {py-ny*tip:.1f} Q{mx-nx*w:.1f} {my-ny*w:.1f} {sx-nx*w:.1f} {sy-ny*w:.1f} Z')
+            f'L{px-nx*tip:.1f} {py-ny*tip:.1f} Q{mx-nx*w:.1f} {my-ny*w:.1f} {sx-nx*w:.1f} {sy-ny*w:.1f}')
 
-def arm(sx, sy, px, py, bend=0.0, paw=11):
-    return [(tube(sx, sy, px, py, 12, bend), LIMB), (circ(px, py, paw), LIMB)]
 
-BASE = [  # drawn behind the arms
- ('M64 206 a24 17 0 1 0 48 0 a24 17 0 1 0 -48 0 Z', LIMB), ('M128 206 a24 17 0 1 0 48 0 a24 17 0 1 0 -48 0 Z', LIMB),
- ('M54 194 C42 146 70 110 120 110 C170 110 198 146 186 194 C166 216 74 216 54 194 Z', BODY),
- ('M66 74 C46 58 56 44 74 58 Z', EAR), ('M174 74 C194 58 184 44 166 58 Z', EAR),
- ('M64 86 C60 52 90 40 120 40 C150 40 180 52 176 86 C174 110 150 130 120 130 C90 130 66 110 64 86 Z', HEAD),
- ('M80 106 a40 24 0 1 0 80 0 a40 24 0 1 0 -80 0 Z', SNOUT),
- ('M72 52 C72 14 168 14 168 52 Z', HAT), ('M54 54 C54 46 186 46 186 54 C186 60 54 60 54 54 Z', BRIM),
-]
-HORN = ('M104 104 C102 84 110 64 128 50 C124 70 132 88 136 104 Z', HORN_C)
-MARKS = ['M74 213 q4 5 8 0 M86 215 q4 5 8 0 M138 215 q4 5 8 0 M150 213 q4 5 8 0', 'M120 20 L120 48', 'M114 84 q4 -3 8 0']
-SMILE = 'M104 116 Q120 128 136 116'
-REST_L = arm(78, 138, 70, 178, bend=-6)          # left arm resting at the side
+def part(d, fill, line=True, closed_fill=True, w=1.5):
+    return dict(d=d, fill=fill, line=line, w=w)
 
-def face(mood='happy'):
-    eyes = ('<ellipse cx="84" cy="80" rx="9.5" ry="12" fill="#22303d"/><ellipse cx="156" cy="80" rx="9.5" ry="12" fill="#22303d"/>'
-            '<circle cx="88" cy="75" r="3.8" fill="#fff"/><circle cx="160" cy="75" r="3.8" fill="#fff"/>'
-            '<circle cx="81" cy="85" r="1.7" fill="#fff"/><circle cx="153" cy="85" r="1.7" fill="#fff"/>')
-    if mood == 'look-up':  # thinking: eyes glance up and to the side
-        eyes = eyes.replace('cy="80"', 'cy="77"').replace('cx="88" cy="75"', 'cx="90" cy="71"').replace('cx="160" cy="75"', 'cx="162" cy="71"')
-    return (f'<g filter="url(#wob2)"><ellipse cx="108" cy="106" rx="4" ry="3" fill="{LINE}"/><ellipse cx="132" cy="106" rx="4" ry="3" fill="{LINE}"/>{eyes}'
-            '<ellipse cx="72" cy="102" rx="10" ry="6.5" fill="#ee9aa6" opacity=".6"/><ellipse cx="168" cy="102" rx="10" ry="6.5" fill="#ee9aa6" opacity=".6"/></g>'
-            f'<g filter="url(#wob1)" stroke="{LINE}" stroke-width="2" stroke-linejoin="round">'
-            '<rect x="66" y="64" width="36" height="30" rx="11" fill="#e8f4fb" fill-opacity=".12"/>'
-            '<rect x="138" y="64" width="36" height="30" rx="11" fill="#e8f4fb" fill-opacity=".12"/>'
-            '<path d="M102 74 Q120 66 138 74 M66 74 L60 70 M174 74 L180 70" fill="none"/>'
-            '<path d="M72 70 l6 -3 M144 70 l6 -3" stroke="#fff" stroke-width="2.4" stroke-linecap="round" opacity=".9"/></g>')
 
-# ---- poses: arms (filled, outlined), props (own colours), extra marks, mood
+def arm(sx, sy, px, py, bend=0.0, paw=11, far=False):
+    c = FAR if far else LIMB
+    return [part(tube(sx, sy, px, py, 12, bend), c), part(circ(px, py, paw), c)]
+
+
+def stroke(d, w=1.5):  # a drawn mark with no fill (smile, toes, hat seam)
+    return part(d, 'none', True, w=w)
+
+
+def blob(d, fill):  # filled shape with no outline (cheeks, highlights)
+    return part(d, fill, False)
+
+
+# ---------------------------------------------------------------- the two views (facing right for 'q')
+def view_front():
+    v = {}
+    v['ears'] = [part('M66 74 C46 58 56 44 74 58 Z', EAR), part('M174 74 C194 58 184 44 166 58 Z', EAR)]
+    v['back'] = []
+    v['body'] = [part('M54 194 C42 146 70 110 120 110 C170 110 198 146 186 194 C166 216 74 216 54 194 Z', BODY)]
+    v['shade'] = 'M150 112 C204 124 206 196 172 214 L232 216 L232 100 Z'
+    v['legs'] = [part(ell(88, 206, 24, 17), LIMB), part(ell(152, 206, 24, 17), LIMB),
+                 stroke('M74 213 q4 5 8 0 M86 215 q4 5 8 0 M138 215 q4 5 8 0 M150 213 q4 5 8 0', 1.2)]
+    v['head'] = [part('M64 86 C60 52 90 40 120 40 C150 40 180 52 176 86 C174 110 150 130 120 130 C90 130 66 110 64 86 Z', HEAD),
+                 part(ell(120, 106, 40, 24), SNOUT)]
+    v['face'] = [blob(ell(108, 106, 4, 3), LINE), blob(ell(132, 106, 4, 3), LINE),
+                 stroke('M104 116 Q120 128 136 116'),
+                 blob(ell(72, 102, 10, 6.5), '#ee9aa6aa'), blob(ell(168, 102, 10, 6.5), '#ee9aa6aa')]
+    v['eyes'] = [(84, 80, 9.5, 12), (156, 80, 9.5, 12)]
+    v['lenses'] = [(66, 64, 36, 30), (138, 64, 36, 30)]
+    v['bridge'] = 'M102 74 Q120 66 138 74 M66 74 L60 70 M174 74 L180 70'
+    v['horn'] = [part('M104 104 C102 84 110 64 128 50 C124 70 132 88 136 104 Z', HORN_C), stroke('M114 86 q4 -3 8 0', 1.1)]
+    v['hat'] = [part('M72 52 C72 14 168 14 168 52 Z', HAT), stroke('M120 20 L120 48', 1.2),
+                part('M54 54 C54 46 186 46 186 54 C186 60 54 60 54 54 Z', BRIM)]
+    v['ground'] = ell(120, 224, 74, 7)
+    return v
+
+
+def view_q():
+    """Three-quarter view, facing right: near side on the left, far side foreshortened."""
+    v = {}
+    v['ears'] = [part('M74 76 C52 60 62 44 84 58 Z', EAR), part('M168 64 C180 48 172 40 160 52 Z', FAR)]
+    v['back'] = [part(ell(150, 204, 22, 16), FAR)]                       # far leg, behind the body
+    v['body'] = [part('M58 196 C46 150 72 112 122 112 C166 112 190 146 182 194 C164 214 80 216 58 196 Z', BODY)]
+    v['shade'] = 'M146 114 C196 124 198 196 168 214 L232 216 L232 100 Z'
+    v['legs'] = [part(ell(92, 208, 26, 17), LIMB), stroke('M76 215 q4 5 8 0 M88 217 q4 5 8 0 M100 216 q4 5 8 0', 1.2)]
+    v['head'] = [part('M68 88 C64 52 96 40 126 40 C156 40 178 54 176 88 C174 112 154 130 126 130 C96 130 70 110 68 88 Z', HEAD),
+                 part(ell(150, 106, 38, 23), SNOUT)]                       # snout pushes past the head outline
+    v['face'] = [blob(ell(152, 110, 4, 3.2), LINE), blob(ell(176, 108, 3, 2.6), LINE),
+                 stroke('M132 120 Q148 130 166 118'),
+                 blob(ell(84, 102, 10, 6.5), '#ee9aa6aa'), blob(ell(170, 98, 6, 5), '#ee9aa688')]
+    v['eyes'] = [(100, 80, 9.5, 12), (150, 78, 6.5, 11)]                  # far eye foreshortened
+    v['lenses'] = [(82, 64, 36, 30), (138, 64, 24, 28)]
+    v['bridge'] = 'M118 74 Q128 68 138 74 M82 74 L72 70'
+    v['horn'] = [part('M150 102 C150 84 164 66 190 56 C182 74 184 90 182 100 Z', HORN_C), stroke('M162 86 q5 -3 9 0', 1.1)]
+    v['hat'] = [part('M78 52 C80 14 170 12 172 50 Z', HAT), stroke('M128 18 C132 30 132 40 130 48', 1.2),
+                part('M58 56 C58 46 190 42 190 50 C190 58 58 62 58 56 Z', BRIM)]
+    v['ground'] = ell(124, 224, 72, 7)
+    return v
+
+
+# ---------------------------------------------------------------- the six poses
+REST_FRONT = arm(78, 138, 70, 178, bend=-6)
+REST_Q = arm(82, 140, 76, 180, bend=-6)
+
 POSES = {
- 'what': dict(  # holding a part up to look at it (a small stepper motor)
-   arms=REST_L + arm(164, 140, 196, 98, bend=10),
-   props_back=[('M184 62 h30 v30 h-30 Z', '#7d8590'), ('M190 68 h18 v18 h-18 Z', '#9aa2ac')],
-   front=[circ(196, 98, 11)],
-   props_marks=['M199 62 v-10', 'M176 50 l-6 -6 M183 43 l-2 -8'], mood='happy'),
- 'wiring': dict(  # one end of a lead in each paw, the lead hanging in front
-   arms=arm(76, 140, 44, 158, bend=-8) + arm(164, 140, 196, 158, bend=8),
+ 'what': dict(view='q',  # three-quarter, holding a small stepper motor up to look at it
+   far_arms=arm(160, 136, 206, 74, bend=10, far=True),
+   props=[part('M192 34 h30 v30 h-30 Z', '#7d8590'), part('M198 40 h18 v18 h-18 Z', '#9aa2ac'),
+          stroke('M207 34 v-10', 1.4), stroke('M184 24 l-6 -6 M191 17 l-2 -8', 1.2)],
+   near_arms=REST_Q),
+ 'wiring': dict(view='front',  # one connector in each paw, the lead hanging in front
+   near_arms=arm(76, 140, 44, 158, bend=-8) + arm(164, 140, 196, 158, bend=8),
    wires=['M44 158 C40 214 80 236 120 236 C160 236 200 214 196 158'],
-   props_back=[('M37 134 h14 v14 h-14 Z', '#2e2f33'), ('M189 134 h14 v14 h-14 Z', '#2e2f33')],
-   props_marks=['M41 134 v-6 M47 134 v-6 M193 134 v-6 M199 134 v-6'], mood='happy'),
- 'tools': dict(  # pointing out to the side, toward the tool rack in the panel
-   arms=REST_L + arm(164, 140, 210, 126, bend=-6),
-   props_back=[], front=[tube(212, 124, 230, 116, 4.5, 0, 3.5)],
-   props_marks=['M228 100 l6 -6 M234 108 l8 -2'], mood='happy'),
- 'follows': dict(  # thinking: paw under the chin, eyes up, a small "this follows that" bubble
-   arms=REST_L + arm(166, 146, 150, 126, bend=-18),
-   props_back=[('M174 26 a30 20 0 1 0 60 0 a30 20 0 1 0 -60 0 Z', '#f7f3ea'),
-               ('M178 58 a4 4 0 1 0 8 0 a4 4 0 1 0 -8 0 Z', '#f7f3ea'), ('M184 70 a2.5 2.5 0 1 0 5 0 a2.5 2.5 0 1 0 -5 0 Z', '#f7f3ea')],
-   props_marks=['M188 26 a4 4 0 1 0 8 0 a4 4 0 1 0 -8 0', 'M200 26 h12 m-4 -4 l4 4 l-4 4', 'M216 21 h9 v10 h-9 Z'], mood='look-up'),
- 'shows': dict(  # waving at the screen
-   arms=REST_L + arm(164, 138, 200, 80, bend=-12),
-   props_back=[], props_marks=['M214 66 q8 6 6 16 M222 58 q11 9 8 24'], mood='happy'),
- 'done': dict(  # thumbs up
-   arms=REST_L + arm(164, 142, 194, 116, bend=8, paw=12),
-   props_back=[], front=[tube(194, 108, 197, 90, 4.8, 0, 4)],
-   props_marks=['M216 80 l4 -10 l4 10 l10 4 l-10 4 l-4 10 l-4 -10 l-10 -4 Z', 'M188 120 h10 M188 126 h9'], mood='happy'),
+   props=[part('M37 134 h14 v14 h-14 Z', '#2e2f33'), part('M189 134 h14 v14 h-14 Z', '#2e2f33'),
+          stroke('M41 134 v-6 M47 134 v-6 M193 134 v-6 M199 134 v-6', 1.4)]),
+ 'tools': dict(view='q',  # three-quarter, the far arm points out toward the tool rack
+   far_arms=arm(158, 138, 208, 124, bend=-6, far=True) + [part(tube(210, 122, 230, 114, 4.5, 0, 3.5), FAR)],
+   props=[stroke('M228 98 l6 -6 M234 106 l8 -2', 1.2)],
+   near_arms=REST_Q),
+ 'follows': dict(view='q', mirror=True,  # three-quarter facing left, paw under the chin, thinking
+   near_arms=REST_Q + arm(96, 150, 140, 132, bend=14),
+   overlay=[part(ell(52, 28, 34, 20), '#f7f3ea'), part(circ(84, 56, 4.5), '#f7f3ea'), part(circ(92, 66, 2.6), '#f7f3ea'),
+            stroke(circ(36, 28, 4), 1.3), stroke('M46 28 h14 m-4 -4 l4 4 l-4 4', 1.3), stroke('M64 23 h10 v10 h-10 Z', 1.3)],
+   mood='look-up'),
+ 'shows': dict(view='q',  # three-quarter, the far arm waves up behind the head
+   far_arms=arm(160, 136, 196, 70, bend=-12, far=True),
+   props=[stroke('M212 56 q8 6 6 16 M220 48 q11 9 8 24', 1.3)],
+   near_arms=REST_Q),
+ 'done': dict(view='front',  # front, thumbs up
+   near_arms=REST_FRONT + arm(164, 142, 194, 116, bend=8, paw=12) + [part(tube(194, 108, 197, 90, 4.8, 0, 4), LIMB)],
+   props=[stroke('M216 80 l4 -10 l4 10 l10 4 l-10 4 l-4 10 l-4 -10 l-10 -4 Z', 1.3), stroke('M188 120 h10 M188 126 h9', 1.1)]),
 }
+TITLES = {'what': 'Rhino holding up a part', 'wiring': 'Rhino holding a wire', 'tools': 'Rhino pointing',
+          'follows': 'Rhino thinking', 'shows': 'Rhino waving', 'done': 'Rhino giving a thumbs up'}
 
 DEFS = '''<defs>
   <filter id="grain" x="-5%" y="-5%" width="110%" height="110%">
@@ -98,45 +145,73 @@ DEFS = '''<defs>
     <feTurbulence type="fractalNoise" baseFrequency="0.035" numOctaves="2" seed="1" result="w"/>
     <feDisplacementMap in="m" in2="w" scale="3.2"/>
   </filter>
-  <filter id="wob1" x="-5%" y="-5%" width="110%" height="110%">
-    <feTurbulence type="fractalNoise" baseFrequency="0.035" numOctaves="2" seed="1" result="w"/>
-    <feDisplacementMap in="SourceGraphic" in2="w" scale="3.2"/></filter>
-  <filter id="wob2" x="-5%" y="-5%" width="110%" height="110%">
+  <filter id="wob" x="-5%" y="-5%" width="110%" height="110%">
     <feTurbulence type="fractalNoise" baseFrequency="0.05" numOctaves="2" seed="9" result="w"/>
     <feDisplacementMap in="SourceGraphic" in2="w" scale="2.6"/></filter>
+  <filter id="soft"><feGaussianBlur stdDeviation="2.5"/></filter>
 </defs>'''
 
-TITLES = {'what': 'Rhino holding up a part', 'wiring': 'Rhino holding a wire', 'tools': 'Rhino pointing',
-          'follows': 'Rhino thinking', 'shows': 'Rhino waving', 'done': 'Rhino giving a thumbs up'}
 
-def seamless(d):
-    """Outline a limb without the line across the shoulder where it joins the body."""
-    return d[:-2] if d.endswith(' Z') and ' L' in d and ' Q' in d else d
+def draw(p):
+    """One part: fill (base + grain), then its own outline (pressure ink + sketch pass)."""
+    out = []
+    if p['fill'] != 'none':
+        out.append(f'<path d="{p["d"]}" fill="{p["fill"]}" filter="url(#wob)" opacity=".95"/>')
+        if p['line']:  # grain only on outlined shapes; small blobs stay clean
+            out.append(f'<path d="{p["d"]}" fill="{p["fill"]}" filter="url(#grain)"/>')
+    if p['line']:
+        out.append(f'<path d="{p["d"]}" fill="none" stroke="{LINE}" stroke-width="{p["w"]}" stroke-linecap="round" '
+                   f'stroke-linejoin="round" filter="url(#ink)" opacity=".92"/>')
+        out.append(f'<path d="{p["d"]}" fill="none" stroke="{LINE}" stroke-width=".8" stroke-linecap="round" '
+                   f'filter="url(#wob)" opacity=".42" transform="translate(.8 .6)"/>')
+    return ''.join(out)
+
+
+def eyes_and_glasses(v, mood):
+    s = []
+    for i, (cx, cy, rx, ry) in enumerate(v['eyes']):
+        up = -3 if mood == 'look-up' else 0
+        k = rx / 9.5
+        s.append(f'<ellipse cx="{cx}" cy="{cy+up}" rx="{rx}" ry="{ry}" fill="#22303d" filter="url(#wob)"/>')
+        s.append(f'<circle cx="{cx+4*k:.1f}" cy="{cy-5+up*1.3:.1f}" r="{3.8*k:.1f}" fill="#fff"/>')
+        s.append(f'<circle cx="{cx-3*k:.1f}" cy="{cy+5+up:.1f}" r="{1.7*k:.1f}" fill="#fff"/>')
+    for x, y, w, h in v['lenses']:
+        s.append(draw(part(f'M{x+11} {y} h{w-22} a11 11 0 0 1 11 11 v{h-22} a11 11 0 0 1 -11 11 h{-(w-22)} '
+                           f'a11 11 0 0 1 -11 -11 v{-(h-22)} a11 11 0 0 1 11 -11 Z', '#e8f4fb1f', True, w=1.4)))
+        s.append(f'<path d="M{x+6} {y+6} l6 -3" stroke="#fff" stroke-width="2.2" stroke-linecap="round" opacity=".85"/>')
+    s.append(draw(stroke(v['bridge'], 1.4)))
+    return ''.join(s)
+
 
 def build(name, p):
-    fills = BASE + (p['arms'] + p['props_back'] if name == 'what' else p['props_back'] + p['arms']) + [(d, LIMB) for d in p.get('front', [])]
-    wires = ''.join(f'<path d="{d}" stroke="#c9463d" stroke-width="3.2"/><path d="{d}" transform="translate(0 4)" stroke="#2e2f33" stroke-width="3.2"/>'
-                    for d in p.get('wires', []))
-    lines = ''.join(f'<path d="{seamless(d)}"/>' for d, _ in fills + [HORN]) + ''.join(f'<path d="{d}"/>' for d in MARKS + [SMILE] + p['props_marks'])
-    return f'''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" role="img" aria-labelledby="t">
-<title id="t">{TITLES[name]}</title>
-<!-- Original Rhino Studio wizard mascot, generated by scripts/wizard_poses.py. -->
-{DEFS}
-<g filter="url(#wob2)" opacity=".94">{''.join(P(d, f) for d, f in BASE)}</g>
-<g filter="url(#grain)">{''.join(P(d, f) for d, f in BASE)}</g>
-{face(p['mood'])}
-<g filter="url(#wob2)">{P(*HORN)}</g><g filter="url(#grain)">{P(*HORN)}</g>
-<g fill="none" stroke-linecap="round" filter="url(#wob1)">{wires}</g>
-<g filter="url(#wob2)" opacity=".96">{''.join(P(d, f) for d, f in fills[len(BASE):])}</g>
-<g filter="url(#grain)">{''.join(P(d, f) for d, f in fills[len(BASE):])}</g>
-<g fill="none" stroke="{LINE}" stroke-linecap="round" stroke-linejoin="round">
-  <g filter="url(#ink)" stroke-width="1.5" opacity=".92">{lines}</g>
-  <g filter="url(#wob2)" stroke-width=".8" opacity=".45" transform="translate(.8 .6)">{lines}</g>
-</g>
-</svg>
-'''
+    v = view_front() if p['view'] == 'front' else view_q()
+    mood = p.get('mood', 'happy')
+    layers = []
+    layers += [draw(x) for x in v['ears'] + v['back'] + p.get('far_arms', [])]
+    layers += [draw(x) for x in v['body']]
+    body_d = v['body'][0]['d']
+    layers.append(f'<clipPath id="bc-{name}"><path d="{body_d}"/></clipPath>'
+                  f'<g clip-path="url(#bc-{name})"><path d="{v["shade"]}" fill="{SHADE}" opacity=".38" filter="url(#soft)"/></g>')
+    layers += [draw(x) for x in v['legs'] + v['head'] + v['face']]
+    layers.append(eyes_and_glasses(v, mood))
+    layers += [draw(x) for x in v['horn'] + v['hat']]
+    for d in p.get('wires', []):
+        layers.append(f'<g fill="none" stroke-linecap="round" filter="url(#wob)"><path d="{d}" stroke="#c9463d" stroke-width="3.2"/>'
+                      f'<path d="{d}" transform="translate(0 4)" stroke="#2e2f33" stroke-width="3.2"/></g>')
+    layers += [draw(x) for x in p.get('near_arms', []) + p.get('props', [])]
+    figure = ''.join(layers)
+    ground = f'<path d="{v["ground"]}" fill="#000" opacity=".13" filter="url(#soft)"/>'
+    if p.get('mirror'):
+        figure = f'<g transform="translate(240 0) scale(-1 1)">{figure}</g>'
+        ground = f'<g transform="translate(240 0) scale(-1 1)">{ground}</g>'
+    overlay = ''.join(draw(x) for x in p.get('overlay', []))  # drawn unmirrored (text-like marks read the right way)
+    return (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" role="img" aria-labelledby="t">\n'
+            f'<title id="t">{TITLES[name]}</title>\n<!-- Original Rhino Studio wizard mascot, generated by scripts/wizard_poses.py. -->\n'
+            f'{DEFS}\n{ground}\n{figure}\n{overlay}\n</svg>\n')
 
-os.makedirs(OUT, exist_ok=True)
-for n, p in POSES.items():
-    open(os.path.join(OUT, f'rhino-{n}.svg'), 'w').write(build(n, p))
-print('wrote', len(POSES), 'poses to', OUT)
+
+if __name__ == '__main__':
+    os.makedirs(OUT, exist_ok=True)
+    for n, p in POSES.items():
+        open(os.path.join(OUT, f'rhino-{n}.svg'), 'w').write(build(n, p))
+    print('wrote', len(POSES), 'poses to', OUT)
