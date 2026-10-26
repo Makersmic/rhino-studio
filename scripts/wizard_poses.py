@@ -26,8 +26,8 @@ def tube(sx, sy, px, py, w=12, bend=0.0, tip=None):
             f'L{px-nx*tip:.1f} {py-ny*tip:.1f} Q{mx-nx*w:.1f} {my-ny*w:.1f} {sx-nx*w:.1f} {sy-ny*w:.1f}')
 
 
-def part(d, fill, line=True, closed_fill=True, w=1.5):
-    return dict(d=d, fill=fill, line=line, w=w)
+def part(d, fill, line=True, closed_fill=True, w=1.5, tf=''):
+    return dict(d=d, fill=fill, line=line, w=w, tf=tf)
 
 
 def arm(sx, sy, px, py, bend=0.0, paw=11, far=False):
@@ -48,15 +48,22 @@ def view_front():
     v = {}
     v['ears'] = [part('M66 74 C46 58 56 44 74 58 Z', EAR), part('M174 74 C194 58 184 44 166 58 Z', EAR)]
     v['back'] = []
-    v['body'] = [part('M54 194 C42 146 70 110 120 110 C170 110 198 146 186 194 C166 216 74 216 54 194 Z', BODY)]
+    v['body'] = [part('M58 200 C46 186 48 172 62 160 C58 146 62 130 76 122 C92 112 148 112 164 122 C178 130 182 146 178 160 C192 172 194 186 182 200 C164 216 76 216 58 200 Z', BODY)]
+    v['belt'] = [part('M50 156 C90 170 150 170 190 156 L190 170 C150 184 90 184 50 170 Z', '#8a5a3b'),
+                 part('M110 162 h20 v16 h-20 Z M115 166 h10 v8 h-10 Z', '#d8b25a', w=1.3),
+                 part('M150 170 h20 v22 C170 198 150 198 150 192 Z', '#7a4e33', w=1.3)]
+    v['folds'] = [stroke('M78 136 q9 -5 16 2 M146 138 q8 -6 16 -1', 1.1), stroke('M84 192 q36 10 72 0', 1.1),
+                  stroke('M100 128 q20 8 40 0', 1)]
     v['shade'] = 'M150 112 C204 124 206 196 172 214 L232 216 L232 100 Z'
     v['legs'] = [part(ell(88, 206, 24, 17), LIMB), part(ell(152, 206, 24, 17), LIMB),
                  stroke('M74 213 q4 5 8 0 M86 215 q4 5 8 0 M138 215 q4 5 8 0 M150 213 q4 5 8 0', 1.2)]
     v['head'] = [part('M64 86 C60 52 90 40 120 40 C150 40 180 52 176 86 C174 110 150 130 120 130 C90 130 66 110 64 86 Z', HEAD),
                  part(ell(120, 106, 40, 24), SNOUT)]
     v['face'] = [blob(ell(108, 106, 4, 3), LINE), blob(ell(132, 106, 4, 3), LINE),
-                 stroke('M104 116 Q120 128 136 116'),
-                 blob(ell(72, 102, 10, 6.5), '#ee9aa6aa'), blob(ell(168, 102, 10, 6.5), '#ee9aa6aa')]
+                 part('M110 116 Q120 128 130 116 Q120 119 110 116 Z', '#8a3c4a', w=1.3),
+                 blob(ell(72, 103, 10, 6), '#ee9aa699'), blob(ell(168, 103, 10, 6), '#ee9aa699'),
+                 stroke('M66 106 l4 -6 M71 106 l4 -6 M76 106 l4 -6 M162 106 l4 -6 M167 106 l4 -6 M172 106 l4 -6', .9)]
+    v['bangs'] = [part('M92 60 l6 -10 l5 8 l6 -12 l5 11 l6 -9 l4 12 Z', HEAD, w=1.2)]
     v['eyes'] = [(84, 80, 9.5, 12), (156, 80, 9.5, 12)]
     v['lenses'] = [(66, 64, 36, 30), (138, 64, 36, 30)]
     v['bridge'] = 'M102 74 Q120 66 138 74 M66 74 L60 70 M174 74 L180 70'
@@ -72,14 +79,20 @@ def view_q():
     v = {}
     v['ears'] = [part('M74 76 C52 60 62 44 84 58 Z', EAR), part('M168 64 C180 48 172 40 160 52 Z', FAR)]
     v['back'] = [part(ell(150, 204, 22, 16), FAR)]                       # far leg, behind the body
-    v['body'] = [part('M58 196 C46 150 72 112 122 112 C166 112 190 146 182 194 C164 214 80 216 58 196 Z', BODY)]
+    v['body'] = [part('M62 200 C50 186 52 172 66 160 C62 146 66 130 80 122 C96 112 146 112 162 122 C174 130 178 146 176 160 C188 172 190 186 180 200 C162 216 80 216 62 200 Z', BODY)]
+    v['belt'] = [part('M54 156 C92 170 148 170 186 154 L186 168 C148 184 92 184 54 170 Z', '#8a5a3b'),
+                 part('M128 164 h18 v15 h-18 Z M132 168 h10 v7 h-10 Z', '#d8b25a', w=1.3),
+                 part('M70 170 h18 v22 C88 198 70 198 70 192 Z', '#7a4e33', w=1.3)]
+    v['folds'] = [stroke('M82 136 q9 -5 16 2', 1.1), stroke('M90 192 q34 10 66 -2', 1.1), stroke('M108 128 q18 8 36 -1', 1)]
     v['shade'] = 'M146 114 C196 124 198 196 168 214 L232 216 L232 100 Z'
     v['legs'] = [part(ell(92, 208, 26, 17), LIMB), stroke('M76 215 q4 5 8 0 M88 217 q4 5 8 0 M100 216 q4 5 8 0', 1.2)]
     v['head'] = [part('M68 88 C64 52 96 40 126 40 C156 40 178 54 176 88 C174 112 154 130 126 130 C96 130 70 110 68 88 Z', HEAD),
                  part(ell(150, 106, 38, 23), SNOUT)]                       # snout pushes past the head outline
     v['face'] = [blob(ell(152, 110, 4, 3.2), LINE), blob(ell(176, 108, 3, 2.6), LINE),
-                 stroke('M132 120 Q148 130 166 118'),
-                 blob(ell(84, 102, 10, 6.5), '#ee9aa6aa'), blob(ell(170, 98, 6, 5), '#ee9aa688')]
+                 part('M142 120 Q152 131 162 119 Q152 122 142 120 Z', '#8a3c4a', w=1.3),
+                 blob(ell(84, 103, 10, 6), '#ee9aa699'), blob(ell(170, 99, 6, 5), '#ee9aa677'),
+                 stroke('M78 107 l4 -6 M83 107 l4 -6 M88 107 l4 -6', .9)]
+    v['bangs'] = [part('M100 60 l6 -10 l5 8 l6 -12 l5 11 l6 -9 l4 12 Z', HEAD, w=1.2)]
     v['eyes'] = [(100, 80, 9.5, 12), (150, 78, 6.5, 11)]                  # far eye foreshortened
     v['lenses'] = [(82, 64, 36, 30), (138, 64, 24, 28)]
     v['bridge'] = 'M118 74 Q128 68 138 74 M82 74 L72 70'
@@ -88,6 +101,17 @@ def view_q():
                 part('M58 56 C58 46 190 42 190 50 C190 58 58 62 58 56 Z', BRIM)]
     v['ground'] = ell(124, 224, 72, 7)
     return v
+
+
+def wrench(x, y, ang, length=200, scale=1.0):
+    """A big open-end wrench: handle from (x,y) at angle ang (deg), jaw at the far end."""
+    tf = f'translate({x} {y}) rotate({ang}) scale({scale})'
+    handle = f'M0 -9 L{length} -9 L{length} 9 L0 9 Z'
+    jaw = (f'M{length-6} -24 a30 30 0 1 1 0.1 48 a30 30 0 0 1 -0.1 -48 Z '
+           f'M{length+8} -10 L{length+40} -10 L{length+40} 10 L{length+8} 10 Z')
+    return [part(handle, '#c9cdd3', tf=tf, w=1.6), part(jaw, '#c9cdd3', tf=tf, w=1.6),
+            part(f'M10 0 L{length-30} 0', 'none', tf=tf, w=.9),
+            part(f'M{length-8} -14 a16 16 0 0 1 10 -6', 'none', tf=tf, w=.9)]
 
 
 # ---------------------------------------------------------------- the six poses
@@ -117,9 +141,11 @@ POSES = {
  'shows': dict(view='q',  # three-quarter, the far arm waves up behind the head
    far_arms=arm(160, 136, 196, 70, bend=-12, far=True),
    props=[stroke('M212 56 q8 6 6 16 M220 48 q11 9 8 24', 1.3)],
-   near_arms=REST_Q),
+   tool=wrench(40, 232, -90, 170, 1.0),
+   near_arms=arm(84, 140, 40, 150, bend=6)),
  'done': dict(view='front',  # front, thumbs up
-   near_arms=REST_FRONT + arm(164, 142, 194, 116, bend=8, paw=12) + [part(tube(194, 108, 197, 90, 4.8, 0, 4), LIMB)],
+   back_tool=wrench(222, 232, -145, 205, 1.0),
+   near_arms=arm(80, 140, 64, 122, bend=-6) + arm(164, 142, 194, 116, bend=8, paw=12) + [part(tube(194, 108, 197, 90, 4.8, 0, 4), LIMB)],
    props=[stroke('M216 80 l4 -10 l4 10 l10 4 l-10 4 l-4 10 l-4 -10 l-10 -4 Z', 1.3), stroke('M188 120 h10 M188 126 h9', 1.1)]),
 }
 TITLES = {'what': 'Rhino holding up a part', 'wiring': 'Rhino holding a wire', 'tools': 'Rhino pointing',
@@ -148,6 +174,7 @@ DEFS = '''<defs>
   <filter id="wob" x="-5%" y="-5%" width="110%" height="110%">
     <feTurbulence type="fractalNoise" baseFrequency="0.05" numOctaves="2" seed="9" result="w"/>
     <feDisplacementMap in="SourceGraphic" in2="w" scale="2.6"/></filter>
+  <radialGradient id="iris" cx="50%" cy="65%" r="60%"><stop offset="0" stop-color="#7fb4d8"/><stop offset="1" stop-color="#2f5d86"/></radialGradient>
   <filter id="soft"><feGaussianBlur stdDeviation="2.5"/></filter>
 </defs>'''
 
@@ -156,25 +183,30 @@ def draw(p):
     """One part: fill (base + grain), then its own outline (pressure ink + sketch pass)."""
     out = []
     if p['fill'] != 'none':
-        out.append(f'<path d="{p["d"]}" fill="{p["fill"]}" filter="url(#wob)" opacity=".95"/>')
+        out.append(f'<path d="{p["d"]}" fill="{p["fill"]}" fill-rule="evenodd" filter="url(#wob)" opacity=".95"/>')
         if p['line']:  # grain only on outlined shapes; small blobs stay clean
-            out.append(f'<path d="{p["d"]}" fill="{p["fill"]}" filter="url(#grain)"/>')
+            out.append(f'<path d="{p["d"]}" fill="{p["fill"]}" fill-rule="evenodd" filter="url(#grain)"/>')
     if p['line']:
         out.append(f'<path d="{p["d"]}" fill="none" stroke="{LINE}" stroke-width="{p["w"]}" stroke-linecap="round" '
                    f'stroke-linejoin="round" filter="url(#ink)" opacity=".92"/>')
         out.append(f'<path d="{p["d"]}" fill="none" stroke="{LINE}" stroke-width=".8" stroke-linecap="round" '
                    f'filter="url(#wob)" opacity=".42" transform="translate(.8 .6)"/>')
-    return ''.join(out)
+    body = ''.join(out)
+    return f'<g transform="{p["tf"]}">{body}</g>' if p.get('tf') else body
 
 
 def eyes_and_glasses(v, mood):
     s = []
     for i, (cx, cy, rx, ry) in enumerate(v['eyes']):
         up = -3 if mood == 'look-up' else 0
-        k = rx / 9.5
-        s.append(f'<ellipse cx="{cx}" cy="{cy+up}" rx="{rx}" ry="{ry}" fill="#22303d" filter="url(#wob)"/>')
-        s.append(f'<circle cx="{cx+4*k:.1f}" cy="{cy-5+up*1.3:.1f}" r="{3.8*k:.1f}" fill="#fff"/>')
-        s.append(f'<circle cx="{cx-3*k:.1f}" cy="{cy+5+up:.1f}" r="{1.7*k:.1f}" fill="#fff"/>')
+        k = rx / 9.5; rx, ry = rx * 1.12, ry * 1.12; cy += up
+        s.append(f'<ellipse cx="{cx}" cy="{cy}" rx="{rx:.1f}" ry="{ry:.1f}" fill="#fbfbf8" filter="url(#wob)"/>')
+        s.append(f'<ellipse cx="{cx+1*k:.1f}" cy="{cy+1:.1f}" rx="{rx*.8:.1f}" ry="{ry*.86:.1f}" fill="url(#iris)"/>')
+        s.append(f'<ellipse cx="{cx+1*k:.1f}" cy="{cy+2:.1f}" rx="{rx*.42:.1f}" ry="{ry*.5:.1f}" fill="#141c26"/>')
+        s.append(f'<ellipse cx="{cx+4*k:.1f}" cy="{cy-5:.1f}" rx="{3.6*k:.1f}" ry="{4.4*k:.1f}" fill="#fff"/>')
+        s.append(f'<circle cx="{cx-3*k:.1f}" cy="{cy+6:.1f}" r="{1.8*k:.1f}" fill="#fff" opacity=".9"/>')
+        s.append(draw(stroke(f'M{cx-rx-2:.1f} {cy-ry*.35:.1f} Q{cx:.1f} {cy-ry-4:.1f} {cx+rx+2:.1f} {cy-ry*.45:.1f}', 2.6)))
+        s.append(draw(stroke(f'M{cx+rx:.1f} {cy-ry*.5:.1f} l4 -3', 1.4)))
     for x, y, w, h in v['lenses']:
         s.append(draw(part(f'M{x+11} {y} h{w-22} a11 11 0 0 1 11 11 v{h-22} a11 11 0 0 1 -11 11 h{-(w-22)} '
                            f'a11 11 0 0 1 -11 -11 v{-(h-22)} a11 11 0 0 1 11 -11 Z', '#e8f4fb1f', True, w=1.4)))
@@ -187,18 +219,19 @@ def build(name, p):
     v = view_front() if p['view'] == 'front' else view_q()
     mood = p.get('mood', 'happy')
     layers = []
-    layers += [draw(x) for x in v['ears'] + v['back'] + p.get('far_arms', [])]
+    layers += [draw(x) for x in p.get('back_tool', []) + v['ears'] + v['back'] + p.get('far_arms', [])]
     layers += [draw(x) for x in v['body']]
     body_d = v['body'][0]['d']
     layers.append(f'<clipPath id="bc-{name}"><path d="{body_d}"/></clipPath>'
                   f'<g clip-path="url(#bc-{name})"><path d="{v["shade"]}" fill="{SHADE}" opacity=".38" filter="url(#soft)"/></g>')
+    layers.append(f'<g clip-path="url(#bc-{name})">' + ''.join(draw(x) for x in v['folds'] + v['belt']) + '</g>')
     layers += [draw(x) for x in v['legs'] + v['head'] + v['face']]
     layers.append(eyes_and_glasses(v, mood))
-    layers += [draw(x) for x in v['horn'] + v['hat']]
+    layers += [draw(x) for x in v['horn'] + v['bangs'] + v['hat']]
     for d in p.get('wires', []):
         layers.append(f'<g fill="none" stroke-linecap="round" filter="url(#wob)"><path d="{d}" stroke="#c9463d" stroke-width="3.2"/>'
                       f'<path d="{d}" transform="translate(0 4)" stroke="#2e2f33" stroke-width="3.2"/></g>')
-    layers += [draw(x) for x in p.get('near_arms', []) + p.get('props', [])]
+    layers += [draw(x) for x in p.get('tool', []) + p.get('near_arms', []) + p.get('props', [])]
     figure = ''.join(layers)
     ground = f'<path d="{v["ground"]}" fill="#000" opacity=".13" filter="url(#soft)"/>'
     if p.get('mirror'):
