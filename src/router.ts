@@ -36,6 +36,7 @@ export const router = createRouter({
     // pins), Parts (materials, nozzles, categories). Adding or editing a tool and Add hardware open full width.
     { path: '/assets/toolheads/new', component: () => import('./views/ToolWizardView.vue'), meta: { title: 'Add a toolhead', nav: '/assets' } },
     { path: '/assets/hardware/new', component: () => import('./views/toolheads/HardwareWizardView.vue'), meta: { title: 'Add hardware', nav: '/assets' } },
+    { path: '/assets/hardware/:name/edit', component: () => import('./views/toolheads/HardwareWizardView.vue'), props: true, meta: { title: 'Edit hardware', nav: '/assets' } },
     { path: '/assets/toolheads/:name/edit', component: () => import('./views/ToolEditView.vue'), meta: { title: 'Edit toolhead', nav: '/assets' } },
     {
       path: '/assets',

@@ -7,6 +7,7 @@
  * after the next Klipper restart. Each piece can have its own care tasks.
  */
 import { computed, onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import RsButton from '@/components/RsButton.vue'
 import ItemDialog from '@/toolmgr/ItemDialog.vue'
 import RestartBanner from '@/toolmgr/RestartBanner.vue'
@@ -19,6 +20,7 @@ import '@/maintenance/care.css'
 import '@/toolmgr/forms.css'
 
 const tm = useToolMgrStore()
+const router = useRouter()
 const care = useMaintenanceStore()
 const control = useControlStore()
 const error = ref<string | null>(null)
@@ -26,7 +28,7 @@ onMounted(() => tm.loadOptions().catch((e) => (error.value = (e as Error).messag
 
 const list = computed(() => tm.pins?.hardware ?? [])
 
-// Hardware added with the Add hardware wizard (Tool Manager 1.9): listed here, removed here, added in the wizard
+// Hardware added with the Add hardware wizard (Tool Manager 1.9): listed here, removed here, added and edited in the wizard
 type WizardItem = { name: string; device: string; label: string; purpose?: string; pins: Record<string, string>; headers?: Record<string, string>; macros?: string[]; live?: boolean }
 const wizardItems = ref<WizardItem[]>([])
 const wizardOk = ref(false)
@@ -173,6 +175,7 @@ async function remove() {
           <p v-if="x.purpose" class="tm-hint">{{ x.label }}{{ x.live ? ' · behind the padlock' : '' }}</p>
           <div v-if="x.macros?.length" class="sx-tags"><span v-for="m in x.macros" :key="m" class="sx-tag plain mono">{{ m }}</span></div>
           <footer class="tm-actions">
+            <RsButton size="sm" @click="router.push(`/assets/hardware/${encodeURIComponent(x.name)}/edit`)">Edit</RsButton>
             <RsButton size="sm" variant="danger-outline" @click="removeWizard(x)">Remove</RsButton>
             <RouterLink class="sx-link" :to="{ path: '/care/tasks', query: { for: `hw:${x.name}` } }">Care tasks{{ careOf(x.name).length ? ` (${careOf(x.name).length})` : '' }}</RouterLink>
           </footer>

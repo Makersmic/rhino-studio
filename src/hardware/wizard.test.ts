@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { WIZ_STEPS, STEP_POSE, asksSensorType, checkStep, newDraft, payload, pinText, pinsShown, settingShown, type HwDevice } from './wizard'
+import { WIZ_STEPS, STEP_POSE, asksSensorType, checkStep, draftFrom, newDraft, payload, pinText, pinsShown, settingShown, type HwDevice } from './wizard'
 
 const BUILT = ['gcode', 'heater', 'manual', 'motors', 'temperature']
 const dev = (over: Partial<HwDevice>): HwDevice => ({
@@ -97,5 +97,23 @@ describe('Add hardware wizard', () => {
     expect(settingShown('signal_inverted', d)).toBe(false)
     d.settings.wires = '4'
     expect(settingShown('signal_inverted', d)).toBe(true)
+  })
+
+  it('editing: a saved device comes back as the answers it was saved with, and saves as a replacement', () => {
+    const f = dev({ id: 'fan', live: false, pins: [['pin', 'pwm_out', true], ['tach', 'tach', false]], pin_when: { tach: { wires: ['3', '4'] } },
+      settings: [{ key: 'wires', kind: 'choice', default: '2', options: ['2', '3', '4'] }, { key: 'cycle', kind: 'num', default: 0.01, min: 0.00001, max: 0.5 },
+                 { key: 'kick_start', kind: 'num', default: 0.5, min: 0, max: 1 }] })
+    // as GET /api/hardware/devices sends it (cycle 4e-05 from Python's JSON; "gone" is a setting the catalog dropped)
+    const saved = { name: 'driver_fan', device: 'fan', purpose: 'cools drivers', pins: { pin: 'aux:PA8', tach: 'aux:PG12' },
+      settings: { wires: '4', cycle: 4e-5, gone: 1 }, scope: 'machine' as const, scope_values: [], follows: 'manual', expose: ['control', 'macros'], safe_off: false }
+    const d = draftFrom(saved, f, BUILT)
+    expect(d).toMatchObject({ name: 'driver_fan', original: 'driver_fan', purpose: 'cools drivers', pins: { pin: 'aux:PA8', tach: 'aux:PG12' }, safe_off: false })
+    expect(d.settings).toEqual({ wires: '4', cycle: 0.00004, kick_start: 0.5 })
+    expect(String(d.settings.cycle)).toBe('0.00004') // shown as typed, never 4e-05
+    const body = payload(d, f)
+    expect(body).toMatchObject({ original: 'driver_fan', name: 'driver_fan', safe_off: false, cycle: 0.00004, pins: { pin: 'aux:PA8', tach: 'aux:PG12' } })
+    expect(checkStep('What', f, d, ['lid'], BUILT)).toBeNull() // its own name isn't "taken"
+    expect(payload(newDraft(f, BUILT), f)).not.toHaveProperty('original')
+    expect(payload(newDraft(f, BUILT), f)).not.toHaveProperty('safe_off')
   })
 })

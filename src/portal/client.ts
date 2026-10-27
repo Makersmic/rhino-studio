@@ -511,8 +511,9 @@ export class PortalClient {
   async hwCatalog(): Promise<HwCatalog> {
     return this.getJson<HwCatalog>('/api/hardware/catalog')
   }
-  async hwPins(kind: string, sensor?: string): Promise<PinChoices> {
-    const q = new URLSearchParams({ kind, ...(sensor ? { sensor } : {}) })
+  /** Free pins for `kind`. excludeHw: the device being edited, so its own pins are offered too. */
+  async hwPins(kind: string, sensor?: string, excludeHw?: string): Promise<PinChoices> {
+    const q = new URLSearchParams({ kind, ...(sensor ? { sensor } : {}), ...(excludeHw ? { exclude_hw: excludeHw } : {}) })
     return this.getJson<PinChoices>(`/api/hardware/pins?${q}`)
   }
   async hwBoards(): Promise<BoardsState> {

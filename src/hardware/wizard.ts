@@ -212,6 +212,27 @@ export interface Draft {
   scope_values: string[]
   follows: string
   expose: string[]
+  /** Editing: the device's name as saved (the Portal replaces it). */
+  original?: string
+  /** Editing: kept as saved, so an edit never flips it (the wizard doesn't ask; a heater's is always on). */
+  safe_off?: boolean
+}
+
+/** A device as GET /api/hardware/devices returns it: its saved answers plus what the Portal adds. */
+export interface SavedDevice {
+  name: string
+  device: string
+  purpose?: string
+  notes?: string
+  pins: Record<string, string>
+  sensor_type?: string
+  isolated?: boolean
+  settings?: Record<string, number | string | boolean>
+  scope?: Draft['scope']
+  scope_values?: string[]
+  follows?: string
+  expose?: string[]
+  safe_off?: boolean
 }
 
 /** Devices whose digital input is a switch or sensor the user picks a type for (the Portal's rule). */
@@ -265,6 +286,30 @@ export function newDraft(dev: HwDevice, followsBuilt: string[]): Draft {
     scope_values: [],
     follows: dev.follows.find((f) => followsBuilt.includes(f)) ?? dev.follows[0] ?? 'manual',
     expose: [...dev.expose],
+  }
+}
+
+/** A saved device back into the wizard's answers, to edit it. Settings the catalog has gained since keep
+ *  their defaults; ones it no longer has are dropped (the Portal would refuse them). */
+export function draftFrom(saved: SavedDevice, dev: HwDevice, followsBuilt: string[]): Draft {
+  const base = newDraft(dev, followsBuilt)
+  const settings = { ...base.settings }
+  for (const [k, v] of Object.entries(saved.settings ?? {})) if (k in settings) settings[k] = v
+  return {
+    ...base,
+    name: saved.name,
+    purpose: saved.purpose ?? '',
+    notes: saved.notes ?? '',
+    pins: { ...saved.pins },
+    sensor_type: saved.sensor_type ?? base.sensor_type,
+    isolated: !!saved.isolated,
+    settings,
+    scope: saved.scope ?? 'machine',
+    scope_values: [...(saved.scope_values ?? [])],
+    follows: saved.follows ?? base.follows,
+    expose: [...(saved.expose ?? base.expose)],
+    original: saved.name,
+    ...(saved.safe_off === undefined ? {} : { safe_off: saved.safe_off }),
   }
 }
 
@@ -331,6 +376,8 @@ export function payload(d: Draft, dev: HwDevice): Record<string, unknown> {
     body.sensor_type = d.sensor_type
     body.isolated = d.isolated
   }
+  if (d.original) body.original = d.original
+  if (d.safe_off !== undefined) body.safe_off = d.safe_off
   return body
 }
 

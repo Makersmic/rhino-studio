@@ -9,6 +9,9 @@
  * picker offers only free pins that can do the job, and the Check step is the Portal's own preview of the
  * Klipper text. Save writes custom_tools.cfg, live after the next Klipper restart. Nothing here switches
  * anything on or moves the machine. "Second control board" runs a shorter flow that adds [mcu name].
+ *
+ * /assets/hardware/<name>/edit opens a saved device with its answers filled in (draftFrom); its kind is fixed,
+ * its own pins are offered again, and Save replaces it. The Portal refuses a change that would break a job hook.
  */
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
@@ -16,8 +19,8 @@ import RsButton from '@/components/RsButton.vue'
 import RsPanel from '@/components/RsPanel.vue'
 import RestartBanner from '@/toolmgr/RestartBanner.vue'
 import {
-  STEP_HELP, STEP_LABEL, STEP_POSE, WIRES_HELP, fanPinHelp, WIRING_KEYS, WIZ_STEPS, asksSensorType, checkStep, newDraft, payload, pinLabel, pinText, pinsShown,
-  settingLabel, settingShown, type BoardsState, type DevicePreview, type Draft, type HwCatalog, type HwDevice, type HwSetting, type PinChoice, type WizStep,
+  STEP_HELP, STEP_LABEL, STEP_POSE, WIRES_HELP, fanPinHelp, WIRING_KEYS, WIZ_STEPS, asksSensorType, checkStep, draftFrom, newDraft, payload, pinLabel, pinText, pinsShown,
+  settingLabel, settingShown, type BoardsState, type DevicePreview, type Draft, type HwCatalog, type HwDevice, type HwSetting, type PinChoice, type SavedDevice, type WizStep,
 } from '@/hardware/wizard'
 import { useToolMgrStore } from '@/stores/toolmgr'
 import '@/toolmgr/forms.css'
@@ -25,8 +28,10 @@ import '@/toolmgr/forms.css'
 const POSES = import.meta.glob('@/assets/wizard/rhino-*.svg', { eager: true, query: '?url', import: 'default' }) as Record<string, string>
 const pose = (p: string) => Object.entries(POSES).find(([k]) => k.endsWith(`rhino-${p}.svg`))?.[1] ?? ''
 
+const props = defineProps<{ name?: string }>()
 const router = useRouter()
 const tm = useToolMgrStore()
+const editing = computed(() => !!props.name)
 onBeforeUnmount(tm.use())
 
 const cat = ref<HwCatalog | null>(null)
@@ -44,8 +49,18 @@ async function load() {
   cat.value = catalog
   boards.value = b
   takenNames.value = [...devs.devices.map((x) => x.name), ...(tm.pins?.hardware ?? []).map((h) => h.name), ...b.boards.map((x) => x.name)]
+    .filter((n) => n !== props.name)
+  if (props.name) {
+    const sv = devs.devices.find((x) => x.name === props.name) as unknown as SavedDevice | undefined
+    const kind = sv && catalog.groups.flatMap((g) => g.devices).find((x) => x.id === sv.device)
+    if (!sv || !kind) throw new Error(`No hardware called ${props.name} was added with the wizard.`)
+    dev.value = kind
+    d.value = draftFrom(sv, kind, catalog.follows_built ?? [])
+  }
 }
 onMounted(() => load().catch((e) => (error.value = (e as Error).message)))
+// The router keeps this page when only the device in the address changes (Edit fan -> Edit lid, or Add -> Edit)
+watch(() => props.name, () => another())
 
 const isBoard = computed(() => dev.value?.id === 'board')
 const steps = computed<WizStep[]>(() => (isBoard.value ? ['What', 'Wiring', 'Check'] : WIZ_STEPS))
@@ -71,7 +86,7 @@ async function loadPins() {
   const out: Record<string, PinChoice[]> = {}
   for (const k of kinds) {
     const sensor = k === 'digital_in' && d.value.sensor_type ? d.value.sensor_type : undefined
-    out[k] = (await tm.client().hwPins(k, sensor)).pins
+    out[k] = (await tm.client().hwPins(k, sensor, d.value.original)).pins
   }
   choices.value = out
 }
@@ -201,8 +216,9 @@ const fmt = (s: HwSetting) => (s.kind === 'num' && s.min != null ? `${s.min} to 
   <div class="view">
     <RouterLink to="/assets/hardware" class="back">‹ System hardware</RouterLink>
     <div class="view-head">
-      <h1>Add hardware</h1>
-      <p>Five questions. The Portal offers only pins that can do the job, checks the result against your whole Klipper config, and writes it. It's live after the next Klipper restart.</p>
+      <h1>{{ editing ? `Edit ${name}` : 'Add hardware' }}</h1>
+      <p v-if="editing">Its answers are filled in. Change what you need; the Portal checks the result against your whole Klipper config and replaces it. It's live after the next Klipper restart.</p>
+      <p v-else>Five questions. The Portal offers only pins that can do the job, checks the result against your whole Klipper config, and writes it. It's live after the next Klipper restart.</p>
     </div>
     <RestartBanner />
     <p v-if="!cat && !error" class="muted">Loading the catalog from the Portal…</p>
@@ -215,8 +231,8 @@ const fmt = (s: HwSetting) => (s.kind === 'num' && s.min != null ? `${s.min} to 
           <p class="q">{{ saved }} is saved.</p>
           <p class="tm-hint">Restart Klipper to make it live (the banner above does it, or waits for the job to end).</p>
           <div class="acts">
-            <RsButton variant="primary" @click="another">Add more hardware</RsButton>
-            <RsButton @click="router.push('/assets/hardware')">System hardware</RsButton>
+            <RsButton v-if="!editing" variant="primary" @click="another">Add more hardware</RsButton>
+            <RsButton :variant="editing ? 'primary' : undefined" @click="router.push('/assets/hardware')">System hardware</RsButton>
           </div>
         </div>
       </div></div>
@@ -238,8 +254,9 @@ const fmt = (s: HwSetting) => (s.kind === 'num' && s.min != null ? `${s.min} to 
           <div class="body">
             <!-- ===== What is it ===== -->
             <template v-if="step === 'What'">
-              <p class="q">What are you adding?</p>
-              <section v-for="g in cat.groups" :key="g.id" class="grp">
+              <p class="q">{{ editing ? `What ${name} is` : 'What are you adding?' }}</p>
+              <p v-if="editing && dev" class="tm-hint"><strong>{{ dev.label }}.</strong> To make it a different kind, remove it and add the new one.</p>
+              <section v-for="g in editing ? [] : cat.groups" :key="g.id" class="grp">
                 <h2 class="gh"><span>{{ g.label }}</span><span class="rs-rule leader" /></h2>
                 <div class="tiles">
                   <button
