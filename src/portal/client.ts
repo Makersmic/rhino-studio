@@ -44,8 +44,10 @@
  *   PORTAL_HW_WIZARD     the Add hardware wizard (Tool Manager 1.9): check a
  *                        typed pin, check / save / remove a device or a second
  *                        board ([mcu name]). Same file and restart rule as
- *                        system hardware. Job hooks are not here: they wait for
- *                        the reviewed macro change.
+ *                        system hardware.
+ *   PORTAL_HOOKS         job hooks (Tool Manager 1.9): check, then save the
+ *                        lines Klipper runs at each moment of a job. The Portal
+ *                        checks every line again and writes job_hooks.cfg.
  *
  * Nothing here moves the machine or switches a tool on.
  *
@@ -58,6 +60,7 @@ import type { NetState, WifiNetwork } from '@/system/network'
 import type { EngineAuto, SliceJobState, SlicerState } from '@/slicer/prusa/portal'
 import type { ProfileDraft, ProfileList, SavedJob, SliceProfile } from '@/slicer/sliceProfiles'
 import type { BoardsState, DevicePreview, HwCatalog, PinChoice, PinChoices } from '@/hardware/wizard'
+import type { Hooks, HooksState } from '@/hardware/hooks'
 import type { PortalState, PreviewResult, ToolDetail, ToolLists, ToolOptions, ToolSheetData, WriteResult } from '@/toolmgr/types'
 
 /** GET /api/update (Tool Manager 1.5.3+) */
@@ -97,6 +100,9 @@ export const PORTAL_CARE_WRITES = [
 export const PORTAL_CARE_SETUP = ['areas', 'maint-lists', 'statuses'] as const
 export const PORTAL_TOOL_SETUP = ['tool-lists'] as const
 export const PORTAL_HARDWARE = ['preview-hardware', 'hardware-save', 'hardware-delete'] as const
+/** Job hooks (Tool Manager 1.9+): a check that writes nothing, and the save (rev-checked; the Portal checks every
+ *  line again and rewrites job_hooks.cfg, live after a Klipper restart). */
+export const PORTAL_HOOKS = ['hooks-preview', 'hooks-save'] as const
 export const PORTAL_HW_WIZARD = ['hw-pin-check', 'device-preview', 'device-save', 'device-delete', 'board-preview', 'board-save', 'board-delete'] as const
 /**
  * PORTAL_LABELS (Tool Manager 1.5.3+): pin labels, Klipper aliases in [board_pins rhino].
@@ -130,6 +136,7 @@ export type WriteKind =
   | (typeof PORTAL_TOOL_SETUP)[number]
   | (typeof PORTAL_HARDWARE)[number]
   | (typeof PORTAL_HW_WIZARD)[number]
+  | (typeof PORTAL_HOOKS)[number]
   | (typeof PORTAL_NETWORK)[number]
   | (typeof PORTAL_SLICER)[number]
   | (typeof PORTAL_UPDATE)[number]
@@ -185,6 +192,8 @@ export const WRITE_ROUTES: Record<WriteKind, { method: 'POST' | 'DELETE'; path: 
   'board-preview': { method: 'POST', path: /^\/api\/preview\/hardware\/boards$/ },
   'board-save': { method: 'POST', path: /^\/api\/hardware\/boards$/ },
   'board-delete': { method: 'DELETE', path: /^\/api\/hardware\/boards\/[a-z][a-z0-9_]{1,15}$/ },
+  'hooks-preview': { method: 'POST', path: /^\/api\/preview\/hooks$/ },
+  'hooks-save': { method: 'POST', path: /^\/api\/hooks$/ },
   'net-hostname': { method: 'POST', path: /^\/api\/net\/hostname$/ },
   'net-ipv4': { method: 'POST', path: /^\/api\/net\/ipv4$/ },
   'net-wifi': { method: 'POST', path: /^\/api\/net\/wifi$/ },
@@ -218,7 +227,7 @@ export const WRITE_ROUTES: Record<WriteKind, { method: 'POST' | 'DELETE'; path: 
 
 const ALLOWED = new Set<string>([
   ...PORTAL_WRITES, ...PORTAL_TOOL_CHECKS, ...PORTAL_TOOL_WRITES, ...PORTAL_RESTART,
-  ...PORTAL_CARE_WRITES, ...PORTAL_CARE_SETUP, ...PORTAL_TOOL_SETUP, ...PORTAL_HARDWARE, ...PORTAL_HW_WIZARD, ...PORTAL_LABELS, ...PORTAL_NETWORK, ...PORTAL_SLICER, ...PORTAL_UPDATE, ...PORTAL_TRUST,
+  ...PORTAL_CARE_WRITES, ...PORTAL_CARE_SETUP, ...PORTAL_TOOL_SETUP, ...PORTAL_HARDWARE, ...PORTAL_HW_WIZARD, ...PORTAL_HOOKS, ...PORTAL_LABELS, ...PORTAL_NETWORK, ...PORTAL_SLICER, ...PORTAL_UPDATE, ...PORTAL_TRUST,
   ...PORTAL_BACKUP, ...PORTAL_PROFILES,
 ])
 const enc = encodeURIComponent
@@ -530,6 +539,15 @@ export class PortalClient {
   }
   async saveDevice(body: Record<string, unknown>): Promise<WriteResult> {
     return this.write('device-save', 'POST', '/api/hardware/devices', body)
+  }
+  async hooksState(): Promise<HooksState> {
+    return this.getJson<HooksState>('/api/hooks')
+  }
+  async previewHooks(body: { rev: number; hooks: Hooks }): Promise<HooksState> {
+    return this.write<HooksState>('hooks-preview', 'POST', '/api/preview/hooks', body)
+  }
+  async saveHooks(body: { rev: number; hooks: Hooks }): Promise<HooksState & WriteResult> {
+    return this.write<HooksState & WriteResult>('hooks-save', 'POST', '/api/hooks', body)
   }
   async deleteDevice(name: string): Promise<WriteResult> {
     return this.write('device-delete', 'DELETE', `/api/hardware/devices/${enc(name)}`)

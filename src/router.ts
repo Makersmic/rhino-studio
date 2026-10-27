@@ -50,6 +50,7 @@ export const router = createRouter({
         { path: 'kinds', component: () => import('./views/toolheads/KindsView.vue'), meta: { title: 'Kinds of tool' } },
         { path: 'hardware', component: () => import('./views/toolheads/HardwareView.vue'), meta: { title: 'System hardware' } },
         { path: 'pins', component: () => import('./views/toolheads/PinsView.vue'), meta: { title: 'Board pins and outputs' } },
+        { path: 'hooks', component: () => import('./views/toolheads/JobHooksView.vue'), meta: { title: 'Job hooks' } },
         { path: 'materials', component: () => import('./views/toolheads/ToolListsView.vue'), props: { part: 'materials' }, meta: { title: 'Materials' } },
         { path: 'nozzles', component: () => import('./views/toolheads/ToolListsView.vue'), props: { part: 'nozzles' }, meta: { title: 'Nozzles' } },
         { path: 'categories', component: () => import('./views/toolheads/ToolListsView.vue'), props: { part: 'categories' }, meta: { title: 'Categories' } },

@@ -2,7 +2,7 @@
 /**
  * Assets, with its own menu (Mike, Oct 26):
  *   Toolheads  Library (and each tool's page), Tool connector, Kinds of tool
- *   Hardware   System hardware, Board pins and outputs
+ *   Hardware   System hardware, Board pins and outputs, Job hooks
  *   Parts      Materials, Nozzles, Categories
  * Adding or editing a tool and Add hardware open full width. Old /toolheads/... addresses redirect here (router.ts).
  */
@@ -32,6 +32,7 @@ const groups = computed<SectionGroup[]>(() => {
       items: [
         { to: '/assets/hardware', label: 'System hardware', count: p?.hardware.length || '' },
         { to: '/assets/pins', label: 'Board pins and outputs' },
+        { to: '/assets/hooks', label: 'Job hooks' },
       ],
     },
     {
