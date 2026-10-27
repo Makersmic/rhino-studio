@@ -2,7 +2,7 @@
 
 One interface for every Rhino Multi Motion System process: import a model, pick a toolhead, prepare, preview, send and monitor. "Rhino Studio" is a working title; the name and logo live in `src/brand/brand.ts`.
 
-Status: **Phases 3-4** (Job setup: print, laser, knife and CNC job files from Kiri:Moto), on top of 2b (machine control), 2a (live status) and Care (maintenance). **This version can move the Rhino, heat it, run macros and start jobs.** Run the checks in [docs/testing.md](docs/testing.md) in order before trusting it, starting with 2a's A1-A8.
+Status: Job setup for print, laser, knife and CNC (Kiri:Moto in the browser), machine control, live status, Care (maintenance), and Assets (toolheads, system hardware with the Add hardware wizard, and parts). **This version can move the Rhino, heat it, run macros and start jobs.** Run the checks in [docs/testing.md](docs/testing.md) in order before trusting it, starting with 2a's A1-A8.
 
 ### What it can do
 
@@ -13,7 +13,13 @@ Status: **Phases 3-4** (Job setup: print, laser, knife and CNC job files from Ki
   - **Jog** screen uses two-hand control: the jog keys stay greyed out unless the **Hold** button in the bottom corner is held. Hold with one thumb, tap with the other; one tap is one step. Letting go, a cancelled touch, the screen turning off or switching apps kills the keys at once. A left-handed option mirrors the layout. On a computer, hold Shift as the Hold button.
   - **Status** screen: big work/machine position, Home, Set Z zero / Set work zero.
 - **Klipper prompts**: the Rhino wizards' questions (SWAP_TOOL, RESTORE_TOOL, the job setup wizards) pop up in Studio as well as Mainsail. A button runs only its own command.
-- **Toolheads**: the tool library from the Rhino Portal, as Studio's tool tiles. Each tool has its own page, laid out like its manual pages: what it does and how to start a job with it, the tool connector drawn as in the manual (select a contact to find it in the table), materials, macros, its usage meters and care, and its drawing or photos. **Care tasks** opens Care showing only that tool. Added tools have **Edit tool**: name, power limits, materials, checklist, the connector contacts it uses (select them on the drawing), notes, photos, and its controls and macros, each checked live against your Klipper config with the exact text it adds to `custom_tools.cfg`. Toolheads has its own menu too: **Library**; **Wiring** (the tool connector, with a toolhead picker that inks only that tool's contacts; the board's **pin labels** (names for pins, kept as Klipper aliases in `[board_pins rhino]`: click a label's pin for the free ones, pick one and press the save icon, the old pin shows under it; **Label it** switches an output written with a raw pin over to a label), its outputs and a pin map; **System hardware**, the fans, lights, pumps and switches wired to the board, added and edited with the same checked form as a tool's controls (**Scan Config** lists the pin labels and pins your config files already define), live after a restart); and **Toolhead setup** (the kinds of tool Add a toolhead offers with their starting values, material names, nozzle sizes and hardware categories). **Add a toolhead** walks through the Portal's steps (kind, outputs or connector or the print head it copies, limits, materials, controls, macros, review). Changes wait for a Klipper restart; a banner lists them and offers **Restart Klipper** when the machine is idle (or a restart when the job ends). The Portal stays the store and the judge; Studio sends exactly the requests the Portal's own screens send.
+- **Assets**: everything the machine is made of, in three groups (old `#/toolheads/...` links still work).
+  - **Toolheads**: **Library** (the Rhino Portal's tools as Studio's tool tiles; each tool has its own page laid out like its manual pages: what it does and how to start a job with it, the tool connector drawn as in the manual, materials, macros, its usage meters and care, and its drawing or photos; added tools have **Edit tool**: name, power limits, materials, checklist, connector contacts, notes, photos, controls and macros, each checked live against your Klipper config with the exact text it adds to `custom_tools.cfg`), **Tool connector** (with a toolhead picker that inks only that tool's contacts) and **Kinds of tool** (what Add a toolhead offers, with starting values). **Add a toolhead** walks through the Portal's steps (kind, outputs or connector or the print head it copies, limits, materials, controls, macros, review).
+  - **Hardware**: **System hardware** (the fans, lights, pumps, heaters, sensors and switches wired to the board) and **Board pins and outputs** (the board's **pin labels**, kept as Klipper aliases in `[board_pins rhino]`, its outputs and a pin map). **Add hardware** is a wizard: what is it, how is it wired (each pin checked against what the board can do; second boards such as an EBB or SKR Pico are added here too), which tools it's for, what it follows, what it shows. Fans take 2, 3 or 4 wires (speed signal, tach, power pin).
+  - **Parts**: **Materials**, **Nozzles** and **Categories**, one page each.
+  - Changes wait for a Klipper restart; a banner lists them and offers **Restart Klipper** when the machine is idle (or a restart when the job ends). The Portal stays the store and the judge; Studio sends exactly the requests the Portal's own screens send.
+- **Control › Hardware**: a control for each piece of system hardware. Fans, dimmers and lights get a slider, a % field and Off; switches Off/On; servos an angle. Heaters, spindles and laser-style power sit behind a padlock and turn red while unlocked. Interlocks show Open or Closed, fans their speed (and rpm with a tach; a red notice says when a driven fan isn't turning).
+- **Macro buttons that take values** (like `DRIVER_FAN_SET SPEED=`) open a small prompt with a field (and a slider when the macro's description gives a range, like `SPEED=0..1`) instead of sending the bare name.
 - **Dashboard reports**: under the camera screen, everything the Rhino Portal's Dashboard shows, drawn the e-paper way (ink, dots and hatching instead of colours): production hours, jobs, filament, overdue and due-soon tiles; hours and jobs by toolhead; each toolhead at a glance with its most urgent care task; task status, next up and tasks by machine and toolhead; jobs and maintenance logged per week. Every chart has a Table button for the exact numbers. The figures come from the Portal (`/api/maint`, `/api/maint/history`, `/api/dash/jobs`), so they match it; the Dashboard stays look-only.
 - **Job setup** (the flow of online manufacturing services like SendCutSend and Xometry: upload, confirm the process, configure): **1 File**: drop a model (STL, 3MF, OBJ) or drawing (SVG, DXF), or start from a toolhead card (what it makes, files it takes, build or cut area, materials). **2 Process**: Studio says whether it's a 3D model or a flat drawing and lists the processes that fit, best first (skipped when you started from a card that fits). **3 Set up & send**: place it on a to-scale bed (leadscrew keep-out and prime line shown), pick the material, adjust the settings and Prepare. Kiri:Moto's engine slices **in the browser**, never on the Pi. Print heads get a print with START_JOB and CALCULATE_PA (the same lines as the Orca profile: tool check, homing, heat from the material table, prime, pressure advance) and END_PRINT; the LightSaber a cut in machine X/Y with power scaled to `laser_s_max`, repeated per pass, rail off at the end; the drag knife a cut with slow blade plunges; HotJoe a cut-out (or clear-and-cut-out) in work coordinates, X0 Y0 at the stock's front-left corner and Z0 on its top. Materials, powers and feeds come from Klipper's own `VARIABLES` tables. Every file is then **checked line by line** (tool, forbidden commands, travel limits or stock, nothing printed or cut over the leadscrew, heaters, laser power, depth, END_PRINT) and anything that fails can't be sent. **Send to Rhino** only uploads it; start it from Files.
 - **Advanced settings and ready-made files**: print jobs have fold-outs grouped the way Orca groups them (quality, strength, speed, retraction, support, cooling, bed adhesion); laser and knife cuts have smoothing and outer-outline-only; CNC jobs pick the cutter (end or ball mill, cutting length) and a list of steps (level the top, rough out, outline inside or outside) run in order with one tool. To slice somewhere else (OrcaSlicer offline, LightBurn, Fusion), drop the **.gcode** in Job setup instead: it's shown on the bed as it is, never sliced again, and gets the same line-by-line check with rules for outside programs (a missing toolhead or END_PRINT is a note; forbidden commands, keep-outs, laser power and travel limits still block). A file that doesn't name its toolhead gets `; rhino_toolhead = …` added to the copy that's sent.
@@ -93,7 +99,7 @@ Preventive maintenance comes from the Rhino Portal that already runs on the Pi (
   - **Usage meters**: the machine's meters as readouts, each tool's in a fold, Set a reading, and the Mainsail reminder switch.
   - **Care setup**: status codes (the four questions, each folded card saying its answers in a line) and the areas, kinds of work and priorities tasks choose from.
 - **Top bar and nav**: what's due, one tap away.
-- **Toolhead tiles** (Prepare, Toolheads): each tool's care status.
+- **Toolhead tiles** (Prepare, Assets): each tool's care status.
 - **Device**: care for the mounted tool and the machine before the next job.
 - **Files**: "Care due" next to files whose toolhead needs attention.
 - **Alert**: overdue care on the mounted tool.
@@ -141,7 +147,8 @@ src/
   toolheads/    look of each toolhead: accent, icon, summary
   moonraker/    websocket client, tool-state rules, G-code header reader (+ tests)
   control/      command safety check, prompt parser, job-start rules (+ tests); motion, heat, job, console panels; dialogs
-  portal/       Rhino Portal client (maintenance API)
+  portal/       Rhino Portal client (tools, hardware, care, updates; its write allowlist)
+  hardware/     Add hardware wizard rules, fan readings and stall checks (+ tests)
   maintenance/  care rules (+ tests), task cards, log-work dialog, care tiles
   slicer/       Prepare: job settings, Kiri:Moto settings, Rhino job file writer, file checks, ready-made G-code reader (+ tests), engine loader
   prepare/      Job setup parts: step bar, toolhead cards and their facts (+ tests), bed view, number fields, advanced fold-outs, CNC steps
@@ -150,12 +157,13 @@ src/
   bedmesh/      bed mesh: reading Klipper's mesh, tilt and warp, which mesh a print uses (+ tests); the top-down map
   stores/       machine state, control (console, prompts, motion lock, confirmations), cameras, care, settings, theme
   components/   shell (top bar, rail, E-stop) and shared parts
-  views/        one file per screen
+  views/        one file per screen (views/toolheads/ holds the Assets screens)
   router.ts     screens and their URLs
 design/icons/   exported SVGs for the README, videos and the Portal
 scripts/        icon export, mock Moonraker, kiri/ (builds the Kiri:Moto engine into public/kiri/)
 public/kiri/    the Kiri:Moto engine, built from a pinned grid-apps commit (MIT, licence alongside)
 docs/           testing on the machine
+AGENTS.md       rules for any contributor, human or AI
 ```
 
 ## Decisions so far
