@@ -145,6 +145,12 @@ export function shiftXY(lines: string[], dx: number, dy: number): string[] {
   })
 }
 
+/** Adds every line of `lines` to `out`. Never `out.push(...lines)`: a spread passes each line as its own
+ *  argument, and a real model's G-code (hundreds of thousands of lines) overflows the call stack. */
+function append(out: string[], lines: string[]) {
+  for (const l of lines) out.push(l)
+}
+
 export function rhinoFile(kiri: string, job: PrepareJob, part: PartInfo, _machine: MachineInfo, studioVersion: string, engine = 'Kiri:Moto'): RhinoFile {
   const head = header(job, part, studioVersion, engine)
   let cut = body(kiri, engine)
@@ -173,10 +179,9 @@ export function rhinoFile(kiri: string, job: PrepareJob, part: PartInfo, _machin
         'G21 ; millimetres',
         `M83 ; relative extrusion (${engine} writes E per move)`,
         'G92 E0',
-        ...cut,
-        'M107 ; part fan off',
-        'END_PRINT',
       )
+      append(out, cut)
+      out.push('M107 ; part fan off', 'END_PRINT')
       break
     }
     case 'laser': {
@@ -184,7 +189,7 @@ export function rhinoFile(kiri: string, job: PrepareJob, part: PartInfo, _machin
       out.push('G21 ; millimetres', 'G90 ; absolute machine X/Y, same as the Studio bed', 'M5 ; laser off before the first move')
       for (let p = 1; p <= passes; p++) {
         if (passes > 1) out.push(`; pass ${p} of ${passes}`)
-        out.push(...cut)
+        append(out, cut)
       }
       out.push('M5 ; laser off', 'DEACTIVATE_LASER ; laser power rail off', 'END_PRINT')
       break
@@ -201,7 +206,9 @@ export function rhinoFile(kiri: string, job: PrepareJob, part: PartInfo, _machin
       break
     }
     case 'cnc': {
-      out.push('G21 ; millimetres', 'G90 ; absolute work coordinates (CNC_JOB_SETUP sets X0 Y0 and Z0)', ...cut, 'M5 ; spindle off', 'END_PRINT')
+      out.push('G21 ; millimetres', 'G90 ; absolute work coordinates (CNC_JOB_SETUP sets X0 Y0 and Z0)')
+      append(out, cut)
+      out.push('M5 ; spindle off', 'END_PRINT')
       break
     }
   }

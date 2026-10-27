@@ -164,6 +164,24 @@ describe('rhinoFile', () => {
     const { checks } = checkFile(f.text, j, part(), M)
     expect(blocking(checks)).toEqual([])
   })
+  it('a real-sized model (600k lines) builds for every process without overflowing the call stack', () => {
+    // A 10 mm cube is a few hundred lines; a 4 MB Thingiverse sphere is hundreds of thousands.
+    // `out.push(...lines)` passed each line as an argument and threw "Maximum call stack size exceeded".
+    const n = 600_000
+    const big = Array.from({ length: n }, (_, i) => `G1 X${100 + (i % 50)} Y${100 + (i % 37)} E0.01`).join('\n')
+    const jobs = [
+      newJob('BlockOne', 'fdm', materialsFor('BlockOne', null).list),
+      newJob('LightSaber', 'laser', materialsFor('LightSaber', null).list),
+      newJob('HotJoe', 'cnc', materialsFor('HotJoe', null).list),
+    ]
+    for (const j of jobs) {
+      const f = rhinoFile(big, j, part(), M, 'x')
+      const lines = f.text.trim().split('\n')
+      expect(lines.filter((l) => l.startsWith('G1 X')).length).toBeGreaterThanOrEqual(n)
+      expect(lines.at(-1)).toBe('END_PRINT')
+      expect(() => checkFile(f.text, j, part(), M)).not.toThrow()
+    }
+  }, 60_000) // the line-by-line check takes a few seconds on 600k lines
   it('BlockOne gets the Orca profile\'s CALCULATE_PA line right after START_JOB', () => {
     const j = newJob('BlockOne', 'fdm', materialsFor('BlockOne', null).list)
     const lines = rhinoFile(fdmKiri, j, part(), M, 'x').text.split('\n')
