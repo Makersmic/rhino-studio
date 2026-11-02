@@ -33,6 +33,7 @@ import { buildIni, loadSchema, valueOf, type RhinoCtx, type Schema } from '@/sli
 import { runPrusa, type SlicerState } from '@/slicer/prusa/portal'
 import { useMaintenanceStore } from './maintenance'
 import { useSliceProfilesStore } from './sliceProfiles'
+import { sameIfEqual } from '@/prepare/stable'
 import {
   applyProfile, builtinId, defaultsFor, diffSettings, engineOf, isBuiltin, jobSettings, profileStatus, setJobSettings,
   type AnySettings, type SavedJob,
@@ -81,7 +82,12 @@ export const usePrepareStore = defineStore('prepare', () => {
   const machine = useMachineStore()
 
   // ---- the machine, as Klipper describes it (built-in numbers until connected)
-  const machineInfo = computed<MachineInfo>(() => {
+  const machineInfo = computed<MachineInfo>((previous) => {
+    // Status updates arrive constantly, and everything that reads this re-runs when it changes (checking a
+    // whole file, for one). Keep the same object unless a value really changed.
+    return sameIfEqual(previous, readMachineInfo())
+  })
+  function readMachineInfo(): MachineInfo {
     const st = machine.status
     const lim = machine.limits
     const vars = st['gcode_macro VARIABLES'] as Record<string, unknown> | undefined
@@ -98,7 +104,7 @@ export const usePrepareStore = defineStore('prepare', () => {
       keepOut: DEFAULT_MACHINE.keepOut,
       prime: pos ? { x: num(pos.prime_x, 5), y: num(pos.prime_y, 10), length: num(pos.prime_length, 120) } : machine.online ? null : DEFAULT_MACHINE.prime,
     }
-  })
+  }
 
   /** Every toolhead Studio can prepare a job for: Klipper's list, or the built-in five offline. */
   const tools = computed<PrepTool[]>(() => {

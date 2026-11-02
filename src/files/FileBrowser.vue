@@ -29,7 +29,7 @@ import { fetchFileToolhead } from '@/moonraker/gcodeHeader'
 import { useMachineStore } from '@/stores/machine'
 import { useMaintenanceStore } from '@/stores/maintenance'
 import { useControlStore } from '@/stores/control'
-import { careText } from '@/maintenance/summary'
+import { jobCareNote } from '@/maintenance/summary'
 import { lastRuns, type LastRun } from '@/files/lastRun'
 import { POWER_ACTIONS } from '@/system/power'
 import FileMenu, { type MenuItem } from './FileMenu.vue'
@@ -212,7 +212,7 @@ async function start(r: Row) {
     }
     const tool = h && h !== 'error' ? h : machine.mountedName
     const c = tool ? care.forTool(tool) : null
-    const careNote = c && (c.overdue || c.dueSoon) && c.next ? `Care for ${tool}: ${careText(c)} (${c.next.title}). Nothing is blocked; it's your call.` : null
+    const careNote = jobCareNote(c, tool)
     const ok = await control.startJob(r.rel, h === 'error' ? null : h, careNote)
     if (ok) setTimeout(load, 1500)
   } finally {
@@ -615,6 +615,7 @@ function menuItems(r: Row): MenuItem[] {
   }
   const m = openMode(props.root, r.name, r.size)
   const items: MenuItem[] = []
+  if (props.root === 'gcodes' && isGcode(r.name)) items.push({ label: 'Preview', run: () => void router.push({ path: '/preview', query: { file: r.rel } }) })
   if (m.mode !== 'download') items.push({ label: m.mode === 'edit' && !lock ? 'Edit' : 'View', run: () => void open(r) })
   items.push({ label: 'Download', run: () => download(r) })
   if (!ro) {

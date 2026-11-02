@@ -103,6 +103,11 @@ export function careText(c: Pick<AssetCare, 'overdue' | 'dueSoon' | 'total'>): s
   return parts.length ? parts.join(', ') : 'Up to date'
 }
 
+/** The line in a job's confirmation when care is due on its tool. It informs and never blocks. */
+export function jobCareNote(c: (Pick<AssetCare, 'overdue' | 'dueSoon' | 'total'> & { next?: { title: string } | null }) | null | undefined, tool: string | null | undefined): string | null {
+  return c && (c.overdue || c.dueSoon) && c.next ? `Care for ${tool}: ${careText(c)} (${c.next.title}). Nothing is blocked; it's your call.` : null
+}
+
 /** Meter readings rounded for display: 1,148 h, 6,062 m, 492 jobs. */
 export function fmtMeter(value: number, unit: string): string {
   const v = Math.abs(value) >= 100 ? Math.round(value) : Math.round(value * 10) / 10

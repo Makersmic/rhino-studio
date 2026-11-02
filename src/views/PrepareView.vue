@@ -482,6 +482,7 @@ const engineNote = computed(() => {
               <RsButton variant="primary" :disabled="!!prep.blocked.length || !machine.online || prep.sending != null" @click="prep.send()">
                 {{ prep.sending != null ? `Sending ${Math.round(prep.sending * 100)}%` : 'Send to Rhino' }}
               </RsButton>
+              <RsButton @click="router.push({ path: '/preview', query: { from: 'setup' } })">Preview</RsButton>
               <RsButton v-if="!up" :disabled="!!prep.blocked.length" @click="prep.download()">Download</RsButton>
               <span v-if="!machine.online" class="muted small">Connect to send.<template v-if="!up"> Download works offline.</template></span>
             </div>

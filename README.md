@@ -233,6 +233,7 @@ Third-party pieces in use:
 | Package | Licence |
 |---|---|
 | Vue, Vue Router, Pinia, Vite | MIT |
+| three.js (the 3D drawing in Preview, loaded only when it opens) | MIT |
 | Archivo, JetBrains Mono (via Fontsource) | SIL Open Font License 1.1 |
 | DSEG7 Classic by keshikan (bundled in `src/assets/fonts/`, unmodified, licence alongside) | SIL Open Font License 1.1 |
 | Kiri:Moto engine, GridSpace grid-apps 4.7.0 (bundled in `public/kiri/`, built by `scripts/kiri/build.mjs` with two path fixes, licence alongside) | MIT |
