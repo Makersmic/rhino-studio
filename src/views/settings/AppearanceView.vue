@@ -4,6 +4,8 @@ import './settings.css'
 import RsPanel from '@/components/RsPanel.vue'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import RsButton from '@/components/RsButton.vue'
+import PageImagePicker from './PageImagePicker.vue'
+import TextColourPicker from './TextColourPicker.vue'
 import { useThemeStore, type ThemePref } from '@/stores/theme'
 import { usePanelThemeStore } from '@/stores/panelTheme'
 
@@ -148,6 +150,9 @@ const options: { value: ThemePref; label: string }[] = [
           <RsButton :disabled="!pending || busy" @click="revert">Revert</RsButton>
           <span v-if="pending" class="pending">Showing a preview: Apply to keep it.</span>
         </div>
+
+        <TextColourPicker :locked="themeChoice !== CURRENT" />
+        <PageImagePicker :locked="themeChoice !== CURRENT" />
 
         <form class="save-row" @submit.prevent="saveTheme">
           <label class="field grow">

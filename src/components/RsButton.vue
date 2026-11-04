@@ -33,9 +33,10 @@ withDefaults(
   min-height: 38px;
   padding: 0 var(--rs-space-4);
   border-radius: var(--rs-radius-md);
-  border: 1px solid var(--rs-line-strong);
-  background: transparent;
-  color: var(--rs-text-strong);
+  /* a theme can fill everyday buttons (--rs-btn-*, see theme/panelColors.ts); otherwise they're outlined */
+  border: 1px solid var(--rs-btn-edge, var(--rs-line-strong));
+  background: var(--rs-btn-fill, transparent);
+  color: var(--rs-btn-text, var(--rs-text-strong));
   font-weight: var(--rs-weight-medium);
   font-size: var(--rs-text-sm);
   cursor: pointer;
@@ -43,14 +44,15 @@ withDefaults(
   transition: background var(--rs-dur) var(--rs-ease), color var(--rs-dur) var(--rs-ease);
 }
 .btn.sm { min-height: 32px; padding: 0 var(--rs-space-3); }
-.btn:hover:not(:disabled) { background: var(--rs-surface-2); }
+.btn:hover:not(:disabled) { background: var(--rs-btn-hover, var(--rs-surface-2)); }
 .primary { background: var(--rs-ink); border-color: var(--rs-ink); color: var(--rs-on-ink); }
-.primary:hover:not(:disabled) { background: var(--rs-text); }
-.quiet { border-color: transparent; color: var(--rs-text); padding: 0 var(--rs-space-2); }
+.primary:hover:not(:disabled) { background: var(--rs-ink-hover, var(--rs-text)); }
+.quiet { background: transparent; border-color: transparent; color: var(--rs-btn-quiet, var(--rs-text)); padding: 0 var(--rs-space-2); }
 .quiet:hover:not(:disabled) { background: transparent; color: var(--rs-text-strong); text-decoration: underline; text-underline-offset: 4px; }
 .danger { background: var(--rs-danger); border-color: var(--rs-danger); color: var(--rs-on-danger); }
 .danger:hover:not(:disabled) { background: var(--rs-danger-strong); }
-.danger-outline { border-color: var(--rs-danger); color: var(--rs-danger); }
+/* no theme recolours these: red keeps its meaning */
+.danger-outline { background: transparent; border-color: var(--rs-danger); color: var(--rs-danger); }
 .danger-outline:hover:not(:disabled) { background: var(--rs-danger); color: var(--rs-on-danger); }
 .btn:disabled { cursor: not-allowed; opacity: 0.35; }
 </style>

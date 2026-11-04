@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { watchEffect } from 'vue'
+import { computed, watchEffect } from 'vue'
+import { pageImageStyle } from '@/theme/panelColors'
 import { useRoute } from 'vue-router'
 import AppTopBar from '@/components/AppTopBar.vue'
 import AppRail from '@/components/AppRail.vue'
@@ -10,6 +11,7 @@ import PanelColorDialog from '@/components/PanelColorDialog.vue'
 import UntrustedCard from '@/components/UntrustedCard.vue'
 import { useMachineStore } from '@/stores/machine'
 import { useThemeStore } from '@/stores/theme'
+import { usePanelThemeStore } from '@/stores/panelTheme'
 import { useSettingsStore, portalBase } from '@/stores/settings'
 import { useMaintenanceStore } from '@/stores/maintenance'
 import { brand } from '@/brand/brand'
@@ -35,6 +37,26 @@ watchEffect(() => {
   document.documentElement.style.setProperty('--rs-active', `var(${v})`)
 })
 
+// A theme's page colours go on the whole document, so the top bar, rail, dialogs and menus follow it
+const themes = usePanelThemeStore()
+let pageKeys: string[] = []
+watchEffect(() => {
+  const root = document.documentElement.style
+  const vars = themes.pageVars
+  for (const k of pageKeys) if (!(k in vars)) root.removeProperty(k)
+  for (const [k, v] of Object.entries(vars)) root.setProperty(k, v)
+  pageKeys = Object.keys(vars)
+})
+
+// The picture behind the page, if the theme has one. The Pendant is full screen and keeps its own plain look.
+const maintenance = useMaintenanceStore()
+const pagePicture = computed(() =>
+  route.meta.bare ? {} : pageImageStyle(themes.pageColours, (path) => maintenance.portal()?.media(path) ?? null),
+)
+watchEffect(() => {
+  document.documentElement.toggleAttribute('data-page-picture', !!pagePicture.value.backgroundImage)
+})
+
 watchEffect(() => {
   const page = route.meta.title as string | undefined
   document.title = page ? `${page} · ${brand.name}` : brand.name
@@ -42,6 +64,7 @@ watchEffect(() => {
 </script>
 
 <template>
+  <div v-if="pagePicture.backgroundImage" class="page-picture" aria-hidden="true" :style="pagePicture" />
   <!-- Pendant mode is full screen: no top bar or nav (it has its own Stop) -->
   <template v-if="route.meta.bare">
     <UntrustedCard v-if="machine.untrusted" />
@@ -70,6 +93,8 @@ watchEffect(() => {
 </template>
 
 <style scoped>
+/* Behind everything: the top bar and rail paint solid over it, so Stop never sits on a picture */
+.page-picture { position: fixed; inset: 0; z-index: -1; pointer-events: none; }
 .body { display: flex; align-items: flex-start; }
 main { flex: 1; min-width: 0; outline: none; display: flex; flex-direction: column; min-height: calc(100vh - var(--rs-topbar-h)); }
 .skip {

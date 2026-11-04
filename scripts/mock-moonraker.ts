@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto'
 /**
  * A pretend Moonraker for working on Rhino Studio without the machine.
  *
@@ -1322,6 +1323,38 @@ function untrusted(req: IncomingMessage, res: import('node:http').ServerResponse
   return false
 }
 
+// Background pictures (Tool Manager, next release): kept in memory, gone when the mock restarts
+const themePictures = new Map<string, { data: Buffer; type: string; added: number }>()
+const themePictureList = () => [...themePictures].map(([name, p]) => ({ name, size: p.data.length, added: p.added }))
+async function themeImageRoutes(req: IncomingMessage, res: import('node:http').ServerResponse, url: string): Promise<boolean> {
+  const media = /^\/theme-media\/([0-9a-f]{16}\.\w+)$/.exec(url)
+  if (media && req.method === 'GET') {
+    const p = themePictures.get(media[1]!)
+    if (!p) return json(res, 404, { ok: false, error: 'No such picture' }), true
+    res.writeHead(200, { 'Content-Type': p.type, 'Content-Length': p.data.length })
+    res.end(p.data)
+    return true
+  }
+  if (url === '/api/theme-images' && req.method === 'GET') return json(res, 200, { ok: true, images: themePictureList(), max: 12, max_bytes: 6291456 }), true
+  const del = /^\/api\/theme-images\/([0-9a-f]{16}\.\w+)$/.exec(url)
+  if (del && req.method === 'DELETE') {
+    themePictures.delete(del[1]!)
+    return json(res, 200, { ok: true, images: themePictureList() }), true
+  }
+  if (url !== '/api/theme-images' || req.method !== 'POST') return false
+  const chunks: Buffer[] = []
+  for await (const c of req) chunks.push(c as Buffer)
+  const body = Buffer.concat(chunks)
+  const start = body.indexOf('\r\n\r\n') + 4
+  const end = body.lastIndexOf('\r\n--')
+  const data = body.subarray(start, end)
+  if (themePictures.size >= 12) return json(res, 400, { ok: false, error: 'There are already 12 background pictures on the Rhino. Delete one first.' }), true
+  if (data[0] !== 0xff || data[1] !== 0xd8) return json(res, 400, { ok: false, error: 'That file is not really a JPG image' }), true
+  const name = randomBytes(8).toString('hex') + '.jpg'
+  themePictures.set(name, { data, type: 'image/jpeg', added: Math.floor(Date.now() / 1000) })
+  return json(res, 200, { ok: true, name, images: themePictureList() }), true
+}
+
 // Settings > Trusted addresses (Tool Manager 1.5.4): an in-memory trusted_clients
 const trusted = ['127.0.0.0/8', '192.168.86.0/24']
 async function trustRoutes(req: IncomingMessage, res: import('node:http').ServerResponse, url: string): Promise<boolean> {
@@ -1657,6 +1690,7 @@ const server = createServer(async (req, res) => {
   const url = decodeURIComponent((req.url ?? '').split('?')[0]!)
   if (!url.startsWith("/webcam")) console.log(`HTTP ${req.method} ${url}${req.headers.range ? ` (${req.headers.range})` : ''}`)
   if (untrusted(req, res, url)) return
+  if (await themeImageRoutes(req, res, url)) return
   if (await trustRoutes(req, res, url)) return
   if (await portal(req, res, url)) return
   if (req.method === 'POST' && url === '/printer/emergency_stop') {

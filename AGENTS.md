@@ -35,7 +35,9 @@ and keep it maintained. Vue 3 + TypeScript (strict) + Vite, Pinia, vue-router (h
 
 ## Design rules
 
-- Ink and paper do the work. **Red only** means stop/destroy, an unlocked live panel, or the Dashboard's "needs you".
+- The default look: ink and paper do the work. A saved theme can leave that behind (Mike, Nov 2026): its visual style rules, with
+  its own buttons, selected colours, titles, numbers and page colours (`src/theme/panelColors.ts`).
+- In every look, **red only** means stop/destroy, an unlocked live panel, or the Dashboard's "needs you". No theme recolours them.
 - Archivo for the interface; DSEG7 (`.rs-num`) only for big readouts; JetBrains Mono for positions, G-code and the console.
 - Every colour and size comes from `src/styles/tokens.css`. Check light and dark, desktop and phone (and about 760 px).
 - Sentence case, plain verbs, say what will happen. Empty states explain what's missing.

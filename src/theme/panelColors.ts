@@ -23,13 +23,57 @@ export interface PanelColors {
   text?: string
   /** Panel outline and the dotted dividers */
   border?: string
+  /** Filled primary buttons and whatever is selected, and the text on them */
+  accent?: string
+  onAccent?: string
+  /** Everyday buttons: filled in this colour, with this text, instead of outlined */
+  button?: string
+  onButton?: string
+  /** Edges of inputs, step buttons and other controls, separate from the panel's outline */
+  control?: string
+  /** Panel titles */
+  heading?: string
+  /** Big readout numbers */
+  readout?: string
+  /** The page behind the panels (only used on SHELL_ID) */
+  page?: string
+  /** A picture behind the page: a file the Portal holds (only used on SHELL_ID) */
+  image?: string
+  /** How much of the page colour lies over the picture, percent */
+  imageDim?: number
+  /** How much of the picture shows through the panels, percent */
+  panelSee?: number
+  /** How the picture sits on the page */
+  imageFit?: ImageFit
+  /** One text colour across the screen, over whatever the theme says (only used on SHELL_ID) */
+  font?: string
 }
+
+export const IMAGE_FITS = ['cover', 'contain', 'stretch', 'actual', 'tile'] as const
+export type ImageFit = (typeof IMAGE_FITS)[number]
+
+/** The colour slots, in the order the picker shows them */
+export const COLOR_KEYS = ['bg', 'text', 'border', 'accent', 'onAccent', 'button', 'onButton', 'control', 'heading', 'readout', 'page', 'font'] as const
+export type ColorKey = (typeof COLOR_KEYS)[number]
+/** A theme's colours for the page, top bar, rail, and any panel it doesn't name */
+export const SHELL_ID = 'app.shell'
 
 export type Mode = 'day' | 'night'
 export type PanelTheme = Partial<Record<Mode, PanelColors>>
 export type ThemeMap = Record<string, PanelTheme>
 
 const HEX = /^#([0-9a-f]{6})$/i
+
+/** The names the Portal gives pictures. Nothing else reaches a CSS url(). */
+const IMAGE_NAME = /^[0-9a-f]{16}\.(png|jpe?g|gif|webp)$/
+/** The page title and rail need the wash under them: a picture can't go brighter than this */
+export const DIM_MIN = 50
+export const DIM_MAX = 90
+export const DIM_DEFAULT = 60
+/** Past this, whatever is in the picture starts to fight the text on a panel */
+export const SEE_MAX = 30
+const clampDim = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? Math.round(Math.min(DIM_MAX, Math.max(DIM_MIN, v))) : DIM_DEFAULT)
+const clampSee = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? Math.round(Math.min(SEE_MAX, Math.max(0, v))) : 0)
 
 export function isHex(v: unknown): v is string {
   return typeof v === 'string' && HEX.test(v)
@@ -46,9 +90,16 @@ export function cleanTheme(input: unknown): ThemeMap {
       const c = (theme as Record<string, unknown>)[mode]
       if (!c || typeof c !== 'object') continue
       const pc: PanelColors = {}
-      for (const k of ['bg', 'text', 'border'] as const) {
+      for (const k of COLOR_KEYS) {
         const v = (c as Record<string, unknown>)[k]
         if (isHex(v)) pc[k] = v.toLowerCase()
+      }
+      const { image, imageDim, panelSee, imageFit } = c as Record<string, unknown>
+      if (typeof image === 'string' && IMAGE_NAME.test(image)) {
+        pc.image = image
+        pc.imageDim = clampDim(imageDim)
+        pc.panelSee = clampSee(panelSee)
+        if ((IMAGE_FITS as readonly unknown[]).includes(imageFit) && imageFit !== 'cover') pc.imageFit = imageFit as ImageFit
       }
       if (Object.keys(pc).length) t[mode] = pc
     }
@@ -85,7 +136,92 @@ export function panelVars(c: PanelColors | undefined): Record<string, string> {
     v['--rs-dot-faint'] = `color-mix(in srgb, ${c.border} 70%, transparent)`
     v['border-color'] = c.border
   }
+  if (c.control) {
+    v['--rs-line-strong'] = c.control
+    v['--rs-line'] = `color-mix(in srgb, ${c.control} 45%, transparent)`
+  }
+  if (c.accent) {
+    v['--rs-ink'] = c.accent
+    v['--rs-ink-hover'] = `color-mix(in srgb, ${c.accent} 84%, ${c.onAccent ?? 'var(--rs-surface)'})`
+    v['--rs-btn-quiet'] = c.text ?? 'var(--rs-text)'
+  }
+  if (c.onAccent) v['--rs-on-ink'] = c.onAccent
+  if (c.button) {
+    v['--rs-btn-fill'] = c.button
+    v['--rs-btn-edge'] = c.button
+    v['--rs-btn-hover'] = `color-mix(in srgb, ${c.button} 84%, ${c.onButton ?? 'var(--rs-surface)'})`
+    v['--rs-key-fill'] = `color-mix(in srgb, ${c.button} 22%, var(--rs-surface))`
+  }
+  if (c.onButton) v['--rs-btn-text'] = c.onButton
+  if (c.heading) v['--rs-heading'] = c.heading
+  if (c.readout) v['--rs-readout'] = c.readout
   return v
+}
+
+/**
+ * The same, for the whole page: the top bar, rail, page titles, and anything a theme doesn't name.
+ * Menus follow it too. --rs-danger and the live red are never touched, so Stop looks the same in every theme.
+ */
+export function shellVars(c: PanelColors | undefined): Record<string, string> {
+  if (!c) return {}
+  const v = panelVars(c)
+  delete v['background-color']
+  delete v.color
+  delete v['border-color']
+  if (c.page) {
+    v['--rs-bg'] = c.page
+    // quieter labels on the page itself (the rail) are measured against the page, not the panels
+    if (c.text) v['--rs-text-muted'] = `color-mix(in srgb, ${c.text} 74%, ${c.page})`
+  }
+  if (c.bg) v['--rs-menu-bg'] = c.bg
+  if (c.text) v['--rs-menu-text'] = c.text
+  return v
+}
+
+/** The picture behind the page, washed with the page colour. Empty without a picture or a way to reach it. */
+export function pageImageStyle(c: PanelColors | undefined, url: (path: string) => string | null): Record<string, string> {
+  const u = c?.image && IMAGE_NAME.test(c.image) ? url(`/theme-media/${c.image}`) : null
+  if (!u) return {}
+  const wash = `color-mix(in srgb, var(--rs-bg) ${clampDim(c?.imageDim)}%, transparent)`
+  // the wash always covers the page; only the picture's own layer follows the choice
+  const look: Record<ImageFit, [string, string]> = {
+    cover: ['cover', 'no-repeat'],
+    contain: ['contain', 'no-repeat'],
+    stretch: ['100% 100%', 'no-repeat'],
+    actual: ['auto', 'no-repeat'],
+    tile: ['auto', 'repeat'],
+  }
+  const [size, repeat] = look[c?.imageFit ?? 'cover'] ?? look.cover
+  return {
+    backgroundImage: `linear-gradient(${wash}, ${wash}), url("${u}")`,
+    backgroundSize: `100% 100%, ${size}`,
+    backgroundRepeat: `no-repeat, ${repeat}`,
+    backgroundPosition: 'center, center',
+    backgroundColor: 'var(--rs-bg)',
+  }
+}
+
+/** A panel's colours with the screen's own text colour on top. Text on filled buttons keeps its contrast pair. */
+export function withFont(c: PanelColors | undefined, font: string | undefined): PanelColors | undefined {
+  return font ? { ...c, text: font, heading: font, readout: font } : c
+}
+
+/** How a text colour reads on the hardest background showing in this look: every themed panel, and the default paper */
+export function worstContrast(font: string, theme: ThemeMap, mode: Mode): number {
+  const bgs = new Set<string>()
+  for (const t of Object.values(theme)) {
+    const bg = t[mode]?.bg
+    if (bg) bgs.add(bg)
+  }
+  if (!bgs.size) bgs.add(DEFAULTS[mode].bg)
+  return Math.min(...[...bgs].map((b) => contrast(font, b)))
+}
+
+/** A panel's background once some of the picture shows through it */
+export function seeThrough(vars: Record<string, string>, see: number | undefined): Record<string, string> {
+  const s = clampSee(see)
+  const bg = vars['background-color']
+  return s && bg ? { ...vars, 'background-color': `color-mix(in srgb, ${bg} ${100 - s}%, transparent)` } : vars
 }
 
 // ---- contrast and reserved colours -------------------------------------------
@@ -157,7 +293,7 @@ export const SWATCHES: string[] = [
 ]
 
 /** The app's own panel colours in each mode (tokens.css), for previews and contrast checks. */
-export const DEFAULTS: Record<Mode, Required<PanelColors>> = {
+export const DEFAULTS: Record<Mode, Required<Pick<PanelColors, 'bg' | 'text' | 'border'>>> = {
   night: { bg: '#121314', text: '#ecebe6', border: '#9b9a96' },
   day: { bg: '#edebe5', text: '#111214', border: '#3a3b3d' },
 }

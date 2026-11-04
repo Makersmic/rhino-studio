@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { brand } from '@/brand/brand'
-import { cleanTheme, contrast, panelVars, reservedHue, toHex, SWATCHES } from './panelColors'
+import { cleanTheme, contrast, panelVars, reservedHue, shellVars, toHex, SWATCHES } from './panelColors'
 
 describe('panel colours', () => {
   it('keeps only valid colours and drops empty entries', () => {
@@ -20,6 +20,35 @@ describe('panel colours', () => {
     expect(v['--rs-ink']).toBe('#ffffff') // live / selected ink follows the text
     expect(v['--rs-on-ink']).toBe('var(--rs-surface)')
     expect(v['--rs-line-strong']).toBe('#8a8f94')
+  })
+
+  it('gives a theme its own buttons, selected colour, control edges, titles and numbers', () => {
+    const v = panelVars({ bg: '#123f42', text: '#eef0b8', border: '#b7bd47', accent: '#f7d6e0', onAccent: '#2c0a14', button: '#b7bd47', onButton: '#2c0a14', control: '#397367', heading: '#b7bd47', readout: '#f7d6e0' })
+    expect(v['--rs-ink']).toBe('#f7d6e0')
+    expect(v['--rs-on-ink']).toBe('#2c0a14')
+    expect(v['--rs-btn-fill']).toBe('#b7bd47')
+    expect(v['--rs-btn-text']).toBe('#2c0a14')
+    expect(v['--rs-line-strong']).toBe('#397367')
+    expect(v['border-color']).toBe('#b7bd47')
+    expect(v['--rs-heading']).toBe('#b7bd47')
+    expect(v['--rs-readout']).toBe('#f7d6e0')
+  })
+
+  it('keeps the new colours in a theme, and a theme without them looks as it did', () => {
+    expect(cleanTheme({ 'app.shell': { night: { page: '#010203', button: '#112233', onButton: 'nope' } } })).toEqual({ 'app.shell': { night: { page: '#010203', button: '#112233' } } })
+    const old = panelVars({ bg: '#121314', text: '#ecebe6', border: '#9b9a96' })
+    expect(old['--rs-btn-fill']).toBeUndefined()
+    expect(old['--rs-ink']).toBe('#ecebe6')
+    expect(old['--rs-line-strong']).toBe('#9b9a96')
+  })
+
+  it('themes the page but never Stop', () => {
+    const v = shellVars({ bg: '#123f42', text: '#eef0b8', page: '#0b2c2e', button: '#b7bd47', accent: '#f7d6e0' })
+    expect(v['--rs-bg']).toBe('#0b2c2e')
+    expect(v['--rs-menu-bg']).toBe('#123f42')
+    expect(v['background-color']).toBeUndefined()
+    expect(Object.keys(v).filter((k) => /danger|live/.test(k))).toEqual([])
+    expect(shellVars(undefined)).toEqual({})
   })
 
   it('never touches the reserved colours', () => {

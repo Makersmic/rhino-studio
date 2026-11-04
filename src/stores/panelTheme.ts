@@ -12,8 +12,8 @@ import { computed, onScopeDispose, ref, watch } from 'vue'
 import { useMachineStore } from './machine'
 import { useThemeStore } from './theme'
 import {
-  cleanLibrary, cleanName, cleanTheme, panelVars, readThemeFile, themeFile, uniqueName,
-  type Mode, type PanelColors, type ThemeLibrary, type ThemeMap,
+  DIM_DEFAULT, SHELL_ID, cleanLibrary, cleanName, cleanTheme, panelVars, readThemeFile, seeThrough, shellVars, withFont, themeFile, uniqueName,
+  type ImageFit, type Mode, type PanelColors, type PanelTheme, type ThemeLibrary, type ThemeMap,
 } from '@/theme/panelColors'
 
 const KEY = 'panel_theme'
@@ -84,7 +84,11 @@ export const usePanelThemeStore = defineStore('panelTheme', () => {
     if (editing.value?.id === id && draftMode.value === mode.value) return draft.value
     return shown.value[id]?.[mode.value]
   }
-  const styleFor = (id: string | undefined) => (id ? panelVars(colorsFor(id)) : {})
+  const styleFor = (id: string | undefined) => (id ? seeThrough(panelVars(withFont(colorsFor(id), pageColours.value?.font)), pageColours.value?.panelSee) : {})
+  /** The theme's page colours, put on the whole document (App.vue) */
+  const pageVars = computed(() => shellVars(withFont(shown.value[SHELL_ID]?.[mode.value], shown.value[SHELL_ID]?.[mode.value]?.font)))
+  /** The picture behind the page, and how it's set, in the look showing now */
+  const pageColours = computed(() => shown.value[SHELL_ID]?.[mode.value])
   const isCustom = (id: string) => !!themes.value[id]
 
   // ---- saving ----
@@ -139,6 +143,64 @@ export const usePanelThemeStore = defineStore('panelTheme', () => {
     await persist(next)
   }
   const resetAll = () => persist({})
+
+  /**
+   * The picture behind the page, for day and night together. It belongs to the theme in use, so a saved theme keeps it.
+   * With save false it only shows (a slider being dragged).
+   */
+  async function setBackground(b: { image?: string | null; imageDim?: number; panelSee?: number; imageFit?: ImageFit }, save = true) {
+    const next: ThemeMap = { ...themes.value }
+    const shell = { ...(next[SHELL_ID] ?? {}) }
+    for (const m of ['day', 'night'] as const) {
+      const c = { ...(shell[m] ?? {}) }
+      if (b.image === null) {
+        delete c.image
+        delete c.imageDim
+        delete c.panelSee
+        delete c.imageFit
+      } else {
+        if (b.image) {
+          c.image = b.image
+          c.imageDim ??= DIM_DEFAULT
+          c.panelSee ??= 0
+        }
+        if (c.image && b.imageDim !== undefined) c.imageDim = b.imageDim
+        if (c.image && b.panelSee !== undefined) c.panelSee = b.panelSee
+        if (c.image && b.imageFit) {
+          if (b.imageFit === 'cover') delete c.imageFit
+          else c.imageFit = b.imageFit
+        }
+      }
+      if (Object.keys(c).length) shell[m] = c
+      else delete shell[m]
+    }
+    await keepShell(next, shell, save)
+  }
+
+  /** One text colour across the screen, for the look showing now (day and night can differ). null = the theme's own. */
+  async function setFont(font: string | null, save = true) {
+    const next: ThemeMap = { ...themes.value }
+    const shell = { ...(next[SHELL_ID] ?? {}) }
+    const c = { ...(shell[mode.value] ?? {}) }
+    if (font) c.font = font.toLowerCase()
+    else delete c.font
+    if (Object.keys(c).length) shell[mode.value] = c
+    else delete shell[mode.value]
+    await keepShell(next, shell, save)
+  }
+
+  /** The theme keeps its name, and a saved theme keeps the change */
+  async function keepShell(next: ThemeMap, shell: PanelTheme, save: boolean) {
+    if (Object.keys(shell).length) next[SHELL_ID] = shell
+    else delete next[SHELL_ID]
+    if (!save) {
+      themes.value = next
+      return
+    }
+    const name = activeName.value
+    await persist(next, name)
+    if (name && library.value[name] && machine.online) await saveLibrary({ ...library.value, [name]: { panels: next, savedAt: Date.now() } })
+  }
   const customCount = computed(() => Object.keys(themes.value).length)
 
   // ---- named themes: preview, apply, save, delete, files ----
@@ -229,7 +291,7 @@ export const usePanelThemeStore = defineStore('panelTheme', () => {
   return {
     themes, mode, editing, draft, draftMode, saving, error, customCount,
     library, savedNames, activeName, preview,
-    startEdit, switchDraftMode, cancelEdit, saveEdit, reset, resetAll, styleFor, colorsFor, isCustom, load,
+    startEdit, switchDraftMode, cancelEdit, saveEdit, reset, resetAll, styleFor, pageVars, pageColours, shown, setBackground, setFont, colorsFor, isCustom, load,
     previewTheme, cancelPreview, applyPreview, saveAs, deleteSaved, exportFile, importFile,
   }
 })

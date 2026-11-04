@@ -12,7 +12,7 @@
 import { computed, nextTick, ref, watch } from 'vue'
 import RsButton from '@/components/RsButton.vue'
 import { usePanelThemeStore } from '@/stores/panelTheme'
-import { DEFAULTS, SWATCHES, baseVars, contrast, panelVars, reservedHue, type Mode, type PanelColors } from '@/theme/panelColors'
+import { DEFAULTS, SWATCHES, baseVars, contrast, panelVars, reservedHue, type ColorKey, type Mode, type PanelColors } from '@/theme/panelColors'
 
 const store = usePanelThemeStore()
 const dlg = ref<HTMLDialogElement | null>(null)
@@ -29,16 +29,36 @@ watch(
   },
 )
 
-const ROWS: { key: keyof PanelColors; label: string }[] = [
+type Row = { key: ColorKey; label: string }
+const ROWS: Row[] = [
   { key: 'bg', label: 'Background' },
   { key: 'text', label: 'Text' },
   { key: 'border', label: 'Border and dividers' },
 ]
+const MORE: Row[] = [
+  { key: 'accent', label: 'Selected and main button' },
+  { key: 'onAccent', label: 'Text on them' },
+  { key: 'button', label: 'Buttons' },
+  { key: 'onButton', label: 'Text on buttons' },
+  { key: 'control', label: 'Edges of inputs and controls' },
+  { key: 'heading', label: 'Panel title' },
+  { key: 'readout', label: 'Big numbers' },
+]
 
 const effective = computed(() => ({ ...DEFAULTS[store.draftMode], ...store.draft }) as Required<PanelColors>)
+/** What the colour well starts on: the slot's own colour, or what shows there until it's set */
+const wellColour = (k: ColorKey) => (store.draft[k] as string | undefined) ?? effective.value[k] ?? effective.value.text
 const ratio = computed(() => contrast(effective.value.text, effective.value.bg))
+/** Pairs picked for contrast that came out hard to read */
+const weakPairs = computed(() => {
+  const d = store.draft
+  const out: string[] = []
+  if (d.accent && d.onAccent && contrast(d.accent, d.onAccent) < 4.5) out.push('Selected and main button')
+  if (d.button && d.onButton && contrast(d.button, d.onButton) < 4.5) out.push('Buttons')
+  return out
+})
 const reserved = computed(() => {
-  for (const r of ROWS) {
+  for (const r of [...ROWS, ...MORE]) {
     const v = store.draft[r.key]
     const hue = v ? reservedHue(v) : null
     if (hue) return { row: r.label, hue }
@@ -48,7 +68,7 @@ const reserved = computed(() => {
 const previewStyle = computed(() => ({ ...baseVars(store.draftMode), ...panelVars(store.draft) }))
 const livePreview = computed(() => store.draftMode === store.mode)
 
-function set(key: keyof PanelColors, value: string | undefined) {
+function set(key: ColorKey, value: string | undefined) {
   const next = { ...store.draft }
   if (value) next[key] = value.toLowerCase()
   else delete next[key]
@@ -97,12 +117,28 @@ const pickMode = (m: Mode) => store.switchDraftMode(m)
             @click="set(r.key, c)"
           />
           <label class="custom" :title="'Any colour'">
-            <input type="color" :value="effective[r.key]" @input="set(r.key, ($event.target as HTMLInputElement).value)" />
+            <input type="color" :value="wellColour(r.key)" @input="set(r.key, ($event.target as HTMLInputElement).value)" />
             <span>Custom</span>
           </label>
         </div>
       </section>
 
+      <details class="more">
+        <summary>Buttons, titles and numbers</summary>
+        <section v-for="r in MORE" :key="r.key" class="row">
+          <h3>{{ r.label }}</h3>
+          <div class="swatches">
+            <button type="button" class="def" :class="{ on: !store.draft[r.key] }" @click="set(r.key, undefined)">Default</button>
+            <button v-for="c in SWATCHES" :key="c" type="button" class="sw" :class="{ on: store.draft[r.key] === c }" :style="{ background: c }" :aria-label="c" :title="c" @click="set(r.key, c)" />
+            <label class="custom" :title="'Any colour'">
+              <input type="color" :value="wellColour(r.key)" @input="set(r.key, ($event.target as HTMLInputElement).value)" />
+              <span>Custom</span>
+            </label>
+          </div>
+        </section>
+      </details>
+
+      <p v-if="weakPairs.length" class="warn">{{ weakPairs.join(' and ') }}: the text may be hard to read on that colour (aim for 4.5:1 or more).</p>
       <p v-if="ratio < 4.5" class="warn">Text may be hard to read on this background (contrast {{ ratio.toFixed(1) }}:1; aim for 4.5:1 or more).</p>
       <p v-if="reserved" class="warn">{{ reserved.row }} is close to the {{ reserved.hue }} the app keeps for {{ reserved.hue === 'red' ? 'Stop and Cancel' : 'choosing a tool to swap to' }}. Those still show in their own colours, but they'll stand out less.</p>
       <p class="note">

@@ -96,8 +96,10 @@ textarea {
   font-style: normal;
   letter-spacing: 0.02em;
   line-height: 0.9;
-  color: var(--rs-text-strong);
+  color: var(--rs-readout, var(--rs-text-strong));
 }
+/* Page titles and notes sit straight on a background picture: a soft edge in the page colour keeps them readable */
+:root[data-page-picture] .view-head { text-shadow: 0 0 6px var(--rs-bg), 0 1px 3px var(--rs-bg); }
 /* A one-row dotted rule */
 .rs-rule {
   height: 2px;
@@ -143,6 +145,15 @@ textarea {
   --rs-on-danger: var(--rs-live-fill);
   --rs-focus-ring: #ffffff;
   --rs-graph-grid: rgb(255 255 255 / 0.25);
+  /* a theme's page colours reach here by inheritance: live stays white on red */
+  --rs-btn-fill: transparent;
+  --rs-btn-edge: rgb(255 255 255 / 0.7);
+  --rs-btn-text: #ffffff;
+  --rs-btn-hover: color-mix(in srgb, var(--rs-live-fill) 84%, #000);
+  --rs-btn-quiet: #ffffff;
+  --rs-ink-hover: rgb(255 255 255 / 0.85);
+  --rs-heading: #ffffff;
+  --rs-readout: #ffffff;
   background: var(--rs-live-fill);
   border-color: var(--rs-live-fill);
   color: #ffffff;

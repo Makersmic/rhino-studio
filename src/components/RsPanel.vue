@@ -85,13 +85,17 @@ function toggleFold() {
   padding: 0 var(--rs-space-4) 0 var(--rs-space-5);
   background: radial-gradient(var(--rs-dot-faint) 0.9px, transparent 1.1px) 0 100% / 5px 2px repeat-x;
 }
-h2 { font-size: var(--rs-text-md); font-weight: var(--rs-weight-medium); }
+h2 { font-size: var(--rs-text-md); font-weight: var(--rs-weight-medium); color: var(--rs-heading, var(--rs-text-strong)); }
 .status { font-size: var(--rs-text-sm); color: var(--rs-text-muted); margin-left: auto; white-space: nowrap; }
 .actions { display: flex; align-items: center; gap: var(--rs-space-2); margin-left: auto; }
 .status + .actions { margin-left: var(--rs-space-3); }
 /* the ⋮ always sits in the top-right corner, after any status or actions */
 .panel-dots { margin-left: auto; margin-right: -8px; }
 .status ~ .panel-dots, .actions ~ .panel-dots { margin-left: var(--rs-space-1); }
+/* on a phone, a title with several actions wraps instead of running off the panel */
+@media (max-width: 720px) {
+  .head { flex-wrap: wrap; row-gap: var(--rs-space-1); padding-block: 6px; }
+}
 .body { padding: var(--rs-space-3) var(--rs-space-5) var(--rs-space-5); flex: 1; min-width: 0; }
 .flush .body { padding: 0; }
 .fold { display: inline-flex; align-items: center; gap: 8px; margin-left: -6px; padding: 4px 6px; border: 0; border-radius: var(--rs-radius-sm); background: none; color: var(--rs-text-strong); font: inherit; cursor: pointer; }
