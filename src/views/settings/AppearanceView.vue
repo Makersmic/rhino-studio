@@ -8,6 +8,7 @@ import PageImagePicker from './PageImagePicker.vue'
 import TextColourPicker from './TextColourPicker.vue'
 import { useThemeStore, type ThemePref } from '@/stores/theme'
 import { usePanelThemeStore } from '@/stores/panelTheme'
+import { isBuiltin } from '@/theme/builtinThemes'
 
 const theme = useThemeStore()
 const panelTheme = usePanelThemeStore()
@@ -25,6 +26,7 @@ const fileInput = ref<HTMLInputElement | null>(null)
 const currentLabel = computed(() =>
   panelTheme.activeName ?? (panelTheme.customCount ? 'Your own colours (not saved as a theme)' : 'Default colours'),
 )
+const saved = computed(() => panelTheme.savedNames.filter((x) => x !== panelTheme.activeName))
 const pending = computed(() => lookChoice.value !== theme.pref || themeChoice.value !== CURRENT)
 
 watch(lookChoice, (p) => theme.preview(p))
@@ -69,11 +71,12 @@ async function saveTheme() {
 async function deleteTheme() {
   const name = themeChoice.value
   if (name === CURRENT || name === DEFAULT) return
-  if (!window.confirm(`Delete the saved theme "${name}"? Panels keep the colours they show now.`)) return
+  const built = isBuiltin(name)
+  if (!window.confirm(built ? `Put "${name}" back as it came, without your changes to it?` : `Delete the saved theme "${name}"? Panels keep the colours they show now.`)) return
   themeChoice.value = CURRENT
   try {
     await panelTheme.deleteSaved(name)
-    say(`Deleted "${name}".`)
+    say(built ? `"${name}" is back as it came.` : `Deleted "${name}".`)
   } catch (e) {
     say((e as Error).message, true)
   }
@@ -136,13 +139,18 @@ const options: { value: ThemePref; label: string }[] = [
           <select v-model="themeChoice" aria-label="Theme">
             <option :value="CURRENT">In use: {{ currentLabel }}</option>
             <option v-if="panelTheme.customCount || panelTheme.activeName" :value="DEFAULT">Default colours</option>
-            <option v-for="n in panelTheme.savedNames.filter((x) => x !== panelTheme.activeName)" :key="n" :value="n">{{ n }}</option>
+            <optgroup label="Built-in themes">
+              <option v-for="n in panelTheme.builtinNames.filter((x) => x !== panelTheme.activeName)" :key="n" :value="n">{{ n }}</option>
+            </optgroup>
+            <optgroup v-if="saved.length" label="Your saved themes">
+              <option v-for="n in saved" :key="n" :value="n">{{ n }}</option>
+            </optgroup>
           </select>
-          <button v-if="themeChoice !== CURRENT && themeChoice !== DEFAULT" type="button" class="link" @click="deleteTheme">Delete</button>
+          <button v-if="panelTheme.library[themeChoice]" type="button" class="link" @click="deleteTheme">{{ isBuiltin(themeChoice) ? 'Reset' : 'Delete' }}</button>
         </div>
         <p class="muted small">
           A theme is every panel's colours, day and night. Change one panel from the ⋮ in its corner.
-          Themes are kept on the machine, so every screen shows the same one.
+          The one in use and your saved ones are kept on the machine, so every screen shows the same one.
         </p>
 
         <div class="apply-row">

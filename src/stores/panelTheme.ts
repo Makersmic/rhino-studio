@@ -11,6 +11,7 @@ import { defineStore } from 'pinia'
 import { computed, onScopeDispose, ref, watch } from 'vue'
 import { useMachineStore } from './machine'
 import { useThemeStore } from './theme'
+import { BUILTIN_NAMES, builtinPanels, isBuiltin } from '@/theme/builtinThemes'
 import {
   DIM_DEFAULT, SHELL_ID, cleanLibrary, cleanName, cleanTheme, panelVars, readThemeFile, seeThrough, shellVars, withFont, themeFile, uniqueName,
   type ImageFit, type Mode, type PanelColors, type PanelTheme, type ThemeLibrary, type ThemeMap,
@@ -199,15 +200,20 @@ export const usePanelThemeStore = defineStore('panelTheme', () => {
     }
     const name = activeName.value
     await persist(next, name)
-    if (name && library.value[name] && machine.online) await saveLibrary({ ...library.value, [name]: { panels: next, savedAt: Date.now() } })
+    if (name && (library.value[name] || isBuiltin(name)) && machine.online) await saveLibrary({ ...library.value, [name]: { panels: next, savedAt: Date.now() } })
   }
   const customCount = computed(() => Object.keys(themes.value).length)
 
   // ---- named themes: preview, apply, save, delete, files ----
-  /** Look at a saved theme (or the default, name null) without applying it. */
+  /** A theme's panels: a saved copy first (a built-in someone changed keeps its changes), then the built-in */
+  const panelsOf = (name: string) => library.value[name]?.panels ?? builtinPanels(name)
+  /** Look at a saved or built-in theme (or the default, name null) without applying it. */
   function previewTheme(name: string | null) {
     if (name === null) preview.value = { name: null, panels: {} }
-    else if (library.value[name]) preview.value = { name, panels: library.value[name]!.panels }
+    else {
+      const panels = panelsOf(name)
+      if (panels) preview.value = { name, panels }
+    }
   }
   const cancelPreview = () => (preview.value = null)
   /** Make the previewed theme the one every screen uses. */
@@ -250,12 +256,14 @@ export const usePanelThemeStore = defineStore('panelTheme', () => {
   /** Adds a theme file to the saved themes and previews it (Apply makes it current). */
   async function importFile(text: string, fallbackName: string) {
     const { name, panels } = readThemeFile(text)
-    const unique = uniqueName(name ?? cleanName(fallbackName.replace(/\.rhino-theme\.json$|\.json$/i, '')) ?? 'Imported theme', library.value)
+    const taken = Object.fromEntries(BUILTIN_NAMES.map((n) => [n, { panels: {}, savedAt: 0 }]))
+    const unique = uniqueName(name ?? cleanName(fallbackName.replace(/\.rhino-theme\.json$|\.json$/i, '')) ?? 'Imported theme', { ...taken, ...library.value })
     await saveLibrary({ ...library.value, [unique]: { panels, savedAt: Date.now() } })
     previewTheme(unique)
     return unique
   }
-  const savedNames = computed(() => Object.keys(library.value).sort((a, b) => a.localeCompare(b)))
+  /** The user's own themes. A built-in with changes stays listed with the built-ins. */
+  const savedNames = computed(() => Object.keys(library.value).filter((n) => !isBuiltin(n)).sort((a, b) => a.localeCompare(b)))
 
   // ---- loading from the machine ----
   async function load() {
@@ -266,7 +274,7 @@ export const usePanelThemeStore = defineStore('panelTheme', () => {
         machine.getStudioSetting(LIBRARY_KEY),
       ])
       library.value = cleanLibrary(lib)
-      activeName.value = typeof n === 'string' && library.value[n] ? n : null
+      activeName.value = typeof n === 'string' && panelsOf(n) ? n : null
       if (v != null) {
         themes.value = cleanTheme(v)
         try {
@@ -290,7 +298,7 @@ export const usePanelThemeStore = defineStore('panelTheme', () => {
 
   return {
     themes, mode, editing, draft, draftMode, saving, error, customCount,
-    library, savedNames, activeName, preview,
+    library, savedNames, builtinNames: BUILTIN_NAMES, activeName, preview,
     startEdit, switchDraftMode, cancelEdit, saveEdit, reset, resetAll, styleFor, pageVars, pageColours, shown, setBackground, setFont, colorsFor, isCustom, load,
     previewTheme, cancelPreview, applyPreview, saveAs, deleteSaved, exportFile, importFile,
   }
