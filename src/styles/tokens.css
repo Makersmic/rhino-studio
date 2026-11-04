@@ -22,6 +22,8 @@
   --rs-font-ui: 'Archivo Variable', system-ui, sans-serif;
   --rs-font-display: 'DSEG7 Classic', 'Archivo Variable', ui-monospace, monospace;
   --rs-font-code: 'JetBrains Mono', ui-monospace, monospace;
+  /* Stop always reads the same: no theme's typeface reaches it */
+  --rs-font-fixed: 'Archivo Variable', system-ui, sans-serif;
 
   --rs-text-xs: 0.75rem;    /* 12px  captions, units */
   --rs-text-sm: 0.8125rem;  /* 13px  labels, secondary */

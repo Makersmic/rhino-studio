@@ -6,6 +6,7 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import RsButton from '@/components/RsButton.vue'
 import PageImagePicker from './PageImagePicker.vue'
 import TextColourPicker from './TextColourPicker.vue'
+import TypefacePicker from './TypefacePicker.vue'
 import { useThemeStore, type ThemePref } from '@/stores/theme'
 import { usePanelThemeStore } from '@/stores/panelTheme'
 import { isBuiltin } from '@/theme/builtinThemes'
@@ -160,6 +161,7 @@ const options: { value: ThemePref; label: string }[] = [
         </div>
 
         <TextColourPicker :locked="themeChoice !== CURRENT" />
+        <TypefacePicker :locked="themeChoice !== CURRENT" />
         <PageImagePicker :locked="themeChoice !== CURRENT" />
 
         <form class="save-row" @submit.prevent="saveTheme">

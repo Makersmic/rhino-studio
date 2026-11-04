@@ -190,6 +190,20 @@ export const usePanelThemeStore = defineStore('panelTheme', () => {
     await keepShell(next, shell, save)
   }
 
+  /** A typeface for one level, day and night together. null = Studio's own. */
+  async function setTypeface(level: 'faceTitle' | 'faceSub' | 'faceBody', id: string | null, save = true) {
+    const next: ThemeMap = { ...themes.value }
+    const shell = { ...(next[SHELL_ID] ?? {}) }
+    for (const m of ['day', 'night'] as const) {
+      const c = { ...(shell[m] ?? {}) }
+      if (id) c[level] = id
+      else delete c[level]
+      if (Object.keys(c).length) shell[m] = c
+      else delete shell[m]
+    }
+    await keepShell(next, shell, save)
+  }
+
   /** The theme keeps its name, and a saved theme keeps the change */
   async function keepShell(next: ThemeMap, shell: PanelTheme, save: boolean) {
     if (Object.keys(shell).length) next[SHELL_ID] = shell
@@ -299,7 +313,7 @@ export const usePanelThemeStore = defineStore('panelTheme', () => {
   return {
     themes, mode, editing, draft, draftMode, saving, error, customCount,
     library, savedNames, builtinNames: BUILTIN_NAMES, activeName, preview,
-    startEdit, switchDraftMode, cancelEdit, saveEdit, reset, resetAll, styleFor, pageVars, pageColours, shown, setBackground, setFont, colorsFor, isCustom, load,
+    startEdit, switchDraftMode, cancelEdit, saveEdit, reset, resetAll, styleFor, pageVars, pageColours, shown, setBackground, setFont, setTypeface, colorsFor, isCustom, load,
     previewTheme, cancelPreview, applyPreview, saveAs, deleteSaved, exportFile, importFile,
   }
 })

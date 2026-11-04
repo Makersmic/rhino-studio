@@ -60,6 +60,7 @@ async function stop() {
   padding: 0 var(--rs-space-5) 0 6px;
   border-radius: var(--rs-radius-md);
   border: 0;
+  font-family: var(--rs-font-fixed);
   background: var(--rs-danger);
   color: var(--rs-on-danger);
   font-weight: var(--rs-weight-bold);

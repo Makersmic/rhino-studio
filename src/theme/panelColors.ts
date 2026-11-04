@@ -15,6 +15,7 @@
  */
 
 import { brand } from '@/brand/brand'
+import { typefaceOf } from './typefaces'
 
 export interface PanelColors {
   /** Panel background */
@@ -47,6 +48,10 @@ export interface PanelColors {
   imageFit?: ImageFit
   /** One text colour across the screen, over whatever the theme says (only used on SHELL_ID) */
   font?: string
+  /** Typefaces (typefaces.ts) for category titles, subcategories and regular text (only used on SHELL_ID) */
+  faceTitle?: string
+  faceSub?: string
+  faceBody?: string
 }
 
 export const IMAGE_FITS = ['cover', 'contain', 'stretch', 'actual', 'tile'] as const
@@ -93,6 +98,10 @@ export function cleanTheme(input: unknown): ThemeMap {
       for (const k of COLOR_KEYS) {
         const v = (c as Record<string, unknown>)[k]
         if (isHex(v)) pc[k] = v.toLowerCase()
+      }
+      for (const k of ['faceTitle', 'faceSub', 'faceBody'] as const) {
+        const v = (c as Record<string, unknown>)[k]
+        if (typefaceOf(v, k === 'faceBody' ? 'body' : 'title')) pc[k] = v as string
       }
       const { image, imageDim, panelSee, imageFit } = c as Record<string, unknown>
       if (typeof image === 'string' && IMAGE_NAME.test(image)) {
@@ -173,6 +182,12 @@ export function shellVars(c: PanelColors | undefined): Record<string, string> {
     // quieter labels on the page itself (the rail) are measured against the page, not the panels
     if (c.text) v['--rs-text-muted'] = `color-mix(in srgb, ${c.text} 74%, ${c.page})`
   }
+  const title = typefaceOf(c.faceTitle, 'title')
+  const sub = typefaceOf(c.faceSub, 'title')
+  const body = typefaceOf(c.faceBody, 'body')
+  if (title) v['--rs-font-title'] = title.stack
+  if (sub) v['--rs-font-sub'] = sub.stack
+  if (body) v['--rs-font-ui'] = body.stack
   if (c.bg) v['--rs-menu-bg'] = c.bg
   if (c.text) v['--rs-menu-text'] = c.text
   return v

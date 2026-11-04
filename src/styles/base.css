@@ -33,6 +33,9 @@ h3 {
   letter-spacing: -0.01em;
   margin: 0;
 }
+/* A theme can choose its own typefaces (src/theme/typefaces.ts). Only the family changes, never the size. */
+h1, h2 { font-family: var(--rs-font-title, var(--rs-font-ui)); }
+h3, h4, legend { font-family: var(--rs-font-sub, var(--rs-font-ui)); }
 h1 { font-size: var(--rs-text-xl); font-weight: var(--rs-weight-body); letter-spacing: -0.02em; }
 h2 { font-size: var(--rs-text-lg); }
 h3 { font-size: var(--rs-text-md); }
