@@ -22,11 +22,12 @@ import { computed, ref, shallowRef, watch } from 'vue'
 import { useMachineStore } from './machine'
 import { BUILT_IN_TOOLHEADS, lookFor, type ToolheadLook } from '@/toolheads/registry'
 import { applyMaterial, materialsFor, newJob, normalizeJob, processFor, type Material } from '@/slicer/profiles'
-import { kiriJob } from '@/slicer/kiriSettings'
+import { cutHeight, kiriJob } from '@/slicer/kiriSettings'
 import { rhinoFile, type RhinoFile } from '@/slicer/rhinoFile'
 import { checkFile, blocking, type Check, type FileStats } from '@/slicer/check'
-import { FLAT_TYPES, extOf, merge, partInfo, transform } from '@/slicer/model'
-import { DEFAULT_MACHINE, type MachineInfo, type PartInfo, type PrepareJob, type Process } from '@/slicer/types'
+import { FLAT_TYPES, combine, extOf, merge, partInfo, transform } from '@/slicer/model'
+import { PART_GAP, freeSpot, rectOf } from '@/viewer/placement'
+import { DEFAULT_MACHINE, type MachineInfo, type PartInfo, type PartView, type Placement, type PrepareJob, type Process } from '@/slicer/types'
 import { loadModelFile, runKiri, kiriVersion, type Phase } from '@/slicer/engine'
 import { GCODE_TYPES, readJobFile, withToolhead, type JobFileInfo } from '@/slicer/gcodeFile'
 import { buildIni, loadSchema, valueOf, type RhinoCtx, type Schema } from '@/slicer/prusa/config'
@@ -75,6 +76,23 @@ export interface PrepResult {
 const STUDIO_VERSION = typeof __APP_VERSION__ === 'string' ? __APP_VERSION__ : 'dev'
 /** Plain copy of a job (reactive proxies can't go through structuredClone) */
 const clone = <T>(v: T): T => JSON.parse(JSON.stringify(v)) as T
+
+interface PartShape {
+  /** the way up and scale these triangles were worked out for */
+  key: string
+  vertices: Float32Array
+  info: PartInfo
+}
+interface JobPart {
+  id: number
+  name: string
+  /** the triangles as loaded */
+  raw: Float32Array
+  flat: boolean
+  /** where it was when it was last selected (job.placement is the selected part's) */
+  placement: Placement
+  shape?: PartShape
+}
 
 const num = (v: unknown, d: number) => (typeof v === 'number' && Number.isFinite(v) ? v : d)
 
@@ -127,7 +145,16 @@ export const usePrepareStore = defineStore('prepare', () => {
 
   // ---- the part
   const fileName = ref<string | null>(null)
-  const raw = shallowRef<Float32Array | null>(null)
+  /**
+   * The parts on the bed. job.placement is always the selected part's, so every control works on the selected part;
+   * the others keep theirs here until selected. They all slice as one model (see sliceInput). A saved job only remembers
+   * settings, so the list lasts as long as the job does on this screen.
+   */
+  const partsList = shallowRef<JobPart[]>([])
+  const selectedId = ref(0)
+  let nextPartId = 1
+  const selected = computed(() => partsList.value.find((p) => p.id === selectedId.value) ?? null)
+  const raw = computed(() => selected.value?.raw ?? null)
   const flat = ref(false)
   const loading = ref(false)
   const loadError = ref<string | null>(null)
@@ -304,8 +331,161 @@ export const usePrepareStore = defineStore('prepare', () => {
     { deep: true },
   )
 
-  const vertices = computed(() => (raw.value && job.value ? transform(raw.value, job.value.placement.rotate, job.value.placement.scale) : null))
-  const part = computed<PartInfo | null>(() => (vertices.value && fileName.value ? partInfo(fileName.value, vertices.value, flat.value) : null))
+  /** A part's triangles the way up it is now. Worked out again only when its way up or scale changes, not when it moves. */
+  function shapeOf(p: JobPart, pl: Placement): PartShape {
+    const key = `${pl.rotate}|${pl.scale}|${pl.tiltX ?? 0}|${pl.tiltY ?? 0}`
+    if (p.shape?.key !== key) {
+      const v = transform(p.raw, pl.rotate, pl.scale, pl.tiltX ?? 0, pl.tiltY ?? 0)
+      p.shape = { key, vertices: v, info: partInfo(p.name, v, p.flat) }
+    }
+    return p.shape
+  }
+  const shape = computed(() => (selected.value && job.value ? shapeOf(selected.value, job.value.placement) : null))
+  const vertices = computed(() => shape.value?.vertices ?? null)
+  const part = computed<PartInfo | null>(() => shape.value?.info ?? null)
+
+  /** Every part where it is now */
+  const parts = computed<PartView[]>(() => {
+    const j = job.value
+    if (!j) return []
+    return partsList.value.map((p) => {
+      const placement = p.id === selectedId.value ? j.placement : p.placement
+      const s = shapeOf(p, placement)
+      return { id: p.id, name: p.name, vertices: s.vertices, info: s.info, x: placement.x, y: placement.y, placement: { ...placement } }
+    })
+  })
+  /** CNC mills one part in its stock, and a ready-made file already says where everything goes */
+  const canAddParts = computed(() => !!raw.value && !uploaded.value && job.value?.process !== 'cnc')
+
+  function selectPart(id: number) {
+    const j = job.value
+    const next = partsList.value.find((p) => p.id === id)
+    if (!j || !next || id === selectedId.value) return
+    if (selected.value) selected.value.placement = { ...j.placement }
+    j.placement = { ...next.placement }
+    selectedId.value = id
+  }
+
+  /** The areas a new part has to stay clear of */
+  function takenAreas() {
+    const j = job.value
+    const m = machineInfo.value
+    const out = parts.value.map((p) => rectOf(p.x, p.y, p.info.size))
+    for (const k of m.keepOut) out.push(k)
+    if (j?.process === 'fdm' && m.prime) out.push({ x0: m.prime.x - 2, y0: m.prime.y, x1: m.prime.x + 2, y1: m.prime.y + m.prime.length })
+    return out
+  }
+  /** Beside the selected part if there's room, else the next free spot */
+  function spotFor(size: { x: number; y: number }) {
+    const m = machineInfo.value
+    const s = part.value
+    const p = job.value?.placement
+    const want = s && p ? { x: p.x + s.size.x / 2 + PART_GAP + size.x / 2, y: p.y } : { x: m.workArea.x / 2, y: m.workArea.y / 2 }
+    return freeSpot(size, want, takenAreas(), m.workArea)
+  }
+
+  function addPart(p: JobPart) {
+    const j = job.value
+    if (selected.value && j) selected.value.placement = { ...j.placement }
+    partsList.value = [...partsList.value, p]
+    if (j) j.placement = { ...p.placement }
+    selectedId.value = p.id
+  }
+
+  function copyName(name: string): string {
+    const dot = name.lastIndexOf('.')
+    const base = dot > 0 ? name.slice(0, dot) : name
+    const ext = dot > 0 ? name.slice(dot) : ''
+    const used = new Set(partsList.value.map((p) => p.name))
+    for (let n = 1; ; n++) {
+      const c = `${base} copy${n > 1 ? ` ${n}` : ''}${ext}`
+      if (!used.has(c)) return c
+    }
+  }
+
+  /** The same file added twice: the list and the warnings have to tell them apart */
+  function uniqueName(name: string): string {
+    const used = new Set(partsList.value.map((p) => p.name))
+    if (!used.has(name)) return name
+    const dot = name.lastIndexOf('.')
+    const base = dot > 0 ? name.slice(0, dot) : name
+    const ext = dot > 0 ? name.slice(dot) : ''
+    for (let n = 2; ; n++) {
+      const c = `${base} ${n}${ext}`
+      if (!used.has(c)) return c
+    }
+  }
+
+  function duplicatePart(id: number) {
+    selectPart(id)
+    const src = selected.value
+    const j = job.value
+    if (!src || !j || !canAddParts.value || !part.value) return
+    const spot = spotFor(part.value.size)
+    const name = copyName(src.name)
+    const s = shapeOf(src, j.placement)
+    // the copy shares the loaded triangles, so a big model isn't held twice
+    addPart({ id: nextPartId++, name, raw: src.raw, flat: src.flat, placement: { ...j.placement, x: spot.x, y: spot.y }, shape: { ...s, info: { ...s.info, name } } })
+  }
+
+  function removePart(id: number) {
+    const left = partsList.value.filter((p) => p.id !== id)
+    if (!left.length) return clearPart()
+    if (id === selectedId.value) selectPart(left[0]!.id)
+    partsList.value = left
+    if (fileName.value && !left.some((p) => p.name === fileName.value)) fileName.value = left[0]!.name
+  }
+
+  /** Back to the way up the file came in. It stays where it is and keeps its scale. */
+  function resetWayUp(id: number) {
+    selectPart(id)
+    const p = job.value?.placement
+    if (job.value && p) job.value.placement = { x: p.x, y: p.y, rotate: 0, scale: p.scale }
+  }
+
+  /** More files onto the bed. All of a job's parts are 3D models, or all drawings: they cut in different ways. */
+  async function addFiles(files: File[]) {
+    if (!canAddParts.value || !job.value) return
+    loading.value = true
+    loadError.value = null
+    try {
+      for (const file of files) {
+        const ext = extOf(file.name)
+        if ((GCODE_TYPES as readonly string[]).includes(ext)) throw new Error('a ready-made G-code file can’t join other parts. Use Replace to set it up on its own.')
+        const isFlat = FLAT_TYPES.has(ext)
+        if (isFlat !== flat.value) throw new Error(flat.value ? 'this job holds flat drawings, and this is a 3D model. Use one kind in a job.' : 'this job holds 3D models, and this is a flat drawing. Use one kind in a job.')
+        const loaded = await loadModelFile(file)
+        const verts = merge(loaded.map((p) => p.vertices).filter((v) => v && v.length >= 9))
+        if (verts.length < 9) throw new Error('No triangles in this file.')
+        const p: JobPart = { id: nextPartId++, name: uniqueName(file.name), raw: verts, flat: isFlat, placement: { x: 0, y: 0, rotate: 0, scale: 1 } }
+        const { info } = shapeOf(p, p.placement)
+        const spot = spotFor(info.size)
+        p.placement = { ...p.placement, x: spot.x, y: spot.y }
+        addPart(p)
+      }
+    } catch (e) {
+      loadError.value = `Couldn't add the file: ${(e as Error).message ?? e}`
+    } finally {
+      loading.value = false
+    }
+  }
+
+  /** What goes to the engine: one part as it is, or all of them as one model, centred where they sit together */
+  function sliceInput(j: PrepareJob): { vertices: Float32Array; part: PartInfo; job: PrepareJob } | null {
+    if (!vertices.value || !part.value) return null
+    if (parts.value.length <= 1) return { vertices: vertices.value, part: part.value, job: j }
+    const c = combine(parts.value)
+    const first = parts.value[0]!
+    const dot = first.name.lastIndexOf('.')
+    const name = `${dot > 0 ? first.name.slice(0, dot) : first.name} and ${parts.value.length - 1} more${dot > 0 ? first.name.slice(dot) : ''}`
+    const info = partInfo(name, c.vertices, flat.value)
+    if (j.process === 'laser' || j.process === 'dragknife') {
+      const at = cutHeight(j.process === 'laser' ? j.laser.cutHeight : j.knife.cutHeight, info)
+      const short = parts.value.find((p) => p.info.size.z <= at)
+      if (short) throw new Error(`${short.name} is only ${Math.round(short.info.size.z * 100) / 100} mm tall, below the ${at} mm cut height, so it wouldn't be cut. Lower the cut height.`)
+    }
+    return { vertices: c.vertices, part: info, job: { ...j, placement: { x: c.x, y: c.y, rotate: 0, scale: 1 } } }
+  }
 
   async function load(file: File) {
     loading.value = true
@@ -316,7 +496,7 @@ export const usePrepareStore = defineStore('prepare', () => {
         const text = await file.text()
         const info = readJobFile(text)
         if (!info.bounds) throw new Error('No moves found in this G-code.')
-        raw.value = null
+        partsList.value = []
         fileName.value = file.name
         uploaded.value = { name: file.name, text, info }
         confirmed.value = false
@@ -330,7 +510,9 @@ export const usePrepareStore = defineStore('prepare', () => {
       const parts = await loadModelFile(file)
       const verts = merge(parts.map((p) => p.vertices).filter((v) => v && v.length >= 9))
       if (verts.length < 9) throw new Error('No triangles in this file.')
-      raw.value = verts
+      const id = nextPartId++
+      partsList.value = [{ id, name: file.name, raw: verts, flat: FLAT_TYPES.has(ext), placement: { x: 0, y: 0, rotate: 0, scale: 1 } }]
+      selectedId.value = id
       uploaded.value = null
       fileName.value = file.name
       flat.value = FLAT_TYPES.has(ext)
@@ -355,7 +537,7 @@ export const usePrepareStore = defineStore('prepare', () => {
   }
 
   function clearPart() {
-    raw.value = null
+    partsList.value = []
     uploaded.value = null
     fileName.value = null
     modelResult.value = null
@@ -395,7 +577,7 @@ export const usePrepareStore = defineStore('prepare', () => {
     }
     if (!raw.value) return []
     const list = tools.value
-      .filter((t) => suits(t.process, flat.value))
+      .filter((t) => suits(t.process, flat.value) && !(t.process === 'cnc' && partsList.value.length > 1))
       .map((t) => ({ tool: t, recommended: flat.value ? true : t.process === 'fdm' || t.process === 'cnc', mounted: t.name === mounted }))
     const rank = (o: (typeof list)[number]) => (o.recommended ? 0 : 2) + (o.mounted ? 0 : 1)
     return list.sort((a, b) => rank(a) - rank(b))
@@ -433,10 +615,18 @@ export const usePrepareStore = defineStore('prepare', () => {
   const sendError = ref<string | null>(null)
   let runId = 0
 
-  // Anything changes: the prepared file no longer matches the screen
+  // Anything changes: the prepared file no longer matches the screen. Selecting another part changes nothing that's cut.
+  const whatIsCut = () => {
+    const places = parts.value.map((p) => [p.id, p.placement])
+    return JSON.stringify([places, job.value ? { ...job.value, placement: null } : null])
+  }
+  let lastCut = ''
   watch(
-    [job, raw],
+    [job, raw, partsList],
     () => {
+      const now = whatIsCut()
+      if (now === lastCut) return
+      lastCut = now
       if (phase.value) runId++ // a newer request wins; the running one is ignored when it finishes
       modelResult.value = null
       sentPath.value = null
@@ -503,8 +693,6 @@ export const usePrepareStore = defineStore('prepare', () => {
   async function prepare() {
     if (!job.value || !vertices.value || !part.value) return
     const id = ++runId
-    const j = clone(job.value)
-    const p = part.value
     const m = machineInfo.value
     prepError.value = null
     modelResult.value = null
@@ -515,6 +703,9 @@ export const usePrepareStore = defineStore('prepare', () => {
       progress.value = f ?? null
     }
     try {
+      const input = sliceInput(clone(job.value))
+      if (!input) return
+      const { job: j, part: p, vertices: model } = input
       if (j.process === 'fdm' && j.engine === 'prusa') {
         const portal = useMaintenanceStore().portal()
         if (!portal) throw new Error('PrusaSlicer runs on the Rhino: set the Rhino Portal’s address in Settings > Connection.')
@@ -527,7 +718,7 @@ export const usePrepareStore = defineStore('prepare', () => {
         if (!engineKeys || engineKeys.version !== st.engine.installed) engineKeys = { version: st.engine.installed, keys: new Set(await portal.slicerKeys()) }
         const ctx: RhinoCtx = { ...rhinoCtx.value!, job: j }
         const ini = buildIni(sch, ctx, engineKeys.keys)
-        const out = await runPrusa(portal, vertices.value, ini, p.name, [j.placement.x, j.placement.y], onPhase, () => id === runId)
+        const out = await runPrusa(portal, model, ini, p.name, [j.placement.x, j.placement.y], onPhase, () => id === runId)
         if (id !== runId) return
         // CALCULATE_PA and the header read the layer height and speed the engine actually used
         j.fdm.layerHeight = Number(valueOf('layer_height', sch, ctx).value) || j.fdm.layerHeight
@@ -537,7 +728,7 @@ export const usePrepareStore = defineStore('prepare', () => {
         modelResult.value = { file, checks, stats, kiri: `PrusaSlicer ${st.engine.installed}${out.cached ? ' (from the cache)' : ''}`, kiriSeconds: out.seconds, kiriFilament: out.filamentMm }
         return
       }
-      const kiri = await runKiri(vertices.value, kiriJob(j, p, m), onPhase)
+      const kiri = await runKiri(model, kiriJob(j, p, m), onPhase)
       if (id !== runId) return
       const file = rhinoFile(kiri, j, p, m, STUDIO_VERSION)
       const { checks, stats } = checkFile(file.text, j, p, m)
@@ -611,6 +802,14 @@ export const usePrepareStore = defineStore('prepare', () => {
     fileName,
     part,
     vertices,
+    parts,
+    selectedId,
+    canAddParts,
+    selectPart,
+    addFiles,
+    duplicatePart,
+    removePart,
+    resetWayUp,
     flat,
     loading,
     loadError,

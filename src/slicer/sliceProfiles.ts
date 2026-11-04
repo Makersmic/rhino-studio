@@ -52,7 +52,7 @@ export interface SavedJob {
   material: string | null
   /** only the settings that differ from the profile */
   overrides: AnySettings
-  placement: { x: number; y: number; rotate: number; scale: number }
+  placement: { x: number; y: number; rotate: number; scale: number; tiltX?: number; tiltY?: number }
   saved?: number
 }
 

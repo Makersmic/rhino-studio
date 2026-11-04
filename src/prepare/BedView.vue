@@ -14,8 +14,9 @@
  *                               work zero (X0 Y0 marked).
  */
 import { computed, ref } from 'vue'
-import type { MachineInfo, PartInfo, PrepareJob } from '@/slicer/types'
+import type { MachineInfo, PartInfo, PartView, PrepareJob } from '@/slicer/types'
 import { cncStock } from '@/slicer/kiriSettings'
+import { clampCentre } from '@/viewer/placement'
 
 const props = defineProps<{
   machine: MachineInfo
@@ -25,7 +26,11 @@ const props = defineProps<{
   result: { min: [number, number, number]; max: [number, number, number] } | null
   /** toolpath of a ready-made file (XY polylines) */
   paths?: Array<Array<[number, number]>> | null
+  /** every part in the job; `part` above is the selected one */
+  parts?: PartView[]
+  selectedId?: number
 }>()
+const emit = defineEmits<{ select: [id: number]; menu: [id: number, x: number, y: number] }>()
 
 const isCnc = computed(() => props.job.process === 'cnc')
 const stock = computed(() => (props.part && isCnc.value ? cncStock(props.job, props.part) : null))
@@ -91,29 +96,68 @@ const toMm = (e: PointerEvent) => {
   const p = new DOMPoint(e.clientX, e.clientY).matrixTransform(m.inverse())
   return { x: p.x, y: area.value.y0 + area.value.h - p.y }
 }
-const clampX = (x: number) => {
-  const half = (props.part?.size.x ?? 0) / 2
-  return Math.round(Math.min(Math.max(x, half), area.value.w - half) * 2) / 2
+const clampX = (x: number) => clampCentre(x, props.part?.size.x ?? 0, area.value.w)
+const clampY = (y: number) => clampCentre(y, props.part?.size.y ?? 0, area.value.h)
+const others = computed(() =>
+  (props.parts ?? [])
+    .filter((p) => p.id !== props.selectedId)
+    .map((p) => ({ id: p.id, name: p.name, points: p.info.footprint.map(([x, y]) => `${(p.x + x).toFixed(2)},${fy(p.y + y).toFixed(2)}`).join(' ') })),
+)
+const several = computed(() => (props.parts?.length ?? 0) > 1)
+
+// Right click (or a long press on a touch screen) opens the part's menu
+const HOLD_MS = 550
+const CLICK_SLOP = 6
+let rightPress: { x: number; y: number } | null = null
+let holdTimer: ReturnType<typeof setTimeout> | null = null
+let holdAt: { x: number; y: number } | null = null
+function stopHold() {
+  if (holdTimer) clearTimeout(holdTimer)
+  holdTimer = null
+  holdAt = null
 }
-const clampY = (y: number) => {
-  const half = (props.part?.size.y ?? 0) / 2
-  return Math.round(Math.min(Math.max(y, half), area.value.h - half) * 2) / 2
-}
-function down(e: PointerEvent) {
+
+function down(e: PointerEvent, id: number | null = null) {
   if (isCnc.value || !props.part) return
+  if (id !== null) emit('select', id)
+  const target = id ?? props.selectedId ?? 0
+  if (e.button === 2) {
+    rightPress = { x: e.clientX, y: e.clientY }
+    return
+  }
+  if (e.button !== 0) return
+  if (e.pointerType === 'touch') {
+    const { clientX: x, clientY: y } = e
+    holdAt = { x, y }
+    holdTimer = setTimeout(() => {
+      stopHold()
+      grab = null
+      emit('menu', target, x, y)
+    }, HOLD_MS)
+  }
   const p = toMm(e)
   if (!p) return
   grab = { dx: props.job.placement.x - p.x, dy: props.job.placement.y - p.y }
   ;(e.currentTarget as Element).setPointerCapture(e.pointerId)
 }
 function move(e: PointerEvent) {
+  if (holdAt) {
+    if (Math.hypot(e.clientX - holdAt.x, e.clientY - holdAt.y) < CLICK_SLOP) return
+    stopHold()
+  }
   if (!grab) return
   const p = toMm(e)
   if (!p) return
   props.job.placement.x = clampX(p.x + grab.dx)
   props.job.placement.y = clampY(p.y + grab.dy)
 }
-function up() {
+function up(e: PointerEvent, id: number | null = null) {
+  stopHold()
+  if (e.button === 2 && rightPress && Math.hypot(e.clientX - rightPress.x, e.clientY - rightPress.y) < CLICK_SLOP) {
+    const target = id ?? props.selectedId ?? 0
+    if (target) emit('menu', target, e.clientX, e.clientY)
+  }
+  rightPress = null
   grab = null
 }
 function key(e: KeyboardEvent) {
@@ -166,7 +210,13 @@ const fmt = (v: number) => (Math.round(v * 10) / 10).toString()
         <path :d="`M0 ${fy(0)} l${area.w * 0.06} 0 M0 ${fy(0)} l0 ${-area.h * 0.08}`" />
       </g>
 
-      <g v-if="part" class="part" :class="{ movable: !isCnc }" tabindex="0" :aria-label="isCnc ? `Part in the stock` : `Part at X ${fmt(job.placement.x)} Y ${fmt(job.placement.y)}. Arrow keys move it.`" @pointerdown="down" @pointermove="move" @pointerup="up" @pointercancel="up" @keydown="key">
+      <g v-for="o in others" :key="o.id" class="part other movable" @pointerdown="down($event, o.id)" @pointermove="move" @pointerup="up($event, o.id)" @pointercancel="up($event, o.id)" @contextmenu.prevent>
+        <title>{{ o.name }}</title>
+        <polygon :points="o.points" class="shape" fill="url(#bed-dither)" />
+        <polygon :points="o.points" class="edge" />
+      </g>
+
+      <g v-if="part" class="part" :class="{ movable: !isCnc, picked: several }" tabindex="0" :aria-label="isCnc ? `Part in the stock` : `${several ? part.name : 'Part'} at X ${fmt(job.placement.x)} Y ${fmt(job.placement.y)}. Arrow keys move it.`" @pointerdown="down" @pointermove="move" @pointerup="up" @pointercancel="up" @keydown="key" @contextmenu.prevent>
         <rect v-if="box" class="box" :x="box.x" :y="box.y" :width="box.w" :height="box.h" />
         <polygon :points="outline" class="shape" fill="url(#bed-dither)" />
         <polygon :points="outline" class="edge" />
@@ -203,6 +253,9 @@ svg { width: 100%; height: auto; max-height: 62vh; display: block; color: var(--
 .part.movable { cursor: grab; }
 .part.movable:active { cursor: grabbing; }
 .part:focus-visible .edge { stroke-width: 3; }
+.part.other .shape { opacity: 0.55; }
+.part.other .edge { stroke: var(--rs-text-muted); stroke-width: 1; }
+.part.picked .edge { stroke-width: 2.5; }
 .box { fill: none; stroke: var(--rs-text-muted); stroke-width: 1; stroke-dasharray: 4 3; vector-effect: non-scaling-stroke; }
 .shape { color: var(--rs-text-strong); }
 .edge { fill: none; stroke: var(--rs-text-strong); stroke-width: 1.5; vector-effect: non-scaling-stroke; stroke-linejoin: round; }

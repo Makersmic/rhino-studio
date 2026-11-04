@@ -32,21 +32,35 @@ export function bounds(v: Float32Array) {
 }
 
 /**
- * Turn around Z (degrees) and scale, then centre X/Y on 0 and put the bottom on Z 0.
+ * Scale, tilt around X then Y, and turn around Z (degrees), then centre X/Y on 0 and put the bottom on Z 0.
  * Returns a new array; the original stays as loaded.
  */
-export function transform(src: Float32Array, rotateDeg: number, scale: number): Float32Array {
+export function transform(src: Float32Array, rotateDeg: number, scale: number, tiltXDeg = 0, tiltYDeg = 0): Float32Array {
   const v = new Float32Array(src.length)
   const a = (rotateDeg * Math.PI) / 180
   const c = Math.cos(a)
   const s = Math.sin(a)
+  const ax = (tiltXDeg * Math.PI) / 180
+  const cx1 = Math.cos(ax)
+  const sx1 = Math.sin(ax)
+  const ay = (tiltYDeg * Math.PI) / 180
+  const cy1 = Math.cos(ay)
+  const sy1 = Math.sin(ay)
   const k = scale > 0 ? scale : 1
   for (let i = 0; i + 2 < src.length; i += 3) {
-    const x = src[i]! * k
-    const y = src[i + 1]! * k
-    v[i] = x * c - y * s
-    v[i + 1] = x * s + y * c
-    v[i + 2] = src[i + 2]! * k
+    const x0 = src[i]! * k
+    const y0 = src[i + 1]! * k
+    const z0 = src[i + 2]! * k
+    // around X
+    const y1 = y0 * cx1 - z0 * sx1
+    const z1 = y0 * sx1 + z0 * cx1
+    // around Y
+    const x2 = x0 * cy1 + z1 * sy1
+    const z2 = -x0 * sy1 + z1 * cy1
+    // around Z
+    v[i] = x2 * c - y1 * s
+    v[i + 1] = x2 * s + y1 * c
+    v[i + 2] = z2
   }
   const b = bounds(v)
   const cx = (b.min[0]! + b.max[0]!) / 2
@@ -58,6 +72,37 @@ export function transform(src: Float32Array, rotateDeg: number, scale: number): 
     v[i + 2] = v[i + 2]! - cz
   }
   return v
+}
+
+/**
+ * Several parts on the bed as one model for the engine: each is moved to where it sits, and the whole lot is centred on
+ * X/Y. x and y say where that middle goes on the bed. Each part is centred on X/Y with its bottom on Z 0 already.
+ */
+export function combine(parts: Array<{ vertices: Float32Array; x: number; y: number }>): { vertices: Float32Array; x: number; y: number } {
+  let x0 = Infinity
+  let y0 = Infinity
+  let x1 = -Infinity
+  let y1 = -Infinity
+  for (const p of parts) {
+    const b = bounds(p.vertices)
+    x0 = Math.min(x0, b.min[0]! + p.x)
+    y0 = Math.min(y0, b.min[1]! + p.y)
+    x1 = Math.max(x1, b.max[0]! + p.x)
+    y1 = Math.max(y1, b.max[1]! + p.y)
+  }
+  const x = (x0 + x1) / 2
+  const y = (y0 + y1) / 2
+  const out = merge(parts.map((p) => p.vertices))
+  let o = 0
+  for (const p of parts) {
+    const dx = p.x - x
+    const dy = p.y - y
+    for (let i = 0; i + 2 < p.vertices.length; i += 3, o += 3) {
+      out[o] = p.vertices[i]! + dx
+      out[o + 1] = p.vertices[i + 1]! + dy
+    }
+  }
+  return { vertices: out, x, y }
 }
 
 /** Convex hull of the points seen from above (Andrew's monotone chain). */

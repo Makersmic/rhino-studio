@@ -8,22 +8,10 @@ import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vu
 import RsButton from '@/components/RsButton.vue'
 import type { ParsedGcode } from '@/gcode/parse'
 import { BUDGET_NORMAL, BUDGET_REDUCED, buildDraw, fileMoveAt, previewNotes, visibleRange, type DrawData } from './draw'
-import type { BedShape, GcodeScene, Rgb, ViewAngle } from './scene'
+import type { BedShape, GcodeScene, ViewAngle } from './scene'
+import { colourOf, loadReduced, saveReduced, watchTheme } from './theme'
 
 const props = defineProps<{ parsed: ParsedGcode; bed: BedShape }>()
-
-const REDUCED_KEY = 'rs.viewer.reduced'
-function loadReduced(): boolean {
-  try {
-    const v = localStorage.getItem(REDUCED_KEY)
-    if (v === '1') return true
-    if (v === '0') return false
-  } catch {
-    /* storage blocked: fall through to the guess */
-  }
-  // A two-core machine, such as the kiosk, starts in the lighter mode
-  return (navigator.hardwareConcurrency || 4) <= 2
-}
 
 const canvas = ref<HTMLCanvasElement | null>(null)
 const box = ref<HTMLDivElement | null>(null)
@@ -57,20 +45,8 @@ const head = computed(() => {
 
 let scene: GcodeScene | null = null
 let observer: ResizeObserver | null = null
-let themeWatch: MutationObserver | null = null
-let systemTheme: MediaQueryList | null = null
+let stopTheme: (() => void) | null = null
 
-/** Any CSS colour as sRGB numbers: the browser does the converting, including color-mix() */
-function colourOf(css: string): Rgb {
-  const c = document.createElement('canvas')
-  c.width = c.height = 1
-  const g = c.getContext('2d', { willReadFrequently: true })
-  if (!g) return { r: 0.5, g: 0.5, b: 0.5 }
-  g.fillStyle = css
-  g.fillRect(0, 0, 1, 1)
-  const d = g.getImageData(0, 0, 1, 1).data
-  return { r: d[0]! / 255, g: d[1]! / 255, b: d[2]! / 255 }
-}
 function applyColours() {
   if (!box.value || !scene) return
   const st = getComputedStyle(box.value)
@@ -97,10 +73,7 @@ onMounted(async () => {
       if (e) scene?.resize(e.contentRect.width, e.contentRect.height)
     })
     observer.observe(box.value)
-    themeWatch = new MutationObserver(onThemeChange)
-    themeWatch.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
-    systemTheme = window.matchMedia('(prefers-color-scheme: dark)')
-    systemTheme.addEventListener('change', onThemeChange)
+    stopTheme = watchTheme(onThemeChange)
     document.addEventListener('visibilitychange', onVisible)
   } catch (e) {
     failure.value = `This browser couldn't start the 3D drawing (${(e as Error).message}). The file itself is fine.`
@@ -109,8 +82,7 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   observer?.disconnect()
-  themeWatch?.disconnect()
-  systemTheme?.removeEventListener('change', onThemeChange)
+  stopTheme?.()
   document.removeEventListener('visibilitychange', onVisible)
   scene?.dispose()
   scene = null
@@ -132,11 +104,7 @@ function toggleWhole() {
 }
 function toggleReduced() {
   reduced.value = !reduced.value
-  try {
-    localStorage.setItem(REDUCED_KEY, reduced.value ? '1' : '0')
-  } catch {
-    /* storage blocked: it still applies to this view */
-  }
+  saveReduced(reduced.value)
   draw.value = buildDraw(props.parsed, reduced.value ? BUDGET_REDUCED : BUDGET_NORMAL)
   scene?.setPath(draw.value, !reduced.value)
   scene?.setVisible(range.value.end, range.value.dimBefore)

@@ -16,7 +16,9 @@ import { useRouter } from 'vue-router'
 import RsPanel from '@/components/RsPanel.vue'
 import RsButton from '@/components/RsButton.vue'
 import Icon from '@/icons/Icon.vue'
-import BedView from '@/prepare/BedView.vue'
+import JobWorkspace from '@/prepare/JobWorkspace.vue'
+import FileMenu, { type MenuItem } from '@/files/FileMenu.vue'
+import { laidFlat, turned } from '@/viewer/placement'
 import NumField from '@/prepare/NumField.vue'
 import StepBar from '@/prepare/StepBar.vue'
 import FdmAdvanced from '@/prepare/FdmAdvanced.vue'
@@ -38,14 +40,48 @@ const router = useRouter()
 
 const picker = ref<HTMLInputElement | null>(null)
 const dragging = ref(false)
+/** the file picker is adding parts, not starting over */
+const adding = ref(false)
 function pick(list: FileList | null) {
-  const f = list?.[0]
-  if (f) void prep.load(f)
+  const files = [...(list ?? [])]
+  if (adding.value) void prep.addFiles(files)
+  else if (files[0]) void prep.load(files[0])
   if (picker.value) picker.value.value = ''
+}
+function choose(add: boolean) {
+  adding.value = add
+  // the picker's multiple has to be set before it opens
+  if (picker.value) picker.value.multiple = add
+  picker.value?.click()
 }
 function onDrop(e: DragEvent) {
   dragging.value = false
+  // On the bed, a dropped file joins the job where it can. Elsewhere it starts one.
+  adding.value = prep.step === 'setup' && prep.canAddParts
   pick(e.dataTransfer?.files ?? null)
+}
+
+// ---- a part's menu
+const partMenu = ref<{ id: number; x: number; y: number; normal: [number, number, number] | null } | null>(null)
+const partMenuItems = computed<MenuItem[]>(() => {
+  const m = partMenu.value
+  const p = prep.parts.find((x) => x.id === m?.id)
+  if (!m || !p) return []
+  const items: MenuItem[] = [
+    { label: 'Duplicate', run: () => prep.duplicatePart(p.id), block: prep.canAddParts ? null : 'A CNC job holds one part' },
+  ]
+  if (!p.info.flat) {
+    if (m.normal) items.push({ label: 'Lay this face flat', run: () => layFlat(m.normal!) })
+    else if (is3d.value) items.push({ label: 'Lay flat…', run: () => (prep.selectPart(p.id), (picking.value = true)) })
+  }
+  if (proc.value !== 'cnc') items.push({ label: 'Centre', run: () => (prep.selectPart(p.id), prep.centre()) })
+  items.push({ label: 'Reset way up', run: () => prep.resetWayUp(p.id) })
+  items.push({ label: 'Delete from job', run: () => prep.removePart(p.id), danger: true })
+  return items
+})
+function selectForMenu(id: number, x: number, y: number, normal: [number, number, number] | null) {
+  prep.selectPart(id)
+  partMenu.value = { id, x, y, normal }
 }
 
 const job = computed(() => prep.job)
@@ -127,10 +163,29 @@ const summary = computed(() => {
   return rows
 })
 
-function rotate(by: number) {
-  if (!prep.job) return
-  prep.job.placement.rotate = (((prep.job.placement.rotate + by) % 360) + 360) % 360
+// ---- which way up: turns and Lay flat work out new angles; the part stays where it is on the bed
+const picking = ref(false)
+const is3d = ref(false)
+function turn(axis: 'x' | 'y' | 'z') {
+  if (prep.job) prep.job.placement = turned(prep.job.placement, axis, 90)
 }
+function layFlat(normal: [number, number, number]) {
+  if (prep.job) prep.job.placement = laidFlat(prep.job.placement, normal)
+}
+/** A tilt of 0 isn't stored, so a plain job stays as it always was */
+function tiltField(key: 'tiltX' | 'tiltY') {
+  return computed({
+    get: () => prep.job?.placement[key] ?? 0,
+    set: (v: number) => {
+      const p = prep.job?.placement
+      if (!p) return
+      if (v) p[key] = v
+      else delete p[key]
+    },
+  })
+}
+const tiltX = tiltField('tiltX')
+const tiltY = tiltField('tiltY')
 
 function openInFiles() {
   if (prep.sentPath) void router.push({ path: '/files', query: { file: prep.sentPath } })
@@ -175,7 +230,7 @@ const engineNote = computed(() => {
 
     <!-- ============ 1. File -->
     <template v-if="prep.step === 'file'">
-      <button type="button" class="dropzone" :class="{ dragging }" @click="picker?.click()">
+      <button type="button" class="dropzone" :class="{ dragging }" @click="choose(false)">
         <Icon nav="prepare" :size="56" />
         <span class="big">{{ prep.loading ? 'Reading the file…' : prep.preset ? `Drop a file for ${prep.preset}, or click to choose one` : 'Drop a model or drawing here, or click to choose one' }}</span>
         <span class="muted small">3D models: STL, 3MF, OBJ · 2D drawings: SVG, DXF · ready-made jobs: G-code from Orca, LightBurn and others</span>
@@ -297,30 +352,53 @@ const engineNote = computed(() => {
         @drop.prevent.stop="onDrop"
       >
         <template #actions>
-          <RsButton size="sm" :disabled="prep.loading" @click="picker?.click()">Replace</RsButton>
+          <RsButton v-if="prep.canAddParts" size="sm" :disabled="prep.loading" @click="choose(true)">Add file</RsButton>
+          <RsButton size="sm" :disabled="prep.loading" @click="choose(false)">{{ prep.parts.length > 1 ? 'Replace all' : 'Replace' }}</RsButton>
         </template>
 
         <template v-if="job && up">
-          <BedView :machine="prep.machineInfo" :job="job" :part="null" :result="prep.result?.file.bounds ?? null" :paths="up.info.paths" />
+          <JobWorkspace :machine="prep.machineInfo" :job="job" :part="null" :result="prep.result?.file.bounds ?? null" :paths="up.info.paths" :file-text="up.text" />
           <p class="muted small">Shown as it is in the file{{ proc === 'cnc' ? ', around the work zero' : ', on the bed' }}. It isn't sliced again: to change it, change it in {{ up.info.madeBy ?? 'the program that made it' }} and drop it here again.</p>
           <p v-if="prep.loadError" class="error" role="alert">{{ prep.loadError }}</p>
         </template>
         <template v-else-if="job && prep.part">
-          <BedView :machine="prep.machineInfo" :job="job" :part="prep.part" :result="prep.result?.file.bounds ?? null" />
+          <JobWorkspace
+            v-model:picking="picking"
+            :machine="prep.machineInfo"
+            :job="job"
+            :part="prep.part"
+            :parts="prep.parts"
+            :selected-id="prep.selectedId"
+            :result="prep.result?.file.bounds ?? null"
+            @pick="layFlat"
+            @mode="is3d = $event"
+            @select="prep.selectPart"
+            @menu="selectForMenu"
+          />
+          <FileMenu v-if="partMenu && partMenuItems.length" :x="partMenu.x" :y="partMenu.y" :title="prep.parts.find((p) => p.id === partMenu?.id)?.name ?? ''" :items="partMenuItems" @close="partMenu = null" />
           <p v-if="suits" class="notice small" role="status">{{ suits }}</p>
           <div class="place">
             <template v-if="proc !== 'cnc'">
               <NumField v-model="job.placement.x" label="Centre X" unit="mm" :min="0" :max="prep.machineInfo.workArea.x" :step="1" />
               <NumField v-model="job.placement.y" label="Centre Y" unit="mm" :min="0" :max="prep.machineInfo.workArea.y" :step="1" />
             </template>
-            <NumField v-model="job.placement.rotate" label="Turn" unit="°" :min="0" :max="359.9" :step="1" />
+            <NumField v-model="job.placement.rotate" label="Turn" unit="°" :min="0" :max="359.999" :step="1" />
+            <template v-if="!prep.part.flat">
+              <NumField v-model="tiltX" label="Tilt X" unit="°" :min="-180" :max="180" :step="1" />
+              <NumField v-model="tiltY" label="Tilt Y" unit="°" :min="-180" :max="180" :step="1" />
+            </template>
             <NumField v-model="job.placement.scale" label="Scale" unit="%" :min="0.01" :max="10" :step="0.01" percent />
             <div class="placebtns">
-              <RsButton size="sm" variant="quiet" @click="rotate(90)">Turn 90°</RsButton>
+              <RsButton size="sm" variant="quiet" @click="turn('z')">Turn 90°</RsButton>
+              <template v-if="!prep.part.flat">
+                <RsButton size="sm" variant="quiet" @click="turn('x')">Turn on X</RsButton>
+                <RsButton size="sm" variant="quiet" @click="turn('y')">Turn on Y</RsButton>
+                <RsButton v-if="is3d" size="sm" variant="quiet" :aria-pressed="picking" @click="picking = !picking">{{ picking ? 'Cancel lay flat' : 'Lay flat' }}</RsButton>
+              </template>
               <RsButton v-if="proc !== 'cnc'" size="sm" variant="quiet" @click="prep.centre()">Centre</RsButton>
             </div>
           </div>
-          <p class="muted small">{{ prep.part.triangles.toLocaleString() }} triangles<template v-if="proc !== 'cnc'"> · drag the part or use the arrow keys (Shift = 10 mm)</template></p>
+          <p class="muted small">{{ prep.part.triangles.toLocaleString() }} triangles<template v-if="proc !== 'cnc'"> · arrow keys move the {{ prep.parts.length > 1 ? 'selected part' : 'part' }} (Shift = 10 mm)</template> · right-click or long-press a part for more</p>
           <p v-if="prep.loadError" class="error" role="alert">{{ prep.loadError }}</p>
         </template>
       </RsPanel>
@@ -549,8 +627,8 @@ const engineNote = computed(() => {
 .error { color: var(--rs-danger); font-size: var(--rs-text-sm); margin-top: var(--rs-space-3); }
 .notice { color: var(--rs-text-strong); border: 1px solid var(--rs-line-strong); background: var(--rs-surface-2); padding: 8px 12px; border-radius: var(--rs-radius-md); margin-top: var(--rs-space-3); }
 
-.place { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)) auto; gap: var(--rs-space-3); align-items: end; margin: var(--rs-space-4) 0 var(--rs-space-2); }
-.placebtns { display: flex; gap: 4px; }
+.place { display: grid; grid-template-columns: repeat(auto-fit, minmax(92px, 1fr)); gap: var(--rs-space-3); align-items: end; margin: var(--rs-space-4) 0 var(--rs-space-2); }
+.placebtns { display: flex; flex-wrap: wrap; gap: 4px; grid-column: 1 / -1; }
 @media (max-width: 720px) { .place { grid-template-columns: repeat(2, minmax(0, 1fr)); } .placebtns { grid-column: 1 / -1; } }
 
 .tools { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 6px; }

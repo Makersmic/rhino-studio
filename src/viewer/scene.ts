@@ -9,6 +9,7 @@
 import {
   BufferAttribute,
   BufferGeometry,
+  DoubleSide,
   InstancedBufferAttribute,
   InstancedBufferGeometry,
   InstancedInterleavedBuffer,
@@ -16,6 +17,8 @@ import {
   LineSegments,
   Mesh,
   PerspectiveCamera,
+  Plane,
+  Raycaster,
   Scene,
   ShaderMaterial,
   Vector2,
@@ -39,6 +42,13 @@ export interface BedShape {
   x: number
   y: number
   keepOut: Array<{ x0: number; y0: number; x1: number; y1: number }>
+  /** an extra area to keep clear: the prime line */
+  prime?: { x0: number; y0: number; x1: number; y1: number } | null
+}
+/** A box of thin lines: the CNC stock, or where a prepared file's moves go */
+export interface WireBox {
+  min: [number, number, number]
+  max: [number, number, number]
 }
 export type ViewAngle = 'angle' | 'top'
 
@@ -205,6 +215,99 @@ function material(strip: boolean): ShaderMaterial {
   })
 }
 
+/**
+ * The part, solid and lit from the same side as the threads. Its normals come from the triangles themselves, on the
+ * graphics card, so a big model needs no second copy of its data. Lit faces are always the brighter ones, in either theme.
+ */
+function modelMaterial(): ShaderMaterial {
+  return new ShaderMaterial({
+    side: DoubleSide,
+    vertexShader: `
+      varying vec3 vWorld;
+      void main() {
+        vec4 world = modelMatrix * vec4(position, 1.0);
+        vWorld = world.xyz;
+        gl_Position = projectionMatrix * viewMatrix * world;
+      }`,
+    fragmentShader: `
+      precision highp float;
+      uniform vec3 uInk;
+      uniform vec3 uPaper;
+      uniform float uInkIsDark;
+      uniform vec3 uLight;
+      varying vec3 vWorld;
+      void main() {
+        vec3 n = normalize(cross(dFdx(vWorld), dFdy(vWorld)));
+        vec3 v = normalize(cameraPosition - vWorld);
+        if (dot(n, v) < 0.0) n = -n;
+        float side = 0.5 + 0.5 * dot(n, uLight);
+        float top = max(0.0, n.z) * 0.18;
+        float lit = clamp(side * 0.8 + top, 0.0, 1.0);
+        vec3 c = uInkIsDark > 0.5 ? mix(uInk, uPaper, 0.12 + 0.7 * lit) : mix(uPaper, uInk, 0.14 + 0.78 * lit);
+        gl_FragColor = vec4(c, 1.0);
+      }`,
+    uniforms: {
+      uInk: { value: new Vector3(0, 0, 0) },
+      uPaper: { value: new Vector3(1, 1, 1) },
+      uInkIsDark: { value: 0 },
+      uLight: { value: new Vector3(1, -0.45, 0.35).normalize() },
+    },
+  })
+}
+
+/**
+ * The selected part's outline: the same triangles drawn in ink, spread a few pixels outward on screen and pushed back in
+ * depth, so only the ring outside the real part shows. It works on a curved part with no sharp edges, needs no second
+ * copy of the model, and doesn't care which way the file's triangles face.
+ */
+function outlineMaterial(): ShaderMaterial {
+  return new ShaderMaterial({
+    side: DoubleSide,
+    vertexShader: `
+      uniform vec2 uResolution;
+      uniform float uPixels;
+      uniform float uMid;
+      void main() {
+        mat4 m = projectionMatrix * viewMatrix * modelMatrix;
+        vec4 c = m * vec4(position, 1.0);
+        vec4 o = m * vec4(0.0, 0.0, uMid, 1.0);
+        vec2 d = (c.xy / c.w - o.xy / o.w) * uResolution;
+        float len = length(d);
+        if (len > 0.0) c.xy += d / len * uPixels * 2.0 / uResolution * c.w;
+        c.z += 0.001 * c.w;
+        gl_Position = c;
+      }`,
+    fragmentShader: `
+      precision highp float;
+      uniform vec3 uInk;
+      void main() { gl_FragColor = vec4(uInk, 1.0); }`,
+    uniforms: {
+      uInk: { value: new Vector3(0, 0, 0) },
+      uPaper: { value: new Vector3(1, 1, 1) },
+      uInkIsDark: { value: 0 },
+      uResolution: { value: new Vector2(1, 1) },
+      uPixels: { value: 2 },
+      uMid: { value: 0 },
+    },
+  })
+}
+
+/** The twelve edges of a box, as a line list */
+export function boxLines(boxes: WireBox[]): Float32Array {
+  const p: number[] = []
+  for (const { min: a, max: b } of boxes) {
+    const c = [
+      [a[0], a[1]], [b[0], a[1]], [b[0], b[1]], [a[0], b[1]],
+    ] as const
+    for (let i = 0; i < 4; i++) {
+      const u = c[i]!
+      const w = c[(i + 1) % 4]!
+      p.push(u[0], u[1], a[2], w[0], w[1], a[2], u[0], u[1], b[2], w[0], w[1], b[2], u[0], u[1], a[2], u[0], u[1], b[2])
+    }
+  }
+  return Float32Array.from(p)
+}
+
 /** The bed outline, a 50 mm grid, the corner at X0 Y0, and the areas to keep clear */
 export function bedLines(bed: BedShape): { positions: Float32Array; shades: Uint8Array } {
   const p: number[] = []
@@ -221,7 +324,7 @@ export function bedLines(bed: BedShape): { positions: Float32Array; shades: Uint
   line(0, bed.y, 0, 0, 110)
   line(0, 0, Math.min(40, bed.x), 0, 255)
   line(0, 0, 0, Math.min(40, bed.y), 255)
-  for (const k of bed.keepOut) {
+  for (const k of bed.prime ? [...bed.keepOut, bed.prime] : bed.keepOut) {
     line(k.x0, k.y0, k.x1, k.y0, 90)
     line(k.x1, k.y0, k.x1, k.y1, 90)
     line(k.x1, k.y1, k.x0, k.y1, 90)
@@ -242,6 +345,14 @@ function stripShape(): InstancedBufferGeometry {
   return g
 }
 
+export interface SceneModel {
+  id: number
+  vertices: Float32Array
+  x: number
+  y: number
+  height: number
+}
+
 export class GcodeScene {
   private renderer: WebGLRenderer
   private scene = new Scene()
@@ -250,6 +361,13 @@ export class GcodeScene {
   private bedMaterial = material(false)
   private lineMaterial = material(false)
   private stripMaterial = material(true)
+  private meshMaterial = modelMaterial()
+  private wireMaterial = material(false)
+  private outlineMat = outlineMaterial()
+  private models = new Map<number, Mesh>()
+  private outline: Mesh | null = null
+  private wires: LineSegments | null = null
+  private raycaster = new Raycaster()
   private bed: LineSegments | null = null
   private path: LineSegments | Mesh | null = null
   private strips = false
@@ -354,12 +472,114 @@ export class GcodeScene {
   }
 
   setColours(c: ViewerColours): void {
-    for (const m of [this.bedMaterial, this.lineMaterial, this.stripMaterial]) {
+    for (const m of [this.bedMaterial, this.lineMaterial, this.stripMaterial, this.meshMaterial, this.wireMaterial, this.outlineMat]) {
       m.uniforms.uInk!.value.set(c.ink.r, c.ink.g, c.ink.b)
       m.uniforms.uPaper!.value.set(c.paper.r, c.paper.g, c.paper.b)
       m.uniforms.uInkIsDark!.value = c.ink.r + c.ink.g + c.ink.b < c.paper.r + c.paper.g + c.paper.b ? 1 : 0
     }
     this.draw()
+  }
+
+  /**
+   * The parts as triangles (each centred on X/Y, bottom on Z 0), where they sit. Only what changed is touched, so this is
+   * cheap to call on every step of a drag. It uses the arrays it's given, without a copy.
+   */
+  setModels(list: SceneModel[], selectedId: number | null): void {
+    const wanted = new Set(list.map((m) => m.id))
+    for (const [id, mesh] of this.models) {
+      if (!wanted.has(id)) {
+        this.scene.remove(mesh)
+        mesh.geometry.dispose()
+        this.models.delete(id)
+      }
+    }
+    for (const m of list) {
+      let mesh = this.models.get(m.id)
+      if (mesh && (mesh.geometry.getAttribute('position') as BufferAttribute).array !== m.vertices) {
+        this.scene.remove(mesh)
+        mesh.geometry.dispose()
+        mesh = undefined
+      }
+      if (!mesh) {
+        const g = new BufferGeometry()
+        g.setAttribute('position', new BufferAttribute(m.vertices, 3))
+        g.computeBoundingSphere()
+        mesh = new Mesh(g, this.meshMaterial)
+        mesh.userData.partId = m.id
+        this.scene.add(mesh)
+        this.models.set(m.id, mesh)
+      }
+      mesh.position.set(m.x, m.y, 0)
+    }
+    this.showOutline(selectedId === null ? undefined : list.find((m) => m.id === selectedId))
+    this.draw()
+  }
+
+  private showOutline(m: SceneModel | undefined): void {
+    const mesh = m && this.models.get(m.id)
+    if (!m || !mesh) {
+      if (this.outline) this.outline.visible = false
+      return
+    }
+    if (!this.outline) {
+      this.outline = new Mesh(mesh.geometry, this.outlineMat)
+      this.outline.frustumCulled = false
+      this.scene.add(this.outline)
+    }
+    this.outline.geometry = mesh.geometry
+    this.outline.position.copy(mesh.position)
+    this.outline.visible = true
+    this.outlineMat.uniforms.uMid!.value = m.height / 2
+  }
+
+  /** Boxes drawn in thin lines; they replace any drawn before */
+  setBoxes(boxes: WireBox[]): void {
+    if (this.wires) {
+      this.scene.remove(this.wires)
+      this.wires.geometry.dispose()
+      this.wires = null
+    }
+    if (boxes.length) {
+      const positions = boxLines(boxes)
+      const g = new BufferGeometry()
+      g.setAttribute('position', new BufferAttribute(positions, 3))
+      g.setAttribute('shade', new BufferAttribute(new Uint8Array(positions.length / 3).fill(150), 1, true))
+      this.wires = new LineSegments(g, this.wireMaterial)
+      this.wires.frustumCulled = false
+      this.scene.add(this.wires)
+    }
+    this.draw()
+  }
+
+  /** What the camera aims at when there's no toolpath */
+  setFocus(bounds: GcodeBounds | null): void {
+    this.bounds = bounds
+  }
+
+  /** While a part is being dragged, the camera stays put */
+  setOrbit(on: boolean): void {
+    this.controls.enabled = on
+  }
+
+  private aim(clientX: number, clientY: number): void {
+    const r = this.canvas.getBoundingClientRect()
+    this.raycaster.setFromCamera(new Vector2(((clientX - r.left) / r.width) * 2 - 1, -((clientY - r.top) / r.height) * 2 + 1), this.camera)
+  }
+
+  /** The part under the pointer, the point on it and the way its face points, or null */
+  hitModel(clientX: number, clientY: number): { id: number; point: [number, number, number]; normal: [number, number, number] } | null {
+    if (!this.models.size) return null
+    this.aim(clientX, clientY)
+    const hit = this.raycaster.intersectObjects([...this.models.values()], false)[0]
+    if (!hit || !hit.face) return null
+    return { id: hit.object.userData.partId as number, point: [hit.point.x, hit.point.y, hit.point.z], normal: [hit.face.normal.x, hit.face.normal.y, hit.face.normal.z] }
+  }
+
+  /** Where the pointer's line crosses a level plane at height z, or null if it doesn't */
+  hitLevel(clientX: number, clientY: number, z: number): [number, number] | null {
+    this.aim(clientX, clientY)
+    const out = new Vector3()
+    return this.raycaster.ray.intersectPlane(new Plane(new Vector3(0, 0, 1), -z), out) ? [out.x, out.y] : null
   }
 
   /** Aim at the job (or the whole bed), from the front corner or straight down */
@@ -398,6 +618,8 @@ export class GcodeScene {
     this.camera.aspect = width / height
     this.camera.updateProjectionMatrix()
     this.renderer.getDrawingBufferSize(this.stripMaterial.uniforms.uResolution!.value)
+    this.renderer.getDrawingBufferSize(this.outlineMat.uniforms.uResolution!.value)
+    this.outlineMat.uniforms.uPixels!.value = 1.5 * this.renderer.getPixelRatio()
     this.draw()
   }
 
@@ -419,6 +641,11 @@ export class GcodeScene {
     this.controls.dispose()
     this.bed?.geometry.dispose()
     this.path?.geometry.dispose()
+    for (const mesh of this.models.values()) mesh.geometry.dispose()
+    this.wires?.geometry.dispose()
+    this.outlineMat.dispose()
+    this.meshMaterial.dispose()
+    this.wireMaterial.dispose()
     this.bedMaterial.dispose()
     this.lineMaterial.dispose()
     this.stripMaterial.dispose()

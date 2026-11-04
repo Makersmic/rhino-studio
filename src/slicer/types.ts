@@ -168,6 +168,9 @@ export interface Placement {
   y: number
   /** turn around Z, degrees */
   rotate: number
+  /** tilt around X then Y, degrees, applied before the turn. Left out when 0, so plain jobs stay as they were. */
+  tiltX?: number
+  tiltY?: number
   /** 1 = as drawn */
   scale: number
 }
@@ -231,6 +234,18 @@ export const DEFAULT_MACHINE: MachineInfo = {
 }
 
 /** The part as loaded, after rotate and scale, centred on X/Y with its bottom at Z 0. */
+/** One part of a job, where it is now */
+export interface PartView {
+  id: number
+  name: string
+  /** its triangles: centred on X/Y, bottom on Z 0 */
+  vertices: Float32Array
+  info: PartInfo
+  x: number
+  y: number
+  placement: Placement
+}
+
 export interface PartInfo {
   name: string
   /** size in mm */
