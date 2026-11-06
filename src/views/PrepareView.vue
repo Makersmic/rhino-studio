@@ -11,7 +11,7 @@
  * The slicing runs in this browser (src/slicer/), so the Pi only ever receives
  * the finished file. See src/stores/prepare.ts.
  */
-import { computed, ref } from 'vue'
+import { computed, defineAsyncComponent, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import RsPanel from '@/components/RsPanel.vue'
 import RsButton from '@/components/RsButton.vue'
@@ -19,6 +19,8 @@ import Icon from '@/icons/Icon.vue'
 import JobWorkspace from '@/prepare/JobWorkspace.vue'
 import FileMenu, { type MenuItem } from '@/files/FileMenu.vue'
 import { laidFlat, turned } from '@/viewer/placement'
+import { footprints, partsBox, spinMode } from '@/viewer/spin'
+import { loadReduced } from '@/viewer/theme'
 import NumField from '@/prepare/NumField.vue'
 import StepBar from '@/prepare/StepBar.vue'
 import FdmAdvanced from '@/prepare/FdmAdvanced.vue'
@@ -35,6 +37,12 @@ import { MODEL_TYPES } from '@/slicer/model'
 import { GCODE_TYPES } from '@/slicer/gcodeFile'
 
 const prep = usePrepareStore()
+const ModelSpin = defineAsyncComponent(() => import('@/viewer/ModelSpin.vue'))
+/** Step 2's picture: the model turning in 3D, or its outline from above with Lighter drawing or no 3D */
+const spinFailed = ref(false)
+const spin = computed(() =>
+  spinMode({ lighter: loadReduced(), reducedMotion: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false, failed: spinFailed.value }),
+)
 const machine = useMachineStore()
 const router = useRouter()
 
@@ -45,13 +53,11 @@ const adding = ref(false)
 function pick(list: FileList | null) {
   const files = [...(list ?? [])]
   if (adding.value) void prep.addFiles(files)
-  else if (files[0]) void prep.load(files[0])
+  else if (files.length) void prep.loadFiles(files)
   if (picker.value) picker.value.value = ''
 }
 function choose(add: boolean) {
   adding.value = add
-  // the picker's multiple has to be set before it opens
-  if (picker.value) picker.value.multiple = add
   picker.value?.click()
 }
 function onDrop(e: DragEvent) {
@@ -130,15 +136,14 @@ const pathPreview = computed(() => {
   const lines = u.info.paths.filter((_, i) => i % step === 0).map((pl) => pl.map(([x, y]) => `${(x - b.min[0]).toFixed(1)},${(b.max[1] - y).toFixed(1)}`).join(' '))
   return { view: `${-pad} ${-pad} ${w + 2 * pad} ${h + 2 * pad}`, lines, w, h }
 })
-const footprintPath = computed(() => {
-  const p = prep.part
-  if (!p || !p.footprint.length) return { d: '', view: '0 0 10 10' }
-  const w = Math.max(p.size.x, 1)
-  const h = Math.max(p.size.y, 1)
-  const pad = Math.max(w, h) * 0.06
-  const d = p.footprint.map(([x, y], i) => `${i ? 'L' : 'M'}${(x + w / 2).toFixed(2)} ${(h / 2 - y).toFixed(2)}`).join(' ') + ' Z'
-  return { d, view: `${-pad} ${-pad} ${w + 2 * pad} ${h + 2 * pad}` }
-})
+/** Step 2: every part, where it sits beside the others */
+const outlines = computed(() => footprints(prep.parts))
+const together = computed(() => partsBox(prep.parts))
+const spinModels = computed(() => prep.parts.map((p) => ({ id: p.id, vertices: p.vertices, x: p.x, y: p.y, height: p.info.size.z })))
+/** "bracket.stl", or "3 parts" */
+const partsTitle = computed(() => (prep.parts.length > 1 ? `${prep.parts.length} parts` : (prep.part?.name ?? '')))
+/** Several parts can't be milled: say so when the machine has a CNC tool */
+const cncLeftOut = computed(() => prep.parts.length > 1 && prep.tools.some((t) => t.process === 'cnc'))
 
 const fmtTime = (s: number) => {
   const m = Math.round(s / 60)
@@ -225,7 +230,7 @@ const engineNote = computed(() => {
       <p>Drop in a model or drawing, confirm what the Rhino should do with it, then place it, set it up and send it. 3D models can be sliced by PrusaSlicer on the Rhino or by Kiri:Moto in this browser; everything else is worked out on this computer. Every file is checked before it goes to the Rhino.</p>
     </div>
 
-    <input ref="picker" type="file" :accept="accepts" class="visually-hidden" aria-label="Choose a model file" @change="pick(($event.target as HTMLInputElement).files)" />
+    <input ref="picker" type="file" multiple :accept="accepts" class="visually-hidden" aria-label="Choose a model file" @change="pick(($event.target as HTMLInputElement).files)" />
     <StepBar :step="prep.step" @go="goStep" />
 
     <!-- ============ 1. File -->
@@ -290,6 +295,7 @@ const engineNote = computed(() => {
             </span>
           </button>
           <p v-if="up.info.toolhead && !prep.options.length" class="error">The file says it's for {{ up.info.toolhead }}, which this machine doesn't have.</p>
+          <p v-if="prep.loadSkipped" class="notice small" role="status">{{ prep.loadSkipped }}</p>
           <div class="ogo">
             <RsButton variant="primary" :disabled="!chosen" @click="confirm">Continue</RsButton>
           </div>
@@ -297,18 +303,27 @@ const engineNote = computed(() => {
       </div>
     </RsPanel>
 
-    <RsPanel v-else-if="prep.step === 'process' && prep.part" panel-id="prepare.process" :title="`What should the Rhino do with ${prep.part.name}?`">
+    <RsPanel v-else-if="prep.step === 'process' && prep.part" panel-id="prepare.process" :title="`What should the Rhino do with ${partsTitle}?`">
       <template #actions>
         <RsButton size="sm" variant="quiet" @click="prep.clearPart()">Use another file</RsButton>
       </template>
       <div class="procgrid">
         <figure class="detect">
-          <svg :viewBox="footprintPath.view" class="fp" role="img" :aria-label="`${prep.part.name} seen from above`">
-            <path :d="footprintPath.d" />
+          <ModelSpin
+            v-if="spin !== 'flat' && spinModels.length"
+            :models="spinModels"
+            :box="together"
+            :spin="spin === 'spin'"
+            :label="`${partsTitle} in 3D. Drag to turn ${prep.parts.length > 1 ? 'them' : 'it'}.`"
+            @failed="spinFailed = true"
+          />
+          <svg v-else :viewBox="outlines.view" class="fp" role="img" :aria-label="`${partsTitle} seen from above`">
+            <path v-for="(d, i) in outlines.paths" :key="i" :d="d" />
           </svg>
           <figcaption>
-            <span><strong>{{ prep.fileKind }}</strong> · {{ prep.part.name.split('.').pop()?.toUpperCase() }}</span>
-            <span>{{ fmt(prep.part.size.x) }} × {{ fmt(prep.part.size.y) }}<template v-if="!prep.flat"> × {{ fmt(prep.part.size.z) }}</template> mm</span>
+            <span v-if="prep.parts.length > 1"><strong>{{ prep.parts.length }} {{ prep.flat ? 'drawings' : '3D models' }}</strong> · {{ prep.parts[0]!.name }} and {{ prep.parts.length - 1 }} more</span>
+            <span v-else><strong>{{ prep.fileKind }}</strong> · {{ prep.part.name.split('.').pop()?.toUpperCase() }}</span>
+            <span>{{ fmt(together.max[0] - together.min[0]) }} × {{ fmt(together.max[1] - together.min[1]) }}<template v-if="!prep.flat"> × {{ fmt(together.max[2]) }}</template> mm<template v-if="prep.parts.length > 1"> together</template></span>
             <span class="muted small">{{ prep.flat ? 'A flat outline: it can be cut, not printed or milled.' : 'A solid: it can be printed or milled, or cut along its outline.' }}</span>
           </figcaption>
         </figure>
@@ -331,6 +346,8 @@ const engineNote = computed(() => {
               <span class="osub">{{ o.recommended ? 'Suits this file' : 'Also possible: cuts the outline at one height' }}<template v-if="o.mounted"> · mounted now</template></span>
             </span>
           </button>
+          <p v-if="cncLeftOut" class="muted small">CNC milling isn't offered: it mills one part at a time.</p>
+          <p v-if="prep.loadSkipped" class="notice small" role="status">{{ prep.loadSkipped }}</p>
           <div class="ogo">
             <RsButton variant="primary" :disabled="!chosen" @click="confirm">Continue</RsButton>
           </div>
@@ -360,6 +377,7 @@ const engineNote = computed(() => {
           <JobWorkspace :machine="prep.machineInfo" :job="job" :part="null" :result="prep.result?.file.bounds ?? null" :paths="up.info.paths" :file-text="up.text" />
           <p class="muted small">Shown as it is in the file{{ proc === 'cnc' ? ', around the work zero' : ', on the bed' }}. It isn't sliced again: to change it, change it in {{ up.info.madeBy ?? 'the program that made it' }} and drop it here again.</p>
           <p v-if="prep.loadError" class="error" role="alert">{{ prep.loadError }}</p>
+          <p v-if="prep.loadSkipped" class="notice small" role="status">{{ prep.loadSkipped }}</p>
         </template>
         <template v-else-if="job && prep.part">
           <JobWorkspace
@@ -400,6 +418,7 @@ const engineNote = computed(() => {
           </div>
           <p class="muted small">{{ prep.part.triangles.toLocaleString() }} triangles<template v-if="proc !== 'cnc'"> · arrow keys move the {{ prep.parts.length > 1 ? 'selected part' : 'part' }} (Shift = 10 mm)</template> · right-click or long-press a part for more</p>
           <p v-if="prep.loadError" class="error" role="alert">{{ prep.loadError }}</p>
+          <p v-if="prep.loadSkipped" class="notice small" role="status">{{ prep.loadSkipped }}</p>
         </template>
       </RsPanel>
 

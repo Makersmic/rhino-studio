@@ -2,7 +2,7 @@ import { readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { GcodeParser, MOVE_EXTRUDE, MOVE_FEED, MOVE_RAPID, parseGcode, type ParsedGcode } from './parse'
-import { isGcodeFileUrl, runParse, transferables } from './run'
+import { FileTooBig, isGcodeFileUrl, runParse, transferables } from './run'
 
 /** Move i as [x0, y0, z0, x1, y1, z1] */
 const seg = (p: ParsedGcode, i: number) => [...p.segments.subarray(i * 6, i * 6 + 6)]
@@ -392,6 +392,15 @@ describe('reading from the machine', () => {
     const init = (f.mock.calls[0] as unknown[])[1] as RequestInit
     expect(init.method).toBeUndefined()
     expect(init.body).toBeUndefined()
+  })
+
+  it('stops before reading a file over the size it was given', async () => {
+    vi.stubGlobal('fetch', async () => new Response(streamOf(ORCA), { headers: { 'content-length': String(ORCA.length) } }))
+    const e = await runParse({ url, maxBytes: ORCA.length - 1 }, () => {}).catch((x: unknown) => x)
+    expect(e).toBeInstanceOf(FileTooBig)
+    expect((e as FileTooBig).bytes).toBe(ORCA.length)
+    expect((await runParse({ url, maxBytes: ORCA.length }, () => {})).moveCount).toBeGreaterThan(0)
+    vi.unstubAllGlobals()
   })
 
   it('says so when the machine refuses', async () => {

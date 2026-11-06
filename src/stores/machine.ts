@@ -186,6 +186,8 @@ export const useMachineStore = defineStore('machine', () => {
     state: (status.value.print_stats?.state as string | undefined) ?? null,
     filename: (status.value.print_stats?.filename as string | undefined) || null,
     progress: num(status.value.virtual_sdcard?.progress),
+    /** how far Klipper has read into the job's file, in bytes: the hologram's progress */
+    filePosition: num(status.value.virtual_sdcard?.file_position),
     /** seconds actually spent running (pauses not counted) */
     duration: num(status.value.print_stats?.print_duration),
     message: (status.value.print_stats?.message as string | undefined) || null,

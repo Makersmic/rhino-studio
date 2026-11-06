@@ -5,7 +5,16 @@
  */
 import { GcodeParser, type ParsedGcode } from './parse'
 
-export type ParseSource = { url: string } | { text: string }
+/** `maxBytes`: give up before reading a file bigger than this, with a FileTooBig error */
+export type ParseSource = { url: string; maxBytes?: number } | { text: string }
+
+/** A file over the size its reader was given. `bytes` is its size, so the screen can say it and offer to read it anyway. */
+export class FileTooBig extends Error {
+  constructor(public bytes: number) {
+    super(`The file is ${(bytes / 1048576).toFixed(1)} MB.`)
+    this.name = 'FileTooBig'
+  }
+}
 
 /** A download address for a G-code file, and nothing else on the machine */
 export function isGcodeFileUrl(url: string, base = 'http://localhost/'): boolean {
@@ -29,6 +38,10 @@ export async function runParse(source: ParseSource, onProgress: (done: number, t
   if (!res.body) throw new Error("This browser can't read the file as a stream.")
   const size = Number(res.headers.get('content-length'))
   const total = Number.isFinite(size) && size > 0 ? size : null
+  if (source.maxBytes !== undefined && total !== null && total > source.maxBytes) {
+    await res.body.cancel()
+    throw new FileTooBig(total)
+  }
   const reader = res.body.getReader()
   let done = 0
   let reported = 0

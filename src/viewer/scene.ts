@@ -28,6 +28,7 @@ import {
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import type { GcodeBounds } from '@/gcode/parse'
 import type { DrawData } from './draw'
+import { frameSeconds } from './spin'
 
 export interface Rgb {
   r: number
@@ -216,6 +217,53 @@ function material(strip: boolean): ShaderMaterial {
 }
 
 /**
+ * The Dashboard hologram: plain lines, see-through, over the camera. Moves before uDone (the part already made) are the
+ * deeper turquoise and nearly solid; the rest is a faint pale ghost. Travel isn't drawn. A soft fade towards the bottom
+ * of each part keeps a dense print from turning into a flat block of colour.
+ */
+function hologramMaterial(): ShaderMaterial {
+  return new ShaderMaterial({
+    transparent: true,
+    depthWrite: false,
+    vertexShader: `
+      attribute float shade;
+      uniform int uDone;
+      uniform int uNowFrom;
+      uniform vec2 uHeight;
+      varying float vShade;
+      varying float vDone;
+      varying float vHeight;
+      void main() {
+        vShade = shade;
+        // 0 still to make, 1 done, 2 the layer being made now
+        vDone = gl_VertexID < uDone ? (gl_VertexID >= uNowFrom ? 2.0 : 1.0) : 0.0;
+        vHeight = clamp((position.z - uHeight.x) / max(uHeight.y - uHeight.x, 0.001), 0.0, 1.0);
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }`,
+    fragmentShader: `
+      uniform vec3 uGhost;
+      uniform vec3 uDoneColour;
+      varying float vShade;
+      varying float vDone;
+      varying float vHeight;
+      void main() {
+        if (vShade < 0.002) discard;
+        // Faint enough that overlapping threads build up a soft volume instead of a flat block
+        if (vDone > 1.5) gl_FragColor = vec4(mix(uGhost, vec3(1.0), 0.5), 1.0);
+        else if (vDone > 0.5) gl_FragColor = vec4(uDoneColour, 0.7);
+        else gl_FragColor = vec4(uGhost, 0.05 + 0.07 * vHeight);
+      }`,
+    uniforms: {
+      uDone: { value: 0 },
+      uNowFrom: { value: 0 },
+      uHeight: { value: new Vector2(0, 1) },
+      uGhost: { value: new Vector3(0.56, 0.97, 0.93) },
+      uDoneColour: { value: new Vector3(0.06, 0.64, 0.6) },
+    },
+  })
+}
+
+/**
  * The part, solid and lit from the same side as the threads. Its normals come from the triangles themselves, on the
  * graphics card, so a big model needs no second copy of its data. Lit faces are always the brighter ones, in either theme.
  */
@@ -364,6 +412,7 @@ export class GcodeScene {
   private meshMaterial = modelMaterial()
   private wireMaterial = material(false)
   private outlineMat = outlineMaterial()
+  private holoMaterial = hologramMaterial()
   private models = new Map<number, Mesh>()
   private outline: Mesh | null = null
   private wires: LineSegments | null = null
@@ -466,6 +515,34 @@ export class GcodeScene {
     this.draw()
   }
 
+  /** The hologram's toolpath: lines in the hologram's own colours, framed from the front corner */
+  setHologram(d: DrawData, colours: { ghost: Rgb; done: Rgb }): void {
+    if (this.path) {
+      this.scene.remove(this.path)
+      this.path.geometry.dispose()
+    }
+    this.strips = false
+    const u = this.holoMaterial.uniforms
+    u.uGhost!.value.set(colours.ghost.r, colours.ghost.g, colours.ghost.b)
+    u.uDoneColour!.value.set(colours.done.r, colours.done.g, colours.done.b)
+    if (d.bounds) u.uHeight!.value.set(d.bounds.min[2], d.bounds.max[2])
+    const g = new BufferGeometry()
+    g.setAttribute('position', new BufferAttribute(d.segments, 3))
+    g.setAttribute('shade', new BufferAttribute(d.shades, 1, true))
+    this.path = new LineSegments(g, this.holoMaterial)
+    this.path.frustumCulled = false
+    this.scene.add(this.path)
+    this.bounds = d.bounds
+    this.setView('angle')
+  }
+
+  /** The first `moves` drawn moves are done; those from `nowFrom` on are the layer being made now */
+  setHologramDone(moves: number, nowFrom: number): void {
+    this.holoMaterial.uniforms.uDone!.value = moves * 2
+    this.holoMaterial.uniforms.uNowFrom!.value = nowFrom * 2
+    this.draw()
+  }
+
   setTravel(show: boolean): void {
     for (const m of [this.lineMaterial, this.stripMaterial]) m.uniforms.uTravel!.value = show ? TRAVEL_SHOWN : -1
     this.draw()
@@ -561,6 +638,31 @@ export class GcodeScene {
     this.controls.enabled = on
   }
 
+  private spinFrame = 0
+  private spinLast: number | null = null
+  private readonly stopSpinOnGrab = () => this.setSpin(false)
+  /**
+   * Turn the camera slowly around the target, about 30 s a turn. The first touch or drag stops it for good, so the view
+   * holds still for the person looking. No frames run while the page is hidden.
+   */
+  setSpin(on: boolean): void {
+    if (this.spinFrame) cancelAnimationFrame(this.spinFrame)
+    this.spinFrame = 0
+    this.spinLast = null
+    this.controls.autoRotate = on
+    this.controls.removeEventListener('start', this.stopSpinOnGrab)
+    if (!on || this.disposed) return
+    this.controls.addEventListener('start', this.stopSpinOnGrab)
+    const tick = (now: number) => {
+      if (this.disposed || !this.controls.autoRotate) return
+      const dt = frameSeconds(this.spinLast, now)
+      this.spinLast = now
+      if (!document.hidden && dt > 0) this.controls.update(dt)
+      this.spinFrame = requestAnimationFrame(tick)
+    }
+    this.spinFrame = requestAnimationFrame(tick)
+  }
+
   private aim(clientX: number, clientY: number): void {
     const r = this.canvas.getBoundingClientRect()
     this.raycaster.setFromCamera(new Vector2(((clientX - r.left) / r.width) * 2 - 1, -((clientY - r.top) / r.height) * 2 + 1), this.camera)
@@ -635,6 +737,8 @@ export class GcodeScene {
   dispose(): void {
     this.disposed = true
     if (this.pending) cancelAnimationFrame(this.pending)
+    if (this.spinFrame) cancelAnimationFrame(this.spinFrame)
+    this.controls.removeEventListener('start', this.stopSpinOnGrab)
     this.canvas.removeEventListener('webglcontextlost', this.lost)
     this.canvas.removeEventListener('webglcontextrestored', this.restored)
     this.controls.removeEventListener('change', this.requestDraw)
@@ -644,6 +748,7 @@ export class GcodeScene {
     for (const mesh of this.models.values()) mesh.geometry.dispose()
     this.wires?.geometry.dispose()
     this.outlineMat.dispose()
+    this.holoMaterial.dispose()
     this.meshMaterial.dispose()
     this.wireMaterial.dispose()
     this.bedMaterial.dispose()

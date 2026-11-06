@@ -1,6 +1,6 @@
 /** Starts a parse in its own worker. One worker per file, so cancelling or finishing frees all of its memory. */
 import type { ParsedGcode } from './parse'
-import type { ParseSource } from './run'
+import { FileTooBig, type ParseSource } from './run'
 import type { FromWorker, ToWorker } from './parse.worker'
 
 export interface ParseJob {
@@ -20,7 +20,7 @@ export function parseInWorker(source: ParseSource, onProgress?: (done: number, t
       }
       worker.terminate()
       if (m.type === 'done') resolve(m.result)
-      else reject(new Error(m.cancelled ? 'Cancelled' : m.message))
+      else reject(m.tooBig !== undefined ? new FileTooBig(m.tooBig) : new Error(m.cancelled ? 'Cancelled' : m.message))
     }
     worker.onerror = (e) => {
       worker.terminate()

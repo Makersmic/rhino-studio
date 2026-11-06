@@ -220,4 +220,8 @@
   --rs-overlay-button: rgb(0 0 0 / 0.42);
   --rs-overlay-glow: 0 0 8px rgb(255 255 255 / 0.5);
   --rs-overlay-dither: radial-gradient(rgb(255 255 255 / 0.07) 0.9px, transparent 1.2px) 0 0 / 5px 5px;
+  /* The Dashboard hologram only (Mike, roadmap item 9): turquoise, never used for anything else. The part still to make
+     is a pale ghost; the finished part is the deeper turquoise, drawn more solid. Same in both themes: it sits on the camera. */
+  --rs-holo-ghost: #8ff7ec;
+  --rs-holo-done: #0fa39a;
 }

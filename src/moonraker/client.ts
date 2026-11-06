@@ -148,7 +148,7 @@ const EMERGENCY_STOP = 'printer.emergency_stop'
 export const WATCHED_OBJECTS: Record<string, string[] | null> = {
   webhooks: ['state', 'state_message'],
   print_stats: ['state', 'filename', 'message', 'print_duration'],
-  virtual_sdcard: ['progress', 'is_active'],
+  virtual_sdcard: ['progress', 'is_active', 'file_position'],
   toolhead: ['position', 'homed_axes', 'axis_minimum', 'axis_maximum', 'max_velocity', 'max_accel'],
   gcode_move: ['gcode_position', 'homing_origin', 'speed_factor', 'extrude_factor', 'absolute_coordinates'],
   pause_resume: ['is_paused'],

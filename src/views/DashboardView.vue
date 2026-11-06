@@ -20,7 +20,7 @@
  * Text sits straight on live video, so it uses the overlay tokens: white
  * with a soft shadow, red only for what needs attention.
  */
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, onBeforeUnmount, ref, watch } from 'vue'
 import { fanStalls, rpmText, type FanReading } from '@/hardware/fans'
 import Icon from '@/icons/Icon.vue'
 import WebcamView from '@/webcams/WebcamView.vue'
@@ -31,6 +31,8 @@ import { useMaintenanceStore } from '@/stores/maintenance'
 import { useWebcamsStore } from '@/stores/webcams'
 import { careText } from '@/maintenance/summary'
 import { plausible } from '@/control/tempHistory'
+import { holoSpins, loadHoloShown, saveHoloShown } from '@/viewer/hologram'
+import { loadReduced } from '@/viewer/theme'
 import { formatDuration, notices, operationName, remainingSeconds, runningDetail } from '@/dashboard/notices'
 
 const machine = useMachineStore()
@@ -114,8 +116,10 @@ const rail = computed<RailItem[]>(() => {
     alert: st.alert,
     to: '/control',
   }))
+  // While a job runs the rail keeps to the job's readings: position and care step aside for the hologram (Mike, Nov 5).
+  // An overdue care item still shows as a notice.
   const p = pos.value
-  items.push({
+  if (!jobActive.value) items.push({
     id: 'pos',
     label: `${workPos.value ? 'Work position' : 'Position'}${homed.value ? '' : ' · not homed'}`,
     value: p ? p.map((v, i) => `${'XYZ'[i]} ${v.toFixed(1)}`).join('  ') : '—',
@@ -128,7 +132,7 @@ const rail = computed<RailItem[]>(() => {
     items.push({ id: f.id, label: f.label, value: `${rpmText(f.rpm)} rpm`, sub: stalled ? 'Not turning' : `${Math.round(f.speed * 100)} %`, alert: stalled, to: '/assets/hardware' })
   }
   const c = care.counts
-  items.push({
+  if (!jobActive.value) items.push({
     id: 'care',
     label: 'Care',
     value: c.overdue ? `${c.overdue} overdue` : c.due_soon ? `${c.due_soon} due soon` : 'Up to date',
@@ -138,6 +142,21 @@ const rail = computed<RailItem[]>(() => {
   return items
 })
 const elapsed = computed(() => formatDuration(job.value.duration))
+
+// ---- the hologram: the job's toolpath over the camera, finished part darker (viewer/Hologram.vue, look only)
+const Hologram = defineAsyncComponent(async () => (await import('@/viewer/Hologram.vue')).default)
+const holoShown = ref(loadHoloShown())
+const holoFailed = ref(false)
+const holoUrl = computed(() => (jobActive.value && job.value.filename ? machine.fileUrl(job.value.filename) : null))
+const holoSpin = holoSpins({ lighter: loadReduced(), reducedMotion: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false })
+function toggleHolo() {
+  holoShown.value = !holoShown.value
+  saveHoloShown(holoShown.value)
+}
+// The file it holds is let go once the job is over
+watch(jobActive, async (on) => {
+  if (!on) (await import('@/viewer/Hologram.vue')).forgetHologram()
+})
 
 // A fan driven but not turning for 10 s (fans.ts); checked as readings arrive and on the 5 s clock
 const fanSince = ref<Record<string, number>>({})
@@ -196,8 +215,14 @@ const list = computed(() =>
         </RouterLink>
         <div class="corner">
           <span class="state" :class="{ alert: state.alert, live: state.live }" aria-live="polite"><i aria-hidden="true" />{{ state.text }}</span>
+          <button v-if="holoUrl && !holoFailed" type="button" class="holo-toggle" :aria-pressed="holoShown" @click="toggleHolo">{{ holoShown ? 'Hide model' : 'Show model' }}</button>
         </div>
       </header>
+
+      <!-- middle: the job's model as a hologram, while a job runs -->
+      <div v-if="holoUrl && holoShown && !holoFailed" class="holo-area">
+        <Hologram :url="holoUrl" :file-position="job.filePosition" :spin="holoSpin" :label="`${job.filename} in 3D: the darker part is done. Drag to turn it.`" @failed="holoFailed = true" />
+      </div>
 
       <!-- bottom-left: notices, then the one big number -->
       <div class="lower">
@@ -329,6 +354,12 @@ a.hero:hover .file { text-decoration: underline; text-underline-offset: 4px; }
 .val em { font-style: normal; font-weight: var(--rs-weight-regular, 400); font-size: var(--rs-text-xs); color: var(--rs-overlay-muted); margin-left: 6px; }
 .item:hover .val { text-decoration: underline; text-underline-offset: 4px; }
 .item.alert .k, .item.alert .val { color: var(--rs-overlay-alert); }
+.holo-area { grid-row: 2; justify-self: end; align-self: stretch; width: min(560px, 48%); min-height: 240px; margin: var(--rs-space-3) var(--m); }
+.holo-toggle {
+  padding: 3px 10px; font: inherit; font-size: var(--rs-text-xs); color: var(--rs-overlay-text); text-shadow: none;
+  background: var(--rs-overlay-button); border: 1px solid var(--rs-overlay-faint); border-radius: 6px; cursor: pointer;
+}
+.holo-toggle:focus-visible { outline: 2px solid var(--rs-overlay-text); outline-offset: 2px; }
 .camname { margin-left: auto; align-self: flex-end; font-size: var(--rs-text-xs); color: var(--rs-overlay-muted); white-space: nowrap; }
 
 @media (max-width: 720px) {
@@ -339,6 +370,7 @@ a.hero:hover .file { text-decoration: underline; text-underline-offset: 4px; }
   .hero { flex-direction: column; align-items: flex-start; gap: var(--rs-space-2); }
   .rail { display: grid; grid-template-columns: 1fr 1fr; }
   .camname { grid-column: 1 / -1; margin-left: 0; }
+  .holo-area { justify-self: stretch; width: auto; min-height: 260px; }
   .bottom-scrim { height: 70%; }
 }
 </style>

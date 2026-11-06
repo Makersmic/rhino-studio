@@ -26,6 +26,7 @@ import { cutHeight, kiriJob } from '@/slicer/kiriSettings'
 import { rhinoFile, type RhinoFile } from '@/slicer/rhinoFile'
 import { checkFile, blocking, type Check, type FileStats } from '@/slicer/check'
 import { FLAT_TYPES, combine, extOf, merge, partInfo, transform } from '@/slicer/model'
+import { planDrop, skippedMessage } from '@/prepare/dropPlan'
 import { PART_GAP, freeSpot, rectOf } from '@/viewer/placement'
 import { DEFAULT_MACHINE, type MachineInfo, type PartInfo, type PartView, type Placement, type PrepareJob, type Process } from '@/slicer/types'
 import { loadModelFile, runKiri, kiriVersion, type Phase } from '@/slicer/engine'
@@ -443,26 +444,60 @@ export const usePrepareStore = defineStore('prepare', () => {
     if (job.value && p) job.value.placement = { x: p.x, y: p.y, rotate: 0, scale: p.scale }
   }
 
-  /** More files onto the bed. All of a job's parts are 3D models, or all drawings: they cut in different ways. */
+  /** Files left out of the last drop or pick, and why (shown until the next one) */
+  const loadSkipped = ref<string | null>(null)
+
+  /** One more model or drawing onto the bed, beside the others. Its kind has been checked by planDrop. */
+  async function addOne(file: File) {
+    const isFlat = FLAT_TYPES.has(extOf(file.name))
+    const loaded = await loadModelFile(file)
+    const verts = merge(loaded.map((p) => p.vertices).filter((v) => v && v.length >= 9))
+    if (verts.length < 9) throw new Error(`no triangles in ${file.name}.`)
+    const p: JobPart = { id: nextPartId++, name: uniqueName(file.name), raw: verts, flat: isFlat, placement: { x: 0, y: 0, rotate: 0, scale: 1 } }
+    const { info } = shapeOf(p, p.placement)
+    const spot = spotFor(info.size)
+    p.placement = { ...p.placement, x: spot.x, y: spot.y }
+    addPart(p)
+  }
+
+  /** More files onto the bed. All of a job's parts are 3D models, or all drawings: files that don't fit are skipped and named. */
   async function addFiles(files: File[]) {
     if (!canAddParts.value || !job.value) return
+    const plan = planDrop(files.map((f) => f.name), flat.value ? 'flat' : 'model')
     loading.value = true
     loadError.value = null
+    loadSkipped.value = skippedMessage(plan.skipped)
     try {
-      for (const file of files) {
-        const ext = extOf(file.name)
-        if ((GCODE_TYPES as readonly string[]).includes(ext)) throw new Error('a ready-made G-code file can’t join other parts. Use Replace to set it up on its own.')
-        const isFlat = FLAT_TYPES.has(ext)
-        if (isFlat !== flat.value) throw new Error(flat.value ? 'this job holds flat drawings, and this is a 3D model. Use one kind in a job.' : 'this job holds 3D models, and this is a flat drawing. Use one kind in a job.')
-        const loaded = await loadModelFile(file)
-        const verts = merge(loaded.map((p) => p.vertices).filter((v) => v && v.length >= 9))
-        if (verts.length < 9) throw new Error('No triangles in this file.')
-        const p: JobPart = { id: nextPartId++, name: uniqueName(file.name), raw: verts, flat: isFlat, placement: { x: 0, y: 0, rotate: 0, scale: 1 } }
-        const { info } = shapeOf(p, p.placement)
-        const spot = spotFor(info.size)
-        p.placement = { ...p.placement, x: spot.x, y: spot.y }
-        addPart(p)
-      }
+      for (const i of plan.load) await addOne(files[i]!)
+    } catch (e) {
+      loadError.value = `Couldn't add the file: ${(e as Error).message ?? e}`
+    } finally {
+      loading.value = false
+    }
+  }
+
+  /**
+   * A new job from the files dropped or picked: every model (or every drawing) becomes a part, or one G-code file is set
+   * up on its own. The ones that don't fit are skipped and named. Several parts can't be milled, so a CNC tool card
+   * goes back to the toolhead step.
+   */
+  async function loadFiles(files: File[]) {
+    const plan = planDrop(files.map((f) => f.name))
+    const first = plan.load[0]
+    if (first === undefined) {
+      loadSkipped.value = null
+      loadError.value = files.length ? `Job setup can't use ${files.length > 1 ? 'these files' : files[0]!.name}: ${plan.skipped.map((s) => s.why).filter((w, i, a) => a.indexOf(w) === i).join('; ')}.` : null
+      return
+    }
+    await load(files[first]!)
+    loadSkipped.value = skippedMessage(plan.skipped)
+    if (loadError.value || plan.load.length < 2) return
+    loading.value = true
+    try {
+      for (const i of plan.load.slice(1)) await addOne(files[i]!)
+      // the first part is the one shown and set up first
+      selectPart(partsList.value[0]!.id)
+      if (job.value?.process === 'cnc') confirmed.value = false
     } catch (e) {
       loadError.value = `Couldn't add the file: ${(e as Error).message ?? e}`
     } finally {
@@ -537,6 +572,7 @@ export const usePrepareStore = defineStore('prepare', () => {
   }
 
   function clearPart() {
+    loadSkipped.value = null
     partsList.value = []
     uploaded.value = null
     fileName.value = null
@@ -807,6 +843,8 @@ export const usePrepareStore = defineStore('prepare', () => {
     canAddParts,
     selectPart,
     addFiles,
+    loadFiles,
+    loadSkipped,
     duplicatePart,
     removePart,
     resetWayUp,
