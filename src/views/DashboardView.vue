@@ -147,15 +147,24 @@ const elapsed = computed(() => formatDuration(job.value.duration))
 const Hologram = defineAsyncComponent(async () => (await import('@/viewer/Hologram.vue')).default)
 const holoShown = ref(loadHoloShown())
 const holoFailed = ref(false)
-const holoUrl = computed(() => (jobActive.value && job.value.filename ? machine.fileUrl(job.value.filename) : null))
+// It stays up for two minutes after a print completes, so the finish can be seen; then the picture is clear again
+const holoFinished = ref(false)
+let finishedTimer: ReturnType<typeof setTimeout> | null = null
+watch(() => job.value.state, (now, before) => {
+  if (finishedTimer) clearTimeout(finishedTimer)
+  holoFinished.value = now === 'complete' && (before === 'printing' || before === 'paused')
+  if (holoFinished.value) finishedTimer = setTimeout(() => (holoFinished.value = false), 120_000)
+})
+onBeforeUnmount(() => finishedTimer && clearTimeout(finishedTimer))
+const holoUrl = computed(() => ((jobActive.value || holoFinished.value) && job.value.filename ? machine.fileUrl(job.value.filename) : null))
 const holoSpin = holoSpins({ lighter: loadReduced(), reducedMotion: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false })
 function toggleHolo() {
   holoShown.value = !holoShown.value
   saveHoloShown(holoShown.value)
 }
 // The file it holds is let go once the job is over
-watch(jobActive, async (on) => {
-  if (!on) (await import('@/viewer/Hologram.vue')).forgetHologram()
+watch(holoUrl, async (url) => {
+  if (!url) (await import('@/viewer/Hologram.vue')).forgetHologram()
 })
 
 // A fan driven but not turning for 10 s (fans.ts); checked as readings arrive and on the 5 s clock
@@ -221,7 +230,7 @@ const list = computed(() =>
 
       <!-- middle: the job's model as a hologram, while a job runs -->
       <div v-if="holoUrl && holoShown && !holoFailed" class="holo-area">
-        <Hologram :url="holoUrl" :file-position="job.filePosition" :spin="holoSpin" :label="`${job.filename} in 3D: the darker part is done. Drag to turn it.`" @failed="holoFailed = true" />
+        <Hologram :url="holoUrl" :file-position="job.filePosition" :progress="holoFinished ? 1 : job.progress" :speed="holoFinished ? null : job.speed" :complete="holoFinished" :spin="holoSpin" :label="`${job.filename} in 3D: the darker part is done. Drag to turn it.`" @failed="holoFailed = true" />
       </div>
 
       <!-- bottom-left: notices, then the one big number -->

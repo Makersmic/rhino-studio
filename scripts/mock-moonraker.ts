@@ -80,6 +80,7 @@ const status: Record<string, Record<string, unknown>> = {
   webhooks: { state: 'ready', state_message: 'Printer is ready' },
   print_stats: { state: 'standby', filename: '', message: '', print_duration: 0 },
   virtual_sdcard: { progress: 0, is_active: false, file_position: 0 },
+  motion_report: { live_velocity: 0 },
   toolhead: { position: [120.0, 85.5, 12.3, 0], homed_axes: 'xyz', axis_minimum: [0, 0, -5, 0], axis_maximum: [576, 406, 300, 0], max_velocity: 300, max_accel: 3000 },
   gcode_move: { gcode_position: [120.0, 85.5, 12.3, 0], homing_origin: [0, 0, 0, 0], speed_factor: 1, extrude_factor: 1, absolute_coordinates: true },
   pause_resume: { is_paused: false },
@@ -227,8 +228,9 @@ files['twisted_vase_PLA.gcode'] = (() => {
     const t = L / layers
     const r = 22 + 10 * Math.sin(t * Math.PI * 1.2)
     const twist = t * Math.PI * 0.6
-    out.push(';LAYER_CHANGE', `;Z:${z}`, `G1 Z${z} F720`, ';TYPE:External perimeter', ';WIDTH:0.45')
-    for (const off of [0, 0.45, 0.9]) {
+    out.push(';LAYER_CHANGE', `;Z:${z}`, `G1 Z${z} F720`, ';WIDTH:0.45')
+    for (const off of [0.9, 0.45, 0]) {
+      out.push(off ? ';TYPE:Perimeter' : ';TYPE:External perimeter')
       const pts: string[] = []
       for (let k = 0; k <= 48; k++) {
         const a = (k / 48) * Math.PI * 2
@@ -1059,7 +1061,7 @@ function handle(method: string, params: Record<string, unknown> | undefined): un
       return 'ok'
     case 'printer.print.cancel':
       recordJob('cancelled')
-      update('print_stats', { state: 'cancelled' })
+      update('print_stats', { state: 'cancelled' }); update('motion_report', { live_velocity: 0 })
       update('virtual_sdcard', { is_active: false })
       update('idle_timeout', { state: 'Ready' })
       outputsOff()
@@ -1849,11 +1851,14 @@ setInterval(() => {
     update('virtual_sdcard', { progress: p, file_position: Math.round(p * Buffer.byteLength(files[jobFile] ?? '')) })
     // pretend each second is 40 s of a real job, so the time estimates look real
     update('print_stats', { print_duration: (status.print_stats.print_duration as number) + 40 })
+    // walls slow, infill fast: a speed that wanders like a real print's
+    update('motion_report', { live_velocity: Math.round((70 + 50 * Math.sin(Date.now() / 7000) + Math.random() * 15) * 10) / 10 })
     if (p >= 1) {
       update('idle_timeout', { state: 'Ready' })
       outputsOff()
       recordJob('completed')
       update('print_stats', { state: 'complete' })
+      update('motion_report', { live_velocity: 0 })
       respond(`Done printing file ${jobFile}`)
     }
   }

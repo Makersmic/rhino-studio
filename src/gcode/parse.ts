@@ -16,6 +16,25 @@ export const MOVE_RAPID = 0
 export const MOVE_FEED = 1
 export const MOVE_EXTRUDE = 2
 
+/** What a printed move is, from the slicer's ;TYPE: (PrusaSlicer, Orca, Cura) or "; feature" (Kiri:Moto) comments */
+export const FEATURE_UNKNOWN = 0
+export const FEATURE_OUTER_WALL = 1
+export const FEATURE_INNER_WALL = 2
+export const FEATURE_FILL = 3
+export const FEATURE_SUPPORT = 4
+export const FEATURE_OTHER = 5
+
+/** A slicer's name for a feature, as one of the FEATURE_ codes */
+export function featureOf(name: string): number {
+  const n = name.trim().toLowerCase()
+  if (!n) return FEATURE_UNKNOWN
+  if (/support/.test(n)) return FEATURE_SUPPORT
+  if (/external perimeter|outer wall|wall-outer|overhang perimeter|overhang wall/.test(n)) return FEATURE_OUTER_WALL
+  if (/perimeter|inner wall|wall-inner|^wall|shells?$/.test(n)) return FEATURE_INNER_WALL
+  if (/fill|skin|top|bottom|bridge|ironing|sparse|solid/.test(n)) return FEATURE_FILL
+  return FEATURE_OTHER
+}
+
 /** How the layers were found: slicer comments, rises in printed height, cutting depths, or not at all */
 export type LayerSource = 'markers' | 'extrusion' | 'depth' | 'none'
 
@@ -36,6 +55,8 @@ export interface ParsedGcode {
   power: Float32Array | null
   /** The slicer's line width for each move in hundredths of a mm, from ;WIDTH: lines. 0 = the file didn't say. */
   widths: Uint8Array
+  /** FEATURE_ code of each move: outer wall, inner wall, fill, support (FEATURE_UNKNOWN when the file doesn't say) */
+  features: Uint8Array
   /** Nozzle size in mm, if the file says, as a fallback for the line width */
   nozzle: number | null
   /** First move of each layer, and its height */
@@ -47,6 +68,8 @@ export interface ParsedGcode {
   hasExtrusion: boolean
   /** From a Studio file's header: "fdm", "laser", "cnc" and so on. Null for files from elsewhere. */
   process: string | null
+  /** The material, from START_JOB MATERIAL= or the slicer's filament_type. Null if the file doesn't say. */
+  material: string | null
   stats: {
     bytes: number
     lines: number
@@ -101,6 +124,10 @@ const LAYER_COLON = [...'LAYER:'].map((c) => c.charCodeAt(0))
 const RHINO_PROCESS = [...'rhino_process'].map((c) => c.charCodeAt(0))
 const RHINO_SETTINGS = [...'rhino_settings'].map((c) => c.charCodeAt(0))
 const WIDTH = [...'WIDTH:'].map((c) => c.charCodeAt(0))
+const START_JOB = [...'START_JOB'].map((c) => c.charCodeAt(0))
+const FILAMENT_TYPE = [...'filament_type'].map((c) => c.charCodeAt(0))
+const TYPE_COLON = [...'TYPE:'].map((c) => c.charCodeAt(0))
+const FEATURE_WORD = [...'feature '].map((c) => c.charCodeAt(0))
 const NOZZLE_DIAMETER = [...'nozzle_diameter'].map((c) => c.charCodeAt(0))
 
 export class GcodeParser {
@@ -109,6 +136,8 @@ export class GcodeParser {
   private kinds = new Uint8Array(this.cap)
   private offs = new Uint32Array(this.cap)
   private wids = new Uint8Array(this.cap)
+  private feats = new Uint8Array(this.cap)
+  private feature = FEATURE_UNKNOWN
   private width = 0
   private nozzle: number | null = null
   private pow: Float32Array | null = null
@@ -152,6 +181,7 @@ export class GcodeParser {
   private boxAny = new Box()
 
   private process: string | null = null
+  private material: string | null = null
   private leftover: Uint8Array | null = null
   private consumed = 0
   private lines = 0
@@ -226,6 +256,7 @@ export class GcodeParser {
       offsets: this.offs.slice(0, n),
       power: this.pow ? this.pow.slice(0, n) : null,
       widths: this.wids.slice(0, n),
+      features: this.feats.slice(0, n),
       nozzle: this.nozzle,
       layerStarts,
       layerZ,
@@ -233,6 +264,7 @@ export class GcodeParser {
       bounds: box.used ? { min: box.min, max: box.max } : null,
       hasExtrusion,
       process: this.process,
+      material: this.material,
       stats: { bytes: this.consumed, lines: this.lines, skipped: this.skipped, ignoredPower: this.ignoredPower, straightArcs: this.straightArcs },
     }
   }
@@ -254,6 +286,10 @@ export class GcodeParser {
       if (i >= end) return
     }
     const letter = b[i]! | 32
+    if (this.material === null && startsWith(b, i, end, START_JOB)) {
+      const m = /\bMATERIAL=(\S+)/i.exec(new TextDecoder().decode(b.subarray(i, end)))
+      if (m) this.material = m[1]!
+    }
     if ((letter !== 103 && letter !== 109) || !isDigit(b[i + 1])) {
       this.skipped++
       return
@@ -274,12 +310,18 @@ export class GcodeParser {
     let i = start
     while (i < end && b[i] === SPACE) i++
     if (startsWith(b, i, end, LAYER_CHANGE) || startsWith(b, i, end, LAYER_COLON)) this.markerPending = true
+    else if (startsWith(b, i, end, TYPE_COLON)) this.feature = featureOf(new TextDecoder().decode(b.subarray(i + TYPE_COLON.length, end)))
+    else if (startsWith(b, i, end, FEATURE_WORD)) this.feature = featureOf(new TextDecoder().decode(b.subarray(i + FEATURE_WORD.length, end)))
     else if (startsWith(b, i, end, WIDTH)) {
       const at = i + WIDTH.length
       if (this.number(b, at, end) !== at && this.num > 0) this.width = Math.min(255, Math.round(this.num * 100))
     } else if (this.process === null && startsWith(b, i, end, RHINO_PROCESS)) {
       const m = /^rhino_process\s*=\s*(\S+)/.exec(new TextDecoder().decode(b.subarray(i, end)))
       if (m) this.process = m[1]!
+    } else if (this.material === null && startsWith(b, i, end, FILAMENT_TYPE)) {
+      // "filament_type = PETG;PLA": one per extruder, the first is the one in use
+      const m = /^filament_type\s*=\s*([^;,\s]+)/.exec(new TextDecoder().decode(b.subarray(i, end)))
+      if (m) this.material = m[1]!
     } else if (this.nozzle === null && startsWith(b, i, end, NOZZLE_DIAMETER)) {
       // "nozzle_diameter = 0.4,0.4": one value per extruder, and the first is the one in use on this machine
       const m = /^nozzle_diameter\s*=\s*([\d.]+)/.exec(new TextDecoder().decode(b.subarray(i, end)))
@@ -518,7 +560,10 @@ export class GcodeParser {
     segs[j + 5] = z1
     this.kinds[n] = kind
     this.offs[n] = offset
-    if (kind === MOVE_EXTRUDE) this.wids[n] = this.width
+    if (kind === MOVE_EXTRUDE) {
+      this.wids[n] = this.width
+      this.feats[n] = this.feature
+    }
     if (this.pow) this.pow[n] = this.toolPower
 
     this.boxAny.add(x0, y0, z0)
@@ -577,6 +622,9 @@ export class GcodeParser {
     const wids = new Uint8Array(this.cap)
     wids.set(this.wids)
     this.wids = wids
+    const feats = new Uint8Array(this.cap)
+    feats.set(this.feats)
+    this.feats = feats
     if (this.pow) {
       const pow = new Float32Array(this.cap)
       pow.set(this.pow)

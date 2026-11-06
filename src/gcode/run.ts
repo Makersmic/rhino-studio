@@ -62,7 +62,7 @@ export async function runParse(source: ParseSource, onProgress: (done: number, t
 
 /** The buffers to hand over rather than copy, so a big file doesn't briefly exist twice */
 export function transferables(p: ParsedGcode): ArrayBuffer[] {
-  const list = [p.segments, p.kinds, p.offsets, p.widths, p.layerStarts, p.layerZ]
+  const list = [p.segments, p.kinds, p.offsets, p.widths, p.features, p.layerStarts, p.layerZ]
   if (p.power) list.push(p.power)
   return list.map((a) => a.buffer as ArrayBuffer)
 }

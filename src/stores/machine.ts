@@ -188,6 +188,8 @@ export const useMachineStore = defineStore('machine', () => {
     progress: num(status.value.virtual_sdcard?.progress),
     /** how far Klipper has read into the job's file, in bytes: the hologram's progress */
     filePosition: num(status.value.virtual_sdcard?.file_position),
+    /** the toolhead's measured speed, mm/s (motion_report) */
+    speed: num(status.value.motion_report?.live_velocity),
     /** seconds actually spent running (pauses not counted) */
     duration: num(status.value.print_stats?.print_duration),
     message: (status.value.print_stats?.message as string | undefined) || null,

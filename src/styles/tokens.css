@@ -222,6 +222,10 @@
   --rs-overlay-dither: radial-gradient(rgb(255 255 255 / 0.07) 0.9px, transparent 1.2px) 0 0 / 5px 5px;
   /* The Dashboard hologram only (Mike, roadmap item 9): turquoise, never used for anything else. The part still to make
      is a pale ghost; the finished part is the deeper turquoise, drawn more solid. Same in both themes: it sits on the camera. */
-  --rs-holo-ghost: #8ff7ec;
-  --rs-holo-done: #0fa39a;
+  --rs-holo-ghost: #3ff0dc;
+  --rs-holo-done: #00b8aa;
+  /* The layer being printed now: amber, the bed mesh's warm colour (never red, which means stop) */
+  --rs-holo-now: #ffb347;
+  /* A soft dark pool behind it, so light colours glow over a bright camera picture */
+  --rs-holo-pool: radial-gradient(closest-side, rgb(0 0 0 / 0.62), rgb(0 0 0 / 0.38) 55%, rgb(0 0 0 / 0) 100%);
 }

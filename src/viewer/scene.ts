@@ -7,7 +7,15 @@
  * screen and shaded to look round. The lighter mode draws plain 1-pixel lines.
  */
 import {
+  AdditiveBlending,
+  LinearMipmapLinearFilter,
+  Sprite,
+  SpriteMaterial,
   BufferAttribute,
+  CanvasTexture,
+  MeshBasicMaterial,
+  PlaneGeometry,
+  SRGBColorSpace,
   BufferGeometry,
   DoubleSide,
   InstancedBufferAttribute,
@@ -29,6 +37,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import type { GcodeBounds } from '@/gcode/parse'
 import type { DrawData } from './draw'
 import { frameSeconds } from './spin'
+import { SPARKLES, facesRight } from './runner'
 
 export interface Rgb {
   r: number
@@ -217,51 +226,64 @@ function material(strip: boolean): ShaderMaterial {
 }
 
 /**
- * The Dashboard hologram: plain lines, see-through, over the camera. Moves before uDone (the part already made) are the
- * deeper turquoise and nearly solid; the rest is a faint pale ghost. Travel isn't drawn. A soft fade towards the bottom
- * of each part keeps a dense print from turning into a flat block of colour.
+ * The Dashboard hologram: walls only, as light. Lines add up (additive blending), so where they overlap they glow
+ * brighter, the way light does, instead of stacking into a flat colour. Three bands, by drawn move:
+ *   before uNowFrom          done: the deeper turquoise, brighter towards the top of the part
+ *   uNowFrom up to uNowTo    the layer being made now: amber, full strength
+ *   after                    still to make: a faint pale ghost
  */
 function hologramMaterial(): ShaderMaterial {
   return new ShaderMaterial({
     transparent: true,
     depthWrite: false,
+    blending: AdditiveBlending,
     vertexShader: `
       attribute float shade;
-      uniform int uDone;
       uniform int uNowFrom;
+      uniform int uNowTo;
       uniform vec2 uHeight;
       varying float vShade;
-      varying float vDone;
+      varying float vBand;
       varying float vHeight;
       void main() {
         vShade = shade;
-        // 0 still to make, 1 done, 2 the layer being made now
-        vDone = gl_VertexID < uDone ? (gl_VertexID >= uNowFrom ? 2.0 : 1.0) : 0.0;
+        vBand = gl_VertexID < uNowFrom ? 1.0 : gl_VertexID < uNowTo ? 2.0 : 0.0;
         vHeight = clamp((position.z - uHeight.x) / max(uHeight.y - uHeight.x, 0.001), 0.0, 1.0);
         gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
       }`,
     fragmentShader: `
       uniform vec3 uGhost;
       uniform vec3 uDoneColour;
+      uniform vec3 uNow;
+      uniform float uScan;
       varying float vShade;
-      varying float vDone;
+      varying float vBand;
       varying float vHeight;
       void main() {
         if (vShade < 0.002) discard;
-        // Faint enough that overlapping threads build up a soft volume instead of a flat block
-        if (vDone > 1.5) gl_FragColor = vec4(mix(uGhost, vec3(1.0), 0.5), 1.0);
-        else if (vDone > 0.5) gl_FragColor = vec4(uDoneColour, 0.7);
-        else gl_FragColor = vec4(uGhost, 0.05 + 0.07 * vHeight);
+        vec4 c;
+        if (vBand > 1.5) c = vec4(uNow, 1.0);
+        // Dense walls add up fast as light: kept low, so a finished part stays a shape under the glow, not a blob
+        else if (vBand > 0.5) c = vec4(uDoneColour * (0.5 + 0.5 * vHeight), 0.3);
+        else c = vec4(uGhost, 0.07 + 0.06 * vHeight);
+        // The scan passing up the part: a thin, crisp line of light with a faint edge either side, like a laser scanner.
+        // Gentle enough that the part shows through it rather than flashing white.
+        float d = uScan < 0.0 ? 1.0 : abs(vHeight - uScan);
+        float scan = 0.55 * smoothstep(0.009, 0.0, d) + 0.12 * smoothstep(0.03, 0.0, d);
+        gl_FragColor = vec4(c.rgb + vec3(scan), max(c.a, scan));
       }`,
     uniforms: {
-      uDone: { value: 0 },
       uNowFrom: { value: 0 },
+      uNowTo: { value: 0 },
       uHeight: { value: new Vector2(0, 1) },
       uGhost: { value: new Vector3(0.56, 0.97, 0.93) },
       uDoneColour: { value: new Vector3(0.06, 0.64, 0.6) },
+      uNow: { value: new Vector3(1, 0.7, 0.28) },
+      uScan: { value: -1 },
     },
   })
 }
+
 
 /**
  * The part, solid and lit from the same side as the threads. Its normals come from the triangles themselves, on the
@@ -413,6 +435,10 @@ export class GcodeScene {
   private wireMaterial = material(false)
   private outlineMat = outlineMaterial()
   private holoMaterial = hologramMaterial()
+  private dial: Mesh | null = null
+  private dialTexture: CanvasTexture | null = null
+  private scanTimer: ReturnType<typeof setTimeout> | null = null
+  private scanFrame = 0
   private models = new Map<number, Mesh>()
   private outline: Mesh | null = null
   private wires: LineSegments | null = null
@@ -515,8 +541,8 @@ export class GcodeScene {
     this.draw()
   }
 
-  /** The hologram's toolpath: lines in the hologram's own colours, framed from the front corner */
-  setHologram(d: DrawData, colours: { ghost: Rgb; done: Rgb }): void {
+  /** The hologram's walls in its own colours, framed from the front corner */
+  setHologram(d: Pick<DrawData, 'segments' | 'shades' | 'bounds'>, colours: { ghost: Rgb; done: Rgb; now: Rgb }): void {
     if (this.path) {
       this.scene.remove(this.path)
       this.path.geometry.dispose()
@@ -525,6 +551,7 @@ export class GcodeScene {
     const u = this.holoMaterial.uniforms
     u.uGhost!.value.set(colours.ghost.r, colours.ghost.g, colours.ghost.b)
     u.uDoneColour!.value.set(colours.done.r, colours.done.g, colours.done.b)
+    u.uNow!.value.set(colours.now.r, colours.now.g, colours.now.b)
     if (d.bounds) u.uHeight!.value.set(d.bounds.min[2], d.bounds.max[2])
     const g = new BufferGeometry()
     g.setAttribute('position', new BufferAttribute(d.segments, 3))
@@ -536,10 +563,192 @@ export class GcodeScene {
     this.setView('angle')
   }
 
-  /** The first `moves` drawn moves are done; those from `nowFrom` on are the layer being made now */
-  setHologramDone(moves: number, nowFrom: number): void {
-    this.holoMaterial.uniforms.uDone!.value = moves * 2
-    this.holoMaterial.uniforms.uNowFrom!.value = nowFrom * 2
+  /**
+   * The dial: `canvas` laid flat on the bed, centred on (x, y) at height z, `size` mm across, added as light. Call again
+   * with the same canvas after drawing on it to show the change.
+   */
+  setDial(canvas: HTMLCanvasElement, x: number, y: number, z: number, size: number): void {
+    if (this.dial && this.dialTexture?.image === canvas) {
+      this.dial.position.set(x, y, z)
+      this.dial.scale.set(size, size, 1)
+      this.dialTexture.needsUpdate = true
+      this.draw()
+      return
+    }
+    this.clearDial()
+    this.dialTexture = new CanvasTexture(canvas)
+    this.dialTexture.colorSpace = SRGBColorSpace
+    const m = new MeshBasicMaterial({ map: this.dialTexture, transparent: true, depthWrite: false, blending: AdditiveBlending, side: DoubleSide })
+    this.dial = new Mesh(new PlaneGeometry(1, 1), m)
+    this.dial.position.set(x, y, z)
+    this.dial.scale.set(size, size, 1)
+    this.dial.frustumCulled = false
+    this.scene.add(this.dial)
+    this.draw()
+  }
+
+  private clearDial(): void {
+    if (!this.dial) return
+    this.scene.remove(this.dial)
+    this.dial.geometry.dispose()
+    ;(this.dial.material as MeshBasicMaterial).dispose()
+    this.dialTexture?.dispose()
+    this.dial = null
+    this.dialTexture = null
+  }
+
+  private runner: Mesh | null = null
+  private runnerTexture: CanvasTexture | null = null
+  private sparkles: Sprite[] = []
+  private sparkleTexture: CanvasTexture | null = null
+  private runnerPlace = { x: 0, y: 0, z: 0, radius: 1, height: 1, width: 1, frames: 1 }
+  private runnerPose = { frame: 0, angle: 0, lift: 0, sparkles: [] as number[] }
+  private runnerAz: number | null = null
+  private runnerRight = true
+  /** how far the front of the dial turned at the last draw (radians): the rhino trots while it moves */
+  runnerMoving = 0
+
+  /**
+   * The rhino on the dial: `strip` holds its frames side by side (each facing right). It's an upright cut-out standing
+   * on the ring of `radius` around (x, y) at height z, `height` mm tall, turned to face along the ring the way it runs.
+   * It stands at the point of the ring nearest the camera; on the finish's lap it really runs round, so it's seen
+   * side-on at the front, edge-on at the sides and from its other side across the back. `sparkle` is the finish's
+   * sparkle picture.
+   */
+  setRunner(strip: HTMLCanvasElement, frames: number, sparkle: HTMLCanvasElement, place: { x: number; y: number; z: number; radius: number; height: number }): void {
+    this.clearRunner()
+    const width = place.height * (strip.width / frames / strip.height)
+    this.runnerPlace = { ...place, width, frames }
+    this.runnerTexture = new CanvasTexture(strip)
+    this.runnerTexture.colorSpace = SRGBColorSpace
+    this.runnerTexture.minFilter = LinearMipmapLinearFilter
+    this.runnerTexture.generateMipmaps = true
+    // a unit square standing up from the ring: x along the ring, z up, feet at z 0
+    const g = new PlaneGeometry(1, 1).translate(0, 0.5, 0).rotateX(Math.PI / 2)
+    this.runner = new Mesh(g, new MeshBasicMaterial({ map: this.runnerTexture, transparent: true, depthWrite: false, blending: AdditiveBlending, side: DoubleSide }))
+    this.runner.frustumCulled = false
+    this.runner.onBeforeRender = (_r, _s, camera) => this.placeRunner(camera)
+    this.scene.add(this.runner)
+    this.sparkleTexture = new CanvasTexture(sparkle)
+    for (let i = 0; i < 6; i++) {
+      const sp = new Sprite(new SpriteMaterial({ map: this.sparkleTexture, transparent: true, depthWrite: false, blending: AdditiveBlending }))
+      sp.scale.set(place.height * 0.45, place.height * 0.45, 1)
+      sp.visible = false
+      sp.frustumCulled = false
+      this.sparkles.push(sp)
+      this.scene.add(sp)
+    }
+    this.showRunnerFrame()
+    this.draw()
+  }
+
+  /** Which frame, how far round the ring from the front, how high off it (in rhino heights), and each sparkle's brightness */
+  setRunnerPose(frame: number, angle: number, lift: number, sparkles: number[] = []): void {
+    this.runnerPose = { frame, angle, lift, sparkles }
+    this.showRunnerFrame()
+    this.draw()
+  }
+
+  private showRunnerFrame(): void {
+    const t = this.runnerTexture
+    if (!t) return
+    const n = this.runnerPlace.frames
+    t.repeat.set(1 / n, 1)
+    t.offset.set(this.runnerPose.frame / n, 0)
+  }
+
+  private placeRunner(camera: { position: Vector3 }): void {
+    if (!this.runner) return
+    const p = this.runnerPlace
+    const az = Math.atan2(camera.position.y - p.y, camera.position.x - p.x)
+    if (this.runnerAz !== null) {
+      let d = az - this.runnerAz
+      if (d > Math.PI) d -= Math.PI * 2
+      if (d < -Math.PI) d += Math.PI * 2
+      this.runnerMoving = d
+      const right = facesRight(d, this.runnerRight)
+      this.runnerRight = right
+    }
+    this.runnerAz = az
+    // on a lap the rhino runs the way it faces: counter-clockwise when facing right
+    const dir = this.runnerRight ? 1 : -1
+    const a = az + dir * this.runnerPose.angle
+    const x = p.x + p.radius * Math.cos(a)
+    const y = p.y + p.radius * Math.sin(a)
+    const z = p.z + p.height * this.runnerPose.lift
+    this.runner.position.set(x, y, z)
+    // facing along the ring: its +x is the counter-clockwise tangent, mirrored when it runs the other way
+    this.runner.rotation.set(0, 0, a + Math.PI / 2)
+    this.runner.scale.set(dir * p.width, 1, p.height)
+    // sparkles around it, laid out across the screen: to the camera's right is along the ring's turning direction
+    const rx = -Math.sin(az)
+    const ry = Math.cos(az)
+    this.sparkles.forEach((sp, i) => {
+      const k = SPARKLES[i % SPARKLES.length]!
+      const b = this.runnerPose.sparkles[i] ?? 0
+      sp.visible = b > 0.02
+      ;(sp.material as SpriteMaterial).opacity = b
+      sp.position.set(x + rx * k.x * p.height, y + ry * k.x * p.height, z + (k.y + 0.3) * p.height)
+    })
+  }
+
+  private clearRunner(): void {
+    if (this.runner) {
+      this.scene.remove(this.runner)
+      this.runner.geometry.dispose()
+      ;(this.runner.material as MeshBasicMaterial).dispose()
+      this.runner = null
+    }
+    for (const sp of this.sparkles) {
+      this.scene.remove(sp)
+      ;(sp.material as SpriteMaterial).dispose()
+    }
+    this.sparkles = []
+    this.runnerTexture?.dispose()
+    this.sparkleTexture?.dispose()
+    this.runnerTexture = this.sparkleTexture = null
+    this.runnerAz = null
+  }
+
+  /**
+   * Every `everyMs`, a thin line of light passes up the hologram and straight back down, `sweepMs` each way. Frames run only during
+   * the sweep and never while the page is hidden. 0 stops it.
+   */
+  setScan(everyMs: number, sweepMs = 1100): void {
+    if (this.scanTimer) clearTimeout(this.scanTimer)
+    if (this.scanFrame) cancelAnimationFrame(this.scanFrame)
+    this.scanTimer = null
+    this.scanFrame = 0
+    this.holoMaterial.uniforms.uScan!.value = -1
+    if (!everyMs || this.disposed) return
+    const sweep = () => {
+      if (this.disposed) return
+      if (document.hidden) {
+        this.scanTimer = setTimeout(sweep, everyMs)
+        return
+      }
+      const start = performance.now()
+      const step = (now: number) => {
+        if (this.disposed) return
+        // up from a little below the bottom to a little above the top, then straight back down
+        const t = (now - start) / sweepMs
+        this.holoMaterial.uniforms.uScan!.value = t >= 2 ? -1 : t < 1 ? -0.1 + t * 1.2 : 1.1 - (t - 1) * 1.2
+        this.draw()
+        if (t < 2) this.scanFrame = requestAnimationFrame(step)
+        else {
+          this.scanFrame = 0
+          this.scanTimer = setTimeout(sweep, Math.max(0, everyMs - 2 * sweepMs))
+        }
+      }
+      this.scanFrame = requestAnimationFrame(step)
+    }
+    this.scanTimer = setTimeout(sweep, 600)
+  }
+
+  /** Drawn moves before `from` are done; from `from` up to `to` is the layer being made now */
+  setHologramDone(from: number, to: number): void {
+    this.holoMaterial.uniforms.uNowFrom!.value = from * 2
+    this.holoMaterial.uniforms.uNowTo!.value = to * 2
     this.draw()
   }
 
@@ -722,6 +931,41 @@ export class GcodeScene {
     this.renderer.getDrawingBufferSize(this.stripMaterial.uniforms.uResolution!.value)
     this.renderer.getDrawingBufferSize(this.outlineMat.uniforms.uResolution!.value)
     this.outlineMat.uniforms.uPixels!.value = 1.5 * this.renderer.getPixelRatio()
+    this.composer?.setSize(width, height)
+    this.draw()
+  }
+
+  /** Bloom (three.js UnrealBloomPass, MIT): set up on first use, so pages without it never load the code */
+  private composer: { render(): void; setSize(w: number, h: number): void; dispose(): void } | null = null
+  /**
+   * A glow around bright lines. The bloom pass can't keep a see-through background, so with it on the scene is drawn on
+   * black: the page shows the canvas with `mix-blend-mode: screen`, where black adds nothing and light adds light.
+   * It costs a few full-screen passes per drawn frame, so it's for PCs and phones, not the kiosk.
+   */
+  async setBloom(on: boolean): Promise<void> {
+    this.composer?.dispose()
+    this.composer = null
+    if (!on) {
+      this.renderer.setClearColor(0x000000, 0)
+      this.draw()
+      return
+    }
+    const [{ EffectComposer }, { RenderPass }, { UnrealBloomPass }, { OutputPass }] = await Promise.all([
+      import('three/examples/jsm/postprocessing/EffectComposer.js'),
+      import('three/examples/jsm/postprocessing/RenderPass.js'),
+      import('three/examples/jsm/postprocessing/UnrealBloomPass.js'),
+      import('three/examples/jsm/postprocessing/OutputPass.js'),
+    ])
+    if (this.disposed) return
+    this.renderer.setClearColor(0x000000, 1)
+    const size = this.renderer.getSize(new Vector2())
+    const c = new EffectComposer(this.renderer)
+    c.addPass(new RenderPass(this.scene, this.camera))
+    // strength, radius, threshold: a soft halo on the lit lines, not a fog over everything
+    c.addPass(new UnrealBloomPass(new Vector2(size.x / 2, size.y / 2), 0.4, 0.05, 0.72))
+    c.addPass(new OutputPass())
+    c.setSize(size.x, size.y)
+    this.composer = c
     this.draw()
   }
 
@@ -730,13 +974,16 @@ export class GcodeScene {
     if (this.pending || this.disposed || document.hidden) return
     this.pending = requestAnimationFrame(() => {
       this.pending = 0
-      if (!this.disposed) this.renderer.render(this.scene, this.camera)
+      if (this.disposed) return
+      if (this.composer) this.composer.render()
+      else this.renderer.render(this.scene, this.camera)
     })
   }
 
   dispose(): void {
     this.disposed = true
     if (this.pending) cancelAnimationFrame(this.pending)
+    this.composer?.dispose()
     if (this.spinFrame) cancelAnimationFrame(this.spinFrame)
     this.controls.removeEventListener('start', this.stopSpinOnGrab)
     this.canvas.removeEventListener('webglcontextlost', this.lost)
@@ -749,6 +996,10 @@ export class GcodeScene {
     this.wires?.geometry.dispose()
     this.outlineMat.dispose()
     this.holoMaterial.dispose()
+    this.clearDial()
+    this.clearRunner()
+    if (this.scanTimer) clearTimeout(this.scanTimer)
+    if (this.scanFrame) cancelAnimationFrame(this.scanFrame)
     this.meshMaterial.dispose()
     this.wireMaterial.dispose()
     this.bedMaterial.dispose()
