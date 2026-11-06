@@ -33,7 +33,7 @@ const props = defineProps<{
   fileText?: string | null
   paths?: Array<Array<[number, number]>> | null
   /** support marks on the bed, whether a click adds them, and the overhang angle to tint (null: none) */
-  marks?: Array<{ at: [number, number, number]; r: number }>
+  marks?: Array<{ at: [number, number, number]; r: number; block?: boolean }>
   marking?: boolean
   overhang?: number | null
 }>()

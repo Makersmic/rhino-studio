@@ -17,6 +17,8 @@ export interface Mark {
   z: number
   /** how far round the spot support reaches (mm) */
   r: number
+  /** a block stops support there instead (PrusaSlicer only; Kiri:Moto can't block) */
+  kind?: 'block'
 }
 
 /** "Only where I mark": present (even with no marks yet), or null for off or automatic */
@@ -93,24 +95,24 @@ export interface MarkPart {
 }
 
 /** Each mark where it is now, on the bed (for drawing), with its index in the list. Marks on parts not loaded are left out. */
-export function marksOnBed(parts: MarkPart[], marks: Mark[]): Array<{ i: number; at: V3; r: number }> {
+export function marksOnBed(parts: MarkPart[], marks: Mark[]): Array<{ i: number; at: V3; r: number; block: boolean }> {
   const frames = new Map(parts.map((p) => [p.name, { p, f: partFrame(p.raw, p.shaped, p.placement) }]))
-  const out: Array<{ i: number; at: V3; r: number }> = []
+  const out: Array<{ i: number; at: V3; r: number; block: boolean }> = []
   marks.forEach((m, i) => {
     const e = frames.get(m.part)
     if (!e) return
     const q = e.f.toShaped([m.x, m.y, m.z])
-    out.push({ i, at: [q[0] + e.p.x, q[1] + e.p.y, q[2]], r: m.r * (e.p.placement.scale > 0 ? e.p.placement.scale : 1) })
+    out.push({ i, at: [q[0] + e.p.x, q[1] + e.p.y, q[2]], r: m.r * (e.p.placement.scale > 0 ? e.p.placement.scale : 1), block: m.kind === 'block' })
   })
   return out
 }
 
 /** A mark from a point clicked on a part (bed coordinates), kept in that part's coordinates as loaded */
-export function markAt(part: MarkPart, bed: V3, r: number): Mark {
+export function markAt(part: MarkPart, bed: V3, r: number, block = false): Mark {
   const raw = partFrame(part.raw, part.shaped, part.placement).toRaw([bed[0] - part.x, bed[1] - part.y, bed[2]])
   const k = part.placement.scale > 0 ? part.placement.scale : 1
   const round = (v: number) => Math.round(v * 1000) / 1000
-  return { part: part.name, x: round(raw[0]), y: round(raw[1]), z: round(raw[2]), r: round(r / k) }
+  return { part: part.name, x: round(raw[0]), y: round(raw[1]), z: round(raw[2]), r: round(r / k), ...(block ? { kind: 'block' as const } : {}) }
 }
 
 /**
@@ -118,7 +120,8 @@ export function markAt(part: MarkPart, bed: V3, r: number): Mark {
  * several combined and centred together at (cx, cy) on the bed.
  */
 export function marksForEngine(parts: MarkPart[], marks: Mark[], combinedAt: { x: number; y: number } | null): SupportMark[] {
-  return marksOnBed(parts, marks).map((m) => {
+  // Kiri:Moto can only add support, so blocks are left out for it
+  return marksOnBed(parts, marks.filter((m) => m.kind !== 'block')).map((m) => {
     const only = parts.length === 1 ? parts[0]! : null
     const x = combinedAt ? m.at[0] - combinedAt.x : m.at[0] - (only?.x ?? 0)
     const y = combinedAt ? m.at[1] - combinedAt.y : m.at[1] - (only?.y ?? 0)
@@ -126,9 +129,30 @@ export function marksForEngine(parts: MarkPart[], marks: Mark[], combinedAt: { x
   })
 }
 
-/** "Only where I mark" with nothing marked: say so, because it means no support at all */
-export function marksNote(s: SupportMarks | null, supports: boolean): string | null {
-  if (!supports || !s) return null
-  if (!s.marks.length) return 'No spots marked yet, so nothing will be supported. Choose Mark supports, then click the part above where it needs holding up.'
-  return `${s.marks.length} ${s.marks.length === 1 ? 'spot' : 'spots'} marked for support.`
+/** What the marks will do, in words. "Only where I mark" with nothing marked means no support at all, so it says so. */
+export function marksNote(s: SupportMarks | null, mode: 'off' | 'auto' | 'marked'): string | null {
+  if (mode === 'off' || !s) return null
+  const add = s.marks.filter((m) => m.kind !== 'block').length
+  const block = s.marks.length - add
+  const n = (k: number, word: string) => `${k} ${word}${k === 1 ? '' : 's'}`
+  if (mode === 'marked' && !add) return 'No spots marked yet, so nothing will be supported. Choose Mark supports, then click the part above where it needs holding up.'
+  const parts = [add ? `${n(add, 'spot')} marked for support` : '', block ? `${n(block, 'spot')} blocked` : ''].filter(Boolean)
+  return parts.length ? `${parts.join(', ')}.` : 'Automatic supports. Mark spots to add support, or block spots to keep it off.'
+}
+
+/**
+ * The marks for PrusaSlicer, as the Portal takes them: [x, y, z, r] in the frame of the part it's sent, enforcers and
+ * blockers apart. The Portal builds them into a 3MF as support enforcer and blocker volumes (rhino/prusa_3mf.py).
+ */
+export function marksForPrusa(parts: MarkPart[], marks: Mark[], combinedAt: { x: number; y: number } | null): { enforce: number[][]; block: number[][] } {
+  const r3 = (v: number) => Math.round(v * 1000) / 1000
+  const out = { enforce: [] as number[][], block: [] as number[][] }
+  for (const kind of ['enforce', 'block'] as const) {
+    const these = marks.filter((m) => (m.kind === 'block') === (kind === 'block'))
+    const rs = marksOnBed(parts, these)
+    marksForEngine(parts, these.map((m) => ({ ...m, kind: undefined })), combinedAt).forEach((e, i) => {
+      out[kind].push([r3(e.point.x), r3(e.point.y), r3(e.point.z), r3(Math.min(50, Math.max(0.5, rs[i]?.r ?? e.radius)))])
+    })
+  }
+  return out
 }

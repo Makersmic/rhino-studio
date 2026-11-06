@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { transform } from '@/slicer/model'
-import { markAt, marksForEngine, marksNote, marksOnBed, partFrame, type MarkPart } from './supportMarks'
+import { markAt, marksForEngine, marksForPrusa, marksNote, marksOnBed, partFrame, type MarkPart } from './supportMarks'
 
 // a lopsided box, so turning it can't look the same by accident
 const raw = new Float32Array([0, 0, 0, 40, 0, 0, 40, 10, 0, 0, 10, 0, 0, 0, 20, 40, 0, 20, 40, 10, 20, 0, 10, 20, 5, 3, 7])
@@ -65,10 +65,24 @@ describe('marksForEngine', () => {
   })
 })
 
+describe('blocks', () => {
+  it('are left out for Kiri, and sent apart to PrusaSlicer', () => {
+    const p = part({ rotate: 0, scale: 1 })
+    const marks = [markAt(p, [110, 82, 20], 4), markAt(p, [90, 80, 20], 6, true)]
+    expect(marks[1]!.kind).toBe('block')
+    expect(marksForEngine([p], marks, null)).toHaveLength(1)
+    const pr = marksForPrusa([p], marks, null)
+    expect(pr.enforce).toEqual([[10, 2, 20, 4]])
+    expect(pr.block).toEqual([[-10, 0, 20, 6]])
+  })
+})
+
 describe('marksNote', () => {
-  it('warns when nothing is marked', () => {
-    expect(marksNote({ marks: [] }, true)).toMatch(/nothing will be supported/)
-    expect(marksNote(null, true)).toBeNull()
-    expect(marksNote({ marks: [] }, false)).toBeNull()
+  it('warns when only-where-marked has nothing marked, and counts marks and blocks', () => {
+    expect(marksNote({ marks: [] }, 'marked')).toMatch(/nothing will be supported/)
+    expect(marksNote(null, 'marked')).toBeNull()
+    expect(marksNote({ marks: [] }, 'off')).toBeNull()
+    expect(marksNote({ marks: [] }, 'auto')).toMatch(/Automatic supports/)
+    expect(marksNote({ marks: [{ part: 'a', x: 0, y: 0, z: 0, r: 4 }, { part: 'a', x: 0, y: 0, z: 0, r: 4, kind: 'block' }] }, 'auto')).toBe('1 spot marked for support, 1 spot blocked.')
   })
 })

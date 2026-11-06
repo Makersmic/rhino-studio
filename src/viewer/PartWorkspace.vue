@@ -23,7 +23,7 @@ const props = defineProps<{
   /** marking support spots: a click on a part adds or removes one */
   marking?: boolean
   /** support marks to show, on the bed */
-  marks?: Array<{ at: [number, number, number]; r: number }>
+  marks?: Array<{ at: [number, number, number]; r: number; block?: boolean }>
   /** tint faces that need support past this angle, or null */
   overhang?: number | null
 }>()

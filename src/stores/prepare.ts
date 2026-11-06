@@ -27,7 +27,7 @@ import { rhinoFile, type RhinoFile } from '@/slicer/rhinoFile'
 import { checkFile, blocking, type Check, type FileStats } from '@/slicer/check'
 import { FLAT_TYPES, combine, extOf, merge, partInfo, transform } from '@/slicer/model'
 import { planDrop, skippedMessage } from '@/prepare/dropPlan'
-import { MARK_SIZES, MAX_MARKS, markAt, marksForEngine, marksOnBed, type MarkPart, type SupportMarks } from '@/prepare/supportMarks'
+import { MARK_SIZES, MAX_MARKS, markAt, marksForEngine, marksForPrusa, marksOnBed, type MarkPart, type SupportMarks } from '@/prepare/supportMarks'
 import { PART_GAP, freeSpot, rectOf } from '@/viewer/placement'
 import { DEFAULT_MACHINE, type MachineInfo, type PartInfo, type PartView, type Placement, type PrepareJob, type Process } from '@/slicer/types'
 import { loadModelFile, runKiri, kiriVersion, type Phase } from '@/slicer/engine'
@@ -355,23 +355,51 @@ export const usePrepareStore = defineStore('prepare', () => {
   const markParts = computed<MarkPart[]>(() =>
     parts.value.map((v) => ({ name: v.name, raw: partsList.value.find((p) => p.id === v.id)!.raw, shaped: v.vertices, placement: v.placement, x: v.x, y: v.y })),
   )
-  const supportMode = computed<'off' | 'auto' | 'marked'>(() => (!job.value?.fdm.supports ? 'off' : supportMarks.value ? 'marked' : 'auto'))
+  /**
+   * Off, Automatic or Only where I mark. Kiri:Moto: its supports setting, with marks meaning "only here". PrusaSlicer:
+   * its own two options, support_material and support_material_auto (auto off = only where enforcers are), and marks
+   * and blocks work with both of its modes.
+   */
+  const usesPrusa = computed(() => job.value?.process === 'fdm' && job.value.engine === 'prusa')
+  const supportMode = computed<'off' | 'auto' | 'marked'>(() => {
+    const j = job.value
+    if (!j) return 'off'
+    if (usesPrusa.value) {
+      const sch = schema.value
+      const ctx = rhinoCtx.value
+      if (!sch || !ctx) return 'off'
+      if (valueOf('support_material', sch, ctx).value !== '1') return 'off'
+      return valueOf('support_material_auto', sch, ctx).value === '1' ? 'auto' : 'marked'
+    }
+    return !j.fdm.supports ? 'off' : supportMarks.value ? 'marked' : 'auto'
+  })
+  /** whether clicks can place marks: Kiri only when marking is the mode; PrusaSlicer whenever supports are on */
+  const canMark = computed(() => supportMode.value === 'marked' || (usesPrusa.value && supportMode.value === 'auto'))
   function setSupportMode(mode: 'off' | 'auto' | 'marked') {
     const j = job.value
     if (!j) return
+    if (usesPrusa.value) {
+      j.prusa = { ...(j.prusa ?? {}), support_material: mode === 'off' ? '0' : '1', support_material_auto: mode === 'marked' ? '0' : '1' }
+      supportMarks.value = mode === 'off' ? null : (supportMarks.value ?? { marks: [] })
+      return
+    }
     j.fdm.supports = mode !== 'off'
     // turning marks off keeps nothing hidden: they go, rather than coming back later by surprise
     supportMarks.value = mode === 'marked' ? (supportMarks.value ?? { marks: [] }) : null
   }
+  /** what a click places while marking: support, or (PrusaSlicer) a block */
+  const markKind = ref<'mark' | 'block'>('mark')
   const marksShown = computed(() => (supportMarks.value ? marksOnBed(markParts.value, supportMarks.value.marks) : []))
   /** A click on a part while marking: a new mark on the overhang there */
   function markClick(partId: number, bed: [number, number, number]) {
+    // PrusaSlicer on automatic can take marks without "only where I mark": the list starts with the first one
+    if (!supportMarks.value && canMark.value) supportMarks.value = { marks: [] }
     const sm = supportMarks.value
     if (!sm) return
     const view = parts.value.find((p) => p.id === partId)
     const mp = markParts.value.find((p) => p.name === view?.name)
     if (!mp || sm.marks.length >= MAX_MARKS) return
-    sm.marks.push(markAt(mp, bed, markSize.value))
+    sm.marks.push(markAt(mp, bed, markSize.value, markKind.value === 'block' && usesPrusa.value))
   }
   /** A click on a mark's ball: `shown` is its place among the marks drawn (marksShown) */
   function removeMark(shown: number) {
@@ -795,7 +823,9 @@ export const usePrepareStore = defineStore('prepare', () => {
         if (!engineKeys || engineKeys.version !== st.engine.installed) engineKeys = { version: st.engine.installed, keys: new Set(await portal.slicerKeys()) }
         const ctx: RhinoCtx = { ...rhinoCtx.value!, job: j }
         const ini = buildIni(sch, ctx, engineKeys.keys)
-        const out = await runPrusa(portal, model, ini, p.name, [j.placement.x, j.placement.y], onPhase, () => id === runId)
+        // marks and blocks go beside the part; the Portal builds them into the 3MF PrusaSlicer reads
+        const supports = supportMarks.value && supportMode.value !== 'off' ? marksForPrusa(markParts.value, supportMarks.value.marks, markParts.value.length > 1 ? { x: j.placement.x, y: j.placement.y } : null) : null
+        const out = await runPrusa(portal, model, ini, p.name, [j.placement.x, j.placement.y], onPhase, () => id === runId, undefined, supports)
         if (id !== runId) return
         // CALCULATE_PA and the header read the layer height and speed the engine actually used
         j.fdm.layerHeight = Number(valueOf('layer_height', sch, ctx).value) || j.fdm.layerHeight
@@ -895,6 +925,8 @@ export const usePrepareStore = defineStore('prepare', () => {
     supportMarks,
     supportMode,
     setSupportMode,
+    canMark,
+    markKind,
     markSize,
     marksShown,
     markClick,

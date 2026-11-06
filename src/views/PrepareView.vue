@@ -28,7 +28,7 @@ import FdmAdvanced from '@/prepare/FdmAdvanced.vue'
 import FoldGroup from '@/prepare/FoldGroup.vue'
 import PrusaPanel from '@/prepare/PrusaPanel.vue'
 import ProfileBar from '@/prepare/ProfileBar.vue'
-import { rhinoBase, firstOf } from '@/slicer/prusa/config'
+import { rhinoBase, firstOf, valueOf } from '@/slicer/prusa/config'
 import CncOps from '@/prepare/CncOps.vue'
 import ToolCard from '@/prepare/ToolCard.vue'
 import { PROCESS_ACTION, PROCESS_LABEL, prettyMaterial, toolFacts } from '@/prepare/facts'
@@ -173,13 +173,28 @@ const summary = computed(() => {
 const picking = ref(false)
 const is3d = ref(false)
 // ---- supports placed by hand: clicks on the part add or remove marks while this is on
-const marking = ref(false)
-watch(picking, (on) => on && (marking.value = false))
-watch(marking, (on) => on && (picking.value = false))
-watch(() => prep.supportMode, (m) => m !== 'marked' && (marking.value = false))
-const marksMessage = computed(() => marksNote(prep.supportMarks, !!prep.job?.fdm.supports))
+const marking = ref<'mark' | 'block' | null>(null)
+watch(picking, (on) => on && (marking.value = null))
+watch(marking, (k) => {
+  if (k) {
+    picking.value = false
+    prep.markKind = k
+  }
+})
+watch(() => prep.canMark, (ok) => !ok && (marking.value = null))
+const marksMessage = computed(() => marksNote(prep.supportMarks, prep.supportMode))
+function toggleMarking(k: 'mark' | 'block') {
+  marking.value = marking.value === k ? null : k
+}
 /** tint overhangs while supports are on, so it's clear what they'll hold up (Kiri only: PrusaSlicer has its own) */
-const overhang = computed(() => (prep.job?.process === 'fdm' && prep.job.engine !== 'prusa' && prep.job.fdm.supports ? prep.job.fdm.supportAngle : null))
+const overhang = computed(() => {
+  const j = prep.job
+  if (j?.process !== 'fdm' || prep.supportMode === 'off') return null
+  if (j.engine !== 'prusa') return j.fdm.supportAngle
+  // PrusaSlicer's threshold is the slope from flat that still gets support (0 = its own choice, about 55)
+  const t = prep.schema && prep.rhinoCtx ? Number(valueOf('support_material_threshold', prep.schema, prep.rhinoCtx).value) || 55 : 55
+  return 90 - t
+})
 function turn(axis: 'x' | 'y' | 'z') {
   if (prep.job) prep.job.placement = turned(prep.job.placement, axis, 90)
 }
@@ -398,7 +413,7 @@ const engineNote = computed(() => {
             :selected-id="prep.selectedId"
             :result="prep.result?.file.bounds ?? null"
             :marks="prep.marksShown"
-            :marking="marking"
+            :marking="!!marking"
             :overhang="overhang"
             @mark="prep.markClick"
             @unmark="prep.removeMark"
@@ -426,17 +441,26 @@ const engineNote = computed(() => {
                 <RsButton size="sm" variant="quiet" @click="turn('x')">Turn on X</RsButton>
                 <RsButton size="sm" variant="quiet" @click="turn('y')">Turn on Y</RsButton>
                 <RsButton v-if="is3d" size="sm" variant="quiet" :aria-pressed="picking" @click="picking = !picking">{{ picking ? 'Cancel lay flat' : 'Lay flat' }}</RsButton>
-                <RsButton v-if="is3d && prep.supportMode === 'marked' && job.engine !== 'prusa'" size="sm" :variant="marking ? 'primary' : 'quiet'" :aria-pressed="marking" @click="marking = !marking">{{ marking ? 'Done marking' : 'Mark supports' }}</RsButton>
+                <RsButton v-if="is3d && prep.canMark" size="sm" :variant="marking === 'mark' ? 'primary' : 'quiet'" :aria-pressed="marking === 'mark'" @click="toggleMarking('mark')">{{ marking === 'mark' ? 'Done marking' : 'Mark supports' }}</RsButton>
+                <RsButton v-if="is3d && prep.canMark && job.engine === 'prusa'" size="sm" :variant="marking === 'block' ? 'primary' : 'quiet'" :aria-pressed="marking === 'block'" @click="toggleMarking('block')">{{ marking === 'block' ? 'Done blocking' : 'Block supports' }}</RsButton>
               </template>
               <RsButton v-if="proc !== 'cnc'" size="sm" variant="quiet" @click="prep.centre()">Centre</RsButton>
             </div>
           </div>
-          <div v-if="prep.supportMode === 'marked' && proc === 'fdm'" class="marks" role="group" aria-label="Support marks">
-            <p class="small" role="status">{{ job.engine === 'prusa' ? 'Marked supports are for Kiri:Moto. PrusaSlicer uses its own support settings, so the marks are kept but not used.' : marksMessage }}</p>
-            <template v-if="job.engine !== 'prusa'">
+          <div v-if="proc === 'fdm'" class="marks" role="group" aria-label="Supports">
+            <div class="field">
+              <label for="prep-supports">Supports</label>
+              <select id="prep-supports" :value="prep.supportMode" :disabled="job.engine === 'prusa' && !prep.schema" @change="prep.setSupportMode(($event.target as HTMLSelectElement).value as 'off' | 'auto' | 'marked')">
+                <option value="off">Off</option>
+                <option value="auto">Automatic</option>
+                <option value="marked">Only where I mark</option>
+              </select>
+            </div>
+            <template v-if="prep.canMark">
               <NumField v-model="prep.markSize" label="Mark reach" unit="mm" :min="MARK_SIZES.min" :max="MARK_SIZES.max" :step="0.5" hint="For new marks" />
               <RsButton v-if="prep.supportMarks?.marks.length" size="sm" variant="quiet" @click="prep.clearMarks()">Clear marks</RsButton>
             </template>
+            <p v-if="marksMessage" class="small" role="status">{{ marksMessage }}<template v-if="job.engine !== 'prusa' && prep.supportMarks?.marks.some((m) => m.kind === 'block')"> Kiri:Moto can't block support, so blocked spots are left out with it.</template></p>
           </div>
           <p class="muted small">{{ prep.part.triangles.toLocaleString() }} triangles<template v-if="proc !== 'cnc'"> · arrow keys move the {{ prep.parts.length > 1 ? 'selected part' : 'part' }} (Shift = 10 mm)</template> · right-click or long-press a part for more</p>
           <p v-if="prep.loadError" class="error" role="alert">{{ prep.loadError }}</p>
@@ -507,14 +531,6 @@ const engineNote = computed(() => {
                 <option value="hex">Hex</option>
                 <option value="triangle">Triangle</option>
                 <option value="linear">Lines</option>
-              </select>
-            </div>
-            <div class="field">
-              <label for="prep-supports">Supports</label>
-              <select id="prep-supports" :value="prep.supportMode" @change="prep.setSupportMode(($event.target as HTMLSelectElement).value as 'off' | 'auto' | 'marked')">
-                <option value="off">Off</option>
-                <option value="auto">Automatic</option>
-                <option value="marked">Only where I mark</option>
               </select>
             </div>
             <p v-if="job.toolhead === 'SwitchFly'" class="muted small wide">Filament path {{ job.fdm.path === 1 ? '2 (T1)' : '1 (T0)' }}, from the material.</p>

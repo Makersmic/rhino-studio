@@ -642,12 +642,14 @@ export class PortalClient {
     return (await this.getJson<{ ok: boolean; keys: string[] }>('/api/slicer/keys')).keys
   }
   /** Queue a slice: the part as binary STL and the full INI. The Portal answers with a job id. */
-  async slice(model: Blob, ini: string, name: string, center: [number, number]): Promise<{ id: string }> {
+  /** `supports`: marks placed by hand, as the Portal takes them (prepare/supportMarks.ts marksForPrusa) */
+  async slice(model: Blob, ini: string, name: string, center: [number, number], supports?: { enforce: number[][]; block: number[][] } | null): Promise<{ id: string }> {
     const f = new FormData()
     f.append('model', model, 'part.stl')
     f.append('config', new Blob([ini], { type: 'text/plain' }), 'rhino.ini')
     f.append('name', name)
     f.append('center', `${center[0]},${center[1]}`)
+    if (supports && (supports.enforce.length || supports.block.length)) f.append('supports', JSON.stringify(supports))
     return this.write<{ ok: boolean; id: string }>('slice', 'POST', '/api/slicer/slice', f)
   }
   async sliceJob(id: string): Promise<SliceJobState> {

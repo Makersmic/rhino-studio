@@ -78,9 +78,10 @@ export async function runPrusa(
   onPhase: (p: Phase, fraction?: number) => void,
   stillWanted: () => boolean,
   timeoutMs = 20 * 60_000,
+  supports: { enforce: number[][]; block: number[][] } | null = null,
 ): Promise<{ gcode: string; seconds: number | null; filamentMm: number | null; cached: boolean }> {
   onPhase('Sending to the Rhino')
-  const { id } = await portal.slice(toStl(vertices), ini, name, center)
+  const { id } = await portal.slice(toStl(vertices), ini, name, center, supports)
   const started = Date.now()
   let wait = 300
   for (;;) {

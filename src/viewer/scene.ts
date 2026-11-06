@@ -8,6 +8,7 @@
  */
 import {
   AdditiveBlending,
+  Color,
   InstancedMesh,
   Matrix4,
   SphereGeometry,
@@ -866,8 +867,8 @@ export class GcodeScene {
 
   private markMesh: InstancedMesh | null = null
   private markCount = 0
-  /** Support marks: small amber balls at each spot (bed coordinates), `r` mm across their reach */
-  setMarks(list: Array<{ at: [number, number, number]; r: number }>): void {
+  /** Support marks: small balls at each spot (bed coordinates), `r` mm across their reach. Amber adds, blue blocks. */
+  setMarks(list: Array<{ at: [number, number, number]; r: number; block?: boolean }>): void {
     this.markCount = list.length
     if (this.markMesh && this.markMesh.count < list.length) {
       this.scene.remove(this.markMesh)
@@ -876,7 +877,7 @@ export class GcodeScene {
     }
     if (!this.markMesh && list.length) {
       // drawn through the part: marks sit under overhangs, which the part hides from above
-      const m = new InstancedMesh(new SphereGeometry(1, 14, 10), new MeshBasicMaterial({ color: 0xf5a833, transparent: true, opacity: 0.9, depthTest: false }), Math.max(16, list.length * 2))
+      const m = new InstancedMesh(new SphereGeometry(1, 14, 10), new MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9, depthTest: false }), Math.max(16, list.length * 2))
       m.renderOrder = 10
       m.frustumCulled = false
       this.markMesh = m
@@ -888,7 +889,10 @@ export class GcodeScene {
         // shown smaller than their reach, so they mark the spot without hiding the part
         const s = Math.max(0.6, k.r * 0.35)
         this.markMesh!.setMatrixAt(i, t.makeScale(s, s, s).setPosition(k.at[0], k.at[1], k.at[2]))
+        // the bed mesh's two colours: amber where support goes, blue where it's kept off (never red)
+        this.markMesh!.setColorAt(i, new Color(k.block ? 0x3d8fe0 : 0xf5a833))
       })
+      if (this.markMesh.instanceColor) this.markMesh.instanceColor.needsUpdate = true
       this.markMesh.count = list.length
       this.markMesh.instanceMatrix.needsUpdate = true
     }
