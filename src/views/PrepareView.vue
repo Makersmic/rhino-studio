@@ -11,7 +11,7 @@
  * The slicing runs in this browser (src/slicer/), so the Pi only ever receives
  * the finished file. See src/stores/prepare.ts.
  */
-import { computed, defineAsyncComponent, ref } from 'vue'
+import { computed, defineAsyncComponent, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import RsPanel from '@/components/RsPanel.vue'
 import RsButton from '@/components/RsButton.vue'
@@ -20,6 +20,7 @@ import JobWorkspace from '@/prepare/JobWorkspace.vue'
 import FileMenu, { type MenuItem } from '@/files/FileMenu.vue'
 import { laidFlat, turned } from '@/viewer/placement'
 import { footprints, partsBox, spinMode } from '@/viewer/spin'
+import { MARK_SIZES, marksNote } from '@/prepare/supportMarks'
 import { loadReduced } from '@/viewer/theme'
 import NumField from '@/prepare/NumField.vue'
 import StepBar from '@/prepare/StepBar.vue'
@@ -171,6 +172,14 @@ const summary = computed(() => {
 // ---- which way up: turns and Lay flat work out new angles; the part stays where it is on the bed
 const picking = ref(false)
 const is3d = ref(false)
+// ---- supports placed by hand: clicks on the part add or remove marks while this is on
+const marking = ref(false)
+watch(picking, (on) => on && (marking.value = false))
+watch(marking, (on) => on && (picking.value = false))
+watch(() => prep.supportMode, (m) => m !== 'marked' && (marking.value = false))
+const marksMessage = computed(() => marksNote(prep.supportMarks, !!prep.job?.fdm.supports))
+/** tint overhangs while supports are on, so it's clear what they'll hold up (Kiri only: PrusaSlicer has its own) */
+const overhang = computed(() => (prep.job?.process === 'fdm' && prep.job.engine !== 'prusa' && prep.job.fdm.supports ? prep.job.fdm.supportAngle : null))
 function turn(axis: 'x' | 'y' | 'z') {
   if (prep.job) prep.job.placement = turned(prep.job.placement, axis, 90)
 }
@@ -388,6 +397,11 @@ const engineNote = computed(() => {
             :parts="prep.parts"
             :selected-id="prep.selectedId"
             :result="prep.result?.file.bounds ?? null"
+            :marks="prep.marksShown"
+            :marking="marking"
+            :overhang="overhang"
+            @mark="prep.markClick"
+            @unmark="prep.removeMark"
             @pick="layFlat"
             @mode="is3d = $event"
             @select="prep.selectPart"
@@ -412,9 +426,17 @@ const engineNote = computed(() => {
                 <RsButton size="sm" variant="quiet" @click="turn('x')">Turn on X</RsButton>
                 <RsButton size="sm" variant="quiet" @click="turn('y')">Turn on Y</RsButton>
                 <RsButton v-if="is3d" size="sm" variant="quiet" :aria-pressed="picking" @click="picking = !picking">{{ picking ? 'Cancel lay flat' : 'Lay flat' }}</RsButton>
+                <RsButton v-if="is3d && prep.supportMode === 'marked' && job.engine !== 'prusa'" size="sm" :variant="marking ? 'primary' : 'quiet'" :aria-pressed="marking" @click="marking = !marking">{{ marking ? 'Done marking' : 'Mark supports' }}</RsButton>
               </template>
               <RsButton v-if="proc !== 'cnc'" size="sm" variant="quiet" @click="prep.centre()">Centre</RsButton>
             </div>
+          </div>
+          <div v-if="prep.supportMode === 'marked' && proc === 'fdm'" class="marks" role="group" aria-label="Support marks">
+            <p class="small" role="status">{{ job.engine === 'prusa' ? 'Marked supports are for Kiri:Moto. PrusaSlicer uses its own support settings, so the marks are kept but not used.' : marksMessage }}</p>
+            <template v-if="job.engine !== 'prusa'">
+              <NumField v-model="prep.markSize" label="Mark reach" unit="mm" :min="MARK_SIZES.min" :max="MARK_SIZES.max" :step="0.5" hint="For new marks" />
+              <RsButton v-if="prep.supportMarks?.marks.length" size="sm" variant="quiet" @click="prep.clearMarks()">Clear marks</RsButton>
+            </template>
           </div>
           <p class="muted small">{{ prep.part.triangles.toLocaleString() }} triangles<template v-if="proc !== 'cnc'"> · arrow keys move the {{ prep.parts.length > 1 ? 'selected part' : 'part' }} (Shift = 10 mm)</template> · right-click or long-press a part for more</p>
           <p v-if="prep.loadError" class="error" role="alert">{{ prep.loadError }}</p>
@@ -487,7 +509,14 @@ const engineNote = computed(() => {
                 <option value="linear">Lines</option>
               </select>
             </div>
-            <label class="check"><input v-model="job.fdm.supports" type="checkbox" /> Supports</label>
+            <div class="field">
+              <label for="prep-supports">Supports</label>
+              <select id="prep-supports" :value="prep.supportMode" @change="prep.setSupportMode(($event.target as HTMLSelectElement).value as 'off' | 'auto' | 'marked')">
+                <option value="off">Off</option>
+                <option value="auto">Automatic</option>
+                <option value="marked">Only where I mark</option>
+              </select>
+            </div>
             <p v-if="job.toolhead === 'SwitchFly'" class="muted small wide">Filament path {{ job.fdm.path === 1 ? '2 (T1)' : '1 (T0)' }}, from the material.</p>
           </div>
           <FdmAdvanced v-if="proc === 'fdm' && job.engine !== 'prusa'" :fdm="job.fdm" />
@@ -643,6 +672,8 @@ const engineNote = computed(() => {
 .empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--rs-space-2); min-height: 340px; border: 1px dashed var(--rs-line-strong); border-radius: var(--rs-radius-md); cursor: pointer; text-align: center; padding: var(--rs-space-5); color: var(--rs-text-muted); }
 .empty .big { color: var(--rs-text-strong); font-weight: var(--rs-weight-medium); }
 .small { font-size: var(--rs-text-xs); }
+.marks { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--rs-space-3); margin-top: var(--rs-space-2); }
+.marks p { margin: 0; flex-basis: 100%; color: var(--rs-text-strong); }
 .error { color: var(--rs-danger); font-size: var(--rs-text-sm); margin-top: var(--rs-space-3); }
 .notice { color: var(--rs-text-strong); border: 1px solid var(--rs-line-strong); background: var(--rs-surface-2); padding: 8px 12px; border-radius: var(--rs-radius-md); margin-top: var(--rs-space-3); }
 

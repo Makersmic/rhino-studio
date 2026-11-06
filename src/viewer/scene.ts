@@ -8,6 +8,9 @@
  */
 import {
   AdditiveBlending,
+  InstancedMesh,
+  Matrix4,
+  SphereGeometry,
   LinearMipmapLinearFilter,
   Sprite,
   SpriteMaterial,
@@ -293,10 +296,13 @@ function modelMaterial(): ShaderMaterial {
   return new ShaderMaterial({
     side: DoubleSide,
     vertexShader: `
+      attribute float facing;
       varying vec3 vWorld;
+      varying float vFacing;
       void main() {
         vec4 world = modelMatrix * vec4(position, 1.0);
         vWorld = world.xyz;
+        vFacing = facing;
         gl_Position = projectionMatrix * viewMatrix * world;
       }`,
     fragmentShader: `
@@ -305,7 +311,10 @@ function modelMaterial(): ShaderMaterial {
       uniform vec3 uPaper;
       uniform float uInkIsDark;
       uniform vec3 uLight;
+      uniform float uOverhang;
+      uniform vec3 uWarm;
       varying vec3 vWorld;
+      varying float vFacing;
       void main() {
         vec3 n = normalize(cross(dFdx(vWorld), dFdy(vWorld)));
         vec3 v = normalize(cameraPosition - vWorld);
@@ -314,6 +323,8 @@ function modelMaterial(): ShaderMaterial {
         float top = max(0.0, n.z) * 0.18;
         float lit = clamp(side * 0.8 + top, 0.0, 1.0);
         vec3 c = uInkIsDark > 0.5 ? mix(uInk, uPaper, 0.12 + 0.7 * lit) : mix(uPaper, uInk, 0.14 + 0.78 * lit);
+        // faces hanging down past the support angle: tinted amber, where support will be needed
+        if (vFacing < uOverhang) c = mix(c, uWarm, 0.65);
         gl_FragColor = vec4(c, 1.0);
       }`,
     uniforms: {
@@ -321,8 +332,33 @@ function modelMaterial(): ShaderMaterial {
       uPaper: { value: new Vector3(1, 1, 1) },
       uInkIsDark: { value: 0 },
       uLight: { value: new Vector3(1, -0.45, 0.35).normalize() },
+      uOverhang: { value: -2 },
+      uWarm: { value: new Vector3(0.96, 0.66, 0.2) },
     },
   })
+}
+
+/**
+ * Which way each triangle faces up or down (its outward normal's Z, from the corners' order, as STL files store them),
+ * once per vertex, so the shader can tint overhangs. The on-screen shading doesn't need this; the tint does, because a
+ * face seen from below looks the same as one seen from above.
+ */
+export function facingOf(v: Float32Array): Float32Array {
+  const out = new Float32Array(v.length / 3)
+  for (let i = 0; i + 8 < v.length; i += 9) {
+    const ax = v[i + 3]! - v[i]!
+    const ay = v[i + 4]! - v[i + 1]!
+    const az = v[i + 5]! - v[i + 2]!
+    const bx = v[i + 6]! - v[i]!
+    const by = v[i + 7]! - v[i + 1]!
+    const bz = v[i + 8]! - v[i + 2]!
+    const nx = ay * bz - az * by
+    const ny = az * bx - ax * bz
+    const nz = ax * by - ay * bx
+    const len = Math.hypot(nx, ny, nz) || 1
+    out[i / 3] = out[i / 3 + 1] = out[i / 3 + 2] = nz / len
+  }
+  return out
 }
 
 /**
@@ -789,6 +825,7 @@ export class GcodeScene {
       if (!mesh) {
         const g = new BufferGeometry()
         g.setAttribute('position', new BufferAttribute(m.vertices, 3))
+        g.setAttribute('facing', new BufferAttribute(facingOf(m.vertices), 1))
         g.computeBoundingSphere()
         mesh = new Mesh(g, this.meshMaterial)
         mesh.userData.partId = m.id
@@ -816,6 +853,46 @@ export class GcodeScene {
     this.outline.position.copy(mesh.position)
     this.outline.visible = true
     this.outlineMat.uniforms.uMid!.value = m.height / 2
+  }
+
+  /**
+   * Tint faces that hang down past `angleDeg` (Kiri's support angle: support goes under faces whose outward normal
+   * points down by more than its sine), or null for no tint
+   */
+  setOverhang(angleDeg: number | null): void {
+    this.meshMaterial.uniforms.uOverhang!.value = angleDeg === null ? -2 : -Math.sin((angleDeg * Math.PI) / 180)
+    this.draw()
+  }
+
+  private markMesh: InstancedMesh | null = null
+  private markCount = 0
+  /** Support marks: small amber balls at each spot (bed coordinates), `r` mm across their reach */
+  setMarks(list: Array<{ at: [number, number, number]; r: number }>): void {
+    this.markCount = list.length
+    if (this.markMesh && this.markMesh.count < list.length) {
+      this.scene.remove(this.markMesh)
+      this.markMesh.dispose()
+      this.markMesh = null
+    }
+    if (!this.markMesh && list.length) {
+      // drawn through the part: marks sit under overhangs, which the part hides from above
+      const m = new InstancedMesh(new SphereGeometry(1, 14, 10), new MeshBasicMaterial({ color: 0xf5a833, transparent: true, opacity: 0.9, depthTest: false }), Math.max(16, list.length * 2))
+      m.renderOrder = 10
+      m.frustumCulled = false
+      this.markMesh = m
+      this.scene.add(m)
+    }
+    if (this.markMesh) {
+      const t = new Matrix4()
+      list.forEach((k, i) => {
+        // shown smaller than their reach, so they mark the spot without hiding the part
+        const s = Math.max(0.6, k.r * 0.35)
+        this.markMesh!.setMatrixAt(i, t.makeScale(s, s, s).setPosition(k.at[0], k.at[1], k.at[2]))
+      })
+      this.markMesh.count = list.length
+      this.markMesh.instanceMatrix.needsUpdate = true
+    }
+    this.draw()
   }
 
   /** Boxes drawn in thin lines; they replace any drawn before */
@@ -884,6 +961,41 @@ export class GcodeScene {
     const hit = this.raycaster.intersectObjects([...this.models.values()], false)[0]
     if (!hit || !hit.face) return null
     return { id: hit.object.userData.partId as number, point: [hit.point.x, hit.point.y, hit.point.z], normal: [hit.face.normal.x, hit.face.normal.y, hit.face.normal.z] }
+  }
+
+  /**
+   * Where a support mark goes for a click: the face the pointer is on if it faces down, else the first downward face
+   * straight below it (the overhang under the spot pointed at, seen from above). Null if nothing below faces down,
+   * which means the spot already stands on something.
+   */
+  supportSpot(clientX: number, clientY: number): { id: number; point: [number, number, number] } | null {
+    if (!this.models.size) return null
+    this.aim(clientX, clientY)
+    const meshes = [...this.models.values()]
+    const hit = this.raycaster.intersectObjects(meshes, false)[0]
+    if (!hit || !hit.face) return null
+    const facing = (h: typeof hit) => {
+      const f = (h.object as Mesh).geometry.getAttribute('facing')
+      return f && h.face ? f.getX(h.face.a) : 0
+    }
+    const DOWN = -0.25
+    const id = hit.object.userData.partId as number
+    if (facing(hit) < DOWN) return { id, point: [hit.point.x, hit.point.y, hit.point.z] }
+    const down = new Raycaster(new Vector3(hit.point.x, hit.point.y, hit.point.z - 0.01), new Vector3(0, 0, -1))
+    const below = down.intersectObject(hit.object, false).find((h) => facing(h) < DOWN && h.point.z > 0.2)
+    return below ? { id, point: [below.point.x, below.point.y, below.point.z] } : null
+  }
+
+  /**
+   * Which mark ball is under the pointer (its place in the list given to setMarks), or null. Only the ball you can
+   * see counts, not the reach of its support, so a click beside a mark adds another rather than removing it.
+   */
+  markUnder(clientX: number, clientY: number): number | null {
+    if (!this.markMesh || !this.markCount) return null
+    this.aim(clientX, clientY)
+    const hits = this.raycaster.intersectObject(this.markMesh, false)
+    const hit = hits.find((h) => h.instanceId !== undefined && h.instanceId < this.markCount)
+    return hit?.instanceId ?? null
   }
 
   /** Where the pointer's line crosses a level plane at height z, or null if it doesn't */
@@ -998,6 +1110,7 @@ export class GcodeScene {
     this.holoMaterial.dispose()
     this.clearDial()
     this.clearRunner()
+    this.markMesh?.dispose()
     if (this.scanTimer) clearTimeout(this.scanTimer)
     if (this.scanFrame) cancelAnimationFrame(this.scanFrame)
     this.meshMaterial.dispose()

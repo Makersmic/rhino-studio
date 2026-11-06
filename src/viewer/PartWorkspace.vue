@@ -20,6 +20,12 @@ const props = defineProps<{
   /** waiting for a click on a face */
   picking: boolean
   label: string
+  /** marking support spots: a click on a part adds or removes one */
+  marking?: boolean
+  /** support marks to show, on the bed */
+  marks?: Array<{ at: [number, number, number]; r: number }>
+  /** tint faces that need support past this angle, or null */
+  overhang?: number | null
 }>()
 const emit = defineEmits<{
   select: [id: number]
@@ -33,11 +39,16 @@ const emit = defineEmits<{
   cancelPick: []
   /** this browser can't draw in 3D */
   failed: [message: string]
+  /** a click on a part while marking supports, where on the bed */
+  mark: [id: number, point: [number, number, number]]
+  /** a click on a mark's ball while marking: its place in `marks` */
+  unmark: [index: number]
 }>()
 
 const canvas = ref<HTMLCanvasElement | null>(null)
 const stage = ref<HTMLDivElement | null>(null)
 const contextLost = ref(false)
+const markHint = ref<string | null>(null)
 const dragging = ref(false)
 const angle = ref<ViewAngle>('angle')
 const wholeBed = ref(true)
@@ -125,7 +136,7 @@ function down(e: PointerEvent) {
       openMenu(x, y)
     }, HOLD_MS)
   }
-  if (props.picking) return
+  if (props.picking || props.marking) return
   const hit = scene.hitModel(e.clientX, e.clientY)
   if (!hit) return
   emit('select', hit.id)
@@ -156,6 +167,21 @@ function up(e: PointerEvent) {
   }
   if (grab) {
     endGrab()
+  } else if (props.marking && press && scene && Math.hypot(e.clientX - press.x, e.clientY - press.y) < CLICK_SLOP) {
+    // a click on a mark's ball removes that one mark
+    const onMark = scene.markUnder(e.clientX, e.clientY)
+    if (onMark !== null) {
+      markHint.value = null
+      emit('unmark', onMark)
+      press = null
+      return
+    }
+    // the mark goes on the overhang under the spot clicked: that's where Kiri builds support from
+    const spot = scene.supportSpot(e.clientX, e.clientY)
+    if (spot) {
+      markHint.value = null
+      emit('mark', spot.id, spot.point)
+    } else if (scene.hitModel(e.clientX, e.clientY)) markHint.value = 'Nothing under that spot hangs in the air: it already stands on the part or the bed.'
   } else if (props.picking && press && scene && Math.hypot(e.clientX - press.x, e.clientY - press.y) < CLICK_SLOP) {
     const hit = scene.hitModel(e.clientX, e.clientY)
     if (hit) {
@@ -196,6 +222,8 @@ onMounted(async () => {
     scene.setBed(props.bed)
     drawParts()
     scene.setBoxes(props.boxes)
+    scene.setMarks(props.marks ?? [])
+    scene.setOverhang(props.overhang ?? null)
     look('angle')
     // Before the camera's own handler, so a drag that starts on the part doesn't turn the view too
     canvas.value.addEventListener('pointerdown', down, { capture: true })
@@ -225,6 +253,8 @@ watch(() => props.picking, (on) => {
   if (on) canvas.value?.focus({ preventScroll: true })
 })
 watch(() => props.boxes, (b) => scene?.setBoxes(b))
+watch(() => props.marks, (m) => scene?.setMarks(m ?? []), { deep: true })
+watch(() => props.overhang, (a) => scene?.setOverhang(a ?? null))
 watch(() => props.bed, (b) => {
   scene?.setBed(b)
   look(angle.value)
@@ -232,10 +262,11 @@ watch(() => props.bed, (b) => {
 </script>
 
 <template>
-  <div ref="stage" class="stage" :class="{ picking, movable, dragging }">
+  <div ref="stage" class="stage" :class="{ picking: picking || marking, movable: movable && !marking, dragging }">
     <canvas ref="canvas" tabindex="0" role="img" :aria-label="label" @pointermove="move" @pointerup="up" @pointercancel="up" @keydown="key" @contextmenu.prevent />
     <p v-if="contextLost" class="lost" role="status">The browser paused the 3D drawing. It comes back by itself, or reload this page.</p>
     <p v-if="picking" class="pickhint" role="status">Click the face that should sit on the bed. Esc cancels.</p>
+    <p v-else-if="marking" class="pickhint" role="status">{{ markHint ?? 'Click the part above where it needs support: the mark goes on the overhang below. Click a mark to remove it.' }}</p>
     <div class="views" role="group" aria-label="View">
       <RsButton size="sm" :variant="angle === 'angle' ? 'primary' : undefined" :aria-pressed="angle === 'angle'" @click="look('angle')">Angle</RsButton>
       <RsButton size="sm" :variant="angle === 'top' ? 'primary' : undefined" :aria-pressed="angle === 'top'" @click="look('top')">Top</RsButton>

@@ -9,7 +9,7 @@
 import type { KiriJob } from './kiriSettings'
 
 interface KiriEngine {
-  widget: { loadVertices(v: Float32Array): { center(): unknown } }
+  widget: { loadVertices(v: Float32Array): { center(): unknown }; anno: Record<string, unknown> }
   settings: { stock?: Record<string, unknown> }
   setListener(fn: (msg: Record<string, unknown>) => void): KiriEngine
   setMode(m: string): KiriEngine
@@ -54,8 +54,17 @@ export async function loadModelFile(file: File): Promise<Array<{ vertices: Float
 
 export type Phase = 'Loading the engine' | 'Slicing' | 'Planning the paths' | 'Writing G-code' | 'Sending to the Rhino' | 'Waiting for the slicer' | 'Slicing on the Rhino' | 'Fetching the file'
 
-/** Slice one part (already turned, scaled and centred) and return Kiri's G-code. */
-export async function runKiri(vertices: Float32Array, job: KiriJob, onPhase: (p: Phase, fraction?: number) => void, timeoutMs = 300_000): Promise<string> {
+/** A spot marked for support: Kiri builds support under the part within `radius` of `point` (part coordinates, mm) */
+export interface SupportMark {
+  point: { x: number; y: number; z: number }
+  radius: number
+}
+
+/**
+ * Slice one part (already turned, scaled and centred) and return Kiri's G-code. `marks` are used when the job's support
+ * type is manual: Kiri 4.7 reads them from the widget's `anno.paint` (FDM slice, sliceSupportType "manual").
+ */
+export async function runKiri(vertices: Float32Array, job: KiriJob, onPhase: (p: Phase, fraction?: number) => void, timeoutMs = 300_000, marks: SupportMark[] = []): Promise<string> {
   onPhase('Loading the engine')
   const k = await loadKiri()
   const eng = k.createEngine({ workURL: url('kiri-work.js'), poolURL: url('kiri-pool.js') })
@@ -69,6 +78,7 @@ export async function runKiri(vertices: Float32Array, job: KiriJob, onPhase: (p:
     if (typeof u === 'number') onPhase('Planning the paths', u)
   })
   eng.widget.loadVertices(vertices.slice()).center()
+  if (marks.length) eng.widget.anno = { ...eng.widget.anno, paint: marks.map((m) => ({ point: { ...m.point }, radius: m.radius })) }
   eng.setMode(job.mode).setDevice(job.device).setProcess(job.process)
   eng.setTopOffset(0)
   if (job.tools) eng.setTools(job.tools)

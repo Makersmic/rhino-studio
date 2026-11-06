@@ -27,6 +27,7 @@ import { rhinoFile, type RhinoFile } from '@/slicer/rhinoFile'
 import { checkFile, blocking, type Check, type FileStats } from '@/slicer/check'
 import { FLAT_TYPES, combine, extOf, merge, partInfo, transform } from '@/slicer/model'
 import { planDrop, skippedMessage } from '@/prepare/dropPlan'
+import { MARK_SIZES, MAX_MARKS, markAt, marksForEngine, marksOnBed, type MarkPart, type SupportMarks } from '@/prepare/supportMarks'
 import { PART_GAP, freeSpot, rectOf } from '@/viewer/placement'
 import { DEFAULT_MACHINE, type MachineInfo, type PartInfo, type PartView, type Placement, type PrepareJob, type Process } from '@/slicer/types'
 import { loadModelFile, runKiri, kiriVersion, type Phase } from '@/slicer/engine'
@@ -174,6 +175,9 @@ export const usePrepareStore = defineStore('prepare', () => {
   /** this session only: each tool's settings as last left (the Rhino keeps the durable copy) */
   const saved: Record<string, PrepareJob> = {}
   const job = ref<PrepareJob | null>(null)
+  /** supports placed by hand: "only where I mark" when this isn't null (prepare/supportMarks.ts) */
+  const supportMarks = ref<SupportMarks | null>(null)
+  const markSize = ref(MARK_SIZES.start)
   const materialsOf = (tool: string) => materialsFor(tool, toolheadsTable.value).list
   const materials = computed<{ list: Material[]; live: boolean }>(() => (job.value ? materialsFor(job.value.toolhead, toolheadsTable.value) : { list: [], live: false }))
 
@@ -312,8 +316,8 @@ export const usePrepareStore = defineStore('prepare', () => {
 
   // Remember settings: this session per tool, and on the Rhino per tool and per file
   watch(
-    job,
-    (j) => {
+    () => [job.value, supportMarks.value] as const,
+    ([j]) => {
       if (!j) return
       saved[j.toolhead] = clone(j)
       const s: SavedJob = {
@@ -327,7 +331,8 @@ export const usePrepareStore = defineStore('prepare', () => {
         placement: { ...j.placement },
       }
       profilesStore.saveJobSoon(`tool/${j.toolhead}`, s)
-      if (raw.value && fileName.value) profilesStore.saveJobSoon(fileName.value, s)
+      // support marks belong to this file's parts, so they're saved with the file, never as the tool's default
+      if (raw.value && fileName.value) profilesStore.saveJobSoon(fileName.value, supportMarks.value && j.process === 'fdm' ? { ...s, supportMarks: clone(supportMarks.value) } : s)
     },
     { deep: true },
   )
@@ -344,6 +349,38 @@ export const usePrepareStore = defineStore('prepare', () => {
   const shape = computed(() => (selected.value && job.value ? shapeOf(selected.value, job.value.placement) : null))
   const vertices = computed(() => shape.value?.vertices ?? null)
   const part = computed<PartInfo | null>(() => shape.value?.info ?? null)
+
+  // ---- supports placed by hand (prepare/supportMarks.ts); supportMarks is declared with the job, near the top
+  /** each part as the marks need it: as loaded, as it sits now, and where */
+  const markParts = computed<MarkPart[]>(() =>
+    parts.value.map((v) => ({ name: v.name, raw: partsList.value.find((p) => p.id === v.id)!.raw, shaped: v.vertices, placement: v.placement, x: v.x, y: v.y })),
+  )
+  const supportMode = computed<'off' | 'auto' | 'marked'>(() => (!job.value?.fdm.supports ? 'off' : supportMarks.value ? 'marked' : 'auto'))
+  function setSupportMode(mode: 'off' | 'auto' | 'marked') {
+    const j = job.value
+    if (!j) return
+    j.fdm.supports = mode !== 'off'
+    // turning marks off keeps nothing hidden: they go, rather than coming back later by surprise
+    supportMarks.value = mode === 'marked' ? (supportMarks.value ?? { marks: [] }) : null
+  }
+  const marksShown = computed(() => (supportMarks.value ? marksOnBed(markParts.value, supportMarks.value.marks) : []))
+  /** A click on a part while marking: a new mark on the overhang there */
+  function markClick(partId: number, bed: [number, number, number]) {
+    const sm = supportMarks.value
+    if (!sm) return
+    const view = parts.value.find((p) => p.id === partId)
+    const mp = markParts.value.find((p) => p.name === view?.name)
+    if (!mp || sm.marks.length >= MAX_MARKS) return
+    sm.marks.push(markAt(mp, bed, markSize.value))
+  }
+  /** A click on a mark's ball: `shown` is its place among the marks drawn (marksShown) */
+  function removeMark(shown: number) {
+    const i = marksShown.value[shown]?.i
+    if (i !== undefined) supportMarks.value?.marks.splice(i, 1)
+  }
+  function clearMarks() {
+    if (supportMarks.value) supportMarks.value.marks = []
+  }
 
   /** Every part where it is now */
   const parts = computed<PartView[]>(() => {
@@ -547,6 +584,9 @@ export const usePrepareStore = defineStore('prepare', () => {
       if (verts.length < 9) throw new Error('No triangles in this file.')
       const id = nextPartId++
       partsList.value = [{ id, name: file.name, raw: verts, flat: FLAT_TYPES.has(ext), placement: { x: 0, y: 0, rotate: 0, scale: 1 } }]
+      // marks saved with this file's job come back with it
+      const savedMarks = profilesStore.jobs[file.name]?.supportMarks
+      supportMarks.value = savedMarks ? clone(savedMarks) : null
       selectedId.value = id
       uploaded.value = null
       fileName.value = file.name
@@ -573,6 +613,7 @@ export const usePrepareStore = defineStore('prepare', () => {
 
   function clearPart() {
     loadSkipped.value = null
+    supportMarks.value = null
     partsList.value = []
     uploaded.value = null
     fileName.value = null
@@ -764,7 +805,14 @@ export const usePrepareStore = defineStore('prepare', () => {
         modelResult.value = { file, checks, stats, kiri: `PrusaSlicer ${st.engine.installed}${out.cached ? ' (from the cache)' : ''}`, kiriSeconds: out.seconds, kiriFilament: out.filamentMm }
         return
       }
-      const kiri = await runKiri(model, kiriJob(j, p, m), onPhase)
+      const kj = kiriJob(j, p, m)
+      let marks: ReturnType<typeof marksForEngine> = []
+      if (j.process === 'fdm' && j.fdm.supports && supportMarks.value) {
+        // Only where marked: Kiri's manual supports, under the marks and nowhere else (none marked: no support)
+        kj.process.sliceSupportType = 'manual'
+        marks = marksForEngine(markParts.value, supportMarks.value.marks, markParts.value.length > 1 ? { x: j.placement.x, y: j.placement.y } : null)
+      }
+      const kiri = await runKiri(model, kj, onPhase, undefined, marks)
       if (id !== runId) return
       const file = rhinoFile(kiri, j, p, m, STUDIO_VERSION)
       const { checks, stats } = checkFile(file.text, j, p, m)
@@ -844,6 +892,14 @@ export const usePrepareStore = defineStore('prepare', () => {
     selectPart,
     addFiles,
     loadFiles,
+    supportMarks,
+    supportMode,
+    setSupportMode,
+    markSize,
+    marksShown,
+    markClick,
+    removeMark,
+    clearMarks,
     loadSkipped,
     duplicatePart,
     removePart,

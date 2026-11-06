@@ -53,6 +53,8 @@ export interface SavedJob {
   /** only the settings that differ from the profile */
   overrides: AnySettings
   placement: { x: number; y: number; rotate: number; scale: number; tiltX?: number; tiltY?: number }
+  /** supports only where marked, for this file's parts (prepare/supportMarks.ts) */
+  supportMarks?: { marks: Array<{ part: string; x: number; y: number; z: number; r: number }> }
   saved?: number
 }
 

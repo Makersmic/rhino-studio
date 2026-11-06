@@ -32,12 +32,18 @@ const props = defineProps<{
   /** a ready-made file's text and flat toolpath */
   fileText?: string | null
   paths?: Array<Array<[number, number]>> | null
+  /** support marks on the bed, whether a click adds them, and the overhang angle to tint (null: none) */
+  marks?: Array<{ at: [number, number, number]; r: number }>
+  marking?: boolean
+  overhang?: number | null
 }>()
 const emit = defineEmits<{
   pick: [normal: [number, number, number]]
   mode: [is3d: boolean]
   select: [id: number]
   menu: [id: number, x: number, y: number, normal: [number, number, number] | null]
+  mark: [id: number, point: [number, number, number]]
+  unmark: [index: number]
 }>()
 const picking = defineModel<boolean>('picking', { default: false })
 
@@ -181,6 +187,11 @@ const label = computed(() => (props.part ? `${props.part.name} on the bed in 3D$
         :boxes="boxes"
         :picking="picking"
         :label="label"
+        :marking="marking"
+        :marks="marks"
+        :overhang="overhang"
+        @mark="(id, pt) => emit('mark', id, pt)"
+        @unmark="emit('unmark', $event)"
         @select="emit('select', $event)"
         @menu="(id, x, y, n) => emit('menu', id, x, y, n)"
         @move="moveTo"
