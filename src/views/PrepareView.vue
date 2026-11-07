@@ -21,7 +21,7 @@ import FileMenu, { type MenuItem } from '@/files/FileMenu.vue'
 import StartFile from '@/files/StartFile.vue'
 import { laidFlat, turned } from '@/viewer/placement'
 import { footprints, partsBox, spinMode } from '@/viewer/spin'
-import { MARK_SIZES, marksNote } from '@/prepare/supportMarks'
+import { MARK_SIZES, SHOW_BLOCKS, marksNote } from '@/prepare/supportMarks'
 import { loadReduced } from '@/viewer/theme'
 import NumField from '@/prepare/NumField.vue'
 import StepBar from '@/prepare/StepBar.vue'
@@ -440,7 +440,7 @@ const engineNote = computed(() => {
                 <RsButton size="sm" variant="quiet" @click="turn('y')">Turn on Y</RsButton>
                 <RsButton v-if="is3d" size="sm" variant="quiet" :aria-pressed="picking" @click="picking = !picking">{{ picking ? 'Cancel lay flat' : 'Lay flat' }}</RsButton>
                 <RsButton v-if="is3d && prep.canMark" size="sm" :variant="marking === 'mark' ? 'primary' : 'quiet'" :aria-pressed="marking === 'mark'" @click="toggleMarking('mark')">{{ marking === 'mark' ? 'Done marking' : 'Mark supports' }}</RsButton>
-                <RsButton v-if="is3d && prep.canMark && job.engine === 'prusa'" size="sm" :variant="marking === 'block' ? 'primary' : 'quiet'" :aria-pressed="marking === 'block'" @click="toggleMarking('block')">{{ marking === 'block' ? 'Done blocking' : 'Block supports' }}</RsButton>
+                <RsButton v-if="SHOW_BLOCKS && is3d && prep.canMark && job.engine === 'prusa'" size="sm" :variant="marking === 'block' ? 'primary' : 'quiet'" :aria-pressed="marking === 'block'" @click="toggleMarking('block')">{{ marking === 'block' ? 'Done blocking' : 'Block supports' }}</RsButton>
               </template>
               <RsButton v-if="proc !== 'cnc'" size="sm" variant="quiet" @click="prep.centre()">Centre</RsButton>
             </div>

@@ -129,6 +129,13 @@ export function marksForEngine(parts: MarkPart[], marks: Mark[], combinedAt: { x
   })
 }
 
+/**
+ * Block supports stay hidden (Mike, Nov 7): on real PrusaSlicer 2.8.1 a blocker under about 8 mm changes nothing, because
+ * PrusaSlicer fills small holes in support back in. Planned instead: block the whole overhang that was clicked.
+ * The store, the request and the Portal still carry blocks, so turning this on is the only change needed later.
+ */
+export const SHOW_BLOCKS = false
+
 /** What the marks will do, in words. "Only where I mark" with nothing marked means no support at all, so it says so. */
 export function marksNote(s: SupportMarks | null, mode: 'off' | 'auto' | 'marked'): string | null {
   if (mode === 'off' || !s) return null
@@ -137,7 +144,7 @@ export function marksNote(s: SupportMarks | null, mode: 'off' | 'auto' | 'marked
   const n = (k: number, word: string) => `${k} ${word}${k === 1 ? '' : 's'}`
   if (mode === 'marked' && !add) return 'No spots marked yet, so nothing will be supported. Choose Mark supports, then click the part above where it needs holding up.'
   const parts = [add ? `${n(add, 'spot')} marked for support` : '', block ? `${n(block, 'spot')} blocked` : ''].filter(Boolean)
-  return parts.length ? `${parts.join(', ')}.` : 'Automatic supports. Mark spots to add support, or block spots to keep it off.'
+  return parts.length ? `${parts.join(', ')}.` : SHOW_BLOCKS ? 'Automatic supports. Mark spots to add support, or block spots to keep it off.' : 'Automatic supports. Mark spots to add support there too.'
 }
 
 /**

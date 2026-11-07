@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { transform } from '@/slicer/model'
-import { markAt, marksForEngine, marksForPrusa, marksNote, marksOnBed, partFrame, type MarkPart } from './supportMarks'
+import { markAt, marksForEngine, marksForPrusa, marksNote, marksOnBed, partFrame, SHOW_BLOCKS, type MarkPart } from './supportMarks'
 
 // a lopsided box, so turning it can't look the same by accident
 const raw = new Float32Array([0, 0, 0, 40, 0, 0, 40, 10, 0, 0, 10, 0, 0, 0, 20, 40, 0, 20, 40, 10, 20, 0, 10, 20, 5, 3, 7])
@@ -84,5 +84,12 @@ describe('marksNote', () => {
     expect(marksNote({ marks: [] }, 'off')).toBeNull()
     expect(marksNote({ marks: [] }, 'auto')).toMatch(/Automatic supports/)
     expect(marksNote({ marks: [{ part: 'a', x: 0, y: 0, z: 0, r: 4 }, { part: 'a', x: 0, y: 0, z: 0, r: 4, kind: 'block' }] }, 'auto')).toBe('1 spot marked for support, 1 spot blocked.')
+  })
+})
+
+describe('block supports, hidden for now', () => {
+  it('stay off until blocks work on PrusaSlicer, and the hint doesn’t offer them', () => {
+    expect(SHOW_BLOCKS).toBe(false)
+    expect(marksNote({ marks: [] }, 'auto')).toBe('Automatic supports. Mark spots to add support there too.')
   })
 })
