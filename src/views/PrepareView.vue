@@ -18,6 +18,7 @@ import RsButton from '@/components/RsButton.vue'
 import Icon from '@/icons/Icon.vue'
 import JobWorkspace from '@/prepare/JobWorkspace.vue'
 import FileMenu, { type MenuItem } from '@/files/FileMenu.vue'
+import StartFile from '@/files/StartFile.vue'
 import { laidFlat, turned } from '@/viewer/placement'
 import { footprints, partsBox, spinMode } from '@/viewer/spin'
 import { MARK_SIZES, marksNote } from '@/prepare/supportMarks'
@@ -216,9 +217,6 @@ function tiltField(key: 'tiltX' | 'tiltY') {
 const tiltX = tiltField('tiltX')
 const tiltY = tiltField('tiltY')
 
-function openInFiles() {
-  if (prep.sentPath) void router.push({ path: '/files', query: { file: prep.sentPath } })
-}
 
 // ---- PrusaSlicer options: keep only what differs from the Rhino profile -------------
 function setPrusa(key: string, value: string | null) {
@@ -630,10 +628,10 @@ const engineNote = computed(() => {
             </div>
             <p v-if="prep.sendError" class="error" role="alert">{{ prep.sendError }}</p>
             <p v-if="prep.sentPath" class="sent" role="status">
-              Sent as <strong>{{ prep.sentPath }}</strong>. Nothing has started.
-              <RsButton size="sm" @click="openInFiles">Start it from Files</RsButton>
+              Sent as <strong>{{ prep.sentPath }}</strong>
+              <StartFile :file-path="prep.sentPath" files-link />
             </p>
-            <p class="muted small">{{ prep.result.stats.moves.toLocaleString() }} moves. Files checks the mounted toolhead again before anything runs<template v-if="proc !== 'fdm'">, and starts this through the {{ proc === 'laser' ? 'laser' : proc === 'cnc' ? 'CNC' : 'knife' }} setup wizard</template>.</p>
+            <p class="muted small">{{ prep.result.stats.moves.toLocaleString() }} moves. Starting checks the mounted toolhead again before anything runs<template v-if="proc !== 'fdm'">, and starts this through the {{ proc === 'laser' ? 'laser' : proc === 'cnc' ? 'CNC' : 'knife' }} setup wizard</template>.</p>
           </template>
         </RsPanel>
       </div>
