@@ -46,6 +46,9 @@ const pct = computed(() => d.value.type === 'percent' || d.value.type === 'perce
 const unit = computed(() => (pct.value ? '%' : d.value.sidetext ?? ''))
 // PrusaSlicer writes 'nil' for an unset nullable value
 const shown = computed(() => (text.value === 'nil' ? '' : pct.value ? text.value.replace(/%$/, '') : text.value))
+// What's being typed, while the box has focus. Vue writes :value back on every re-render, and the machine's live status
+// re-renders often, so without this the box jumped back to the old value mid-typing (Mike, Nov 7, on the 7050).
+const draft = ref<string | null>(null)
 function onText(v: string) {
   commit(pct.value && v.trim() !== '' && !v.trim().endsWith('%') ? `${v.trim()}%` : v)
 }
@@ -74,14 +77,17 @@ function onText(v: string) {
       <span v-else class="box">
         <input
           :id="id"
-          :value="shown"
+          :value="draft ?? shown"
           :placeholder="text === 'nil' ? 'Not set' : undefined"
           :list="d.enum && d.open ? `${id}-l` : undefined"
           :disabled="locked"
           class="mono"
           spellcheck="false"
           autocomplete="off"
+          @focus="draft = shown"
+          @input="draft = ($event.target as HTMLInputElement).value"
           @change="onText(($event.target as HTMLInputElement).value)"
+          @blur="draft = null"
           @keydown.enter="($event.target as HTMLInputElement).blur()"
         />
         <span v-if="unit" class="unit">{{ unit }}</span>
