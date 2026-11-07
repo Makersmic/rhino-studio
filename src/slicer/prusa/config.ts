@@ -114,8 +114,9 @@ export const LOCKS: Record<string, Lock> = {
   color_change_gcode: EMPTY(GCODE_REASON),
   pause_print_gcode: EMPTY(GCODE_REASON),
   template_custom_gcode: EMPTY(GCODE_REASON),
-  start_filament_gcode: EMPTY(GCODE_REASON),
-  end_filament_gcode: EMPTY(GCODE_REASON),
+  // Per-filament lists: `""` is one empty template. A bare `=` is an empty list, which PrusaSlicer 2.9.7 misreads.
+  start_filament_gcode: { value: () => '""', reason: GCODE_REASON },
+  end_filament_gcode: { value: () => '""', reason: GCODE_REASON },
   autoemit_temperature_commands: { value: () => '0', reason: TEMP_REASON },
   // print
   post_process: EMPTY('Would run programs on the Rhino after slicing.'),
