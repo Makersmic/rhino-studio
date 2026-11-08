@@ -5,6 +5,8 @@
  * _RHINO_HOOKS, which START_JOB, END_PRINT, cancel, pause and resume call. This module only shapes the editor.
  */
 
+import { hookLines, type MacroDraft } from '@/control/userMacros'
+
 export type Slot = 'before_start' | 'after_start' | 'before_end' | 'after_end' | 'on_cancel' | 'on_pause' | 'on_resume'
 /** scope ("machine", "category:subtractive", "tool:HotJoe") -> slot -> lines */
 export type Hooks = Record<string, Partial<Record<Slot, string[]>>>
@@ -18,7 +20,11 @@ export interface HooksState {
   scopes: { id: string; label: string }[]
   macro?: string
   live?: boolean
+  /** where a tool's start or end lines were copied from (Tool Manager 1.9.13) */
+  sources?: HookSources
 }
+/** scope -> slot -> the macro the lines were copied from, and which revision of it */
+export type HookSources = Record<string, Partial<Record<Slot, { macro: string; rev: number; name: string }>>>
 
 export const SLOT_LABEL: Record<Slot, string> = {
   before_start: 'Before the job starts',
@@ -77,4 +83,32 @@ export function scopeList(state: Pick<HooksState, 'scopes'>, hooks: Hooks): { id
     .filter((k) => !state.scopes.some((s) => s.id === k))
     .map((id) => ({ id, label: `${id.replace(/^tool:/, '')} (no longer a tool)`, count: lineCount(hooks, id), gone: true }))
   return [...known, ...gone]
+}
+
+/**
+ * A toolhead's start (after_start) or end (before_end) G-code copied from one of your macros, or cleared (macro null).
+ * Returns the new hooks and sources to save, or why it can't be copied. The lines are a copy: editing the macro later
+ * changes nothing until Update (Mike, Nov 7); the source says which revision they came from.
+ */
+export function copyMacroTo(
+  hooks: Hooks,
+  sources: HookSources,
+  tool: string,
+  slot: 'after_start' | 'before_end',
+  macro: { id: string; rev: number; name: string; toolheads: string[]; steps: MacroDraft['steps']; notes: string } | null,
+): { hooks: Hooks; sources: HookSources } | { error: string } {
+  const scope = `tool:${tool}`
+  const src: HookSources = JSON.parse(JSON.stringify(sources))
+  if (!macro) {
+    if (src[scope]) {
+      delete src[scope]![slot]
+      if (!Object.keys(src[scope]!).length) delete src[scope]
+    }
+    return { hooks: setSlot(hooks, scope, slot, []), sources: src }
+  }
+  if (macro.toolheads.length && !macro.toolheads.includes(tool)) return { error: `${macro.name} is for ${macro.toolheads.join(', ')} only` }
+  const r = hookLines(macro)
+  if ('error' in r) return r
+  ;(src[scope] ??= {})[slot] = { macro: macro.id, rev: macro.rev, name: macro.name }
+  return { hooks: setSlot(hooks, scope, slot, r.lines), sources: src }
 }

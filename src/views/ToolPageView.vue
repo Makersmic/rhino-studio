@@ -15,6 +15,7 @@ import RsButton from '@/components/RsButton.vue'
 import CareBar from '@/maintenance/CareBar.vue'
 import RestartBanner from '@/toolmgr/RestartBanner.vue'
 import ToolConnector from '@/toolmgr/ToolConnector.vue'
+import ToolStartEnd from '@/toolmgr/ToolStartEnd.vue'
 import { careText, fmtMeter } from '@/maintenance/summary'
 import { lookFor } from '@/toolheads/registry'
 import type { ToolSheetData } from '@/toolmgr/types'
@@ -155,6 +156,10 @@ function pick(n: number) {
             </table>
             <p v-else class="muted">No materials yet.</p>
             <p class="sub">{{ d.builtin ? 'Built-in materials are set in variables.cfg.' : 'Change materials with Edit tool.' }}</p>
+          </RsPanel>
+
+          <RsPanel title="Start and end G-code" panel-id="tool.startend">
+            <ToolStartEnd :tool="name" />
           </RsPanel>
 
           <RsPanel title="Macros for this tool" panel-id="tool.macros">

@@ -60,7 +60,7 @@ import type { NetState, WifiNetwork } from '@/system/network'
 import type { EngineAuto, SliceJobState, SlicerState } from '@/slicer/prusa/portal'
 import type { ProfileDraft, ProfileList, SavedJob, SliceProfile } from '@/slicer/sliceProfiles'
 import type { BoardsState, DevicePreview, HwCatalog, PinChoice, PinChoices } from '@/hardware/wizard'
-import type { Hooks, HooksState } from '@/hardware/hooks'
+import type { HookSources, Hooks, HooksState } from '@/hardware/hooks'
 import type { PortalState, PreviewResult, ToolDetail, ToolLists, ToolOptions, ToolSheetData, WriteResult } from '@/toolmgr/types'
 
 /** GET /api/update (Tool Manager 1.5.3+) */
@@ -593,10 +593,10 @@ export class PortalClient {
   async hooksState(): Promise<HooksState> {
     return this.getJson<HooksState>('/api/hooks')
   }
-  async previewHooks(body: { rev: number; hooks: Hooks }): Promise<HooksState> {
+  async previewHooks(body: { rev: number; hooks: Hooks; sources?: HookSources }): Promise<HooksState> {
     return this.write<HooksState>('hooks-preview', 'POST', '/api/preview/hooks', body)
   }
-  async saveHooks(body: { rev: number; hooks: Hooks }): Promise<HooksState & WriteResult> {
+  async saveHooks(body: { rev: number; hooks: Hooks; sources?: HookSources }): Promise<HooksState & WriteResult> {
     return this.write<HooksState & WriteResult>('hooks-save', 'POST', '/api/hooks', body)
   }
   async deleteDevice(name: string): Promise<WriteResult> {

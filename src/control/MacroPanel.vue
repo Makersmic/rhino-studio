@@ -17,12 +17,16 @@ import { useControlStore } from '@/stores/control'
 import { useMachineStore } from '@/stores/machine'
 import type { MacroGroup } from './macroGroups'
 import { useToolMacros } from './useToolMacros'
+import { useUserMacrosStore } from '@/stores/userMacros'
 
 const props = defineProps<{ kind: 'tool' | 'shared' }>()
 
 const control = useControlStore()
 const machine = useMachineStore()
 const { showAll, toolName, panels, hidden } = useToolMacros()
+// Your macros (Settings › Macros): in the system panel, for the mounted toolhead first, then any toolhead's
+const mine = useUserMacrosStore()
+onMounted(() => { if (props.kind === 'shared' && !mine.loaded) void mine.load() })
 
 const groups = computed<MacroGroup[]>(() => {
   if (props.kind === 'shared') return panels.value.shared
@@ -81,6 +85,14 @@ function runWith(line: string) {
 <template>
   <RsPanel :panel-id="kind === 'shared' ? 'control.macros.system' : 'control.macros.tool'" :title="title" :status="status" class="macro-panel" :class="[kind, { tabbed: !!accent }]" :style="accent ? { '--accent': accent } : undefined">
     <div class="macros">
+      <section v-if="kind === 'shared' && mine.forMounted.length" class="group">
+        <h3>Your macros</h3>
+        <div class="buttons">
+          <button v-for="m in mine.forMounted" :key="m.id" type="button" class="macro" :disabled="!machine.klippyReady" :title="m.notes || m.name" @click="mine.run(m)">
+            <span class="lbl">{{ m.name }}</span>
+          </button>
+        </div>
+      </section>
       <section v-for="g in groups" :key="g.title" class="group">
         <h3 v-if="g.title && g.collapsible">
           <button type="button" class="fold" :aria-expanded="!isFolded(g)" :aria-controls="`macros-${kind}-${g.title}`" @click="toggleFold(g)">

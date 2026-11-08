@@ -28,6 +28,7 @@ const groups = computed<SectionGroup[]>(() => [
       { to: '/settings/tools', label: 'Tool changing' },
       { to: '/settings/cameras', label: 'Cameras' },
       { to: '/settings/profiles', label: 'Slice profiles' },
+      { to: '/settings/macros', label: 'Your macros' },
     ],
   },
   {

@@ -251,7 +251,8 @@ export function buildMacro(m: MacroDraft, ctx: RunContext): BuildResult {
       }
       case 'heatMaterial': {
         if (!ctx.printHead) return { error: `${at}: needs a confirmed print head mounted` }
-        const mat = ctx.materials.find((x) => x.key === s.material)
+        // by its key (PLA_0_4) or its name (PLA: the first in the table)
+        const mat = ctx.materials.find((x) => x.key === s.material) ?? ctx.materials.find((x) => x.name === s.material)
         if (!mat) return { error: `${at}: ${s.material} isn't in ${ctx.tool}'s material table` }
         if (mat.hotend == null || mat.bed == null) return { error: `${at}: ${s.material} has no temperatures in the table` }
         const h = Math.round(Math.min(mat.hotend, HOTEND_MAX))

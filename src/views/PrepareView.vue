@@ -11,6 +11,7 @@
  * The slicing runs in this browser (src/slicer/), so the Pi only ever receives
  * the finished file. See src/stores/prepare.ts.
  */
+import StartEndLine from '@/toolmgr/StartEndLine.vue'
 import { computed, defineAsyncComponent, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import RsPanel from '@/components/RsPanel.vue'
@@ -586,6 +587,7 @@ const engineNote = computed(() => {
 
         <!-- the job file -->
         <RsPanel v-if="job" panel-id="prepare.file" title="Job file" :status="prep.result ? prep.result.file.name : undefined">
+          <StartEndLine :tool="job.toolhead" />
           <div v-if="!up" class="go">
             <RsButton variant="primary" :disabled="!prep.part || !!prep.phase || !!suits || (proc === 'cnc' && !job.cnc.ops.some((o) => o.on))" @click="prep.prepare()">{{ prep.phase ? 'Preparing…' : prep.result ? 'Prepare again' : 'Prepare' }}</RsButton>
             <span v-if="prep.phase" class="phase" role="status">

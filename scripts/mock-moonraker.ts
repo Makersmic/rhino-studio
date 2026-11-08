@@ -89,6 +89,7 @@ const status: Record<string, Record<string, unknown>> = {
   heater_bed: { temperature: 23.6, target: 0 },
   'gcode_macro SWAP_TOOL': { current_tool: tool.current_tool, pending_tool: tool.pending_tool },
   'gcode_macro VARIABLES': { tool_mapping: toolMapping, toolheads },
+  'gcode_macro RHINO_POSITIONS': { park_x: 545, park_y: 370 },
   'gcode_macro CUSTOM_TOOLS': custom,
   save_variables: {
     variables: {
@@ -1214,6 +1215,14 @@ function recount() {
 }
 recount()
 
+type MockMacro = { id: string; name: string; toolheads: string[]; steps: unknown[]; notes: string; rev: number; created: number; updated: number }
+const um = {
+  macros: [] as MockMacro[],
+  deleted: [] as Array<MockMacro & { deleted_at: number }>,
+  hooksRev: 0,
+  hooks: {} as Record<string, Record<string, string[]>>,
+  sources: {} as Record<string, Record<string, { macro: string; rev: number; name: string }>>,
+}
 const sp: {
   profiles: { id: string; name: string; engine: string; process: string; toolhead: string | null; material: string | null; settings: Record<string, unknown>; notes: string; header: Record<string, unknown>; created: number; updated: number; rev: number }[]
   deleted: { id: string; name: string; engine: string; process: string; deleted_at: number }[]
@@ -1471,6 +1480,56 @@ async function portal(req: IncomingMessage, res: import('node:http').ServerRespo
       updRun(String(body.zip))
       return json(res, 200, { ok: true, zip: body.zip }), true
     }
+  }
+  // Your macros (Tool Manager 1.9.13) and job hooks, kept in memory. MOCK_MACROS=old (Portal before 1.9.13)
+  if (url.startsWith('/api/user-macros') || url.startsWith('/api/hooks') || url.startsWith('/api/preview/hooks')) {
+    const path = url.split('?')[0]!
+    if (path.startsWith('/api/user-macros') && process.env.MOCK_MACROS === 'old') return json(res, 404, { ok: false, error: 'Not found' }), true
+    if (req.method === 'GET' && path === '/api/user-macros') return json(res, 200, { ok: true, macros: um.macros, deleted: um.deleted }), true
+    if (req.method === 'GET' && path === '/api/hooks')
+      return json(res, 200, { ok: true, rev: um.hooksRev, updated: 0, hooks: um.hooks, sources: um.sources, warnings: [], slots: ['before_start', 'after_start', 'before_end', 'after_end', 'on_cancel', 'on_pause', 'on_resume'], scopes: [{ id: 'machine', label: 'Whole machine' }, { id: 'tool:BlockOne', label: 'BlockOne' }, { id: 'tool:LightSaber', label: 'LightSaber' }], macro: '', live: true }), true
+    if (req.headers['x-rhino-token'] !== PORTAL_TOKEN) return json(res, 400, { ok: false, error: 'This page is out of date (the portal was restarted). Reload the page and try again.' }), true
+    const body = req.method === 'POST' || req.method === 'DELETE' ? await readBody(req) : {}
+    const now = Math.floor(Date.now() / 1000)
+    if (path === '/api/hooks' || path === '/api/preview/hooks') {
+      if (body.rev !== um.hooksRev) return json(res, 400, { ok: false, error: `Job hooks were changed on another device (now revision ${um.hooksRev}). Reload, then save again.` }), true
+      const hooks = (body.hooks ?? {}) as typeof um.hooks
+      const sources = (body.sources ?? um.sources) as typeof um.sources
+      if (path === '/api/preview/hooks') return json(res, 200, { ok: true, hooks, sources, warnings: [], macro: '' }), true
+      um.hooks = hooks
+      um.sources = sources
+      um.hooksRev += 1
+      return json(res, 200, { ok: true, rev: um.hooksRev, hooks, sources, warnings: [], macro: '', restart_needed: true }), true
+    }
+    if (req.method === 'POST' && path === '/api/user-macros') {
+      const m = { ...(body as Record<string, unknown>), id: `m_${Math.random().toString(36).slice(2, 8)}`, rev: 1, created: now, updated: now } as (typeof um.macros)[number]
+      um.macros.push(m)
+      return json(res, 200, { ok: true, macro: m }), true
+    }
+    const m = /^\/api\/user-macros\/(m_[a-z0-9]+)(\/undelete)?$/.exec(path)
+    if (m) {
+      const i = um.macros.findIndex((x) => x.id === m[1])
+      if (req.method === 'DELETE' && i >= 0) {
+        const [gone] = um.macros.splice(i, 1)
+        um.deleted.unshift({ ...gone!, deleted_at: now })
+        return json(res, 200, { ok: true, deleted: gone!.id, name: gone!.name }), true
+      }
+      if (req.method === 'POST' && m[2]) {
+        const j = um.deleted.findIndex((x) => x.id === m[1])
+        if (j < 0) return json(res, 400, { ok: false, error: 'That macro isn’t in the deleted list any more' }), true
+        const [back] = um.deleted.splice(j, 1)
+        um.macros.push(back!)
+        return json(res, 200, { ok: true, macro: back }), true
+      }
+      if (req.method === 'POST' && i >= 0) {
+        const old = um.macros[i]!
+        if (body.rev !== old.rev) return json(res, 400, { ok: false, error: `${old.name} was changed on another device (now revision ${old.rev}). Reload it, then save again.` }), true
+        const nm = { ...old, ...(body.macro as Record<string, unknown>), id: old.id, rev: old.rev + 1, updated: now } as (typeof um.macros)[number]
+        um.macros[i] = nm
+        return json(res, 200, { ok: true, macro: nm }), true
+      }
+    }
+    return json(res, 400, { ok: false, error: 'Not in the pretend Portal' }), true
   }
   // Slice profiles and saved Prepare jobs (Tool Manager 1.8). MOCK_PROFILES=old (Portal before 1.8) | none (no profiles yet)
   if (url.startsWith('/api/slice-profiles') || url.startsWith('/api/prepare-jobs')) {

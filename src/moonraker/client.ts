@@ -166,7 +166,7 @@ export const WATCHED_OBJECTS: Record<string, string[] | null> = {
   'output_pin SPINDLE_SPEED': ['value'], // spindle ESC throttle: 0.3 = stopped, 1.0 = full
   'gcode_macro TOOL_POWER_STATE': ['active', 'level', 'suspended'], // added powered tools
   // Rhino config 1.4+: the prime line, so Prepare can keep parts off it
-  'gcode_macro RHINO_POSITIONS': ['prime_x', 'prime_y', 'prime_length'],
+  'gcode_macro RHINO_POSITIONS': ['prime_x', 'prime_y', 'prime_length', 'park_x', 'park_y'],
   // Bed mesh (Bed mesh page): Klipper's mesh, what SAVE_CONFIG would write, and the Rhino's mesh settings (1.6.0+)
   bed_mesh: ['profile_name', 'mesh_min', 'mesh_max', 'probed_matrix', 'profiles'],
   configfile: ['save_config_pending', 'save_config_pending_items'],

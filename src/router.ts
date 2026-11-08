@@ -91,6 +91,7 @@ export const router = createRouter({
         { path: 'tools', component: () => import('./views/settings/ToolChangingView.vue'), meta: { title: 'Tool changing', lead: 'How this machine changes tools, and how Studio reads which one is mounted.' } },
         { path: 'cameras', component: () => import('./views/settings/CamerasView.vue'), meta: { title: 'Cameras', lead: 'The camera list in Moonraker, shared with every screen.' } },
         { path: 'profiles', component: () => import('./views/settings/ProfilesView.vue'), meta: { title: 'Slice profiles', lead: 'Your slicing settings, saved on the Rhino so a cleared browser or a new host keeps them.' } },
+        { path: 'macros', component: () => import('./views/settings/MacrosView.vue'), meta: { title: 'Your macros', lead: 'Short routines built from steps, saved on the Rhino and run from Control.' } },
         { path: 'software', component: () => import('./views/settings/SoftwareView.vue'), meta: { title: 'Software and updates', lead: 'What Studio runs on, and what it is built with.' } },
         { path: 'host', component: () => import('./views/settings/HostView.vue'), meta: { title: 'Host', heading: 'Host, restarts and backups', lead: 'Restart Klipper and services, reboot or shut down the host, back up and restore. Never during a job.' } },
         { path: 'logs', component: () => import('./views/settings/LogsView.vue'), meta: { title: 'Logs', lead: 'Klipper and Moonraker logs, and the last error in them.' } },
