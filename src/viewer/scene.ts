@@ -528,6 +528,7 @@ export class GcodeScene {
     this.bed = new LineSegments(g, this.bedMaterial)
     this.bed.frustumCulled = false
     this.scene.add(this.bed)
+    if (this.plateColours) this.setPlate(this.plateColours)
     this.draw()
   }
 
@@ -797,11 +798,41 @@ export class GcodeScene {
 
   setColours(c: ViewerColours): void {
     for (const m of [this.bedMaterial, this.lineMaterial, this.stripMaterial, this.meshMaterial, this.wireMaterial, this.outlineMat]) {
-      m.uniforms.uInk!.value.set(c.ink.r, c.ink.g, c.ink.b)
-      m.uniforms.uPaper!.value.set(c.paper.r, c.paper.g, c.paper.b)
-      m.uniforms.uInkIsDark!.value = c.ink.r + c.ink.g + c.ink.b < c.paper.r + c.paper.g + c.paper.b ? 1 : 0
+      // on a plate, the bed's lines take the plate's own pair, so they show on it in day and night alike
+      const cc = m === this.bedMaterial && this.plateColours ? { ink: this.plateColours.line, paper: this.plateColours.plate } : c
+      m.uniforms.uInk!.value.set(cc.ink.r, cc.ink.g, cc.ink.b)
+      m.uniforms.uPaper!.value.set(cc.paper.r, cc.paper.g, cc.paper.b)
+      m.uniforms.uInkIsDark!.value = cc.ink.r + cc.ink.g + cc.ink.b < cc.paper.r + cc.paper.g + cc.paper.b ? 1 : 0
     }
+    this.lastColours = c
     this.draw()
+  }
+
+  private plate: Mesh | null = null
+  private plateColours: { plate: Rgb; line: Rgb } | null = null
+  private lastColours: ViewerColours | null = null
+  /**
+   * A solid build plate under the bed's grid (Job setup, Mike Nov 7: white), or null for lines only. Drawn just below
+   * the grid, so parts and lines stay on top of it.
+   */
+  setPlate(colours: { plate: Rgb; line: Rgb } | null): void {
+    this.plateColours = colours
+    if (this.plate) {
+      this.scene.remove(this.plate)
+      this.plate.geometry.dispose()
+      ;(this.plate.material as MeshBasicMaterial).dispose()
+      this.plate = null
+    }
+    const b = this.bedShape
+    if (colours && b) {
+      const m = new MeshBasicMaterial({ color: new Color(colours.plate.r, colours.plate.g, colours.plate.b), side: DoubleSide, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 })
+      this.plate = new Mesh(new PlaneGeometry(b.x, b.y), m)
+      this.plate.position.set(b.x / 2, b.y / 2, -0.2)
+      this.plate.renderOrder = -1
+      this.scene.add(this.plate)
+    }
+    if (this.lastColours) this.setColours(this.lastColours)
+    else this.draw()
   }
 
   /**

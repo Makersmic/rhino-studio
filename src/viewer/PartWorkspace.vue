@@ -61,6 +61,7 @@ function applyColours() {
   if (!stage.value || !scene) return
   const st = getComputedStyle(stage.value)
   scene.setColours({ ink: colourOf(st.color), paper: colourOf(st.backgroundColor) })
+  scene.setPlate({ plate: colourOf(st.getPropertyValue('--rs-viewer-plate').trim() || '#ffffff'), line: colourOf(st.getPropertyValue('--rs-viewer-plate-line').trim() || '#7d8389') })
 }
 const onVisible = () => {
   if (!document.hidden) scene?.draw()
