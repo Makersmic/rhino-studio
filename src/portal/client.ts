@@ -64,6 +64,14 @@ import type { Hooks, HooksState } from '@/hardware/hooks'
 import type { PortalState, PreviewResult, ToolDetail, ToolLists, ToolOptions, ToolSheetData, WriteResult } from '@/toolmgr/types'
 
 /** GET /api/update (Tool Manager 1.5.3+) */
+import type { MacroDraft, UserMacro } from '@/control/userMacros'
+export interface MacroList {
+  ok: boolean
+  error?: string
+  macros: UserMacro[]
+  deleted?: Array<{ id: string; name: string; deleted_at: number }>
+}
+
 export interface UpdateRun {
   state: 'idle' | 'running' | 'done' | 'failed'
   zip?: string
@@ -130,6 +138,11 @@ export const PORTAL_BACKUP = ['backup-now', 'backup-upload', 'restore-plan', 're
 export const PORTAL_PROFILES = [
   'profile-create', 'profile-save', 'profile-delete', 'profile-revert', 'profile-undelete', 'profile-import', 'job-save', 'job-delete',
 ] as const
+/**
+ * Your macros (Tool Manager 1.9.13). The Portal only stores them; Studio builds the G-code and sends it through the
+ * console's check (src/control/userMacros.ts). Nothing here reaches Klipper.
+ */
+export const PORTAL_MACROS = ['macro-create', 'macro-save', 'macro-delete', 'macro-revert', 'macro-undelete', 'macro-import'] as const
 export const PORTAL_NETWORK = ['net-hostname', 'net-ipv4', 'net-wifi', 'net-powersave', 'net-keep', 'net-undo'] as const
 
 export type WriteKind =
@@ -151,6 +164,7 @@ export type WriteKind =
   | (typeof PORTAL_TRUST)[number]
   | (typeof PORTAL_BACKUP)[number]
   | (typeof PORTAL_PROFILES)[number]
+  | (typeof PORTAL_MACROS)[number]
 
 /** The one request each write kind may make. */
 export const WRITE_ROUTES: Record<WriteKind, { method: 'POST' | 'DELETE'; path: RegExp }> = {
@@ -231,6 +245,12 @@ export const WRITE_ROUTES: Record<WriteKind, { method: 'POST' | 'DELETE'; path: 
   'profile-revert': { method: 'POST', path: /^\/api\/slice-profiles\/p_[a-z0-9]+\/revert$/ },
   'profile-undelete': { method: 'POST', path: /^\/api\/slice-profiles\/p_[a-z0-9]+\/undelete$/ },
   'profile-import': { method: 'POST', path: /^\/api\/slice-profiles-import$/ },
+  'macro-create': { method: 'POST', path: /^\/api\/user-macros$/ },
+  'macro-save': { method: 'POST', path: /^\/api\/user-macros\/m_[a-z0-9]+$/ },
+  'macro-delete': { method: 'DELETE', path: /^\/api\/user-macros\/m_[a-z0-9]+$/ },
+  'macro-revert': { method: 'POST', path: /^\/api\/user-macros\/m_[a-z0-9]+\/revert$/ },
+  'macro-undelete': { method: 'POST', path: /^\/api\/user-macros\/m_[a-z0-9]+\/undelete$/ },
+  'macro-import': { method: 'POST', path: /^\/api\/user-macros-import$/ },
   'job-save': { method: 'POST', path: /^\/api\/prepare-jobs$/ },
   'job-delete': { method: 'DELETE', path: /^\/api\/prepare-jobs$/ },
 }
@@ -238,7 +258,7 @@ export const WRITE_ROUTES: Record<WriteKind, { method: 'POST' | 'DELETE'; path: 
 const ALLOWED = new Set<string>([
   ...PORTAL_WRITES, ...PORTAL_TOOL_CHECKS, ...PORTAL_TOOL_WRITES, ...PORTAL_THEME_IMAGES, ...PORTAL_RESTART,
   ...PORTAL_CARE_WRITES, ...PORTAL_CARE_SETUP, ...PORTAL_TOOL_SETUP, ...PORTAL_HARDWARE, ...PORTAL_HW_WIZARD, ...PORTAL_HOOKS, ...PORTAL_LABELS, ...PORTAL_NETWORK, ...PORTAL_SLICER, ...PORTAL_UPDATE, ...PORTAL_TRUST,
-  ...PORTAL_BACKUP, ...PORTAL_PROFILES,
+  ...PORTAL_BACKUP, ...PORTAL_PROFILES, ...PORTAL_MACROS,
 ])
 const enc = encodeURIComponent
 
@@ -790,6 +810,46 @@ export class PortalClient {
   }
   async importProfiles(data: object): Promise<{ id: string; name: string }[]> {
     return (await this.write<{ added: { id: string; name: string }[] }>('profile-import', 'POST', '/api/slice-profiles-import', data)).added
+  }
+  // ---- your macros (Tool Manager 1.9.13) ------------------------------------------------------------------------
+
+  /** null from a Tool Manager before 1.9.13 */
+  async userMacros(): Promise<MacroList | null> {
+    try {
+      const r = await fetch(`${this.baseUrl}/api/user-macros`, { headers: { Accept: 'application/json' } })
+      if (r.status === 404) return null
+      const d = (await r.json().catch(() => null)) as MacroList | null
+      if (!d) throw new Error(`Portal error (HTTP ${r.status})`)
+      return d // ok:false with an error when the file can't be read
+    } catch (e) {
+      if (/not found/i.test((e as Error).message)) return null
+      throw e instanceof TypeError ? new Error("Can't reach the Rhino Portal - is it running?") : e
+    }
+  }
+  async macroHistory(id: string): Promise<UserMacro[]> {
+    return (await this.getJson<{ revisions: UserMacro[] }>(`/api/user-macros/${enc(id)}/history`)).revisions
+  }
+  async createMacro(m: MacroDraft): Promise<UserMacro> {
+    return (await this.write<{ macro: UserMacro }>('macro-create', 'POST', '/api/user-macros', m)).macro
+  }
+  /** rev: the revision this edit started from; a newer one on the Rhino is refused */
+  async saveMacro(id: string, m: MacroDraft, rev: number): Promise<UserMacro> {
+    return (await this.write<{ macro: UserMacro }>('macro-save', 'POST', `/api/user-macros/${enc(id)}`, { macro: m, rev })).macro
+  }
+  deleteMacro(id: string): Promise<WriteResult> {
+    return this.write('macro-delete', 'DELETE', `/api/user-macros/${enc(id)}`)
+  }
+  async revertMacro(id: string, to: number): Promise<UserMacro> {
+    return (await this.write<{ macro: UserMacro }>('macro-revert', 'POST', `/api/user-macros/${enc(id)}/revert`, { to })).macro
+  }
+  async undeleteMacro(id: string): Promise<UserMacro> {
+    return (await this.write<{ macro: UserMacro }>('macro-undelete', 'POST', `/api/user-macros/${enc(id)}/undelete`, {})).macro
+  }
+  macrosExportUrl(id?: string): string {
+    return `${this.baseUrl}/api/user-macros-export${id ? `?id=${enc(id)}` : ''}`
+  }
+  async importMacros(data: object): Promise<{ id: string; name: string }[]> {
+    return (await this.write<{ added: { id: string; name: string }[] }>('macro-import', 'POST', '/api/user-macros-import', data)).added
   }
   async prepareJobs(): Promise<Record<string, SavedJob>> {
     return (await this.getJson<{ jobs: Record<string, SavedJob> }>('/api/prepare-jobs')).jobs

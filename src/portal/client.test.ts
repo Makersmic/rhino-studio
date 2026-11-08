@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
-  PORTAL_BACKUP, PORTAL_PROFILES, PORTAL_THEME_IMAGES, PORTAL_CARE_SETUP, PORTAL_CARE_WRITES, PORTAL_HARDWARE, PORTAL_HOOKS, PORTAL_HW_WIZARD, PORTAL_LABELS, PORTAL_NETWORK, PORTAL_SLICER, PORTAL_UPDATE, PORTAL_TRUST, PORTAL_RESTART, PORTAL_TOOL_CHECKS, PORTAL_TOOL_SETUP, PORTAL_TOOL_WRITES, PORTAL_WRITES, PortalClient, WRITE_ROUTES,
+  PORTAL_BACKUP, PORTAL_PROFILES, PORTAL_MACROS, PORTAL_THEME_IMAGES, PORTAL_CARE_SETUP, PORTAL_CARE_WRITES, PORTAL_HARDWARE, PORTAL_HOOKS, PORTAL_HW_WIZARD, PORTAL_LABELS, PORTAL_NETWORK, PORTAL_SLICER, PORTAL_UPDATE, PORTAL_TRUST, PORTAL_RESTART, PORTAL_TOOL_CHECKS, PORTAL_TOOL_SETUP, PORTAL_TOOL_WRITES, PORTAL_WRITES, PortalClient, WRITE_ROUTES,
 } from './client'
 import type { TaskDef } from '@/maintenance/types'
 
@@ -98,7 +98,7 @@ describe('PortalClient', () => {
     const kinds = [
       ...PORTAL_WRITES, ...PORTAL_TOOL_CHECKS, ...PORTAL_TOOL_WRITES, ...PORTAL_THEME_IMAGES, ...PORTAL_RESTART,
       ...PORTAL_CARE_WRITES, ...PORTAL_CARE_SETUP, ...PORTAL_TOOL_SETUP, ...PORTAL_HARDWARE, ...PORTAL_HOOKS, ...PORTAL_HW_WIZARD, ...PORTAL_LABELS, ...PORTAL_NETWORK, ...PORTAL_SLICER, ...PORTAL_UPDATE, ...PORTAL_TRUST,
-      ...PORTAL_BACKUP, ...PORTAL_PROFILES,
+      ...PORTAL_BACKUP, ...PORTAL_PROFILES, ...PORTAL_MACROS,
     ]
     expect(new Set(kinds).size).toBe(kinds.length)
     expect(Object.keys(WRITE_ROUTES).sort()).toEqual([...kinds].sort())
@@ -123,6 +123,27 @@ describe('PortalClient', () => {
       expect(WRITE_ROUTES['profile-delete']!.path.test(bad), bad).toBe(false)
     }
     expect(WRITE_ROUTES['job-save']).toEqual({ method: 'POST', path: /^\/api\/prepare-jobs$/ })
+  })
+
+  it('your macros: ids are m_ plus letters and digits only, and nothing else reaches the routes', () => {
+    expect(WRITE_ROUTES['macro-save']!.path.test('/api/user-macros/m_8f3k2a')).toBe(true)
+    for (const bad of ['/api/user-macros/../backup', '/api/user-macros/m_a%2Fb', '/api/user-macros/p_8f3k2a', '/api/user-macros/']) {
+      expect(WRITE_ROUTES['macro-save']!.path.test(bad), bad).toBe(false)
+      expect(WRITE_ROUTES['macro-delete']!.path.test(bad), bad).toBe(false)
+    }
+  })
+
+  it('macro writes go to their fixed requests, with the token and the revision', async () => {
+    const p = fakePortal()
+    const c = new PortalClient('/portal')
+    const m = { name: 'Cool down', toolheads: [], notes: '', steps: [{ kind: 'fan' as const, percent: 0 }] }
+    await c.createMacro(m)
+    await c.saveMacro('m_1a2b3c', m, 4)
+    await c.deleteMacro('m_1a2b3c')
+    const sent = p.calls.filter((x) => x.init?.method === 'POST' || x.init?.method === 'DELETE')
+    expect(sent.map((x) => `${x.init?.method} ${x.url}`)).toEqual(['POST /portal/api/user-macros', 'POST /portal/api/user-macros/m_1a2b3c', 'DELETE /portal/api/user-macros/m_1a2b3c'])
+    expect(sent.every((x) => (x.init?.headers as Record<string, string>)['X-Rhino-Token'] === 'tok-1')).toBe(true)
+    expect(JSON.parse(String(sent[1]?.init?.body))).toEqual({ macro: m, rev: 4 })
   })
 
   it('slice profile writes go to their fixed requests, with the token and the revision', async () => {
