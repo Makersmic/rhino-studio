@@ -16,7 +16,8 @@ import { useControlStore } from '@/stores/control'
 import { useMachineStore } from '@/stores/machine'
 import { useMaintenanceStore } from '@/stores/maintenance'
 
-const props = defineProps<{ filePath: string; download?: boolean; filesLink?: boolean }>()
+/** stay: don't open Control after starting (a tuning wizard keeps its own page) */
+const props = defineProps<{ filePath: string; download?: boolean; filesLink?: boolean; stay?: boolean }>()
 const router = useRouter()
 const machine = useMachineStore()
 const control = useControlStore()
@@ -51,7 +52,7 @@ async function start() {
   try {
     const tool = fileTool.value ?? machine.mountedName
     const ok = await control.startJob(props.filePath, fileTool.value ?? null, jobCareNote(tool ? care.forTool(tool) : null, tool))
-    if (ok) void router.push('/control')
+    if (ok && !props.stay) void router.push('/control')
   } finally {
     starting.value = false
   }

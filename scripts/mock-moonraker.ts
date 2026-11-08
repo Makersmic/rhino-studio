@@ -179,6 +179,8 @@ if (scenario !== 'toolchanger') {
   status['gcode_macro RHINO_MESH'] = { match_c: 5, cold_c: 40, soak_min: 5 }
   ;(status.save_variables.variables as Record<string, unknown>).mesh_meta = meshMeta
   ;(status.save_variables.variables as Record<string, unknown>).set_material_bed_temp = 60
+  // BlockOne's nozzle height (paper test), for the first-layer squish wizard
+  ;(status.save_variables.variables as Record<string, unknown>).rhino_zcal_blockone = -0.02
 }
 
 if (scenario === 'toolchanger') {
@@ -639,6 +641,11 @@ function runLine(raw: string) {
       if (adj != null) o[2] = Number((o[2]! + Number(adj)).toFixed(4))
       else if (z != null) o[2] = Number(z)
       update('gcode_move', { homing_origin: o })
+      return
+    }
+    case 'SAVE_VARIABLE': {
+      const name = arg(line, 'VARIABLE'), value = arg(line, 'VALUE')
+      if (name) update('save_variables', { variables: { ...(status.save_variables.variables as object), [name.toLowerCase()]: Number.isFinite(Number(value)) ? Number(value) : value } })
       return
     }
     case 'SET_VELOCITY_LIMIT': {

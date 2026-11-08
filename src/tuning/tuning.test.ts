@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { extrudeScript, extruderSettled, lastRun, materialKey, newRotationDistance, tunedFor, tuningStatus, type TuningState } from './tuning'
+import { extrudeScript, extruderSettled, lastRun, materialKey, newRotationDistance, squishFile, squishFine, squishPatches, tunedFor, tuningStatus, zFineVariable, type TuningState } from './tuning'
 import { check } from '@/control/commands'
 
 const st: TuningState = {
@@ -45,5 +45,34 @@ describe('what a job uses', () => {
     expect(lastRun(st, 'BlockOne', 'extruder_calibration')?.value).toBe(4.3)
     expect(lastRun(st, 'BlockOne', 'pressure_advance', 0.8, 'PLA')).toBeNull()
     expect(tuningStatus(st, 'BlockOne', 0.4, 'PLA').map((s) => !!s.run)).toEqual([true, false, true, false])
+  })
+})
+
+describe('first-layer squish', () => {
+  const bed = { x: 550, y: 375, keepOut: [{ x0: 490, y0: 300, x1: 550, y1: 375 }] }
+  it('places five patches on the bed, clear of the areas to keep clear and of each other', () => {
+    const p = squishPatches(bed)
+    expect(p).toHaveLength(5)
+    for (const r of p) {
+      expect(r.x0).toBeGreaterThanOrEqual(5)
+      expect(r.y1).toBeLessThanOrEqual(370)
+      expect(r.x1 <= 490 || r.y1 <= 300).toBe(true)
+    }
+  })
+  it('makes a job file: START_JOB for the head and material, one layer at 0.25 mm, END_PRINT, and the console’s file rules', () => {
+    const f = squishFile({ tool: 'BlockOne', material: 'PLA', nozzle: 0.4, path: 0, rotationDistance: 4.42, bed })
+    const lines = f.trim().split('\n')
+    expect(lines[0]).toBe('; rhino_toolhead = BlockOne')
+    expect(lines).toContain('START_JOB TOOLHEAD=BlockOne MATERIAL=PLA NOZZLE_SIZE=0.4 EXTRUDER=0')
+    expect(lines).toContain('SET_EXTRUDER_ROTATION_DISTANCE EXTRUDER=extruder DISTANCE=4.42 ; calibrated (Studio tuning)')
+    expect(lines.at(-1)).toBe('END_PRINT')
+    expect(lines.filter((l) => /^G1 Z/.test(l)).every((l) => /Z(0\.25|2\.25) /.test(l))).toBe(true)
+    // 0.48 mm lines, 0.25 mm high: about 0.0499 mm of filament per mm
+    expect(f).toMatch(/G1 X\d+ Y\d+ E1\.4\d+ F1200/)
+  })
+  it('keeps the fine-tune: the offset that looked right, less the paper test', () => {
+    expect(zFineVariable('BlockOne', 'PLA_0_4')).toBe('rhino_zfine_blockone_pla_0_4')
+    expect(squishFine(-0.06, -0.02)).toBe(-0.04)
+    expect(squishFine(3, 0)).toBeNull()
   })
 })
