@@ -59,6 +59,34 @@ textarea {
   color: inherit;
 }
 
+/*
+ * Every field you type into or pick from is white with dark text, in day, night and every theme (Mike, Nov 7: "hard
+ * to distinguish them quickly"). !important because many screens style their own fields; checkboxes, sliders, colour
+ * and file pickers keep their own look. A field you can't use is light grey.
+ */
+input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']):not([type='file']):not([type='button']):not([type='submit']),
+select,
+textarea {
+  background-color: var(--rs-field-bg) !important;
+  color: var(--rs-field-text) !important;
+  caret-color: var(--rs-field-text);
+}
+input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']):not([type='file']):disabled,
+select:disabled,
+textarea:disabled {
+  background-color: var(--rs-field-disabled) !important;
+  color: var(--rs-field-muted) !important;
+}
+input::placeholder,
+textarea::placeholder {
+  color: var(--rs-field-muted) !important;
+  opacity: 1;
+}
+select option {
+  background-color: var(--rs-field-bg);
+  color: var(--rs-field-text);
+}
+
 :focus-visible {
   outline: none;
   box-shadow: var(--rs-focus);

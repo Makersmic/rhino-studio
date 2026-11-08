@@ -222,6 +222,11 @@
   --rs-overlay-dither: radial-gradient(rgb(255 255 255 / 0.07) 0.9px, transparent 1.2px) 0 0 / 5px 5px;
   /* The Dashboard hologram only (Mike, roadmap item 9): turquoise, never used for anything else. The part still to make
      is a pale ghost; the finished part is the deeper turquoise, drawn more solid. Same in both themes: it sits on the camera. */
+  /* Fields you type into or pick from: white with dark text in every look and theme, so they're quick to find (Mike, Nov 7) */
+  --rs-field-bg: #ffffff;
+  --rs-field-text: #151618;
+  --rs-field-muted: #6b7075;
+  --rs-field-disabled: #e4e4e1;
   /* Job setup's 3D bed: a white build plate with grey grid lines, the same in day and night (Mike, Nov 7) */
   --rs-viewer-plate: #ffffff;
   --rs-viewer-plate-line: #7d8389;

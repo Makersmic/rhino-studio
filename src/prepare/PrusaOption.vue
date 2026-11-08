@@ -116,12 +116,12 @@ function onText(v: string) {
 .reset { border-color: var(--rs-text-strong); color: var(--rs-text-strong); font-size: 12px; }
 .lvl { flex: none; font-size: 9px; line-height: 14px; padding: 0 4px; border-radius: 3px; box-shadow: inset 0 0 0 1px var(--rs-line-strong); color: var(--rs-text-muted); }
 .ctl { display: flex; }
-.box { flex: 1; display: flex; align-items: center; border: 1px solid var(--rs-line-strong); border-radius: var(--rs-radius-md); background: var(--rs-surface); padding-right: 10px; min-width: 0; }
+.box { flex: 1; display: flex; align-items: center; border: 1px solid var(--rs-line-strong); border-radius: var(--rs-radius-md); background: var(--rs-field-bg); padding-right: 10px; min-width: 0; }
 .box:focus-within { outline: 2px solid var(--rs-focus); outline-offset: 1px; }
 .box input { flex: 1; min-width: 0; height: 34px; padding: 0 10px; border: 0; background: transparent; color: var(--rs-text-strong); font-size: var(--rs-text-sm); }
 .box input:focus { outline: none; }
 .mono { font-family: var(--rs-font-code); }
-.unit { font-size: var(--rs-text-xs); color: var(--rs-text-muted); white-space: nowrap; margin-left: 4px; }
+.unit { font-size: var(--rs-text-xs); color: var(--rs-field-muted); white-space: nowrap; margin-left: 4px; }
 select { flex: 1; min-width: 0; height: 36px; padding: 0 8px; border-radius: var(--rs-radius-md); border: 1px solid var(--rs-line-strong); background: var(--rs-surface); color: var(--rs-text-strong); font: inherit; font-size: var(--rs-text-sm); }
 .sw { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; font-size: var(--rs-text-sm); color: var(--rs-text-strong); }
 .sw input { width: 18px; height: 18px; accent-color: var(--rs-text-strong); }

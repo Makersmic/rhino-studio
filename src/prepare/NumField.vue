@@ -42,11 +42,11 @@ function input(e: Event) {
 <style scoped>
 .field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 label { font-size: 12px; font-weight: var(--rs-weight-medium); color: var(--rs-text-muted); }
-.box { display: flex; align-items: center; border: 1px solid var(--rs-line-strong); border-radius: var(--rs-radius-md); background: var(--rs-surface); padding-right: 10px; }
+.box { display: flex; align-items: center; border: 1px solid var(--rs-line-strong); border-radius: var(--rs-radius-md); background: var(--rs-field-bg); padding-right: 10px; }
 .box:focus-within { outline: 2px solid var(--rs-focus); outline-offset: 1px; }
 input { flex: 1; min-width: 0; height: 36px; padding: 0 10px; border: 0; background: transparent; color: var(--rs-text-strong); font-family: var(--rs-font-code); font-size: var(--rs-text-sm); }
 input:focus { outline: none; }
-.unit { font-size: var(--rs-text-xs); color: var(--rs-text-muted); }
+.unit { font-size: var(--rs-text-xs); color: var(--rs-field-muted); }
 .hint { font-size: 11px; color: var(--rs-text-muted); }
 .bad .box { border-color: var(--rs-danger); }
 </style>
