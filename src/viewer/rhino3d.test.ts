@@ -84,12 +84,22 @@ describe('skin folds', () => {
     expect(bodyFolds(-0.2 + 0.038, 0.27, 0.88)).toBeLessThan(-0.006) // with its crease in front
   })
   it('stay off the spine, fade out before the belly, and leave the rump alone', () => {
-    expect(Math.abs(bodyFolds(0.07, 0, 0.95))).toBeLessThan(0.001)
-    expect(Math.abs(bodyFolds(-0.2, 0, 0.88))).toBeLessThan(0.001)
+    // on the spine itself, only the ridge along it
+    expect(bodyFolds(0.07, 0, 0.95)).toBeCloseTo(0.02, 3)
+    expect(bodyFolds(-0.2, 0, 0.88)).toBeCloseTo(0.02, 3)
     // and well off the back: nothing until about halfway down the side
     expect(Math.abs(bodyFolds(0.07, 0.18, 0.95))).toBeLessThan(0.001)
     expect(Math.abs(bodyFolds(-0.2, 0.15, 0.88))).toBeLessThan(0.001)
     expect(Math.abs(bodyFolds(0.19, 0.3, 0.3))).toBeLessThan(0.001)
     expect(Math.abs(bodyFolds(-0.4, 0.3, 0.8))).toBeLessThan(0.001)
+  })
+})
+
+describe('the spine', () => {
+  it('runs as a ridge along the top of the back, narrow, and fades out over the rump and at the neck', () => {
+    expect(bodyFolds(0, 0, 0.95)).toBeGreaterThan(0.018)
+    expect(bodyFolds(0, 0.08, 0.95)).toBeLessThan(0.002)
+    expect(bodyFolds(-0.45, 0, 0.7)).toBeLessThan(0.001)
+    expect(bodyFolds(0.7, 0, 0.84)).toBeLessThan(0.001)
   })
 })

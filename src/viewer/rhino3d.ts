@@ -149,7 +149,7 @@ export const BODY: Station[] = [
 ]
 /**
  * Head, from the neck joint forwards (before it's tipped nose-down): big and deep at the jaw, waisted in the middle and
- * wide again at the square muzzle, a little like a barbell (Mike, Nov 7)
+ * wide again at the muzzle, a little like a barbell, and tapering to a pointed snout (Mike, Nov 7)
  */
 const HEAD: Station[] = [
   { x: -0.06, bottom: -0.14, top: 0.12, w: 0.1 },
@@ -158,8 +158,9 @@ const HEAD: Station[] = [
   { x: 0.3, bottom: -0.2, top: 0.1, w: 0.125 },
   { x: 0.4, bottom: -0.18, top: 0.07, w: 0.125 },
   { x: 0.5, bottom: -0.17, top: 0.05, w: 0.15 },
-  { x: 0.57, bottom: -0.15, top: 0.03, w: 0.15 },
-  { x: 0.615, bottom: -0.12, top: 0.0, w: 0.08 },
+  { x: 0.56, bottom: -0.15, top: 0.03, w: 0.15 },
+  { x: 0.61, bottom: -0.13, top: 0.0, w: 0.11 },
+  { x: 0.655, bottom: -0.105, top: -0.035, w: 0.04 },
 ]
 /** Hips (back, right at the rump) and shoulders (front): where they join, and how long each half is */
 export const LEG = {
@@ -402,7 +403,10 @@ export function bodyFolds(x: number, y: number, z: number): number {
   const hips = (0.02 * g(v, 0.02) - 0.014 * g(v - 0.038, 0.018)) * Math.min(Math.max((z - 0.44) / 0.12, 0), 1) * offSpine
   // round the neck
   const neck = 0.017 * g(x - 0.5, 0.018) - 0.01 * g(x - 0.535, 0.012) + 0.013 * g(x - 0.57, 0.016)
-  return shoulder + hips + neck
+  // a ridge along the spine, from over the rump to the neck, fading at both ends (Mike, Nov 7)
+  const along = Math.min(Math.max((x + 0.36) / 0.12, 0), 1) * Math.min(Math.max((0.62 - x) / 0.12, 0), 1)
+  const spine = 0.02 * g(y, 0.035) * along * Math.min(Math.max((z - 0.66) / 0.1, 0), 1)
+  return shoulder + hips + neck + spine
 }
 
 /** How finely the skin is made: cells across the rhino's longest side */
@@ -638,9 +642,9 @@ export function buildRhino(colour: string): Rhino3d {
   hornPath([0.34, 0, 0.07], 0.16, 0.055, -1.35)
   for (const side of [1, -1]) {
     // a flared nostril on each side of the muzzle, with its opening cut in
-    const flare: V3 = [0.56, 0.125 * side, -0.07]
+    const flare: V3 = [0.545, 0.125 * side, -0.07]
     shapes.push({ bone: at(neck), dist: ellipsoid(flare, [0.068, 0.052, 0.05]), box: coneBox(flare, flare, 0.068), blend: 0.022 })
-    const hole: V3 = [0.607, 0.14 * side, -0.068]
+    const hole: V3 = [0.588, 0.135 * side, -0.068]
     shapes.push({ bone: at(neck), dist: ellipsoid(hole, [0.052, 0.032, 0.03]), box: coneBox(hole, hole, 0.052), blend: 0.008, cut: true })
     // a heavy brow over each eye and a lower lid under it, so the eye sits in a hollow of skin
     const brow: V3 = [0.28, 0.128 * side, 0.068]
