@@ -7,6 +7,7 @@
  * ConfirmDialog.vue, which this store drives.
  */
 import { hardwareBlock, hardwareScript, isHardwareScript, type HwItem } from '@/control/hardware'
+import { isScrewScript } from '@/bed/zscrews'
 import { defineStore } from 'pinia'
 import { computed, ref, shallowRef, watch } from 'vue'
 import { speedScript, zStepScript, zResetScript, limitsScript, isTuningScript } from '@/control/tuning'
@@ -385,6 +386,63 @@ export const useControlStore = defineStore('control', () => {
     }
   }
 
+  // ---- Bed › Configuration: one lead screw at a time (src/bed/zscrews.ts) -------------------------------------
+  /**
+   * The padlock for moving Z motors on their own, outside Klipper's limits (Mike, Nov 8 2026: recovery when
+   * Z_TILT_ADJUST faults out). Unlocking asks once and is then the confirmation for each press; like Motion it locks
+   * 60 s after the last press, on leaving the page, on a job, a swap, a tool change or Klipper not ready.
+   */
+  const screwUntil = ref(0)
+  const screwUnlocked = computed(() => screwUntil.value > now.value)
+  const screwSecondsLeft = computed(() => Math.max(0, Math.ceil((screwUntil.value - now.value) / 1000)))
+  const screwBlock = computed(() => {
+    if (!machine.klippyReady) return 'Klipper is not ready'
+    if (jobActive.value) return 'A job is running'
+    if (machine.toolState.kind === 'swapping') return 'A tool swap is in progress'
+    return null
+  })
+  const lockScrews = () => (screwUntil.value = 0)
+  async function unlockScrews(): Promise<boolean> {
+    if (screwBlock.value) return false
+    const ok = await confirm({
+      title: 'Move lead screws on their own?',
+      body:
+        'Each press moves the ticked Z motors with no limits and no endstops, one after another. Before the first move Klipper ' +
+        'marks Z as not homed, so nothing else moves Z until you home it again. Watch the bed: stop if a screw binds or the bed racks.',
+      lines: [
+        { text: 'SET_KINEMATIC_POSITION SET_HOMED=none CLEAR_HOMED=Z', reason: 'Z is no longer trusted: home it after' },
+        { text: 'FORCE_MOVE STEPPER=… DISTANCE=… VELOCITY=3 ACCEL=20', reason: 'moves one Z motor with no limits' },
+      ],
+      confirmLabel: 'Unlock for 60 s',
+      tone: 'motion',
+    })
+    if (!ok || screwBlock.value) return false
+    screwUntil.value = Date.now() + UNLOCK_MS
+    now.value = Date.now()
+    return true
+  }
+  watch(screwBlock, (b) => b && lockScrews())
+  watch(() => machine.mountedName, lockScrews)
+  if (typeof document !== 'undefined') document.addEventListener('visibilitychange', () => document.hidden && lockScrews())
+
+  /** Unlocked is the confirmation; only scripts the screw builders make, for Z motors Klipper has, go this way. */
+  async function sendScrews(script: string, label: string, steppers: string[]): Promise<boolean> {
+    if (!screwUnlocked.value) return log('error', `${label}: unlock the lead screws first`), false
+    if (screwBlock.value) return log('error', `${label}: ${screwBlock.value}`), false
+    if (!isScrewScript(script, steppers)) return log('error', `${label}: not a lead screw command`), false
+    const c = check(script, { jobActive: jobActive.value, macros: new Set(macros.value.keys()) })
+    if (c.blocked) return log('error', c.blocked), false
+    screwUntil.value = Date.now() + UNLOCK_MS // each press keeps it unlocked
+    log('sent', label)
+    try {
+      await machine.runChecked(approve(c, true))
+      return true
+    } catch (e) {
+      log('error', `${label}: ${(e as Error).message}`)
+      return false
+    }
+  }
+
   function tuneBuilt(b: { script: string } | { error: string }, label: string) {
     if ('error' in b) return log('error', `${label}: ${b.error}`), Promise.resolve(false)
     return sendTuning(b.script, label)
@@ -642,6 +700,12 @@ export const useControlStore = defineStore('control', () => {
     lockHardware,
     unlockHardware,
     sendHardware,
+    screwUnlocked,
+    screwSecondsLeft,
+    screwBlock,
+    lockScrews,
+    unlockScrews,
+    sendScrews,
     tuningBlock,
     lockTuning,
     unlockTuning,

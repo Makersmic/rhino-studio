@@ -11,7 +11,7 @@ const main: NavItem[] = [
   { to: '/dashboard', label: 'Dashboard', icon: 'dashboard' },
   { to: '/setup', label: 'Job setup', icon: 'prepare' },
   { to: '/control', label: 'Control', icon: 'control' },
-  { to: '/mesh', label: 'Bed mesh', icon: 'mesh', short: 'Mesh' },
+  { to: '/bed', label: 'Bed', icon: 'mesh' },
   { to: '/assets', label: 'Assets', icon: 'toolheads' },
   { to: '/files', label: 'Files', icon: 'files' },
   { to: '/care', label: 'Care', icon: 'care' },

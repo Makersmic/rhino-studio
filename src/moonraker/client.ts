@@ -170,6 +170,8 @@ export const WATCHED_OBJECTS: Record<string, string[] | null> = {
   // Bed mesh (Bed mesh page): Klipper's mesh, what SAVE_CONFIG would write, and the Rhino's mesh settings (1.6.0+)
   bed_mesh: ['profile_name', 'mesh_min', 'mesh_max', 'probed_matrix', 'profiles'],
   configfile: ['save_config_pending', 'save_config_pending_items'],
+  // Bed › Configuration: which Z motors are switched on (released for turning by hand or not)
+  stepper_enable: ['steppers'],
   'gcode_macro RHINO_MESH': ['match_c', 'cold_c', 'soak_min'],
 }
 
@@ -349,6 +351,17 @@ export class MoonrakerClient {
     const r = (await this.call('printer.objects.query', { objects: { configfile: ['settings'] } })) as
       { status?: { configfile?: { settings?: Record<string, Record<string, unknown>> } } }
     return r?.status?.configfile?.settings?.extruder ?? {}
+  }
+
+  /**
+   * [z_tilt] and every [stepper_z*] section as configured (configfile.settings): where Bed › Configuration draws the
+   * lead screws. A read, through printer.objects.query.
+   */
+  async bedConfig(): Promise<Record<string, Record<string, unknown>>> {
+    const r = (await this.call('printer.objects.query', { objects: { configfile: ['settings'] } })) as
+      { status?: { configfile?: { settings?: Record<string, Record<string, unknown>> } } }
+    const all = r?.status?.configfile?.settings ?? {}
+    return Object.fromEntries(Object.entries(all).filter(([k]) => k === 'z_tilt' || /^stepper_z\d*$/.test(k)))
   }
 
   /** Moonraker's running totals over every job it has kept. */

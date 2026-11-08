@@ -29,8 +29,19 @@ export const router = createRouter({
     { path: '/preview', component: () => import('./views/PreviewView.vue'), meta: { title: 'Preview' } },
     { path: '/control', component: () => import('./views/ControlView.vue'), meta: { title: 'Control' } },
     { path: '/device', redirect: '/control' },
-    { path: '/mesh', component: () => import('./views/BedMeshView.vue'), meta: { title: 'Bed mesh' } },
-    { path: '/heightmap', redirect: '/mesh' },
+    // Bed (was Bed mesh; Mike, Nov 8 2026): the mesh, and Configuration (moving the Z lead screws)
+    {
+      path: '/bed',
+      component: () => import('./views/bed/BedShell.vue'),
+      meta: { nav: '/bed' },
+      children: [
+        { path: '', redirect: '/bed/mesh' },
+        { path: 'mesh', component: () => import('./views/BedMeshView.vue'), meta: { title: 'Bed mesh' } },
+        { path: 'config', component: () => import('./views/bed/BedConfigView.vue'), meta: { title: 'Bed configuration' } },
+      ],
+    },
+    { path: '/mesh', redirect: '/bed/mesh' },
+    { path: '/heightmap', redirect: '/bed/mesh' },
     { path: '/pendant', component: () => import('./views/PendantView.vue'), meta: { title: 'Pendant', bare: true } },
     // Assets (was Toolheads; Mike, Oct 26): Toolheads (library, connector, kinds), Hardware (system hardware, board
     // pins), Parts (materials, nozzles, categories). Adding or editing a tool and Add hardware open full width.

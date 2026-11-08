@@ -26,7 +26,8 @@ and keep it maintained. Vue 3 + TypeScript (strict) + Vite, Pinia, vue-router (h
 - **Every script is checked.** `runScript` only accepts a `CheckedScript` (`src/control/commands.ts`). Motion, tool power,
   tool state, restarts and jobs ask first; heat and plain macros don't; the emergency stop never asks.
 - **Narrow no-confirm paths** exist only where a builder makes the exact command and a validator proves it:
-  tuning (`isTuningScript`) and Control › Hardware (`isHardwareScript`, never a tool output). Copy that pattern; don't widen `check`.
+  tuning (`isTuningScript`), Control › Hardware (`isHardwareScript`, never a tool output) and Bed › Configuration
+  (`isScrewScript`: Z motors Klipper has, 5 mm or less, Z marked unhomed first). Copy that pattern; don't widen `check`.
 - **Live things sit behind the padlock** (`PadLock.vue`): motion, tuning, spindles, heaters, laser-style power. Unlocked
   panels turn red; they relock on tool change, job start, Klipper not ready, and leaving the page.
 - **Jobs** start only with Klipper ready, no job running and a confirmed matching tool. Laser, CNC, knife and added

@@ -91,6 +91,7 @@ const status: Record<string, Record<string, unknown>> = {
   'gcode_macro VARIABLES': { tool_mapping: toolMapping, toolheads },
   'gcode_macro RHINO_POSITIONS': { park_x: 545, park_y: 370 },
   'gcode_macro CUSTOM_TOOLS': custom,
+  stepper_enable: { steppers: { stepper_x: true, stepper_y: true, stepper_z: true, stepper_z1: true, stepper_z2: true, extruder: true } },
   save_variables: {
     variables: {
       current_tool: tool.saved,
@@ -643,6 +644,37 @@ function runLine(raw: string) {
       update('gcode_move', { homing_origin: o })
       return
     }
+    // Bed › Configuration: one lead screw at a time, and levelling (MOCK_ZTILT=fail: a probe point out of range)
+    case 'FORCE_MOVE': {
+      const st = arg(line, 'STEPPER') ?? ''
+      if (!/^stepper_z\d*$/.test(st) && !/^stepper_[xy]$/.test(st)) throw new Error(`Unknown stepper ${st}`)
+      update('stepper_enable', { steppers: { ...(status.stepper_enable!.steppers as object), [st]: true } })
+      respond(`// FORCE_MOVE ${st} ${arg(line, 'DISTANCE')} mm (mock)`)
+      return
+    }
+    case 'SET_STEPPER_ENABLE': {
+      const st = arg(line, 'STEPPER') ?? ''
+      update('stepper_enable', { steppers: { ...(status.stepper_enable!.steppers as object), [st]: arg(line, 'ENABLE') !== '0' } })
+      return
+    }
+    case 'SET_KINEMATIC_POSITION': {
+      const clear = (arg(line, 'CLEAR_HOMED') ?? arg(line, 'CLEAR') ?? '').toLowerCase()
+      const set = (arg(line, 'SET_HOMED') ?? 'xyz').toLowerCase()
+      const h = new Set([...th.homed_axes, ...[...'xyz'].filter((a) => set.includes(a))])
+      for (const a of clear) h.delete(a)
+      update('toolhead', { homed_axes: [...'xyz'].filter((a) => h.has(a)).join('') })
+      return
+    }
+    case 'Z_TILT_ADJUST': {
+      if (th.homed_axes !== 'xyz') throw new Error('Must home axis first: 120.000 85.500 12.300 [0.000]')
+      if (process.env.MOCK_ZTILT === 'fail') throw new Error('Move out of range: 247.500 350.000 -10.500 [0.000]')
+      const passes: [number, number[]][] = [[0.412, [0.12, -0.3, 0.01]], [0.021, [0.004, -0.01, 0.001]]]
+      passes.forEach(([range, adj], i) => {
+        respond('// Making the following Z adjustments:\n' + adj.map((a, j) => `// stepper_z${j || ''} = ${a.toFixed(6)}`).join('\n'))
+        respond(`// Retries: ${i}/5 Probed points range: ${range.toFixed(6)} tolerance: 0.050000`)
+      })
+      return
+    }
     case 'SAVE_VARIABLE': {
       const name = arg(line, 'VARIABLE'), value = arg(line, 'VALUE')
       if (name) update('save_variables', { variables: { ...(status.save_variables.variables as object), [name.toLowerCase()]: Number.isFinite(Number(value)) ? Number(value) : value } })
@@ -1135,6 +1167,11 @@ function handle(method: string, params: Record<string, unknown> | undefined): un
       const settings = Object.fromEntries(Object.entries(HW_MACROS).map(([k, v]) => [`gcode_macro ${k.toLowerCase()}`, v]))
       // and the [extruder] section the tuning wizards start from (tools/3dp.cfg); MOCK_EXTRUDE_MAX sets max_extrude_only_distance
       ;(settings as Record<string, unknown>).extruder = { rotation_distance: 4.487, pressure_advance: 0.024, nozzle_diameter: 0.8, max_extrude_only_distance: Number(process.env.MOCK_EXTRUDE_MAX) || 150 }
+      // and Bed › Configuration's lead screws: [z_tilt] and the Z steppers, as the Rhino's printer.cfg has them
+      Object.assign(settings as Record<string, unknown>, {
+        stepper_z: { rotation_distance: 2 }, stepper_z1: { rotation_distance: 2 }, stepper_z2: { rotation_distance: 2 },
+        z_tilt: { z_positions: [[-17.454, -100.383], [357.4595, 515.09], [722.454, -100.383]], points: [[30, 30], [247.5, 350], [450, 30]], retry_tolerance: 0.05, retries: 5 },
+      })
       return { eventtime: Date.now() / 1000, status: { configfile: { settings } } }
     }
     default:
