@@ -127,8 +127,8 @@ const f3 = (n: number | undefined) => (n == null ? '–' : n.toFixed(3))
         <RsPanel class="map-panel" title="Lead screws" :status="picked.length ? `${picked.length} ticked` : undefined" panel-id="bed.screws">
           <ScrewMap :layout="layout" :picked="picked" :moved="moved" :tilt="firstAdjust" :enabled="enabled" @toggle="toggle" />
           <p class="muted small key-note">
-            Tick the screws to move. Crosses are where Z-tilt probes. "Moved" is since you unlocked, + is bed up;
-            "Z-tilt" is the first correction the last Z-tilt made, as Klipper printed it.
+            Tick the screws to move. "Moved" is since you unlocked, + is bed up; "Z-tilt" is the first correction the last
+            Z-tilt made, as Klipper printed it.
           </p>
         </RsPanel>
 
@@ -165,7 +165,7 @@ const f3 = (n: number | undefined) => (n == null ? '–' : n.toFixed(3))
             <div class="hand">
               <RsButton size="sm" :disabled="!armed || !picked.length || busy" @click="release(false)">Release to turn by hand</RsButton>
               <RsButton size="sm" variant="quiet" :disabled="!armed || !released.length || busy" @click="release(true)">Hold</RsButton>
-              <span v-if="released.length" class="muted small">Released: {{ released.map(nameOf).join(', ') }}</span>
+              <span v-if="released.length" class="muted small">Motors off: {{ released.map(nameOf).join(', ') }}</span>
             </div>
           </RsPanel>
 
@@ -191,7 +191,7 @@ const f3 = (n: number | undefined) => (n == null ? '–' : n.toFixed(3))
                 </tbody>
               </table>
             </template>
-            <p v-else class="muted small">No Z-tilt since Studio connected.</p>
+            <p v-else class="muted small">NO Z_TILT PERFORMED SINCE RESTART</p>
           </RsPanel>
         </div>
       </div>
