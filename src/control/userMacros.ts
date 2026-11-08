@@ -313,3 +313,76 @@ export function starterMacros(park: { x: number; y: number } | null, material: s
   })
   return out
 }
+
+// ---- as a toolhead's start or end G-code (job hooks, Tool Manager 1.9.13) ----------------------------------------
+
+/** A hook holds at most this many lines (rhino/job_hooks.py MAX_LINES) */
+export const HOOK_MAX_LINES = 20
+const HOOK_TEXT = /^[A-Za-z0-9 .,:!?()/+-]{0,80}$/
+
+/**
+ * A macro's steps as job-hook lines, to copy into a toolhead's start (after_start) or end (before_end) G-code. The
+ * Portal checks every line again with the hooks' own rules (commands must exist, heater limits). Klipper runs these
+ * inside the job, so: "only if needed" homing is left out (the machine is homed during a job), messages become M118,
+ * and "Heat for a material" is refused (START_JOB already heats from the material table).
+ */
+export function hookLines(m: MacroDraft): { lines: string[] } | { error: string } {
+  const problem = macroProblem(m)
+  if (problem) return { error: problem }
+  const out: string[] = []
+  const moves = m.steps.some((s) => s.kind === 'moveTo' || s.kind === 'moveBy')
+  if (moves) out.push('SAVE_GCODE_STATE NAME=_rs_hook')
+  for (const [i, s] of m.steps.entries()) {
+    const at = `Step ${i + 1} (${STEP_TITLES[s.kind]})`
+    switch (s.kind) {
+      case 'home':
+        if (!s.onlyIfNeeded) out.push(s.axes === 'all' ? 'G28' : s.axes === 'xy' ? 'G28 X0 Y0' : 'G28 Z0')
+        break
+      case 'moveTo':
+      case 'moveBy': {
+        const vals = s.kind === 'moveTo' ? [s.x, s.y, s.z] : [s.dx, s.dy, s.dz]
+        const words = vals.map((v, k) => (v == null ? '' : `${'XYZ'[k]}${n(v)}`)).filter(Boolean)
+        const g1 = `G1 ${words.join(' ')} F${Math.round(s.speed * 60)}`
+        if (s.kind === 'moveTo') out.push('G90', g1)
+        else out.push('G91', g1, 'G90')
+        break
+      }
+      case 'temp': {
+        const t = Math.round(s.target)
+        if (s.heater === 'hotend') out.push(s.wait && t > 0 ? `M109 S${t}` : `M104 S${t}`)
+        else out.push(s.wait && t > 0 ? `M190 S${t}` : `M140 S${t}`)
+        break
+      }
+      case 'heatMaterial':
+        return { error: `${at}: START_JOB already heats from the material table, so this step can't be start or end G-code` }
+      case 'fan':
+        out.push(s.percent === 0 ? 'M107' : `M106 S${Math.round((s.percent / 100) * 255)}`)
+        break
+      case 'wait':
+        out.push(`G4 P${Math.round(s.seconds * 1000)}`)
+        break
+      case 'macro':
+        out.push(s.name.toUpperCase())
+        break
+      case 'message':
+        if (!HOOK_TEXT.test(s.text)) return { error: `${at}: in start or end G-code a message may use only letters, digits, spaces and . , : ! ? ( ) / + -` }
+        out.push(`M118 ${s.text}`)
+        break
+      case 'gcode':
+        out.push(s.line.trim())
+        break
+    }
+  }
+  if (moves) out.push('RESTORE_GCODE_STATE NAME=_rs_hook')
+  if (!out.length) return { error: 'Nothing to run in a job (only "home if needed" steps, and the machine is homed then)' }
+  if (out.length > HOOK_MAX_LINES) return { error: `That's ${out.length} lines of G-code; start or end G-code holds ${HOOK_MAX_LINES}` }
+  return { lines: out }
+}
+
+/** Is this toolhead's start or end G-code still the same as the macro it was copied from? */
+export function sourceState(src: { macro: string; rev: number } | undefined, macros: UserMacro[]): 'none' | 'current' | 'changed' | 'gone' {
+  if (!src) return 'none'
+  const m = macros.find((x) => x.id === src.macro)
+  if (!m) return 'gone'
+  return m.rev === src.rev ? 'current' : 'changed'
+}

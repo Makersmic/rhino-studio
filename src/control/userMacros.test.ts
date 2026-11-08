@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { check } from './commands'
-import { buildMacro, macroProblem, starterMacros, stepProblem, stepSummary, type MacroDraft, type RunContext } from './userMacros'
+import { buildMacro, hookLines, macroProblem, sourceState, starterMacros, stepProblem, stepSummary, type MacroDraft, type RunContext } from './userMacros'
 
 const ctx = (o: Partial<RunContext> = {}): RunContext => ({
   jobActive: false,
@@ -131,5 +131,37 @@ describe('starterMacros', () => {
     expect(s[0]!.steps.at(-1)).toMatchObject({ kind: 'moveTo', x: 275, y: 370 })
     expect(starterMacros(null, null)[0]!.steps.some((x) => x.kind === 'moveTo')).toBe(false)
     expect(starterMacros(null, null).map((m) => m.name)).toEqual(['Park the head', 'Cool down'])
+  })
+})
+
+describe('hookLines (a macro as start or end G-code)', () => {
+  it('writes lines the job hooks accept, and puts the G-code state back after moves', () => {
+    const r = hookLines(macro([
+      { kind: 'home', axes: 'all', onlyIfNeeded: true },
+      { kind: 'moveBy', dx: null, dy: null, dz: 10, speed: 10 },
+      { kind: 'moveTo', x: 275, y: 370, z: null, speed: 100 },
+      { kind: 'message', text: 'Parked' },
+    ]))
+    expect(r).toEqual({ lines: ['SAVE_GCODE_STATE NAME=_rs_hook', 'G91', 'G1 Z10 F600', 'G90', 'G90', 'G1 X275 Y370 F6000', 'M118 Parked', 'RESTORE_GCODE_STATE NAME=_rs_hook'] })
+  })
+  it('writes homing in the form the hooks accept, and heat and fans without a saved state', () => {
+    expect(hookLines(macro([{ kind: 'home', axes: 'xy', onlyIfNeeded: false }, { kind: 'temp', heater: 'bed', target: 0, wait: false }, { kind: 'fan', percent: 0 }]))).toEqual({ lines: ['G28 X0 Y0', 'M140 S0', 'M107'] })
+  })
+  it('refuses what can’t run inside a job', () => {
+    expect(hookLines(macro([{ kind: 'heatMaterial', material: 'PLA', wait: true }]))).toMatchObject({ error: expect.stringMatching(/START_JOB already heats/) })
+    expect(hookLines(macro([{ kind: 'message', text: 'Done; now' }]))).toMatchObject({ error: expect.stringMatching(/only letters, digits/) })
+    expect(hookLines(macro([{ kind: 'home', axes: 'all', onlyIfNeeded: true }]))).toMatchObject({ error: expect.stringMatching(/Nothing to run/) })
+    const long = macro(Array.from({ length: 8 }, () => ({ kind: 'moveBy' as const, dx: 1, dy: null, dz: null, speed: 10 })))
+    expect(hookLines(long)).toMatchObject({ error: expect.stringMatching(/26 lines .* holds 20/) })
+  })
+})
+
+describe('sourceState', () => {
+  const m = { id: 'm_abc123', rev: 3, name: 'Park', toolheads: [], steps: [], notes: '', created: 0, updated: 0 }
+  it('says whether a copy is current, changed or its macro is gone', () => {
+    expect(sourceState(undefined, [m])).toBe('none')
+    expect(sourceState({ macro: 'm_abc123', rev: 3 }, [m])).toBe('current')
+    expect(sourceState({ macro: 'm_abc123', rev: 2 }, [m])).toBe('changed')
+    expect(sourceState({ macro: 'm_zzz999', rev: 1 }, [m])).toBe('gone')
   })
 })
