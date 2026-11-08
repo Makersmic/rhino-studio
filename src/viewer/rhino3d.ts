@@ -223,6 +223,7 @@ uniform float uHeight;
 uniform float uGlitch;
 uniform float uBright;
 uniform float uTexture;
+uniform float uFill;
 varying vec3 vNormalW;
 varying vec3 vPosW;
 varying vec3 vRest;
@@ -269,7 +270,7 @@ void main() {
   float fade = mix(0.35, 1.0, smoothstep(0.0, 0.7, h));
   float scan = 0.78 + 0.22 * step(0.5, fract(h * 22.0));
   float back = smoothstep(0.55, 0.95, n.z) * smoothstep(0.75, 0.95, h);
-  float a = (0.28 + 1.1 * rim) * fade * scan * (1.0 - 0.6 * uGlitch) * uBright * (1.0 - 0.2 * crease);
+  float a = (uFill + 1.1 * rim) * fade * scan * (1.0 - 0.6 * uGlitch) * uBright * (1.0 - 0.2 * crease);
   vec3 c = uColour * a + vec3(1.0) * (0.45 * back + 0.35 * pow(rim, 5.0)) * fade * uBright;
   gl_FragColor = vec4(c, 1.0);
 }`
@@ -379,10 +380,22 @@ function smin(a: number, b: number, k: number): number {
  * each shoulder, fading out before the belly, the same in front of each hind leg, and two folds round the neck. They're carved into the body's distance,
  * so they bend with the skin. Sizes in shoulder heights.
  */
+/** The body's half-width at x (straight between the stations, which is close enough for where folds go) */
+function bodyHalfWidth(x: number): number {
+  for (let i = 0; i < BODY.length - 1; i++) {
+    const a = BODY[i]!
+    const b = BODY[i + 1]!
+    if (x <= b.x) return Math.max(a.w + ((b.w - a.w) * Math.max(x - a.x, 0)) / (b.x - a.x), 0.05)
+  }
+  return BODY[BODY.length - 1]!.w
+}
+
 export function bodyFolds(x: number, y: number, z: number): number {
   const g = (u: number, w: number) => Math.exp(-(u * u) / (w * w))
-  // the shoulder and hip folds stay on the sides: none over the spine (Mike, Nov 7)
-  const offSpine = Math.min(Math.max((Math.abs(y) - 0.08) / 0.12, 0), 1)
+  // the shoulder and hip folds stay low on the sides, well off the back (Mike, Nov 7): measured against the body's
+  // own half-width there, so it's the same over the broad shoulders and the narrower hips
+  const side = Math.abs(y) / bodyHalfWidth(x)
+  const offSpine = Math.min(Math.max((side - 0.62) / 0.2, 0), 1)
   // behind the shoulder: from high on the back (x 0.07) slanting back to behind the elbow (x 0.19)
   const xf = 0.07 + 0.12 * Math.min(Math.max((0.95 - z) / 0.5, 0), 1)
   const u = x - xf
@@ -514,6 +527,7 @@ export function buildRhino(colour: string): Rhino3d {
     uGlitch: { value: 0 },
     uBright: { value: 1 },
     uTexture: { value: 0 },
+    uFill: { value: 0.28 },
   }
   const light = new ShaderMaterial({ uniforms, vertexShader: VERT, fragmentShader: FRAG, transparent: true, depthWrite: false, depthFunc: LessEqualDepth, blending: AdditiveBlending })
   // the horn tip and the glint in each eye glow
@@ -630,8 +644,11 @@ export function buildRhino(colour: string): Rhino3d {
     mesh.bind(skeleton)
   }
 
-  // ---- horns and eyes: rigid, riding on the head
-  const front = piece(horn(0.34, 0.075))
+  // ---- horns and eyes: rigid, riding on the head. The horns are filled more densely, so they look more solid than
+  // the see-through skin (Mike, Nov 7)
+  const hornLight = new ShaderMaterial({ uniforms: { ...uniforms, uFill: { value: 0.62 } }, vertexShader: VERT, fragmentShader: FRAG, transparent: true, depthWrite: false, depthFunc: LessEqualDepth, blending: AdditiveBlending })
+  materials.push(hornLight)
+  const front = piece(horn(0.34, 0.075), hornLight)
   front.position.set(0.5, 0, 0.0)
   front.rotation.y = -1.25
   neck.add(front)
@@ -639,7 +656,7 @@ export function buildRhino(colour: string): Rhino3d {
   // the horn's own tip (0.34 along, 0.119 up), turned as the horn is
   hornTip.position.set(0.5 + 0.34 * Math.cos(1.25) - 0.119 * Math.sin(1.25), 0, 0.34 * Math.sin(1.25) + 0.119 * Math.cos(1.25))
   neck.add(hornTip)
-  const rear = piece(horn(0.16, 0.055))
+  const rear = piece(horn(0.16, 0.055), hornLight)
   rear.position.set(0.34, 0, 0.07)
   rear.rotation.y = -1.35
   neck.add(rear)

@@ -78,14 +78,17 @@ describe('the build (Mike, Nov 7)', () => {
 
 describe('skin folds', () => {
   it('raise a ridge behind the shoulder and in front of the hip on the sides, with a crease beside each', () => {
-    expect(bodyFolds(0.07, 0.3, 0.95)).toBeGreaterThan(0.015) // the shoulder ridge, high on the side
-    expect(bodyFolds(0.07 - 0.042, 0.3, 0.95)).toBeLessThan(-0.008) // its crease just behind
-    expect(bodyFolds(-0.2, 0.3, 0.88)).toBeGreaterThan(0.012) // in front of the hind leg too
-    expect(bodyFolds(-0.2 + 0.038, 0.3, 0.88)).toBeLessThan(-0.006) // with its crease in front
+    expect(bodyFolds(0.07, 0.36, 0.95)).toBeGreaterThan(0.015) // the shoulder ridge, low on the side
+    expect(bodyFolds(0.07 - 0.042, 0.36, 0.95)).toBeLessThan(-0.008) // its crease just behind
+    expect(bodyFolds(-0.2, 0.27, 0.88)).toBeGreaterThan(0.012) // in front of the hind leg too
+    expect(bodyFolds(-0.2 + 0.038, 0.27, 0.88)).toBeLessThan(-0.006) // with its crease in front
   })
   it('stay off the spine, fade out before the belly, and leave the rump alone', () => {
     expect(Math.abs(bodyFolds(0.07, 0, 0.95))).toBeLessThan(0.001)
     expect(Math.abs(bodyFolds(-0.2, 0, 0.88))).toBeLessThan(0.001)
+    // and well off the back: nothing until about halfway down the side
+    expect(Math.abs(bodyFolds(0.07, 0.18, 0.95))).toBeLessThan(0.001)
+    expect(Math.abs(bodyFolds(-0.2, 0.15, 0.88))).toBeLessThan(0.001)
     expect(Math.abs(bodyFolds(0.19, 0.3, 0.3))).toBeLessThan(0.001)
     expect(Math.abs(bodyFolds(-0.4, 0.3, 0.8))).toBeLessThan(0.001)
   })
