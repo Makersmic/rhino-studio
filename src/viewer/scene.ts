@@ -931,18 +931,38 @@ export class GcodeScene {
   private spinFrame = 0
   private spinLast: number | null = null
   private readonly stopSpinOnGrab = () => this.setSpin(false)
+  private spinResume: ReturnType<typeof setTimeout> | null = null
+  private spinResumeMs = 0
+  private readonly pauseSpinOnGrab = () => {
+    if (this.spinResume) clearTimeout(this.spinResume)
+    this.spinResume = null
+    this.controls.autoRotate = false
+  }
+  private readonly resumeSpinLater = () => {
+    if (this.spinResume) clearTimeout(this.spinResume)
+    this.spinResume = setTimeout(() => this.setSpin(true, this.spinResumeMs), this.spinResumeMs)
+  }
   /**
-   * Turn the camera slowly around the target, about 30 s a turn. The first touch or drag stops it for good, so the view
-   * holds still for the person looking. No frames run while the page is hidden.
+   * Turn the camera slowly around the target, about 30 s a turn. A touch or drag stops it, so the view holds still for
+   * the person looking: for good, or with `resumeMs` (the Dashboard hologram) until that long after they let go.
+   * No frames run while the page is hidden.
    */
-  setSpin(on: boolean): void {
+  setSpin(on: boolean, resumeMs = 0): void {
     if (this.spinFrame) cancelAnimationFrame(this.spinFrame)
+    if (this.spinResume) clearTimeout(this.spinResume)
+    this.spinResume = null
     this.spinFrame = 0
     this.spinLast = null
     this.controls.autoRotate = on
     this.controls.removeEventListener('start', this.stopSpinOnGrab)
+    this.controls.removeEventListener('start', this.pauseSpinOnGrab)
+    this.controls.removeEventListener('end', this.resumeSpinLater)
     if (!on || this.disposed) return
-    this.controls.addEventListener('start', this.stopSpinOnGrab)
+    this.spinResumeMs = resumeMs
+    if (resumeMs > 0) {
+      this.controls.addEventListener('start', this.pauseSpinOnGrab)
+      this.controls.addEventListener('end', this.resumeSpinLater)
+    } else this.controls.addEventListener('start', this.stopSpinOnGrab)
     const tick = (now: number) => {
       if (this.disposed || !this.controls.autoRotate) return
       const dt = frameSeconds(this.spinLast, now)
@@ -1098,6 +1118,7 @@ export class GcodeScene {
 
   dispose(): void {
     this.disposed = true
+    if (this.spinResume) clearTimeout(this.spinResume)
     if (this.pending) cancelAnimationFrame(this.pending)
     this.composer?.dispose()
     if (this.spinFrame) cancelAnimationFrame(this.spinFrame)

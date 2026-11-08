@@ -40,6 +40,8 @@ const props = defineProps<{
   label: string
 }>()
 const emit = defineEmits<{ failed: [message: string] }>()
+/** After a touch or drag stops the turn, it starts again this long after letting go (Mike, Nov 7) */
+const RESUME_MS = 3000
 
 const canvas = ref<HTMLCanvasElement | null>(null)
 const stage = ref<HTMLDivElement | null>(null)
@@ -204,7 +206,7 @@ function show(c: { draw: HoloDraw; offsets: Uint32Array; material: string | null
     dialAt = 0
     showDial()
   })
-  scene.setSpin(props.spin)
+  scene.setSpin(props.spin, RESUME_MS)
   void scene.setBloom(glow.value && props.spin)
   // the light bar every 4 s, except on the kiosk and for anyone who asked for less motion
   scene.setScan(props.spin ? 4000 : 0)
