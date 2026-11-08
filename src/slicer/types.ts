@@ -178,12 +178,6 @@ export interface Placement {
 export interface PrepareJob {
   schema: 1
   toolhead: string
-  /**
-   * What the tuning wizards found for this head, nozzle and material (src/tuning), set when the file is made; not
-   * saved with the job. A tuned pressure advance replaces the CALCULATE_PA estimate; a calibrated head's rotation
-   * distance is set for the job; a tuned extrusion multiplier is the job's flow (M221).
-   */
-  tuned?: { pressureAdvance?: number; rotationDistance?: number; extrusionMultiplier?: number }
   process: Process
   /** key in the tool's materials table (variables.cfg), e.g. PLA, PLYWOOD, SOFT_WOOD */
   material: string

@@ -1,7 +1,10 @@
 /**
  * Print head tuning (Tool Manager 1.9.16, docs/phase-tuning-wizards.md): the wizards after Ellis' Print Tuning Guide
  * (https://ellis3dp.com/Print-Tuning-Guide/), what they found, and how a job uses it. Plain sums, tested without a
- * screen; the Portal stores results (rhino/tuning.py), Studio applies them in each prepared file after START_JOB.
+ * screen. The Portal keeps the record (rhino/tuning.py: tool page ticks, dates, history); the values Klipper applies are
+ * stored on the Rhino as save variables (Tool Manager 1.9.17): START_JOB applies the rotation distance and extrusion
+ * multiplier (_RHINO_APPLY_TUNING), CALCULATE_PA the pressure advance. Stored if there is one, printer.cfg (or the PA
+ * estimate) if not; so a test file or any other job file never carries tuned values of its own.
  */
 
 export type TuningTest = 'extruder_calibration' | 'first_layer' | 'pressure_advance' | 'extrusion_multiplier'
@@ -41,15 +44,65 @@ export function materialKey(tool: string, nozzle: number, material: string): str
   return `${tool}|${Number(nozzle.toFixed(3))}|${material}`
 }
 
-/** What a job with this head, nozzle and material uses from tuning (nothing = the Rhino's own defaults) */
-export function tunedFor(st: TuningState | null, tool: string, nozzle: number, material: string): { pressureAdvance?: number; rotationDistance?: number; extrusionMultiplier?: number } {
-  if (!st?.ok) return {}
-  const m = st.materials[materialKey(tool, nozzle, material)]
-  const out: { pressureAdvance?: number; rotationDistance?: number; extrusionMultiplier?: number } = {}
+// ---- what Klipper applies: one save variable per tuned value (Tool Manager 1.9.17) ------------------------------------
+
+/** How the Rhino's macros write a nozzle size in a key: 0.4 -> 0_4 (SET_PRINT's NOZZLE_SIZE_STR) */
+export function nozzleKey(n: number): string {
+  const v = Number(n.toFixed(3))
+  return (Number.isInteger(v) ? v.toFixed(1) : String(v)).replace('.', '_')
+}
+/** The tests whose result Klipper applies at job start; the first-layer fine-tune has its own (zFineVariable) */
+export const STORED_TESTS = ['extruder_calibration', 'pressure_advance', 'extrusion_multiplier'] as const
+export type StoredTest = (typeof STORED_TESTS)[number]
+const isStored = (t: TuningTest): t is StoredTest => (STORED_TESTS as readonly string[]).includes(t)
+
+/**
+ * The save variable for a result: rhino_rd_<head> (once per head), rhino_pa_<head>_<material>_<nozzle> and
+ * rhino_em_<head>_<material>_<nozzle>. The material is its short name (PLA), as START_JOB's MATERIAL=, with no
+ * SwitchFly path: both paths feed the same extruder, so a value covers both. Lower case, as Klipper keeps them.
+ */
+export function storedVariable(test: TuningTest, tool: string, nozzle?: number, material?: string): string | null {
+  if (!isStored(test)) return null
+  if (test === 'extruder_calibration') return `rhino_rd_${tool}`.toLowerCase()
+  if (nozzle == null || !material) return null
+  const k = `${tool}_${material}_${nozzleKey(nozzle)}`.toLowerCase().replace(/[^a-z0-9_]/g, '_')
+  return `${test === 'pressure_advance' ? 'rhino_pa' : 'rhino_em'}_${k}`
+}
+/** The line that stores it (null for a test Klipper doesn't apply) */
+export function storeScript(test: TuningTest, tool: string, value: number, nozzle?: number, material?: string): string | null {
+  const v = storedVariable(test, tool, nozzle, material)
+  return v && Number.isFinite(value) ? `SAVE_VARIABLE VARIABLE=${v} VALUE=${value}` : null
+}
+/** The line that forgets it: None reads as "not tuned" in the macros */
+export function unstoreScript(test: TuningTest, tool: string, nozzle?: number, material?: string): string | null {
+  const v = storedVariable(test, tool, nozzle, material)
+  return v ? `SAVE_VARIABLE VARIABLE=${v} VALUE=None` : null
+}
+
+/**
+ * Results the Portal has that the Rhino doesn't apply yet: saved before 1.9.17, or a store that failed. Each with the
+ * line that stores it. sv = save_variables.variables.
+ */
+export function unstored(st: TuningState | null, tool: string, sv: Record<string, unknown>): Array<{ variable: string; value: number; label: string; script: string }> {
+  if (!st?.ok) return []
+  const out: Array<{ variable: string; value: number; label: string; script: string }> = []
+  const add = (test: StoredTest, value: number | undefined, label: string, nozzle?: number, material?: string) => {
+    if (value == null) return
+    const variable = storedVariable(test, tool, nozzle, material)
+    if (!variable) return
+    const have = sv[variable]
+    if (typeof have === 'number' && Math.abs(have - value) < 1e-9) return
+    out.push({ variable, value, label, script: storeScript(test, tool, value, nozzle, material)! })
+  }
   const rd = st.heads[tool]?.rotation_distance?.value
-  if (rd != null) out.rotationDistance = rd
-  if (m?.pressure_advance) out.pressureAdvance = m.pressure_advance.value
-  if (m?.extrusion_multiplier) out.extrusionMultiplier = m.extrusion_multiplier.value
+  add('extruder_calibration', rd, `Rotation distance ${rd}`)
+  for (const [key, m] of Object.entries(st.materials)) {
+    const [t, nz, mat] = key.split('|')
+    if (t !== tool || !mat) continue
+    const n = Number(nz)
+    add('pressure_advance', m.pressure_advance?.value, `Pressure advance ${m.pressure_advance?.value} for ${mat} ${n} mm`, n, mat)
+    add('extrusion_multiplier', m.extrusion_multiplier?.value, `Extrusion multiplier ${m.extrusion_multiplier?.value} for ${mat} ${n} mm`, n, mat)
+  }
   return out
 }
 
@@ -133,7 +186,7 @@ export function squishPatches(bed: { x: number; y: number; keepOut: Rect[] }, si
  * The squish test as a job file: START_JOB for the head and material (it heats, homes and sets the Z offset as for any
  * print), then one layer of patches, filled in back-and-forth lines, and END_PRINT. Relative extrusion.
  */
-export function squishFile(o: { tool: string; material: string; nozzle: number; path: number; rotationDistance?: number; bed: { x: number; y: number; keepOut: Rect[] } }): string {
+export function squishFile(o: { tool: string; material: string; nozzle: number; path: number; bed: { x: number; y: number; keepOut: Rect[] } }): string {
   const h = SQUISH.height
   const w = Number((o.nozzle * SQUISH.widthFactor).toFixed(3))
   const e = (len: number) => Number(((w * h * len) / FILAMENT_AREA).toFixed(5))
@@ -144,7 +197,6 @@ export function squishFile(o: { tool: string; material: string; nozzle: number; 
     'M140 S0 ; bed off until START_JOB heats it from the material table',
     'M104 S0 ; nozzle off until START_JOB heats it',
     `START_JOB TOOLHEAD=${o.tool} MATERIAL=${o.material} NOZZLE_SIZE=${f(o.nozzle)} EXTRUDER=${o.path}`,
-    ...(o.rotationDistance != null ? [`SET_EXTRUDER_ROTATION_DISTANCE EXTRUDER=extruder DISTANCE=${o.rotationDistance} ; calibrated (Studio tuning)`] : []),
     'G90',
     'G21',
     'M83',
@@ -210,7 +262,6 @@ export function paPatternFile(o: {
   material: string
   nozzle: number
   path: number
-  rotationDistance?: number
   bed: { x: number; y: number; keepOut: Rect[] }
   values: number[]
   /** what to put back afterwards (printer.cfg's [extruder] pressure_advance) */
@@ -230,7 +281,6 @@ export function paPatternFile(o: {
     'M140 S0 ; bed off until START_JOB heats it from the material table',
     'M104 S0 ; nozzle off until START_JOB heats it',
     `START_JOB TOOLHEAD=${o.tool} MATERIAL=${o.material} NOZZLE_SIZE=${f(o.nozzle)} EXTRUDER=${o.path}`,
-    ...(o.rotationDistance != null ? [`SET_EXTRUDER_ROTATION_DISTANCE EXTRUDER=extruder DISTANCE=${o.rotationDistance} ; calibrated (Studio tuning)`] : []),
     'G90',
     'G21',
     'M83',
@@ -310,7 +360,7 @@ export function emCubesBounds(bed: { x: number; y: number }, count: number): Rec
  * layer), two walls, two solid bottom layers, two of sparse infill, then solid top layers to the top; the last one laid
  * in one direction (monotonic) at 60 mm/s, line width 100 % of the nozzle (Ellis' settings). M221 S100 at the end.
  */
-export function emCubesFile(o: { tool: string; material: string; nozzle: number; path: number; rotationDistance?: number; pressureAdvance?: number; bed: { x: number; y: number }; values: number[] }): string {
+export function emCubesFile(o: { tool: string; material: string; nozzle: number; path: number; bed: { x: number; y: number }; values: number[] }): string {
   const C = EM_CUBES
   const w = o.nozzle
   const h = C.layer
@@ -324,8 +374,6 @@ export function emCubesFile(o: { tool: string; material: string; nozzle: number;
     'M140 S0 ; bed off until START_JOB heats it from the material table',
     'M104 S0 ; nozzle off until START_JOB heats it',
     `START_JOB TOOLHEAD=${o.tool} MATERIAL=${o.material} NOZZLE_SIZE=${f(o.nozzle)} EXTRUDER=${o.path}`,
-    ...(o.rotationDistance != null ? [`SET_EXTRUDER_ROTATION_DISTANCE EXTRUDER=extruder DISTANCE=${o.rotationDistance} ; calibrated (Studio tuning)`] : []),
-    ...(o.pressureAdvance != null ? [`SET_PRESSURE_ADVANCE ADVANCE=${o.pressureAdvance} ; tuned (Studio tuning)`] : []),
     'G90',
     'G21',
     'M83',

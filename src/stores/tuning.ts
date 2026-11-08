@@ -4,8 +4,9 @@
  */
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import type { TuningState, TuningTest } from '@/tuning/tuning'
+import { storeScript, unstoreScript, type TuningState, type TuningTest } from '@/tuning/tuning'
 import { useToolMgrStore } from './toolmgr'
+import { useControlStore } from './control'
 
 export const useTuningStore = defineStore('tuning', () => {
   const tm = useToolMgrStore()
@@ -29,11 +30,17 @@ export const useTuningStore = defineStore('tuning', () => {
     const cur = state.value ?? (await load())
     const s = await tm.client().saveTuning({ rev: cur?.rev ?? 0, ...body })
     state.value = { ...s, ok: true }
+    // then what Klipper applies at job start (Tool Manager 1.9.17): one SAVE_VARIABLE, plain (it doesn't ask)
+    const line = storeScript(body.test, body.tool, body.value, body.nozzle, body.material)
+    if (line && !(await useControlStore().send(line, { label: `Store ${body.test.replace(/_/g, ' ')} for ${body.tool} on the Rhino` })))
+      throw new Error('Saved in Studio, but Klipper didn’t store it, so jobs won’t use it yet. Use “Store on the Rhino” on the Tune page.')
     return state.value
   }
   async function clear(body: { tool: string; test: TuningTest; nozzle?: number; material?: string }) {
     const cur = state.value ?? (await load())
     state.value = { ...(await tm.client().clearTuning({ rev: cur?.rev ?? 0, ...body })), ok: true }
+    const line = unstoreScript(body.test, body.tool, body.nozzle, body.material)
+    if (line) await useControlStore().send(line, { label: `Forget ${body.test.replace(/_/g, ' ')} for ${body.tool}` })
   }
   return { state, supported, error, load, save, clear }
 })

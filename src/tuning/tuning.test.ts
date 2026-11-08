@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { emCubesBounds, emCubesFile, emRefine, emValues, emWider, extrudeScript, extruderSettled, lastRun, materialKey, newRotationDistance, paPatternFile, paRefine, paValues, squishFile, squishFine, squishPatches, tunedFor, tuningStatus, zFineVariable, type TuningState } from './tuning'
+import { emCubesBounds, emCubesFile, emRefine, emValues, emWider, extrudeScript, extruderSettled, lastRun, materialKey, newRotationDistance, nozzleKey, storeScript, storedVariable, unstoreScript, unstored, paPatternFile, paRefine, paValues, squishFile, squishFine, squishPatches, tuningStatus, zFineVariable, type TuningState } from './tuning'
 import { check } from '@/control/commands'
 
 const st: TuningState = {
@@ -40,11 +40,25 @@ describe('extruder calibration', () => {
   })
 })
 
-describe('what a job uses', () => {
-  it('takes the head’s rotation distance and the material’s pressure advance', () => {
-    expect(tunedFor(st, 'BlockOne', 0.4, 'PLA')).toEqual({ rotationDistance: 4.3, pressureAdvance: 0.032 })
-    expect(tunedFor(st, 'BlockOne', 0.8, 'PLA')).toEqual({ rotationDistance: 4.3 })
-    expect(tunedFor(null, 'BlockOne', 0.4, 'PLA')).toEqual({})
+describe('what a job uses: stored on the Rhino (Tool Manager 1.9.17)', () => {
+  it('names each value as the macros look it up: head, short material, nozzle as 0_4, no SwitchFly path', () => {
+    expect(storedVariable('extruder_calibration', 'BlockOne')).toBe('rhino_rd_blockone')
+    expect(storedVariable('pressure_advance', 'BlockOne', 0.4, 'PLA')).toBe('rhino_pa_blockone_pla_0_4')
+    expect(storedVariable('extrusion_multiplier', 'SwitchFly', 0.8, 'PETG')).toBe('rhino_em_switchfly_petg_0_8')
+    expect(storedVariable('first_layer', 'BlockOne', 0.4, 'PLA')).toBeNull()
+    expect(storedVariable('pressure_advance', 'BlockOne')).toBeNull()
+    expect([nozzleKey(0.4), nozzleKey(0.6), nozzleKey(1)]).toEqual(['0_4', '0_6', '1_0'])
+  })
+  it('stores with SAVE_VARIABLE and forgets with None, both plain console lines', () => {
+    expect(storeScript('pressure_advance', 'BlockOne', 0.032, 0.4, 'PLA')).toBe('SAVE_VARIABLE VARIABLE=rhino_pa_blockone_pla_0_4 VALUE=0.032')
+    expect(unstoreScript('extruder_calibration', 'BlockOne')).toBe('SAVE_VARIABLE VARIABLE=rhino_rd_blockone VALUE=None')
+    expect(check(storeScript('extruder_calibration', 'BlockOne', 4.3)!, { jobActive: false }).needsConfirm).toBe(false)
+  })
+  it('lists what Studio has that the Rhino doesn’t apply yet', () => {
+    expect(unstored(st, 'BlockOne', {}).map((u) => u.variable)).toEqual(['rhino_rd_blockone', 'rhino_pa_blockone_pla_0_4'])
+    expect(unstored(st, 'BlockOne', { rhino_rd_blockone: 4.3, rhino_pa_blockone_pla_0_4: 0.032 })).toEqual([])
+    expect(unstored(st, 'BlockOne', { rhino_rd_blockone: 4.4, rhino_pa_blockone_pla_0_4: 0.032 })[0]!.script).toBe('SAVE_VARIABLE VARIABLE=rhino_rd_blockone VALUE=4.3')
+    expect(unstored(null, 'BlockOne', {})).toEqual([])
   })
   it('lists each wizard’s last run, per head or per material', () => {
     expect(lastRun(st, 'BlockOne', 'extruder_calibration')?.value).toBe(4.3)
@@ -65,11 +79,12 @@ describe('first-layer squish', () => {
     }
   })
   it('makes a job file: START_JOB for the head and material, one layer at 0.25 mm, END_PRINT, and the console’s file rules', () => {
-    const f = squishFile({ tool: 'BlockOne', material: 'PLA', nozzle: 0.4, path: 0, rotationDistance: 4.42, bed })
+    const f = squishFile({ tool: 'BlockOne', material: 'PLA', nozzle: 0.4, path: 0, bed })
     const lines = f.trim().split('\n')
     expect(lines[0]).toBe('; rhino_toolhead = BlockOne')
     expect(lines).toContain('START_JOB TOOLHEAD=BlockOne MATERIAL=PLA NOZZLE_SIZE=0.4 EXTRUDER=0')
-    expect(lines).toContain('SET_EXTRUDER_ROTATION_DISTANCE EXTRUDER=extruder DISTANCE=4.42 ; calibrated (Studio tuning)')
+    // START_JOB applies the stored rotation distance: the file carries none of its own
+    expect(lines.some((l) => l.startsWith('SET_EXTRUDER_ROTATION_DISTANCE'))).toBe(false)
     expect(lines.at(-1)).toBe('END_PRINT')
     expect(lines.filter((l) => /^G1 Z/.test(l)).every((l) => /Z(0\.25|2\.25) /.test(l))).toBe(true)
     // 0.48 mm lines, 0.25 mm high: about 0.0499 mm of filament per mm
@@ -112,11 +127,11 @@ describe('extrusion multiplier cubes', () => {
     expect(emValues(emWider().start, emWider().step, emWider().count).at(-1)).toBe(1.06)
   })
   it('sets each cube’s multiplier before it on every layer, prints 3 mm of layers and puts 100 % back', () => {
-    const f = emCubesFile({ tool: 'BlockOne', material: 'PLA', nozzle: 0.4, path: 0, pressureAdvance: 0.033, bed, values: emValues(0.9, 0.02, 6) })
+    const f = emCubesFile({ tool: 'BlockOne', material: 'PLA', nozzle: 0.4, path: 0, bed, values: emValues(0.9, 0.02, 6) })
     const lines = f.trim().split('\n')
     expect(lines.filter((l) => l.startsWith(';LAYER_CHANGE'))).toHaveLength(15)
     expect(lines.filter((l) => l === 'M221 S96')).toHaveLength(15)
-    expect(lines).toContain('SET_PRESSURE_ADVANCE ADVANCE=0.033 ; tuned (Studio tuning)')
+    expect(lines.some((l) => l.startsWith('SET_PRESSURE_ADVANCE'))).toBe(false)
     expect(lines.at(-4)).toBe('M221 S100 ; back to 100 %')
     const es = lines.flatMap((l) => (/^G1 X.* E(-?[\d.]+)/.exec(l) ? [Number(/ E(-?[\d.]+)/.exec(l)![1])] : []))
     expect(Math.min(...es)).toBeGreaterThanOrEqual(0)

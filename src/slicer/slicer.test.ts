@@ -189,14 +189,12 @@ describe('rhinoFile', () => {
     expect(lines[i + 1]).toBe('CALCULATE_PA BOWDEN_LENGTH=5.9 MATERIAL=PLA LAYER_HEIGHT=0.2 NOZZLE_SIZE=0.4 PRINT_SPEED=60 FILAMENT_DIAMETER=1.75 LINE_WIDTH=0.4')
     expect(blocking(checkFile(lines.join('\n'), j, part(), M).checks)).toEqual([])
   })
-  it('a tuned head and material: its rotation distance and pressure advance instead of the estimate, and the file still passes', () => {
-    const j = { ...newJob('BlockOne', 'fdm', materialsFor('BlockOne', null).list), tuned: { pressureAdvance: 0.032, rotationDistance: 4.3125, extrusionMultiplier: 0.965 } }
+  it('carries no tuned values: START_JOB and CALCULATE_PA apply what is stored on the Rhino, and the file still passes', () => {
+    const j = newJob('BlockOne', 'fdm', materialsFor('BlockOne', null).list)
     const lines = rhinoFile(fdmKiri, j, part(), M, 'x').text.split('\n')
     const i = lines.findIndex((l) => l.startsWith('START_JOB'))
-    expect(lines[i + 1]).toBe('SET_EXTRUDER_ROTATION_DISTANCE EXTRUDER=extruder DISTANCE=4.3125 ; calibrated (Studio tuning)')
-    expect(lines[i + 2]).toBe('SET_PRESSURE_ADVANCE ADVANCE=0.032 ; tuned (Studio tuning)')
-    expect(lines[i + 3]).toBe('M221 S96.5 ; tuned flow (Studio tuning)')
-    expect(lines.some((l) => l.startsWith('CALCULATE_PA'))).toBe(false)
+    expect(lines[i + 1]).toMatch(/^CALCULATE_PA BOWDEN_LENGTH=5\.9 MATERIAL=PLA /)
+    expect(lines.some((l) => /^(SET_EXTRUDER_ROTATION_DISTANCE|SET_PRESSURE_ADVANCE|M221)\b/.test(l))).toBe(false)
     expect(blocking(checkFile(lines.join('\n'), j, part(), M).checks)).toEqual([])
   })
   it('SwitchFly gets CALCULATE_PA with its 35 mm bowden (3.5 cm) on either path', () => {
@@ -206,12 +204,12 @@ describe('rhinoFile', () => {
     applyMaterial(sf, list.find((m) => m.key === 'PLA_0_4_T1')!)
     expect(paLine(sf)).toMatch(/^CALCULATE_PA BOWDEN_LENGTH=3\.5 /)
   })
-  it('no CALCULATE_PA for a head without a bowden length, or a material the macro does not know', () => {
+  it('no CALCULATE_PA for a head without a bowden length; any material gets one (the macro finds a stored value or falls back)', () => {
     const hj = newJob('HotJoe', 'fdm', materialsFor('BlockOne', null).list)
     expect(paLine(hj)).toBeNull()
     const b = newJob('BlockOne', 'fdm', materialsFor('BlockOne', null).list)
     b.material = 'WOODFILL_0_4'
-    expect(paLine(b)).toBeNull()
+    expect(paLine(b)).toMatch(/^CALCULATE_PA BOWDEN_LENGTH=5\.9 MATERIAL=WOODFILL /)
   })
   it('SwitchFly path 1 goes into EXTRUDER=', () => {
     const list = materialsFor('SwitchFly', null).list

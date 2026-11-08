@@ -11,9 +11,11 @@ import ExtruderCalWizard from '@/tuning/ExtruderCalWizard.vue'
 import FirstLayerWizard from '@/tuning/FirstLayerWizard.vue'
 import PressureAdvanceWizard from '@/tuning/PressureAdvanceWizard.vue'
 import ExtrusionWizard from '@/tuning/ExtrusionWizard.vue'
-import { WIZARDS, lastRun, type TuningTest } from '@/tuning/tuning'
+import { WIZARDS, lastRun, unstored, type TuningTest } from '@/tuning/tuning'
 import { usePrepareStore } from '@/stores/prepare'
 import { useTuningStore } from '@/stores/tuning'
+import { useControlStore } from '@/stores/control'
+import { useMachineStore } from '@/stores/machine'
 
 const route = useRoute()
 const tool = computed(() => String(route.params.name ?? ''))
@@ -29,6 +31,17 @@ const mat = computed(() => mats.value.find((m) => m.key === matKey.value) ?? mat
 const temp = computed(() => mat.value?.extruderTemp ?? 210)
 const running = ref<TuningTest | null>(null)
 const BUILT: TuningTest[] = ['extruder_calibration', 'first_layer', 'pressure_advance', 'extrusion_multiplier']
+// Results the Portal has but Klipper doesn't apply yet (saved before Tool Manager 1.9.17, or a store that failed)
+const machine = useMachineStore()
+const control = useControlStore()
+const sv = computed(() => (machine.status.save_variables?.variables ?? {}) as Record<string, unknown>)
+const missing = computed(() => (machine.klippyReady ? unstored(tuning.state, tool.value, sv.value) : []))
+const storing = ref(false)
+async function storeAll() {
+  storing.value = true
+  await control.send(missing.value.map((m) => m.script).join('\n'), { label: `Store ${tool.value}'s tuning on the Rhino` })
+  storing.value = false
+}
 const date = (t: number) => new Date(t * 1000).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })
 </script>
 
@@ -46,6 +59,17 @@ const date = (t: number) => new Date(t * 1000).toLocaleDateString(undefined, { d
           <option v-for="m in mats" :key="m.key" :value="m.key">{{ m.name }} · {{ m.nozzle ?? 0.4 }} mm nozzle · {{ m.extruderTemp ?? '–' }}°</option>
         </select>
       </label>
+      <p v-if="mat" class="muted small keyline">
+        Jobs use what's tuned here when they start with <code>TOOLHEAD={{ tool }} MATERIAL={{ mat.name }} NOZZLE_SIZE={{ mat.nozzle ?? 0.4 }}</code>:
+        files Studio prepares always do. A file from another slicer must name the material the same way, or it gets the estimate
+        (the console says which it used).
+      </p>
+    </RsPanel>
+
+    <RsPanel v-if="missing.length" title="Not on the Rhino yet" panel-id="tune.unstored" :status="`${missing.length}`">
+      <p class="small">Studio has these results, but Klipper doesn't apply them at job start yet:</p>
+      <ul class="small"><li v-for="m in missing" :key="m.variable">{{ m.label }} <code class="muted">{{ m.variable }}</code></li></ul>
+      <RsButton size="sm" variant="primary" :disabled="storing || !machine.klippyReady" @click="storeAll">Store on the Rhino</RsButton>
     </RsPanel>
 
     <RsPanel v-if="running === 'extruder_calibration'" title="Extruder calibration" panel-id="tune.extruder">
@@ -85,6 +109,9 @@ const date = (t: number) => new Date(t * 1000).toLocaleDateString(undefined, { d
 
 <style scoped>
 .fld { display: flex; flex-direction: column; gap: 6px; font-size: var(--rs-text-sm); max-width: 480px; }
+.keyline { margin: var(--rs-space-3) 0 0; max-width: 72ch; }
+.small { font-size: var(--rs-text-xs); }
+.muted { color: var(--rs-text-muted); }
 .fld select { padding: 8px 10px; border: 1px solid var(--rs-line-strong); border-radius: var(--rs-radius-md); }
 .list { list-style: none; margin: 0; padding: 0; }
 .list li { display: flex; align-items: flex-start; gap: var(--rs-space-3); padding: var(--rs-space-3) 0; border-top: 1px solid var(--rs-line); }

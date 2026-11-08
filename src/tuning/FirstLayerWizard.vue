@@ -66,7 +66,6 @@ async function makeTest() {
       material: props.mat.name,
       nozzle: props.mat.nozzle ?? 0.4,
       path: props.mat.path ?? 0,
-      rotationDistance: tuning.state?.heads[props.tool]?.rotation_distance?.value,
       bed: { x: prep.machineInfo.workArea.x, y: prep.machineInfo.workArea.y, keepOut: prep.machineInfo.keepOut },
     })
     const name = `tuning/squish-${props.tool}-${props.mat.key}.gcode`.replace(/[^A-Za-z0-9_./-]/g, '_')

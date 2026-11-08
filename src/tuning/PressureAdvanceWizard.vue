@@ -61,7 +61,6 @@ async function makeTest() {
       material: props.mat.name,
       nozzle: nozzle.value,
       path: props.mat.path ?? 0,
-      rotationDistance: tuning.state?.heads[props.tool]?.rotation_distance?.value,
       bed: bed.value,
       values: values.value,
       restore: restore.value,

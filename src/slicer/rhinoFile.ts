@@ -26,20 +26,22 @@ import type { MachineInfo, PartInfo, PrepareJob } from './types'
 export const STUDIO_FILE_VERSION = 1
 
 /**
- * Pressure advance: the same CALCULATE_PA line the Orca profile runs after START_JOB.
+ * Pressure advance: the same CALCULATE_PA line the Orca profile runs after START_JOB. On Tool Manager 1.9.17+ the macro
+ * decides: the tuned value stored for this head + nozzle + material if there is one (Studio's PA wizard), otherwise the
+ * estimate from these values. Rotation distance and the extrusion multiplier are applied by START_JOB itself
+ * (_RHINO_APPLY_TUNING), so a prepared file carries no tuned values of its own.
  * BOWDEN_LENGTH (cm) is per print head; a head not listed here gets no CALCULATE_PA line.
- * CALCULATE_PA only knows these materials (tools/3dp_macros.cfg) and fails on any other.
+ * PA_MATERIALS are the ones the estimate has a constant for; the macro falls back to the base material (PLA-CF -> PLA)
+ * or keeps printer.cfg's value for others, so the line goes out for every material.
  */
 // BlockOne 59 mm (its Orca profile); SwitchFly 35 mm, both paths (Mike, 2026-10-14)
 export const PA_BOWDEN_CM: Record<string, number> = { BlockOne: 5.9, SwitchFly: 3.5 }
 export const PA_MATERIALS = new Set(['PLA', 'PETG', 'ABS', 'TPU', 'NYLON', 'ASA', 'PVB', 'PA', 'FLEX'])
 
 export function paLine(job: PrepareJob): string | null {
-  // tuned with the pressure advance wizard: that value, not the estimate
-  if (job.tuned?.pressureAdvance != null) return `SET_PRESSURE_ADVANCE ADVANCE=${Number(job.tuned.pressureAdvance.toFixed(4))} ; tuned (Studio tuning)`
   const bowden = PA_BOWDEN_CM[job.toolhead]
   const mat = materialParam(job.material)
-  if (bowden === undefined || !PA_MATERIALS.has(mat)) return null
+  if (bowden === undefined) return null
   const f = job.fdm
   return `CALCULATE_PA BOWDEN_LENGTH=${fmt(bowden)} MATERIAL=${mat} LAYER_HEIGHT=${fmt(f.layerHeight)} NOZZLE_SIZE=${fmt(f.nozzle)} PRINT_SPEED=${fmt(f.speed)} FILAMENT_DIAMETER=1.75 LINE_WIDTH=${fmt(f.nozzle)}`
 }
@@ -176,9 +178,7 @@ export function rhinoFile(kiri: string, job: PrepareJob, part: PartInfo, _machin
         'M140 S0 ; bed off until START_JOB heats it from the material table',
         'M104 S0 ; nozzle off until START_JOB heats it',
         `START_JOB TOOLHEAD=${job.toolhead} MATERIAL=${mat} NOZZLE_SIZE=${fmt(f.nozzle)} EXTRUDER=${f.path}`,
-        ...(job.tuned?.rotationDistance != null ? [`SET_EXTRUDER_ROTATION_DISTANCE EXTRUDER=extruder DISTANCE=${Number(job.tuned.rotationDistance.toFixed(4))} ; calibrated (Studio tuning)`] : []),
         ...(paLine(job) ? [paLine(job)!] : []),
-        ...(job.tuned?.extrusionMultiplier != null ? [`M221 S${Number((job.tuned.extrusionMultiplier * 100).toFixed(1))} ; tuned flow (Studio tuning)`] : []),
         'G90 ; absolute X/Y/Z',
         'G21 ; millimetres',
         `M83 ; relative extrusion (${engine} writes E per move)`,
