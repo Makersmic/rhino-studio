@@ -330,8 +330,25 @@ function smin(a: number, b: number, k: number): number {
   return Math.min(a, b) - h * h * k * 0.25
 }
 
+/**
+ * Skin folds on the body (Mike, Nov 7), as a rhino has: a ridge with a crease behind it running down and back behind
+ * each shoulder, fading out before the belly, and two folds round the neck. They're carved into the body's distance,
+ * so they bend with the skin. Sizes in shoulder heights.
+ */
+export function bodyFolds(x: number, z: number): number {
+  const g = (u: number, w: number) => Math.exp(-(u * u) / (w * w))
+  // behind the shoulder: from high on the back (x 0.07) slanting back to behind the elbow (x 0.19)
+  const xf = 0.07 + 0.12 * Math.min(Math.max((0.95 - z) / 0.5, 0), 1)
+  const u = x - xf
+  const sides = Math.min(Math.max((z - 0.36) / 0.12, 0), 1)
+  const shoulder = (0.024 * g(u, 0.022) - 0.016 * g(u + 0.042, 0.02)) * sides
+  // round the neck
+  const neck = 0.017 * g(x - 0.5, 0.018) - 0.01 * g(x - 0.535, 0.012) + 0.013 * g(x - 0.57, 0.016)
+  return shoulder + neck
+}
+
 /** How finely the skin is made: cells across the rhino's longest side */
-export const SKIN_CELLS = 72
+export const SKIN_CELLS = 88
 
 /**
  * Turn the shapes (each in its joint's space, the joints in their resting pose) into one skin in the rhino's space:
@@ -444,7 +461,7 @@ export function buildRhino(colour: string): Rhino3d {
     uBright: { value: 1 },
   }
   const light = new ShaderMaterial({ uniforms, vertexShader: VERT, fragmentShader: FRAG, transparent: true, depthWrite: false, depthFunc: LessEqualDepth, blending: AdditiveBlending })
-  // the eyes and the horn tip glow
+  // the horn tip and the glint in each eye glow
   const glowUniforms = { ...uniforms, uBright: { value: 3 } }
   const glow = new ShaderMaterial({ uniforms: glowUniforms, vertexShader: VERT, fragmentShader: FRAG, transparent: true, depthWrite: false, depthFunc: LessEqualDepth, blending: AdditiveBlending })
   // nudged a hair back: two shader programs needn't agree on depth to the last bit, and without this the light pass
@@ -496,7 +513,8 @@ export function buildRhino(colour: string): Rhino3d {
 
   // ---- the shapes, each on its joint, in that joint's space. The body goes first; the rest blend into it.
   const at = (b: Bone) => joints.indexOf(b)
-  const shapes: Shape[] = [{ bone: at(body), dist: loftDist(BODY, 2.5), box: loftBox(BODY), blend: 0 }]
+  const plain = loftDist(BODY, 2.5)
+  const shapes: Shape[] = [{ bone: at(body), dist: (x, y, z) => plain(x, y, z) - bodyFolds(x, z), box: loftBox(BODY), blend: 0 }]
   {
     const a: V3 = [0, 0, 0]
     const b: V3 = [0, 0, -0.24]
@@ -519,6 +537,11 @@ export function buildRhino(colour: string): Rhino3d {
   })
   shapes.push({ bone: at(neck), dist: loftDist(HEAD, 2.6), box: loftBox(HEAD), blend: 0.07 })
   for (const side of [1, -1]) {
+    // a heavy brow over each eye and a lower lid under it, so the eye sits in a hollow of skin
+    const brow: V3 = [0.28, 0.142 * side, 0.068]
+    shapes.push({ bone: at(neck), dist: ellipsoid(brow, [0.045, 0.02, 0.016]), box: coneBox(brow, brow, 0.045), blend: 0.02 })
+    const lid: V3 = [0.285, 0.14 * side, 0.016]
+    shapes.push({ bone: at(neck), dist: ellipsoid(lid, [0.035, 0.016, 0.011]), box: coneBox(lid, lid, 0.035), blend: 0.015 })
     // tube ears, standing up and out, angled back
     const base: V3 = [0.02, 0.1 * side, 0.13]
     const up = new Vector3(0, 0, 0.13).applyEuler(new Euler(-0.45 * side, -0.35, 0))
@@ -550,10 +573,19 @@ export function buildRhino(colour: string): Rhino3d {
   rear.position.set(0.34, 0, 0.07)
   rear.rotation.y = -1.35
   neck.add(rear)
+  // eyes: small almonds set into the side of the head between brow and lid, a little brighter than the skin, each with
+  // a tiny glint, rather than glowing dots
+  const eyeLight = new ShaderMaterial({ uniforms: { ...uniforms, uBright: { value: 1.7 } }, vertexShader: VERT, fragmentShader: FRAG, transparent: true, depthWrite: false, depthFunc: LessEqualDepth, blending: AdditiveBlending })
+  materials.push(eyeLight)
   for (const side of [1, -1]) {
-    const eye = piece(new SphereGeometry(0.016, 8, 6), glow)
-    eye.position.set(0.28, 0.14 * side, 0.04)
+    const eye = piece(new SphereGeometry(1, 14, 10), eyeLight)
+    eye.scale.set(0.024, 0.009, 0.012)
+    eye.position.set(0.285, 0.147 * side, 0.042)
+    eye.rotation.set(0, 0.25, 0) // the almond slopes down towards the nose
     neck.add(eye)
+    const glint = piece(new SphereGeometry(0.0045, 6, 4), glow)
+    glint.position.set(0.291, 0.155 * side, 0.046)
+    neck.add(glint)
   }
 
   function setPose(p: Pose) {

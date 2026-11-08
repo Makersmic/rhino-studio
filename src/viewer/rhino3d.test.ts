@@ -1,6 +1,6 @@
 import { Box3 } from 'three'
 import { describe, expect, it } from 'vitest'
-import { BODY, LEG, buildRhino, loft } from './rhino3d'
+import { BODY, LEG, bodyFolds, buildRhino, loft } from './rhino3d'
 import { FRAME_REAR, framePose, trotPose } from './runner'
 
 const box = (r: ReturnType<typeof buildRhino>) => {
@@ -74,5 +74,14 @@ describe('the hyena-like build (Mike, Nov 7)', () => {
     r.setPose(framePose(12))
     r.feet().forEach((z) => expect(Math.abs(z)).toBeLessThan(0.02))
     r.dispose()
+  })
+})
+
+describe('skin folds', () => {
+  it('raise a ridge behind the shoulder with a crease behind it, and fade out before the belly', () => {
+    expect(bodyFolds(0.07, 0.95)).toBeGreaterThan(0.015) // the ridge, high on the back
+    expect(bodyFolds(0.07 - 0.042, 0.95)).toBeLessThan(-0.008) // the crease just behind it
+    expect(Math.abs(bodyFolds(0.19, 0.3))).toBeLessThan(0.001) // gone under the belly
+    expect(Math.abs(bodyFolds(-0.3, 0.8))).toBeLessThan(0.001) // nothing on the rump
   })
 })
