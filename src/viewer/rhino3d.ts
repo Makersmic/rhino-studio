@@ -166,7 +166,8 @@ export const LEG = {
   back: { x: -0.3, hipZ: 0.42, upper: 0.22, lower: 0.2 },
   front: { x: 0.28, hipZ: 0.52, upper: 0.28, lower: 0.24 },
 }
-const NECK = { x: 0.66, z: 0.74, down: 0.42 }
+/** where the head hangs from, and how far it tips nose-down (Mike, Nov 7: higher, further back, slanting down more) */
+const NECK = { x: 0.6, z: 0.8, down: 0.62 }
 /** The body tips around the back hips; rise is in the trot's own units, about a hundredth of the height */
 const RISE_UNIT = 1 / 110
 
