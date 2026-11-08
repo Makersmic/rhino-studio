@@ -202,7 +202,9 @@ const VERT = `
 uniform float uGlitch;
 varying vec3 vNormalW;
 varying vec3 vPosW;
+varying vec3 vRest;
 void main() {
+  vRest = position;
   #include <beginnormal_vertex>
   #include <skinbase_vertex>
   #include <skinnormal_vertex>
@@ -220,17 +222,54 @@ uniform float uBaseZ;
 uniform float uHeight;
 uniform float uGlitch;
 uniform float uBright;
+uniform float uTexture;
 varying vec3 vNormalW;
 varying vec3 vPosW;
+varying vec3 vRest;
+float hash(vec3 p) { p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
+float noise(vec3 x) {
+  vec3 i = floor(x); vec3 f = fract(x); f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(mix(hash(i), hash(i + vec3(1, 0, 0)), f.x), mix(hash(i + vec3(0, 1, 0)), hash(i + vec3(1, 1, 0)), f.x), f.y),
+             mix(mix(hash(i + vec3(0, 0, 1)), hash(i + vec3(1, 0, 1)), f.x), mix(hash(i + vec3(0, 1, 1)), hash(i + vec3(1, 1, 1)), f.x), f.y), f.z);
+}
+// Wrinkled skin on the legs and face, in the rhino's own resting shape so it moves with it: rings round the legs,
+// creases and a coarse mottle on the face. Returns the height; 1 - crease depth.
+float skin(vec3 p) {
+  float legs = 1.0 - smoothstep(0.3, 0.46, p.z);
+  float face = smoothstep(0.62, 0.8, p.x);
+  float wob = noise(p * 22.0);
+  float rings = sin(p.z * 110.0 + 3.0 * wob);
+  float legH = smoothstep(0.4, 1.0, rings) * (0.6 + 0.4 * noise(p * 8.0));
+  float lines = sin(dot(p, vec3(52.0, 15.0, 75.0)) + 4.0 * noise(p * 12.0));
+  float faceH = 0.75 * smoothstep(0.35, 1.0, lines) + 0.25 * noise(p * 28.0);
+  return legs * legH + face * faceH;
+}
 void main() {
   vec3 n = normalize(vNormalW);
+  float crease = 0.0;
+  // how much of the rhino one pixel covers: once wrinkles would be finer than a few pixels, let them go, or they'd
+  // only shimmer (on the Dashboard the rhino is small, so there it stays smooth)
+  float detail = uTexture * (1.0 - smoothstep(0.009, 0.02, length(fwidth(vRest))));
+  if (detail > 0.0) {
+    // bump the normal by the skin's slope (Mikkelsen's surface gradient), so creases catch the light. Wrinkles are about
+    // 0.009 shoulder heights deep; uHeight is the shoulder height in scene units
+    float h = skin(vRest) * 0.009 * uHeight * detail;
+    vec3 dpx = dFdx(vPosW);
+    vec3 dpy = dFdy(vPosW);
+    vec3 r1 = cross(dpy, n);
+    vec3 r2 = cross(n, dpx);
+    float det = dot(dpx, r1);
+    vec3 grad = sign(det) * (dFdx(h) * r1 + dFdy(h) * r2);
+    n = normalize(abs(det) * n - grad);
+    crease = skin(vRest) * detail;
+  }
   vec3 v = normalize(cameraPosition - vPosW);
   float rim = pow(1.0 - abs(dot(n, v)), 2.2);
   float h = clamp((vPosW.z - uBaseZ) / uHeight, 0.0, 1.2);
   float fade = mix(0.35, 1.0, smoothstep(0.0, 0.7, h));
   float scan = 0.78 + 0.22 * step(0.5, fract(h * 22.0));
   float back = smoothstep(0.55, 0.95, n.z) * smoothstep(0.75, 0.95, h);
-  float a = (0.28 + 1.1 * rim) * fade * scan * (1.0 - 0.6 * uGlitch) * uBright;
+  float a = (0.28 + 1.1 * rim) * fade * scan * (1.0 - 0.6 * uGlitch) * uBright * (1.0 - 0.2 * crease);
   vec3 c = uColour * a + vec3(1.0) * (0.45 * back + 0.35 * pow(rim, 5.0)) * fade * uBright;
   gl_FragColor = vec4(c, 1.0);
 }`
@@ -472,6 +511,7 @@ export function buildRhino(colour: string): Rhino3d {
     uHeight: { value: 1 },
     uGlitch: { value: 0 },
     uBright: { value: 1 },
+    uTexture: { value: 0 },
   }
   const light = new ShaderMaterial({ uniforms, vertexShader: VERT, fragmentShader: FRAG, transparent: true, depthWrite: false, depthFunc: LessEqualDepth, blending: AdditiveBlending })
   // the horn tip and the glint in each eye glow
@@ -578,7 +618,10 @@ export function buildRhino(colour: string): Rhino3d {
   skinMade ??= buildSkin(shapes, joints)
   const skin = skinMade
   const skeleton = new Skeleton(joints)
-  for (const m of [depth, light] as Material[]) {
+  // the skin's own light, the same but wrinkled on the legs and face
+  const skinLight = new ShaderMaterial({ uniforms: { ...uniforms, uTexture: { value: 1 } }, vertexShader: VERT, fragmentShader: FRAG, transparent: true, depthWrite: false, depthFunc: LessEqualDepth, blending: AdditiveBlending })
+  materials.push(skinLight)
+  for (const m of [depth, skinLight] as Material[]) {
     const mesh = new SkinnedMesh(skin, m)
     mesh.frustumCulled = false
     group.add(mesh)
