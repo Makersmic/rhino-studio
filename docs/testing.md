@@ -495,3 +495,17 @@ Large models and job saves (Tool Manager 1.9.7; Mike's Thingiverse sphere, Oct 2
 - [ ] **SJ1 Start job from Job setup.** Send a small print to the Rhino with the right tool mounted, then **Start job** on the "Sent as" line. *Pass if:* the same confirm as Files appears, the job starts, and Studio opens Control. *Stop if:* it starts without asking.
 - [ ] **SJ2 Wrong tool mounted.** As SJ1 with another tool mounted. *Pass if:* it offers **Swap to <tool>** and doesn't start until the swap is confirmed and done. *Stop if:* it offers Start with the wrong tool.
 - [ ] **SJ3 While a job runs.** Send a second file during a job. *Pass if:* no Start button, the "A job is running" line and **Open in Files**; nothing starts when the first job ends. *Stop if:* anything queues or starts by itself.
+
+## Your macros and start/end G-code (needs Tool Manager 1.9.13 on the Rhino)
+
+Have a hand near Stop. Nothing printing.
+
+- [ ] **MB1 Starter macros.** Settings › Your macros › **Add the starter macros**. *Pass if:* Park the head, Heat for PLA and Cool down appear, and Park's last step goes to the park spot from `myrhino/positions.cfg` (the one END_PRINT uses). *Stop if:* Park's position isn't the one END_PRINT parks at.
+- [ ] **MB2 Run from Control, heat only.** With BlockOne confirmed, Control › System Macros › Your macros › **Heat for PLA**. *Pass if:* it doesn't ask, and the hotend and bed head for the table's PLA temperatures. Then **Cool down**: both go to 0, part fan off. *Stop if:* a temperature other than the table's.
+- [ ] **MB3 Run from Control, moving.** **Park the head**. *Pass if:* it asks first, listing the G28 (if not homed), the 10 mm lift and the move; after Proceed the head lifts, then parks. *Stop if:* it moves without asking, or goes anywhere other than the park spot.
+- [ ] **MB4 Refusals.** Unconfirm the tool (or swap and don't confirm), press Park. *Pass if:* the console says to confirm the toolhead and nothing moves. Make a macro with a move past the travel (X 2000) and Test run. *Pass if:* refused before sending, saying the travel. *Stop if:* anything is sent.
+- [ ] **MB5 Edit on a phone.** On a phone, Settings › Your macros: add a Wait step, move it up, remove it, save. *Pass if:* every control reaches, nothing scrolls sideways, and the macro is saved.
+- [ ] **MB6 Start G-code on a toolhead.** BlockOne's page › Start and end G-code › Start G-code: **Park the head**, then restart Klipper from the banner. Print a small part. *Pass if:* after START_JOB heats and homes, the head lifts and goes to the park spot once, then the print starts normally (absolute moves, right feed rate). *Stop if:* the print starts from the wrong place or the first layer is in the air: Cancel.
+- [ ] **MB7 Update after an edit.** Change Park (e.g. lift 15 mm) and save. *Pass if:* BlockOne's page says Park changed and offers **Update**; jobs keep the old lift until Update and a restart.
+- [ ] **MB8 Backup and restore.** Back up now, delete a macro, then restore only **Your macros** from that backup. *Pass if:* the macro is back. *Stop if:* anything else changes.
+
