@@ -161,18 +161,6 @@ const HEAD: Station[] = [
   { x: 0.57, bottom: -0.15, top: 0.03, w: 0.15 },
   { x: 0.615, bottom: -0.12, top: 0.0, w: 0.08 },
 ]
-/** A horn: a cone from its base along x, curving up (it's turned to stand on the snout) */
-function horn(length: number, base: number): BufferGeometry {
-  const st: Station[] = []
-  for (let i = 0; i <= 5; i++) {
-    const k = i / 5
-    const r = base * (1 - k) + 0.004
-    const lift = 0.35 * length * k * k
-    st.push({ x: length * k, bottom: lift - r, top: lift + r, w: r })
-  }
-  return loft(st, { around: 10, steps: 2, round: 2 })
-}
-
 /** Hips (back, right at the rump) and shoulders (front): where they join, and how long each half is */
 export const LEG = {
   side: 0.14,
@@ -203,8 +191,11 @@ uniform float uGlitch;
 varying vec3 vNormalW;
 varying vec3 vPosW;
 varying vec3 vRest;
+attribute float aFill;
+varying float vFill;
 void main() {
   vRest = position;
+  vFill = aFill;
   #include <beginnormal_vertex>
   #include <skinbase_vertex>
   #include <skinnormal_vertex>
@@ -227,6 +218,7 @@ uniform float uFill;
 varying vec3 vNormalW;
 varying vec3 vPosW;
 varying vec3 vRest;
+varying float vFill;
 float hash(vec3 p) { p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
 float noise(vec3 x) {
   vec3 i = floor(x); vec3 f = fract(x); f = f * f * (3.0 - 2.0 * f);
@@ -270,7 +262,8 @@ void main() {
   float fade = mix(0.35, 1.0, smoothstep(0.0, 0.7, h));
   float scan = 0.78 + 0.22 * step(0.5, fract(h * 22.0));
   float back = smoothstep(0.55, 0.95, n.z) * smoothstep(0.75, 0.95, h);
-  float a = (uFill + 1.1 * rim) * fade * scan * (1.0 - 0.6 * uGlitch) * uBright * (1.0 - 0.2 * crease);
+  float fill = uTexture > 0.5 ? max(uFill, vFill) : uFill;
+  float a = (fill + 1.1 * rim) * fade * scan * (1.0 - 0.6 * uGlitch) * uBright * (1.0 - 0.2 * crease);
   vec3 c = uColour * a + vec3(1.0) * (0.45 * back + 0.35 * pow(rim, 5.0)) * fade * uBright;
   gl_FragColor = vec4(c, 1.0);
 }`
@@ -288,6 +281,8 @@ interface Shape {
   blend: number
   /** carved out of what's already there instead (a nostril) */
   cut?: boolean
+  /** drawn more solidly (the horns): how much light fills it, as uFill */
+  fill?: number
 }
 
 /**
@@ -499,8 +494,16 @@ function buildSkin(shapes: Shape[], joints: Bone[]): BufferGeometry {
   const count = p.count
   const idx = new Uint16Array(count * 4)
   const wts = new Float32Array(count * 4)
+  const fills = new Float32Array(count)
+  const filled = shapes.map((sh, i) => ({ sh, i })).filter((f) => f.sh.fill)
   for (let v = 0; v < count; v++) {
     field(p.getX(v), p.getY(v), p.getZ(v), true)
+    // near a horn: drawn more solidly, fading over a couple of hundredths so the join stays one surface
+    for (const f of filled) {
+      local.set(p.getX(v), p.getY(v), p.getZ(v)).applyMatrix4(toJoint[f.sh.bone]!)
+      const e = f.sh.dist(local.x, local.y, local.z)
+      fills[v] = Math.max(fills[v]!, f.sh.fill! * Math.min(Math.max(1 - e / 0.03, 0), 1))
+    }
     const near = Math.min(...perJoint)
     const ranked = Array.from(perJoint, (d, b) => ({ b, w: Math.exp(-(d - near) / 0.03) }))
       .sort((a, b) => b.w - a.w)
@@ -513,6 +516,7 @@ function buildSkin(shapes: Shape[], joints: Bone[]): BufferGeometry {
   }
   g.setAttribute('skinIndex', new Uint16BufferAttribute(idx, 4))
   g.setAttribute('skinWeight', new Float32BufferAttribute(wts, 4))
+  g.setAttribute('aFill', new Float32BufferAttribute(fills, 1))
   return g
 }
 
@@ -612,6 +616,26 @@ export function buildRhino(colour: string): Rhino3d {
     }
   })
   shapes.push({ bone: at(neck), dist: loftDist(HEAD, 2.6), box: loftBox(HEAD), blend: 0.07 })
+  // the horns grow out of the head as part of the same skin (Mike, Nov 7): each a curved cone in short pieces,
+  // following the same curve the separate horns had, filled more solidly than the skin
+  const hornPath = (from: V3, length: number, base: number, turn: number) => {
+    const pts: Array<{ p: V3; r: number }> = []
+    for (const k of [0, 0.3, 0.6, 0.85, 1]) {
+      const x = length * k
+      const z = 0.35 * length * k * k
+      pts.push({
+        p: [from[0] + x * Math.cos(turn) + z * Math.sin(turn), from[1], from[2] - x * Math.sin(turn) + z * Math.cos(turn)],
+        r: Math.max(base * (1 - k), 0.011),
+      })
+    }
+    for (let i = 0; i < pts.length - 1; i++) {
+      const a = pts[i]!
+      const b = pts[i + 1]!
+      shapes.push({ bone: at(neck), dist: roundCone(a.p, b.p, a.r, b.r), box: coneBox(a.p, b.p, a.r), blend: i === 0 ? 0.035 : 0.004, fill: 0.62 })
+    }
+  }
+  hornPath([0.5, 0, 0], 0.34, 0.075, -1.25)
+  hornPath([0.34, 0, 0.07], 0.16, 0.055, -1.35)
   for (const side of [1, -1]) {
     // a flared nostril on each side of the muzzle, with its opening cut in
     const flare: V3 = [0.56, 0.125 * side, -0.07]
@@ -644,22 +668,11 @@ export function buildRhino(colour: string): Rhino3d {
     mesh.bind(skeleton)
   }
 
-  // ---- horns and eyes: rigid, riding on the head. The horns are filled more densely, so they look more solid than
-  // the see-through skin (Mike, Nov 7)
-  const hornLight = new ShaderMaterial({ uniforms: { ...uniforms, uFill: { value: 0.62 } }, vertexShader: VERT, fragmentShader: FRAG, transparent: true, depthWrite: false, depthFunc: LessEqualDepth, blending: AdditiveBlending })
-  materials.push(hornLight)
-  const front = piece(horn(0.34, 0.075), hornLight)
-  front.position.set(0.5, 0, 0.0)
-  front.rotation.y = -1.25
-  neck.add(front)
+  // ---- the horn tip's glow and the eyes: rigid, riding on the head
   const hornTip = piece(new SphereGeometry(0.014, 6, 4), glow)
   // the horn's own tip (0.34 along, 0.119 up), turned as the horn is
   hornTip.position.set(0.5 + 0.34 * Math.cos(1.25) - 0.119 * Math.sin(1.25), 0, 0.34 * Math.sin(1.25) + 0.119 * Math.cos(1.25))
   neck.add(hornTip)
-  const rear = piece(horn(0.16, 0.055), hornLight)
-  rear.position.set(0.34, 0, 0.07)
-  rear.rotation.y = -1.35
-  neck.add(rear)
   // eyes: small almonds set into the side of the head between brow and lid, a little brighter than the skin, each with
   // a tiny glint, rather than glowing dots
   const eyeLight = new ShaderMaterial({ uniforms: { ...uniforms, uBright: { value: 1.7 } }, vertexShader: VERT, fragmentShader: FRAG, transparent: true, depthWrite: false, depthFunc: LessEqualDepth, blending: AdditiveBlending })
