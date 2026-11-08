@@ -412,12 +412,21 @@ export const usePrepareStore = defineStore('prepare', () => {
     if (!m || !Number.isFinite(r)) return
     m.r = Math.round(Math.min(Math.max(r, MARK_SIZES.min), MARK_SIZES.max) * 10) / 10
   }
+  /** Erase: wipe every mark the eraser touches, `reach` mm round `bed` (Mike, Nov 7) */
+  function eraseMarks(bed: [number, number, number], reach: number) {
+    const sm = supportMarks.value
+    if (!sm) return
+    const gone = new Set(marksShown.value.filter((m) => Math.hypot(m.at[0] - bed[0], m.at[1] - bed[1], m.at[2] - bed[2]) < reach + m.r * 0.5).map((m) => m.i))
+    if (!gone.size) return
+    sm.marks = sm.marks.filter((_, i) => !gone.has(i))
+    selectedMark.value = null
+  }
   function removeSelectedMark() {
     if (selectedMark.value != null) supportMarks.value?.marks.splice(selectedMark.value, 1)
     selectedMark.value = null
   }
   /** A click on a part while marking: a new mark on the overhang there */
-  function markClick(partId: number, bed: [number, number, number]) {
+  function markClick(partId: number, bed: [number, number, number], reach?: number) {
     // PrusaSlicer on automatic can take marks without "only where I mark": the list starts with the first one
     if (!supportMarks.value && canMark.value) supportMarks.value = { marks: [] }
     const sm = supportMarks.value
@@ -425,7 +434,8 @@ export const usePrepareStore = defineStore('prepare', () => {
     const view = parts.value.find((p) => p.id === partId)
     const mp = markParts.value.find((p) => p.name === view?.name)
     if (!mp || sm.marks.length >= MAX_MARKS) return
-    sm.marks.push(markAt(mp, bed, markSize.value, markKind.value === 'block' && usesPrusa.value))
+    const r = Math.min(Math.max(reach ?? markSize.value, MARK_SIZES.min), MARK_SIZES.max)
+    sm.marks.push(markAt(mp, bed, r, markKind.value === 'block' && usesPrusa.value))
     // the new one is selected, so it can be sized straight away
     selectedMark.value = sm.marks.length - 1
   }
@@ -968,6 +978,7 @@ export const usePrepareStore = defineStore('prepare', () => {
     selectedMarkReach,
     setSelectedReach,
     removeSelectedMark,
+    eraseMarks,
     clearMarks,
     loadSkipped,
     duplicatePart,

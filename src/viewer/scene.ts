@@ -7,11 +7,12 @@
  * screen and shaded to look round. The lighter mode draws plain 1-pixel lines.
  */
 import {
+  RingGeometry,
+  Vector4,
   AdditiveBlending,
   Color,
   InstancedMesh,
   Matrix4,
-  SphereGeometry,
   Sprite,
   SpriteMaterial,
   BufferAttribute,
@@ -341,6 +342,14 @@ function modelMaterial(): ShaderMaterial {
       uniform vec3 uLight;
       uniform float uOverhang;
       uniform vec3 uWarm;
+      // support marks painted on the part (Mike, Nov 7): each a centre and radius in bed millimetres
+      uniform vec4 uPaint[${PAINT_MAX}];
+      uniform int uPaintCount;
+      uniform int uPaintSel;
+      uniform vec3 uPaintColour;
+      // the brush under the cursor while marking or erasing (radius 0 = none)
+      uniform vec4 uBrush;
+      uniform vec3 uBrushColour;
       varying vec3 vWorld;
       varying float vFacing;
       void main() {
@@ -353,6 +362,23 @@ function modelMaterial(): ShaderMaterial {
         vec3 c = uInkIsDark > 0.5 ? mix(uInk, uPaper, 0.12 + 0.7 * lit) : mix(uPaper, uInk, 0.14 + 0.78 * lit);
         // faces hanging down past the support angle: tinted amber, where support will be needed
         if (vFacing < uOverhang) c = mix(c, uWarm, 0.65);
+        // painted marks: filled in the theme's accent, the selected one fully, with a fine edge. Only on faces that hang
+        // down (where support touches), so a mark under a thin wing doesn't show through on its top
+        float under = vFacing < -0.2 ? 1.0 : 0.0;
+        for (int i = 0; i < ${PAINT_MAX}; i++) {
+          if (i >= uPaintCount) break;
+          float d = distance(vWorld, uPaint[i].xyz);
+          float w = fwidth(d) * 1.5;
+          if (d < uPaint[i].w) c = mix(c, uPaintColour, (i == uPaintSel ? 0.95 : 0.78) * under);
+          if (abs(d - uPaint[i].w) < w) c = mix(c, uPaintColour, under);
+        }
+        // the brush: where a mark would land and how big, or what Erase would take away
+        if (uBrush.w > 0.0) {
+          float d = distance(vWorld, uBrush.xyz);
+          float w = fwidth(d) * 2.0;
+          if (d < uBrush.w) c = mix(c, uBrushColour, 0.45 * under);
+          if (abs(d - uBrush.w) < w) c = mix(c, uBrushColour, under);
+        }
         gl_FragColor = vec4(c, 1.0);
       }`,
     uniforms: {
@@ -362,9 +388,17 @@ function modelMaterial(): ShaderMaterial {
       uLight: { value: new Vector3(1, -0.45, 0.35).normalize() },
       uOverhang: { value: -2 },
       uWarm: { value: new Vector3(0.96, 0.66, 0.2) },
+      uPaint: { value: Array.from({ length: PAINT_MAX }, () => new Vector4()) },
+      uPaintCount: { value: 0 },
+      uPaintSel: { value: -1 },
+      uPaintColour: { value: new Vector3(0.96, 0.66, 0.2) },
+      uBrush: { value: new Vector4(0, 0, 0, 0) },
+      uBrushColour: { value: new Vector3(0.96, 0.66, 0.2) },
     },
   })
 }
+/** How many marks are painted on the part; more still show as outline rings */
+export const PAINT_MAX = 64
 
 /**
  * Which way each triangle faces up or down (its outward normal's Z, from the corners' order, as STL files store them),
@@ -966,17 +1000,26 @@ export class GcodeScene {
 
   private markMesh: InstancedMesh | null = null
   private markCount = 0
-  /** Support marks: small balls at each spot (bed coordinates), `r` mm across their reach. Amber adds, blue blocks. */
+  private markList: Array<{ at: [number, number, number]; r: number }> = []
+  /**
+   * Support marks (Mike, Nov 7): painted on the part in the theme's accent where they meet it, and as thin flat rings
+   * drawn through the part, so a mark under an overhang shows from above too. `r` is the reach, in bed millimetres.
+   */
   setMarks(list: Array<{ at: [number, number, number]; r: number; block?: boolean; selected?: boolean }>): void {
+    this.markList = list.map((k) => ({ at: k.at, r: k.r }))
     this.markCount = list.length
+    const u = this.meshMaterial.uniforms
+    const paint = u.uPaint!.value as Vector4[]
+    list.slice(0, PAINT_MAX).forEach((k, i) => paint[i]!.set(k.at[0], k.at[1], k.at[2], k.r))
+    u.uPaintCount!.value = Math.min(list.length, PAINT_MAX)
+    u.uPaintSel!.value = list.findIndex((k) => k.selected)
     if (this.markMesh && this.markMesh.count < list.length) {
       this.scene.remove(this.markMesh)
       this.markMesh.dispose()
       this.markMesh = null
     }
     if (!this.markMesh && list.length) {
-      // drawn through the part: marks sit under overhangs, which the part hides from above
-      const m = new InstancedMesh(new SphereGeometry(1, 14, 10), new MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9, depthTest: false }), Math.max(16, list.length * 2))
+      const m = new InstancedMesh(new RingGeometry(0.93, 1, 48), new MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.55, depthTest: false, side: DoubleSide }), Math.max(16, list.length * 2))
       m.renderOrder = 10
       m.frustumCulled = false
       this.markMesh = m
@@ -984,13 +1027,10 @@ export class GcodeScene {
     }
     if (this.markMesh) {
       const t = new Matrix4()
+      const pc = u.uPaintColour!.value as Vector3
       list.forEach((k, i) => {
-        // shown smaller than their reach, so they mark the spot without hiding the part
-        // the selected one a little bigger and pale, so it's clear which one the size and Remove act on
-        const s = Math.max(0.6, k.r * 0.35) * (k.selected ? 1.25 : 1)
-        this.markMesh!.setMatrixAt(i, t.makeScale(s, s, s).setPosition(k.at[0], k.at[1], k.at[2]))
-        // the bed mesh's two colours: amber where support goes, blue where it's kept off (never red)
-        this.markMesh!.setColorAt(i, new Color(k.selected ? (k.block ? 0xbfe0ff : 0xffe7b0) : k.block ? 0x3d8fe0 : 0xf5a833))
+        this.markMesh!.setMatrixAt(i, t.makeScale(k.r, k.r, 1).setPosition(k.at[0], k.at[1], k.at[2]))
+        this.markMesh!.setColorAt(i, k.selected ? new Color(1, 1, 1) : k.block ? new Color(0x3d8fe0) : new Color(pc.x, pc.y, pc.z))
       })
       if (this.markMesh.instanceColor) this.markMesh.instanceColor.needsUpdate = true
       this.markMesh.count = list.length
@@ -998,6 +1038,39 @@ export class GcodeScene {
     }
     this.draw()
   }
+  /** The painted marks' colour (the theme's accent) and the eraser's */
+  setPaintColours(paint: Rgb, eraser: Rgb): void {
+    const u = this.meshMaterial.uniforms
+    ;(u.uPaintColour!.value as Vector3).set(paint.r, paint.g, paint.b)
+    this.eraser = eraser
+    this.paintColour = paint
+    if (this.markList.length) this.setMarks(this.markList)
+    this.draw()
+  }
+  private eraser: Rgb = { r: 0.5, g: 0.5, b: 0.5 }
+  private paintColour: Rgb = { r: 0.96, g: 0.66, b: 0.2 }
+  /** The brush under the cursor (null hides it): where a mark would land and its reach, or the eraser */
+  setBrush(at: [number, number, number] | null, r: number, erase = false): void {
+    const u = this.meshMaterial.uniforms
+    ;(u.uBrush!.value as Vector4).set(at?.[0] ?? 0, at?.[1] ?? 0, at?.[2] ?? 0, at ? r : 0)
+    const c = erase ? this.eraser : this.paintColour
+    ;(u.uBrushColour!.value as Vector3).set(c.r, c.g, c.b)
+    // and a ring drawn through the part, so the brush shows from above when it lands on an underside
+    if (!this.brushRing) {
+      this.brushRing = new Mesh(new RingGeometry(0.9, 1, 64), new MeshBasicMaterial({ transparent: true, opacity: 0.9, depthTest: false, side: DoubleSide }))
+      this.brushRing.renderOrder = 11
+      this.brushRing.frustumCulled = false
+      this.scene.add(this.brushRing)
+    }
+    this.brushRing.visible = !!at
+    if (at) {
+      this.brushRing.position.set(at[0], at[1], at[2])
+      this.brushRing.scale.set(r, r, 1)
+      ;(this.brushRing.material as MeshBasicMaterial).color.setRGB(c.r, c.g, c.b)
+    }
+    this.draw()
+  }
+  private brushRing: Mesh | null = null
 
   /** Boxes drawn in thin lines; they replace any drawn before */
   setBoxes(boxes: WireBox[]): void {
@@ -1111,16 +1184,25 @@ export class GcodeScene {
   }
 
   /**
-   * Which mark ball is under the pointer (its place in the list given to setMarks), or null. Only the ball you can
-   * see counts, not the reach of its support, so a click beside a mark adds another rather than removing it.
+   * Which mark's painted circle holds the spot a click would mark (its place in the list given to setMarks), or null:
+   * a click there picks that mark rather than adding another on top of it.
    */
   markUnder(clientX: number, clientY: number): number | null {
-    if (!this.markMesh || !this.markCount) return null
-    this.aim(clientX, clientY)
-    const hits = this.raycaster.intersectObject(this.markMesh, false)
-    const hit = hits.find((h) => h.instanceId !== undefined && h.instanceId < this.markCount)
-    return hit?.instanceId ?? null
+    if (!this.markCount) return null
+    const spot = this.supportSpot(clientX, clientY)
+    if (!spot) return null
+    let best: number | null = null
+    let bestD = Infinity
+    this.markList.forEach((k, i) => {
+      const d = Math.hypot(spot.point[0] - k.at[0], spot.point[1] - k.at[1], spot.point[2] - k.at[2])
+      if (d < k.r && d < bestD) {
+        best = i
+        bestD = d
+      }
+    })
+    return best
   }
+
 
   /** Where the pointer's line crosses a level plane at height z, or null if it doesn't */
   hitLevel(clientX: number, clientY: number, z: number): [number, number] | null {

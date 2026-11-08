@@ -35,6 +35,8 @@ const props = defineProps<{
   /** support marks on the bed, whether a click adds them, and the overhang angle to tint (null: none) */
   marks?: Array<{ at: [number, number, number]; r: number; block?: boolean; selected?: boolean }>
   plateBelow?: number
+  erasing?: boolean
+  brush?: number
   marking?: boolean
   overhang?: number | null
 }>()
@@ -43,7 +45,8 @@ const emit = defineEmits<{
   mode: [is3d: boolean]
   select: [id: number]
   menu: [id: number, x: number, y: number, normal: [number, number, number] | null]
-  mark: [id: number, point: [number, number, number]]
+  mark: [id: number, point: [number, number, number], reach: number]
+  erase: [point: [number, number, number], reach: number]
   unmark: [index: number]
 }>()
 const picking = defineModel<boolean>('picking', { default: false })
@@ -191,7 +194,10 @@ const label = computed(() => (props.part ? `${props.part.name} on the bed in 3D$
         :marking="marking"
         :marks="marks"
         :overhang="overhang"
-        @mark="(id, pt) => emit('mark', id, pt)"
+        @mark="(id, pt, r) => emit('mark', id, pt, r)"
+        @erase="(pt, r) => emit('erase', pt, r)"
+        :erasing="erasing"
+        :brush="brush"
         @unmark="emit('unmark', $event)"
         :plate-below="plateBelow"
         @select="emit('select', $event)"

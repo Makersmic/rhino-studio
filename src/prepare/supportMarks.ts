@@ -26,7 +26,8 @@ export interface SupportMarks {
   marks: Mark[]
 }
 
-export const MARK_SIZES = { min: 1, max: 15, start: 4 }
+/** a mark's reach in mm: up to 40 now that a drag sizes it (the Portal takes up to 50) */
+export const MARK_SIZES = { min: 1, max: 40, start: 4 }
 export const MAX_MARKS = 500
 
 export interface Placement {

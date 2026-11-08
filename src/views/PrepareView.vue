@@ -198,17 +198,19 @@ const summary = computed(() => {
 const picking = ref(false)
 const is3d = ref(false)
 // ---- supports placed by hand: clicks on the part add or remove marks while this is on
-const marking = ref<'mark' | 'block' | null>(null)
+const marking = ref<'mark' | 'block' | 'erase' | null>(null)
 watch(picking, (on) => on && (marking.value = null))
 watch(marking, (k) => {
   if (k) {
     picking.value = false
-    prep.markKind = k
+    if (k !== 'erase') prep.markKind = k
   }
 })
 watch(() => prep.canMark, (ok) => !ok && (marking.value = null))
+// erase mode ends with the last mark: its button goes, so it mustn't be left on
+watch(() => prep.supportMarks?.marks.length ?? 0, (n) => { if (!n && marking.value === 'erase') marking.value = null })
 const marksMessage = computed(() => marksNote(prep.supportMarks, prep.supportMode))
-function toggleMarking(k: 'mark' | 'block') {
+function toggleMarking(k: 'mark' | 'block' | 'erase') {
   marking.value = marking.value === k ? null : k
 }
 /** tint overhangs while supports are on, so it's clear what they'll hold up (Kiri only: PrusaSlicer has its own) */
@@ -435,10 +437,13 @@ const engineNote = computed(() => {
             :selected-id="prep.selectedId"
             :result="prep.result?.file.bounds ?? null"
             :marks="prep.marksShown"
-            :marking="!!marking"
+            :marking="marking === 'mark' || marking === 'block'"
+            :erasing="marking === 'erase'"
+            :brush="prep.markSize"
             :overhang="overhang"
             @mark="prep.markClick"
             @unmark="prep.pickMark"
+            @erase="prep.eraseMarks"
             :plate-below="settings.plateSeeThrough"
             @pick="layFlat"
             @mode="is3d = $event"
@@ -465,6 +470,7 @@ const engineNote = computed(() => {
                 <RsButton size="sm" variant="quiet" @click="turn('y')">Turn on Y</RsButton>
                 <RsButton v-if="is3d" size="sm" variant="quiet" :aria-pressed="picking" @click="picking = !picking">{{ picking ? 'Cancel lay flat' : 'Lay flat' }}</RsButton>
                 <RsButton v-if="is3d && prep.canMark" size="sm" :variant="marking === 'mark' ? 'primary' : 'quiet'" :aria-pressed="marking === 'mark'" @click="toggleMarking('mark')">{{ marking === 'mark' ? 'Done marking' : 'Mark supports' }}</RsButton>
+                <RsButton v-if="is3d && prep.canMark && prep.supportMarks?.marks.length" size="sm" :variant="marking === 'erase' ? 'primary' : 'quiet'" :aria-pressed="marking === 'erase'" @click="toggleMarking('erase')">{{ marking === 'erase' ? 'Done erasing' : 'Erase marks' }}</RsButton>
                 <RsButton v-if="SHOW_BLOCKS && is3d && prep.canMark && job.engine === 'prusa'" size="sm" :variant="marking === 'block' ? 'primary' : 'quiet'" :aria-pressed="marking === 'block'" @click="toggleMarking('block')">{{ marking === 'block' ? 'Done blocking' : 'Block supports' }}</RsButton>
               </template>
               <RsButton v-if="proc !== 'cnc'" size="sm" variant="quiet" @click="prep.centre()">Centre</RsButton>
@@ -486,7 +492,7 @@ const engineNote = computed(() => {
                 <RsButton size="sm" aria-label="Bigger" @click="prep.setSelectedReach(prep.selectedMarkReach + 0.5)">+</RsButton>
                 <RsButton size="sm" variant="danger-outline" @click="prep.removeSelectedMark()">Remove</RsButton>
               </div>
-              <NumField v-else v-model="prep.markSize" label="Mark reach" unit="mm" :min="MARK_SIZES.min" :max="MARK_SIZES.max" :step="0.5" hint="For new marks" />
+              <NumField v-else v-model="prep.markSize" label="Mark reach" unit="mm" :min="MARK_SIZES.min" :max="MARK_SIZES.max" :step="0.5" hint="New marks and the eraser; or press and drag on the part" />
               <RsButton v-if="prep.supportMarks?.marks.length" size="sm" variant="quiet" @click="prep.clearMarks()">Clear marks</RsButton>
             </template>
             <p v-if="marksMessage" class="small" role="status">{{ marksMessage }}<template v-if="job.engine !== 'prusa' && prep.supportMarks?.marks.some((m) => m.kind === 'block')"> Kiri:Moto can't block support, so blocked spots are left out with it.</template></p>

@@ -230,6 +230,8 @@
   /* Preview: the model in the theme's selected colour, supports in its button colour (a lighter tint of the model when
      the two are alike), Mike Nov 7 */
   --rs-viewer-model: var(--rs-ink);
+  /* support marks painted on the part in Job setup: the theme's accent (Mike, Nov 7) */
+  --rs-viewer-paint: var(--rs-ink);
   --rs-viewer-support: var(--rs-btn-fill);
   /* Job setup's 3D bed: a white build plate with grey grid lines, the same in day and night (Mike, Nov 7) */
   --rs-viewer-plate: #ffffff;

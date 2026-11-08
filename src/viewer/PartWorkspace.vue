@@ -26,6 +26,10 @@ const props = defineProps<{
   marks?: Array<{ at: [number, number, number]; r: number; block?: boolean; selected?: boolean }>
   /** how see-through the build plate is from below, 0-100 % (Settings › Appearance; passed in, never read here) */
   plateBelow?: number
+  /** erasing support marks: a drag over painted marks wipes them */
+  erasing?: boolean
+  /** the brush's reach for a new mark or the eraser, in bed millimetres */
+  brush?: number
   /** tint faces that need support past this angle, or null */
   overhang?: number | null
 }>()
@@ -42,7 +46,9 @@ const emit = defineEmits<{
   /** this browser can't draw in 3D */
   failed: [message: string]
   /** a click on a part while marking supports, where on the bed */
-  mark: [id: number, point: [number, number, number]]
+  mark: [id: number, point: [number, number, number], reach: number]
+  /** a drag while erasing: wipe marks within `reach` of this spot */
+  erase: [point: [number, number, number], reach: number]
   /** a click on a mark's ball while marking: its place in `marks` */
   unmark: [index: number]
 }>()
@@ -64,6 +70,7 @@ function applyColours() {
   if (!stage.value || !scene) return
   const st = getComputedStyle(stage.value)
   scene.setColours({ ink: colourOf(st.color), paper: colourOf(st.backgroundColor) })
+  scene.setPaintColours(colourOf(st.getPropertyValue('--rs-viewer-paint').trim() || st.color), colourOf(st.getPropertyValue('--rs-text-muted').trim() || '#888888'))
   scene.setPlateBelow((props.plateBelow ?? 75) / 100)
   scene.setPlate({ plate: colourOf(st.getPropertyValue('--rs-viewer-plate').trim() || '#ffffff'), line: colourOf(st.getPropertyValue('--rs-viewer-plate-line').trim() || '#7d8389') })
 }
@@ -105,6 +112,31 @@ let press: { x: number; y: number } | null = null
 let rightPress: { x: number; y: number } | null = null
 let holdTimer: ReturnType<typeof setTimeout> | null = null
 const CLICK_SLOP = 6
+// ---- painting support marks (Mike, Nov 7): the brush follows the pointer; press and drag sizes a new mark
+// the mode a press started in is the one it finishes in: erasing the last mark ends erase mode mid-drag
+let paintPress: { id: number; point: [number, number, number]; r: number; touch: boolean; erase: boolean } | null = null
+let lastPointer: { x: number; y: number } | null = null
+let brushFrame = 0
+const brushR = () => props.brush ?? 4
+/** once a frame at most: show the brush where a mark would land, or grow the one being pressed, or wipe */
+function brushStep() {
+  brushFrame = 0
+  if (!scene || !lastPointer) return
+  const { x, y } = lastPointer
+  if (paintPress && !paintPress.erase && !paintPress.touch) {
+    const at = scene.hitLevel(x, y, paintPress.point[2])
+    if (at && press && Math.hypot(x - press.x, y - press.y) >= CLICK_SLOP) paintPress.r = Math.min(Math.max(Math.hypot(at[0] - paintPress.point[0], at[1] - paintPress.point[1]), 1), 40)
+    scene.setBrush(paintPress.point, paintPress.r)
+    return
+  }
+  const spot = scene.supportSpot(x, y)
+  scene.setBrush(spot?.point ?? null, brushR(), !!(paintPress?.erase ?? props.erasing))
+  if (paintPress?.erase && spot) emit('erase', spot.point, brushR())
+}
+function leave() {
+  lastPointer = null
+  if (!paintPress) scene?.setBrush(null, 0)
+}
 const HOLD_MS = 550
 
 function stopHold() {
@@ -141,6 +173,19 @@ function down(e: PointerEvent) {
       openMenu(x, y)
     }, HOLD_MS)
   }
+  if (props.marking || props.erasing) {
+    // on the part: this press marks (or erases) and, with a mouse, a drag sizes it, so the camera holds still. On a
+    // touch screen a tap marks and a drag still turns the view. Off the part the camera turns as usual.
+    const spot = scene.supportSpot(e.clientX, e.clientY)
+    if (spot) {
+      paintPress = { ...spot, r: brushR(), touch: e.pointerType === 'touch', erase: !!props.erasing }
+      if (!paintPress.touch) {
+        scene.setOrbit(false)
+        canvas.value?.setPointerCapture(e.pointerId)
+      }
+    }
+    return
+  }
   if (props.picking || props.marking) return
   const hit = scene.hitModel(e.clientX, e.clientY)
   if (!hit) return
@@ -159,6 +204,11 @@ function move(e: PointerEvent) {
     if (Math.hypot(e.clientX - press.x, e.clientY - press.y) < CLICK_SLOP) return // still deciding: a hold or a drag
     stopHold()
   }
+  if ((props.marking || props.erasing) && scene && !grab) {
+    lastPointer = { x: e.clientX, y: e.clientY }
+    if (!brushFrame) brushFrame = requestAnimationFrame(brushStep)
+    return
+  }
   if (!grab || !scene) return
   const at = scene.hitLevel(e.clientX, e.clientY, grab.z)
   if (at) emit('move', at[0] + grab.dx, at[1] + grab.dy)
@@ -172,21 +222,22 @@ function up(e: PointerEvent) {
   }
   if (grab) {
     endGrab()
-  } else if (props.marking && press && scene && Math.hypot(e.clientX - press.x, e.clientY - press.y) < CLICK_SLOP) {
-    // a click on a mark's ball removes that one mark
-    const onMark = scene.markUnder(e.clientX, e.clientY)
-    if (onMark !== null) {
-      markHint.value = null
-      emit('unmark', onMark)
-      press = null
-      return
-    }
-    // the mark goes on the overhang under the spot clicked: that's where Kiri builds support from
-    const spot = scene.supportSpot(e.clientX, e.clientY)
-    if (spot) {
-      markHint.value = null
-      emit('mark', spot.id, spot.point)
-    } else if (scene.hitModel(e.clientX, e.clientY)) markHint.value = 'Nothing under that spot hangs in the air: it already stands on the part or the bed.'
+  } else if (paintPress && scene) {
+    const p = paintPress
+    paintPress = null
+    scene.setOrbit(true)
+    const dragged = !!press && Math.hypot(e.clientX - press.x, e.clientY - press.y) >= CLICK_SLOP
+    if (p.touch && dragged) {
+      // a finger drag turned the view: nothing to mark
+    } else if (p.erase) emit('erase', p.point, brushR())
+    else if (!dragged) {
+      // a click inside a painted mark picks it; anywhere else on the part places a new one at the brush's size
+      const onMark = scene.markUnder(e.clientX, e.clientY)
+      if (onMark !== null) emit('unmark', onMark)
+      else emit('mark', p.id, p.point, brushR())
+    } else emit('mark', p.id, p.point, p.r)
+    markHint.value = null
+    scene.setBrush(null, 0)
   } else if (props.picking && press && scene && Math.hypot(e.clientX - press.x, e.clientY - press.y) < CLICK_SLOP) {
     const hit = scene.hitModel(e.clientX, e.clientY)
     if (hit) {
@@ -259,6 +310,7 @@ watch(() => props.picking, (on) => {
 })
 watch(() => props.boxes, (b) => scene?.setBoxes(b))
 watch(() => props.marks, (m) => scene?.setMarks(m ?? []), { deep: true })
+watch(() => [props.marking, props.erasing], ([m, er]) => { if (!m && !er) scene?.setBrush(null, 0) })
 watch(() => props.overhang, (a) => scene?.setOverhang(a ?? null))
 watch(() => props.bed, (b) => {
   scene?.setBed(b)
@@ -268,10 +320,11 @@ watch(() => props.bed, (b) => {
 
 <template>
   <div ref="stage" class="stage" :class="{ picking: picking || marking, movable: movable && !marking, dragging }">
-    <canvas ref="canvas" tabindex="0" role="img" :aria-label="label" @pointermove="move" @pointerup="up" @pointercancel="up" @keydown="key" @contextmenu.prevent />
+    <canvas ref="canvas" tabindex="0" role="img" :aria-label="label" @pointermove="move" @pointerup="up" @pointercancel="up" @pointerleave="leave" @keydown="key" @contextmenu.prevent />
     <p v-if="contextLost" class="lost" role="status">The browser paused the 3D drawing. It comes back by itself, or reload this page.</p>
     <p v-if="picking" class="pickhint" role="status">Click the face that should sit on the bed. Esc cancels.</p>
-    <p v-else-if="marking" class="pickhint" role="status">{{ markHint ?? 'Click the part above where it needs support: the mark goes on the overhang below. Click a mark to select it, then size it or remove it below.' }}</p>
+    <p v-else-if="erasing" class="pickhint" role="status">Drag over painted marks to wipe them.</p>
+    <p v-else-if="marking" class="pickhint" role="status">{{ markHint ?? 'Point at the part: the circle shows where support goes, on the overhang below. Click to mark it, or press and drag to size it. Click inside a mark to select it.' }}</p>
     <div class="views" role="group" aria-label="View">
       <RsButton size="sm" :variant="angle === 'angle' ? 'primary' : undefined" :aria-pressed="angle === 'angle'" @click="look('angle')">Angle</RsButton>
       <RsButton size="sm" :variant="angle === 'top' ? 'primary' : undefined" :aria-pressed="angle === 'top'" @click="look('top')">Top</RsButton>
