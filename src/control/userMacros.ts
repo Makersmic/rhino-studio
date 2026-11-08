@@ -16,7 +16,7 @@ export type MacroStep =
   | { kind: 'moveTo'; x: number | null; y: number | null; z: number | null; speed: number }
   | { kind: 'moveBy'; dx: number | null; dy: number | null; dz: number | null; speed: number }
   | { kind: 'temp'; heater: 'hotend' | 'bed'; target: number; wait: boolean }
-  | { kind: 'heatMaterial'; wait: boolean }
+  | { kind: 'heatMaterial'; material: string; wait: boolean }
   | { kind: 'fan'; percent: number }
   | { kind: 'wait'; seconds: number }
   | { kind: 'macro'; name: string }
@@ -52,7 +52,7 @@ export const STEP_TITLES: Record<StepKind, string> = {
   moveTo: 'Move to',
   moveBy: 'Move by',
   temp: 'Set temperature',
-  heatMaterial: 'Heat for the material',
+  heatMaterial: 'Heat for a material',
   fan: 'Part fan',
   wait: 'Wait',
   macro: 'Run a macro',
@@ -78,7 +78,7 @@ export function stepSummary(s: MacroStep): string {
     case 'temp':
       return `${s.heater === 'hotend' ? 'Hotend' : 'Bed'} ${n(s.target)}°${s.target === 0 ? ' (off)' : ''}${s.wait ? ', and wait' : ''}`
     case 'heatMaterial':
-      return `Hotend and bed from the material table${s.wait ? ', and wait' : ''}`
+      return `${s.material || '(no material)'}: hotend and bed from the mounted toolhead’s table${s.wait ? ', and wait' : ''}`
     case 'fan':
       return s.percent === 0 ? 'Off' : `${n(s.percent)} %`
     case 'wait':
@@ -104,7 +104,7 @@ export function newStep(kind: StepKind): MacroStep {
     case 'temp':
       return { kind, heater: 'hotend', target: 200, wait: false }
     case 'heatMaterial':
-      return { kind, wait: true }
+      return { kind, material: '', wait: true }
     case 'fan':
       return { kind, percent: 100 }
     case 'wait':
@@ -135,7 +135,7 @@ export function stepProblem(s: MacroStep): string | null {
     case 'temp':
       return num(s.target, 0, s.heater === 'hotend' ? HOTEND_MAX : BED_MAX) ? null : `0 to ${s.heater === 'hotend' ? HOTEND_MAX : BED_MAX}°`
     case 'heatMaterial':
-      return null
+      return /^[A-Za-z0-9_.-]{1,40}$/.test(s.material) ? null : 'Pick a material'
     case 'fan':
       return num(s.percent, 0, 100) ? null : '0 to 100 %'
     case 'wait':
@@ -180,8 +180,8 @@ export interface RunContext {
   position: number[] | null
   min: number[] | null
   max: number[] | null
-  /** the mounted tool's material temperatures, for "Heat for the material" */
-  material: { hotend: number; bed: number; name: string } | null
+  /** the mounted toolhead's material table (Job setup's), for "Heat for a material" */
+  materials: Array<{ key: string; name: string; hotend: number | null; bed: number | null }>
   /** Klipper's macros (upper case) */
   macros: ReadonlySet<string>
 }
@@ -251,9 +251,11 @@ export function buildMacro(m: MacroDraft, ctx: RunContext): BuildResult {
       }
       case 'heatMaterial': {
         if (!ctx.printHead) return { error: `${at}: needs a confirmed print head mounted` }
-        if (!ctx.material) return { error: `${at}: no material is set for the mounted toolhead` }
-        const h = Math.round(Math.min(ctx.material.hotend, HOTEND_MAX))
-        const b = Math.round(Math.min(ctx.material.bed, BED_MAX))
+        const mat = ctx.materials.find((x) => x.key === s.material)
+        if (!mat) return { error: `${at}: ${s.material} isn't in ${ctx.tool}'s material table` }
+        if (mat.hotend == null || mat.bed == null) return { error: `${at}: ${s.material} has no temperatures in the table` }
+        const h = Math.round(Math.min(mat.hotend, HOTEND_MAX))
+        const b = Math.round(Math.min(mat.bed, BED_MAX))
         // the bed first: it's slowest, and heating both at once is what the console would do anyway
         out.push(`M140 S${b}`, `M104 S${h}`)
         if (s.wait) out.push(`M190 S${b}`, `M109 S${h}`)
@@ -284,27 +286,30 @@ export function buildMacro(m: MacroDraft, ctx: RunContext): BuildResult {
 // ---- starting examples (Mike, Nov 7: he mostly types simple moves and heating) ------------------------------------
 
 /**
- * Park the head, heat for the material, cool down. `park` is RHINO_POSITIONS' park_x / park_y (myrhino/positions.cfg),
- * the spot END_PRINT uses; without it, Park only lifts Z.
+ * Park the head, heat for a material, cool down. `park` is RHINO_POSITIONS' park_x / park_y (myrhino/positions.cfg),
+ * the spot END_PRINT uses; without it, Park only lifts Z. `material` is the one to heat for (PLA if the mounted
+ * toolhead has it); without one, that starter is left out.
  */
-export function starterMacros(park: { x: number; y: number } | null): MacroDraft[] {
+export function starterMacros(park: { x: number; y: number } | null, material: string | null): MacroDraft[] {
   const parkSteps: MacroStep[] = [
     { kind: 'home', axes: 'all', onlyIfNeeded: true },
     { kind: 'moveBy', dx: null, dy: null, dz: 10, speed: 10 },
   ]
   if (park) parkSteps.push({ kind: 'moveTo', x: park.x, y: park.y, z: null, speed: 100 })
-  return [
+  const out: MacroDraft[] = [
     { name: 'Park the head', toolheads: [], notes: 'Lifts 10 mm, then goes to the park spot END_PRINT uses (myrhino/positions.cfg).', steps: parkSteps },
-    { name: 'Heat for the material', toolheads: [], notes: 'Hotend and bed from the material table for the mounted print head.', steps: [{ kind: 'heatMaterial', wait: true }] },
-    {
-      name: 'Cool down',
-      toolheads: [],
-      notes: 'Heaters and part fan off.',
-      steps: [
-        { kind: 'temp', heater: 'hotend', target: 0, wait: false },
-        { kind: 'temp', heater: 'bed', target: 0, wait: false },
-        { kind: 'fan', percent: 0 },
-      ],
-    },
   ]
+  if (material)
+    out.push({ name: `Heat for ${material}`, toolheads: [], notes: 'Hotend and bed from the mounted print head’s material table.', steps: [{ kind: 'heatMaterial', material, wait: true }] })
+  out.push({
+    name: 'Cool down',
+    toolheads: [],
+    notes: 'Heaters and part fan off.',
+    steps: [
+      { kind: 'temp', heater: 'hotend', target: 0, wait: false },
+      { kind: 'temp', heater: 'bed', target: 0, wait: false },
+      { kind: 'fan', percent: 0 },
+    ],
+  })
+  return out
 }

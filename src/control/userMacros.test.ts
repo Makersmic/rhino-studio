@@ -11,7 +11,7 @@ const ctx = (o: Partial<RunContext> = {}): RunContext => ({
   position: [100, 100, 10, 0],
   min: [0, 0, 0],
   max: [550, 375, 300],
-  material: { hotend: 215, bed: 60, name: 'PLA' },
+  materials: [{ key: 'PLA', name: 'PLA', hotend: 215, bed: 60 }, { key: 'TPU', name: 'TPU', hotend: null, bed: null }],
   macros: new Set(['CLEAN_NOZZLE', 'END_PRINT']),
   ...o,
 })
@@ -48,9 +48,10 @@ describe('buildMacro', () => {
     expect(r.slice(1, -1)).toEqual(['G28 X Y', 'G90', 'G1 X275 Y350 F6000', 'M109 S210', 'M140 S60', 'M106 S128', 'M107', 'G4 P1500', 'CLEAN_NOZZLE', 'RESPOND MSG="Ready"', 'M117 hi'])
   })
 
-  it('heats for the mounted material, bed first, and waits when asked', () => {
-    expect(lines(buildMacro(macro([{ kind: 'heatMaterial', wait: true }]), ctx())).slice(1, -1)).toEqual(['M140 S60', 'M104 S215', 'M190 S60', 'M109 S215'])
-    expect(lines(buildMacro(macro([{ kind: 'heatMaterial', wait: true }]), ctx({ material: null })))[0]).toMatch(/no material/)
+  it('heats for a material from the mounted toolhead’s table, bed first, and waits when asked', () => {
+    expect(lines(buildMacro(macro([{ kind: 'heatMaterial', material: 'PLA', wait: true }]), ctx())).slice(1, -1)).toEqual(['M140 S60', 'M104 S215', 'M190 S60', 'M109 S215'])
+    expect(lines(buildMacro(macro([{ kind: 'heatMaterial', material: 'PETG', wait: true }]), ctx()))[0]).toMatch(/PETG isn't in BlockOne's material table/)
+    expect(lines(buildMacro(macro([{ kind: 'heatMaterial', material: 'TPU', wait: true }]), ctx()))[0]).toMatch(/no temperatures/)
   })
 
   it('skips "home only if needed" when those axes are homed, and homes when they aren’t', () => {
@@ -95,7 +96,7 @@ describe('the console still decides what asks first', () => {
     expect(c.blocked).toBeNull()
   })
   it('doesn’t ask before a heat-only macro, as the console doesn’t', () => {
-    const c = checked(macro([{ kind: 'heatMaterial', wait: true }, { kind: 'fan', percent: 0 }, { kind: 'message', text: 'Hot' }]))
+    const c = checked(macro([{ kind: 'heatMaterial', material: 'PLA', wait: true }, { kind: 'fan', percent: 0 }, { kind: 'message', text: 'Hot' }]))
     expect(c.needsConfirm).toBe(false)
     expect(c.blocked).toBeNull()
   })
@@ -123,11 +124,12 @@ describe('step checks', () => {
 })
 
 describe('starterMacros', () => {
-  it('parks at the END_PRINT spot, heats for the material, cools down; all valid', () => {
-    const s = starterMacros({ x: 275, y: 370 })
-    expect(s.map((m) => m.name)).toEqual(['Park the head', 'Heat for the material', 'Cool down'])
+  it('parks at the END_PRINT spot, heats for a material, cools down; all valid', () => {
+    const s = starterMacros({ x: 275, y: 370 }, 'PLA')
+    expect(s.map((m) => m.name)).toEqual(['Park the head', 'Heat for PLA', 'Cool down'])
     for (const m of s) expect(macroProblem(m)).toBeNull()
     expect(s[0]!.steps.at(-1)).toMatchObject({ kind: 'moveTo', x: 275, y: 370 })
-    expect(starterMacros(null)[0]!.steps.some((x) => x.kind === 'moveTo')).toBe(false)
+    expect(starterMacros(null, null)[0]!.steps.some((x) => x.kind === 'moveTo')).toBe(false)
+    expect(starterMacros(null, null).map((m) => m.name)).toEqual(['Park the head', 'Cool down'])
   })
 })
