@@ -21,6 +21,8 @@ interface Saved {
   toolAdapter: string
   /** On machines that change tools themselves: confirm swaps started from Studio's Swap list */
   confirmSwaps: boolean
+  /** Job setup's 3D view: how see-through the build plate is when you look from below, 0 (solid) to 100 % (Mike, Nov 7) */
+  plateSeeThrough: number
 }
 
 function load(): Saved {
@@ -33,11 +35,12 @@ function load(): Saved {
         portalUrl: typeof v.portalUrl === 'string' ? v.portalUrl : '',
         toolAdapter: typeof v.toolAdapter === 'string' ? v.toolAdapter : 'auto',
         confirmSwaps: v.confirmSwaps !== false,
+        plateSeeThrough: typeof v.plateSeeThrough === 'number' && v.plateSeeThrough >= 0 && v.plateSeeThrough <= 100 ? v.plateSeeThrough : 75,
       }
   } catch {
     /* storage blocked or bad JSON */
   }
-  return { moonrakerUrl: '', autoConnect: true, portalUrl: '', toolAdapter: 'auto', confirmSwaps: true }
+  return { moonrakerUrl: '', autoConnect: true, portalUrl: '', toolAdapter: 'auto', confirmSwaps: true, plateSeeThrough: 75 }
 }
 
 /** Where to reach the Portal: the setting, or /portal on this app's address. */
@@ -59,14 +62,15 @@ export const useSettingsStore = defineStore('settings', () => {
   const portalUrl = ref(saved.portalUrl)
   const toolAdapter = ref(saved.toolAdapter)
   const confirmSwaps = ref(saved.confirmSwaps)
+  const plateSeeThrough = ref(saved.plateSeeThrough)
 
-  watch([moonrakerUrl, autoConnect, portalUrl, toolAdapter, confirmSwaps], () => {
+  watch([moonrakerUrl, autoConnect, portalUrl, toolAdapter, confirmSwaps, plateSeeThrough], () => {
     try {
-      localStorage.setItem(KEY, JSON.stringify({ moonrakerUrl: moonrakerUrl.value, autoConnect: autoConnect.value, portalUrl: portalUrl.value, toolAdapter: toolAdapter.value, confirmSwaps: confirmSwaps.value }))
+      localStorage.setItem(KEY, JSON.stringify({ moonrakerUrl: moonrakerUrl.value, autoConnect: autoConnect.value, portalUrl: portalUrl.value, toolAdapter: toolAdapter.value, confirmSwaps: confirmSwaps.value, plateSeeThrough: plateSeeThrough.value }))
     } catch {
       /* ignore */
     }
   })
 
-  return { moonrakerUrl, autoConnect, portalUrl, toolAdapter, confirmSwaps }
+  return { moonrakerUrl, autoConnect, portalUrl, toolAdapter, confirmSwaps, plateSeeThrough }
 })

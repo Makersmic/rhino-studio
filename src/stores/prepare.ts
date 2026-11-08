@@ -381,6 +381,7 @@ export const usePrepareStore = defineStore('prepare', () => {
   /** whether clicks can place marks: Kiri only when marking is the mode; PrusaSlicer whenever supports are on */
   const canMark = computed(() => supportMode.value === 'marked' || (usesPrusa.value && supportMode.value === 'auto'))
   function setSupportMode(mode: 'off' | 'auto' | 'marked') {
+    selectedMark.value = null
     const j = job.value
     if (!j) return
     if (usesPrusa.value) {
@@ -394,7 +395,27 @@ export const usePrepareStore = defineStore('prepare', () => {
   }
   /** what a click places while marking: support, or (PrusaSlicer) a block */
   const markKind = ref<'mark' | 'block'>('mark')
-  const marksShown = computed(() => (supportMarks.value ? marksOnBed(markParts.value, supportMarks.value.marks) : []))
+  /** The mark picked to resize or remove (its place in supportMarks.marks), or null (Mike, Nov 7) */
+  const selectedMark = ref<number | null>(null)
+  const marksShown = computed(() =>
+    supportMarks.value ? marksOnBed(markParts.value, supportMarks.value.marks).map((m) => ({ ...m, selected: m.i === selectedMark.value })) : [],
+  )
+  /** A click on a mark's ball: select it, or let it go if it was the one selected. `shown` is its place in marksShown */
+  function pickMark(shown: number) {
+    const i = marksShown.value[shown]?.i
+    selectedMark.value = i === undefined || i === selectedMark.value ? null : i
+  }
+  const selectedMarkReach = computed(() => (selectedMark.value != null ? (supportMarks.value?.marks[selectedMark.value]?.r ?? null) : null))
+  /** Resize the selected mark: how far round its spot support reaches (mm, in the part's own size) */
+  function setSelectedReach(r: number) {
+    const m = selectedMark.value != null ? supportMarks.value?.marks[selectedMark.value] : undefined
+    if (!m || !Number.isFinite(r)) return
+    m.r = Math.round(Math.min(Math.max(r, MARK_SIZES.min), MARK_SIZES.max) * 10) / 10
+  }
+  function removeSelectedMark() {
+    if (selectedMark.value != null) supportMarks.value?.marks.splice(selectedMark.value, 1)
+    selectedMark.value = null
+  }
   /** A click on a part while marking: a new mark on the overhang there */
   function markClick(partId: number, bed: [number, number, number]) {
     // PrusaSlicer on automatic can take marks without "only where I mark": the list starts with the first one
@@ -405,6 +426,8 @@ export const usePrepareStore = defineStore('prepare', () => {
     const mp = markParts.value.find((p) => p.name === view?.name)
     if (!mp || sm.marks.length >= MAX_MARKS) return
     sm.marks.push(markAt(mp, bed, markSize.value, markKind.value === 'block' && usesPrusa.value))
+    // the new one is selected, so it can be sized straight away
+    selectedMark.value = sm.marks.length - 1
   }
   /** A click on a mark's ball: `shown` is its place among the marks drawn (marksShown) */
   function removeMark(shown: number) {
@@ -413,6 +436,7 @@ export const usePrepareStore = defineStore('prepare', () => {
   }
   function clearMarks() {
     if (supportMarks.value) supportMarks.value.marks = []
+    selectedMark.value = null
   }
 
   /** Every part where it is now */
@@ -646,6 +670,7 @@ export const usePrepareStore = defineStore('prepare', () => {
 
   function clearPart() {
     stage.value = 'setup'
+    selectedMark.value = null
     loadSkipped.value = null
     supportMarks.value = null
     partsList.value = []
@@ -938,6 +963,11 @@ export const usePrepareStore = defineStore('prepare', () => {
     marksShown,
     markClick,
     removeMark,
+    selectedMark,
+    pickMark,
+    selectedMarkReach,
+    setSelectedReach,
+    removeSelectedMark,
     clearMarks,
     loadSkipped,
     duplicatePart,

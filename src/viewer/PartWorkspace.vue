@@ -23,7 +23,9 @@ const props = defineProps<{
   /** marking support spots: a click on a part adds or removes one */
   marking?: boolean
   /** support marks to show, on the bed */
-  marks?: Array<{ at: [number, number, number]; r: number; block?: boolean }>
+  marks?: Array<{ at: [number, number, number]; r: number; block?: boolean; selected?: boolean }>
+  /** how see-through the build plate is from below, 0-100 % (Settings › Appearance; passed in, never read here) */
+  plateBelow?: number
   /** tint faces that need support past this angle, or null */
   overhang?: number | null
 }>()
@@ -53,6 +55,7 @@ const dragging = ref(false)
 const angle = ref<ViewAngle>('angle')
 const wholeBed = ref(true)
 
+watch(() => props.plateBelow, (v) => scene?.setPlateBelow((v ?? 75) / 100))
 let scene: GcodeScene | null = null
 let observer: ResizeObserver | null = null
 let stopTheme: (() => void) | null = null
@@ -61,6 +64,7 @@ function applyColours() {
   if (!stage.value || !scene) return
   const st = getComputedStyle(stage.value)
   scene.setColours({ ink: colourOf(st.color), paper: colourOf(st.backgroundColor) })
+  scene.setPlateBelow((props.plateBelow ?? 75) / 100)
   scene.setPlate({ plate: colourOf(st.getPropertyValue('--rs-viewer-plate').trim() || '#ffffff'), line: colourOf(st.getPropertyValue('--rs-viewer-plate-line').trim() || '#7d8389') })
 }
 const onVisible = () => {
@@ -267,7 +271,7 @@ watch(() => props.bed, (b) => {
     <canvas ref="canvas" tabindex="0" role="img" :aria-label="label" @pointermove="move" @pointerup="up" @pointercancel="up" @keydown="key" @contextmenu.prevent />
     <p v-if="contextLost" class="lost" role="status">The browser paused the 3D drawing. It comes back by itself, or reload this page.</p>
     <p v-if="picking" class="pickhint" role="status">Click the face that should sit on the bed. Esc cancels.</p>
-    <p v-else-if="marking" class="pickhint" role="status">{{ markHint ?? 'Click the part above where it needs support: the mark goes on the overhang below. Click a mark to remove it.' }}</p>
+    <p v-else-if="marking" class="pickhint" role="status">{{ markHint ?? 'Click the part above where it needs support: the mark goes on the overhang below. Click a mark to select it, then size it or remove it below.' }}</p>
     <div class="views" role="group" aria-label="View">
       <RsButton size="sm" :variant="angle === 'angle' ? 'primary' : undefined" :aria-pressed="angle === 'angle'" @click="look('angle')">Angle</RsButton>
       <RsButton size="sm" :variant="angle === 'top' ? 'primary' : undefined" :aria-pressed="angle === 'top'" @click="look('top')">Top</RsButton>

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 /** Settings / Appearance: day or night, and the panel colour theme shared by every screen. */
+import { useSettingsStore } from '@/stores/settings'
 import './settings.css'
 import RsPanel from '@/components/RsPanel.vue'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
@@ -119,6 +120,7 @@ const options: { value: ThemePref; label: string }[] = [
   { value: 'dark', label: 'Dark' },
   { value: 'light', label: 'Light' },
 ]
+const settings = useSettingsStore()
 </script>
 
 <template>
@@ -160,6 +162,13 @@ const options: { value: ThemePref; label: string }[] = [
           <span v-if="pending" class="pending">Showing a preview: Apply to keep it.</span>
         </div>
 
+        <h3 class="sub-h">3D view</h3>
+        <label class="field plate">
+          <span>Build plate seen from below: {{ settings.plateSeeThrough }} % see-through</span>
+          <input v-model.number="settings.plateSeeThrough" type="range" min="0" max="100" step="5" aria-label="How see-through the build plate is from below" />
+        </label>
+        <p class="muted small">In Job setup, turn the view to look under a part: the white plate lets you see its underside and the support marks there. 0 % keeps it solid. Kept in this browser only.</p>
+
         <TextColourPicker :locked="themeChoice !== CURRENT" />
         <TypefacePicker :locked="themeChoice !== CURRENT" />
         <PageImagePicker :locked="themeChoice !== CURRENT" />
@@ -186,6 +195,8 @@ const options: { value: ThemePref; label: string }[] = [
 </template>
 
 <style scoped>
+.plate { display: flex; flex-direction: column; gap: 6px; max-width: 420px; }
+.plate input[type='range'] { width: 100%; }
 .theme-pick { display: flex; align-items: center; gap: var(--rs-space-3); margin-bottom: var(--rs-space-2); }
 .theme-pick select {
   flex: 1; min-width: 0; height: 38px; padding: 0 10px; border-radius: var(--rs-radius-md);

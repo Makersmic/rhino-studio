@@ -11,9 +11,10 @@
  * The slicing runs in this browser (src/slicer/), so the Pi only ever receives
  * the finished file. See src/stores/prepare.ts.
  */
+import { useSettingsStore } from '@/stores/settings'
 import PreviewView from '@/views/PreviewView.vue'
 import StartEndLine from '@/toolmgr/StartEndLine.vue'
-import { computed, defineAsyncComponent, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import RsPanel from '@/components/RsPanel.vue'
 import RsButton from '@/components/RsButton.vue'
 import Icon from '@/icons/Icon.vue'
@@ -47,6 +48,7 @@ const spin = computed(() =>
   spinMode({ lighter: loadReduced(), reducedMotion: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false, failed: spinFailed.value }),
 )
 const machine = useMachineStore()
+const settings = useSettingsStore()
 
 const picker = ref<HTMLInputElement | null>(null)
 const dragging = ref(false)
@@ -122,6 +124,20 @@ function confirm() {
   if (chosen.value) prep.confirmProcess(chosen.value)
   choice.value = null
 }
+// the selected mark's reach, for its size field; Delete removes it and Esc lets it go while marking
+const selReach = computed({ get: () => prep.selectedMarkReach ?? MARK_SIZES.start, set: (v: number) => prep.setSelectedReach(v) })
+function onMarkKey(e: KeyboardEvent) {
+  if (prep.selectedMark == null || prep.step !== 'setup') return
+  const t = e.target as HTMLElement | null
+  if (t && /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)) return
+  if (e.key === 'Delete' || e.key === 'Backspace') {
+    e.preventDefault()
+    prep.removeSelectedMark()
+  } else if (e.key === 'Escape') prep.selectedMark = null
+}
+onMounted(() => window.addEventListener('keydown', onMarkKey))
+onBeforeUnmount(() => window.removeEventListener('keydown', onMarkKey))
+
 function goStep(s: 'file' | 'process' | 'setup' | 'preview' | 'jobfile') {
   if (s === 'file') prep.clearPart()
   else if (s === 'process') prep.changeProcess()
@@ -422,7 +438,8 @@ const engineNote = computed(() => {
             :marking="!!marking"
             :overhang="overhang"
             @mark="prep.markClick"
-            @unmark="prep.removeMark"
+            @unmark="prep.pickMark"
+            :plate-below="settings.plateSeeThrough"
             @pick="layFlat"
             @mode="is3d = $event"
             @select="prep.selectPart"
@@ -463,7 +480,13 @@ const engineNote = computed(() => {
               </select>
             </div>
             <template v-if="prep.canMark">
-              <NumField v-model="prep.markSize" label="Mark reach" unit="mm" :min="MARK_SIZES.min" :max="MARK_SIZES.max" :step="0.5" hint="For new marks" />
+              <div v-if="prep.selectedMarkReach != null" class="selmark" role="group" aria-label="The selected mark">
+                <RsButton size="sm" aria-label="Smaller" @click="prep.setSelectedReach(prep.selectedMarkReach - 0.5)">−</RsButton>
+                <NumField v-model="selReach" label="Selected mark's reach" unit="mm" :min="MARK_SIZES.min" :max="MARK_SIZES.max" :step="0.5" hint="Delete removes it, Esc lets it go" />
+                <RsButton size="sm" aria-label="Bigger" @click="prep.setSelectedReach(prep.selectedMarkReach + 0.5)">+</RsButton>
+                <RsButton size="sm" variant="danger-outline" @click="prep.removeSelectedMark()">Remove</RsButton>
+              </div>
+              <NumField v-else v-model="prep.markSize" label="Mark reach" unit="mm" :min="MARK_SIZES.min" :max="MARK_SIZES.max" :step="0.5" hint="For new marks" />
               <RsButton v-if="prep.supportMarks?.marks.length" size="sm" variant="quiet" @click="prep.clearMarks()">Clear marks</RsButton>
             </template>
             <p v-if="marksMessage" class="small" role="status">{{ marksMessage }}<template v-if="job.engine !== 'prusa' && prep.supportMarks?.marks.some((m) => m.kind === 'block')"> Kiri:Moto can't block support, so blocked spots are left out with it.</template></p>
@@ -667,6 +690,7 @@ const engineNote = computed(() => {
 .layout { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(320px, 1fr); gap: var(--rs-gap); align-items: start; }
 .side { display: flex; flex-direction: column; gap: var(--rs-gap); min-width: 0; }
 .jobfile { max-width: 860px; }
+.selmark { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--rs-space-2); }
 @media (max-width: 1100px) { .layout { grid-template-columns: minmax(0, 1fr); } }
 
 .drop.dragging { outline: 2px dashed var(--rs-ink); outline-offset: -6px; }

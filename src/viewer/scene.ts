@@ -858,6 +858,25 @@ export class GcodeScene {
 
   private plate: Mesh | null = null
   private plateColours: { plate: Rgb; line: Rgb } | null = null
+  /** how see-through the plate is when the camera is under the bed, 0..1 (Settings › Appearance, Mike Nov 7) */
+  private plateBelow = 0.75
+  setPlateBelow(f: number): void {
+    this.plateBelow = Math.min(Math.max(f, 0), 1)
+    this.draw()
+  }
+  /** Solid from above; from below, see-through by the user's setting, so a part's underside and its marks show */
+  private shadePlate(): void {
+    if (!this.plate) return
+    const m = this.plate.material as MeshBasicMaterial
+    const below = this.camera.position.z < this.plate.position.z && this.plateBelow > 0
+    const opacity = below ? 1 - this.plateBelow : 1
+    if (m.opacity !== opacity || m.transparent !== below) {
+      m.opacity = opacity
+      m.transparent = below
+      m.depthWrite = !below
+      m.needsUpdate = true
+    }
+  }
   private lastColours: ViewerColours | null = null
   /**
    * A solid build plate under the bed's grid (Job setup, Mike Nov 7: white), or null for lines only. Drawn just below
@@ -948,7 +967,7 @@ export class GcodeScene {
   private markMesh: InstancedMesh | null = null
   private markCount = 0
   /** Support marks: small balls at each spot (bed coordinates), `r` mm across their reach. Amber adds, blue blocks. */
-  setMarks(list: Array<{ at: [number, number, number]; r: number; block?: boolean }>): void {
+  setMarks(list: Array<{ at: [number, number, number]; r: number; block?: boolean; selected?: boolean }>): void {
     this.markCount = list.length
     if (this.markMesh && this.markMesh.count < list.length) {
       this.scene.remove(this.markMesh)
@@ -967,10 +986,11 @@ export class GcodeScene {
       const t = new Matrix4()
       list.forEach((k, i) => {
         // shown smaller than their reach, so they mark the spot without hiding the part
-        const s = Math.max(0.6, k.r * 0.35)
+        // the selected one a little bigger and pale, so it's clear which one the size and Remove act on
+        const s = Math.max(0.6, k.r * 0.35) * (k.selected ? 1.25 : 1)
         this.markMesh!.setMatrixAt(i, t.makeScale(s, s, s).setPosition(k.at[0], k.at[1], k.at[2]))
         // the bed mesh's two colours: amber where support goes, blue where it's kept off (never red)
-        this.markMesh!.setColorAt(i, new Color(k.block ? 0x3d8fe0 : 0xf5a833))
+        this.markMesh!.setColorAt(i, new Color(k.selected ? (k.block ? 0xbfe0ff : 0xffe7b0) : k.block ? 0x3d8fe0 : 0xf5a833))
       })
       if (this.markMesh.instanceColor) this.markMesh.instanceColor.needsUpdate = true
       this.markMesh.count = list.length
@@ -1192,6 +1212,7 @@ export class GcodeScene {
       this.pending = 0
       if (this.disposed) return
       this.placeRunner()
+      this.shadePlate()
       if (this.composer) this.composer.render()
       else this.renderer.render(this.scene, this.camera)
     })

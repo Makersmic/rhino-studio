@@ -33,7 +33,8 @@ const props = defineProps<{
   fileText?: string | null
   paths?: Array<Array<[number, number]>> | null
   /** support marks on the bed, whether a click adds them, and the overhang angle to tint (null: none) */
-  marks?: Array<{ at: [number, number, number]; r: number; block?: boolean }>
+  marks?: Array<{ at: [number, number, number]; r: number; block?: boolean; selected?: boolean }>
+  plateBelow?: number
   marking?: boolean
   overhang?: number | null
 }>()
@@ -192,6 +193,7 @@ const label = computed(() => (props.part ? `${props.part.name} on the bed in 3D$
         :overhang="overhang"
         @mark="(id, pt) => emit('mark', id, pt)"
         @unmark="emit('unmark', $event)"
+        :plate-below="plateBelow"
         @select="emit('select', $event)"
         @menu="(id, x, y, n) => emit('menu', id, x, y, n)"
         @move="moveTo"
