@@ -178,6 +178,7 @@ export function rhinoFile(kiri: string, job: PrepareJob, part: PartInfo, _machin
         `START_JOB TOOLHEAD=${job.toolhead} MATERIAL=${mat} NOZZLE_SIZE=${fmt(f.nozzle)} EXTRUDER=${f.path}`,
         ...(job.tuned?.rotationDistance != null ? [`SET_EXTRUDER_ROTATION_DISTANCE EXTRUDER=extruder DISTANCE=${Number(job.tuned.rotationDistance.toFixed(4))} ; calibrated (Studio tuning)`] : []),
         ...(paLine(job) ? [paLine(job)!] : []),
+        ...(job.tuned?.extrusionMultiplier != null ? [`M221 S${Number((job.tuned.extrusionMultiplier * 100).toFixed(1))} ; tuned flow (Studio tuning)`] : []),
         'G90 ; absolute X/Y/Z',
         'G21 ; millimetres',
         `M83 ; relative extrusion (${engine} writes E per move)`,

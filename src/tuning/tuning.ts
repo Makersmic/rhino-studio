@@ -270,3 +270,114 @@ export function paPatternBounds(bed: { x: number; y: number }, columns: number):
   return { x0, y0: yc - P.leg - 12, x1: x0 + columns * P.pitch, y1: yc + P.leg }
 }
 export const patternClear = (r: Rect, keepOut: Rect[]) => !keepOut.some((z) => r.x0 < z.x1 && r.x1 > z.x0 && r.y0 < z.y1 && r.y1 > z.y0)
+
+// ---- extrusion multiplier (Ellis: 30x30x3 cubes, many top layers, monotonic top, smoothest top wins) ---------------
+
+export const EM_CUBES = { size: 30, height: 3, layer: 0.2, pitch: 40, bottom: 2, infill: 2, walls: 2, infillGap: 3.3 } as const
+const FEED = { first: 1200, walls: 2400, infill: 3600, top: 3600, travel: 9000 }
+
+/** The multipliers tried, one cube each, left to right */
+export function emValues(start: number, step: number, count: number): number[] {
+  return Array.from({ length: count }, (_, i) => Math.round((start + step * i) * 1000) / 1000)
+}
+/** Finer, round a pick (Ellis: then 0.5 % steps) */
+export function emRefine(pick: number): { start: number; step: number; count: number } {
+  return { start: Math.round((pick - 0.01) * 1000) / 1000, step: 0.005, count: 5 }
+}
+/** When every cube looks alike: a wider spread round the middle */
+export function emWider(): { start: number; step: number; count: number } {
+  return { start: 0.86, step: 0.04, count: 6 }
+}
+
+export function emCubesBounds(bed: { x: number; y: number }, count: number): Rect {
+  const C = EM_CUBES
+  const x0 = Math.round((bed.x - (count * C.pitch - (C.pitch - C.size))) / 2)
+  const y0 = Math.round(bed.y / 2 - C.size / 2)
+  return { x0, y0, x1: x0 + count * C.pitch, y1: y0 + C.size }
+}
+
+/**
+ * The extrusion multiplier test as a job file: cubes in a row, each at its own multiplier (M221 before it on every
+ * layer), two walls, two solid bottom layers, two of sparse infill, then solid top layers to the top; the last one laid
+ * in one direction (monotonic) at 60 mm/s, line width 100 % of the nozzle (Ellis' settings). M221 S100 at the end.
+ */
+export function emCubesFile(o: { tool: string; material: string; nozzle: number; path: number; rotationDistance?: number; pressureAdvance?: number; bed: { x: number; y: number }; values: number[] }): string {
+  const C = EM_CUBES
+  const w = o.nozzle
+  const h = C.layer
+  const e = (len: number) => Number(((w * h * len) / FILAMENT_AREA).toFixed(5))
+  const f = (v: number) => Number(v.toFixed(3))
+  const layers = Math.round(C.height / h)
+  const b = emCubesBounds(o.bed, o.values.length)
+  const out = [
+    `; rhino_toolhead = ${o.tool}`,
+    `; Rhino Studio extrusion multiplier cubes (Ellis' Print Tuning Guide): ${o.values.join(', ')}`,
+    'M140 S0 ; bed off until START_JOB heats it from the material table',
+    'M104 S0 ; nozzle off until START_JOB heats it',
+    `START_JOB TOOLHEAD=${o.tool} MATERIAL=${o.material} NOZZLE_SIZE=${f(o.nozzle)} EXTRUDER=${o.path}`,
+    ...(o.rotationDistance != null ? [`SET_EXTRUDER_ROTATION_DISTANCE EXTRUDER=extruder DISTANCE=${o.rotationDistance} ; calibrated (Studio tuning)`] : []),
+    ...(o.pressureAdvance != null ? [`SET_PRESSURE_ADVANCE ADVANCE=${o.pressureAdvance} ; tuned (Studio tuning)`] : []),
+    'G90',
+    'G21',
+    'M83',
+    'G92 E0',
+  ]
+  let px = 0
+  let py = 0
+  const to = (x: number, y: number, feed: number) => {
+    out.push(`G1 X${f(x)} Y${f(y)} E${e(Math.hypot(x - px, y - py))} F${feed}`)
+    px = x
+    py = y
+  }
+  const travel = (x: number, y: number, retract = true) => {
+    if (retract) out.push('G1 E-0.8 F1800', `G0 X${f(x)} Y${f(y)} F${FEED.travel}`, 'G1 E0.8 F1800')
+    else out.push(`G0 X${f(x)} Y${f(y)} F${FEED.travel}`)
+    px = x
+    py = y
+  }
+  for (let layer = 1; layer <= layers; layer++) {
+    const z = f(h * layer)
+    out.push(';LAYER_CHANGE', `;Z:${z}`, `G1 Z${z} F600`)
+    const first = layer === 1
+    const top = layer === layers
+    const solid = layer <= C.bottom || layer > C.bottom + C.infill
+    o.values.forEach((em, i) => {
+      const x0 = b.x0 + i * C.pitch
+      const y0 = b.y0
+      out.push(`M221 S${f(em * 100)}`)
+      // walls, outside in
+      for (let k = 0; k < C.walls; k++) {
+        const d = w / 2 + k * w
+        const feed = first ? FEED.first : FEED.walls
+        travel(x0 + d, y0 + d)
+        to(x0 + C.size - d, y0 + d, feed)
+        to(x0 + C.size - d, y0 + C.size - d, feed)
+        to(x0 + d, y0 + C.size - d, feed)
+        to(x0 + d, y0 + d, feed)
+      }
+      // inside: solid lines (monotonic on top, back and forth below), or sparse infill
+      const lo = C.walls * w
+      const hi = C.size - C.walls * w
+      const gap = solid ? w : C.infillGap
+      const alongX = layer % 2 === 0
+      const feed = first ? FEED.first : top ? FEED.top : FEED.infill
+      let dir = 1
+      for (let s = lo + w / 2; s <= hi - w / 2 + 1e-6; s += gap) {
+        const a = dir > 0 || top ? lo : hi
+        const c = dir > 0 || top ? hi : lo
+        const [sx, sy, ex, ey] = alongX ? [x0 + a, y0 + s, x0 + c, y0 + s] : [x0 + s, y0 + a, x0 + s, y0 + c]
+        // the top's lines all run one way: back to the start of the next over what's printed, no retract needed
+        if (s === lo + w / 2) travel(sx, sy)
+        else if (top) travel(sx, sy, false)
+        else {
+          // step over to the next line along the edge
+          to(sx, sy, feed)
+        }
+        to(ex, ey, feed)
+        dir = -dir
+      }
+    })
+  }
+  out.push('M221 S100 ; back to 100 %', `G1 Z${f(C.height + 5)} F600`, 'M107', 'END_PRINT')
+  return out.join('\n') + '\n'
+}

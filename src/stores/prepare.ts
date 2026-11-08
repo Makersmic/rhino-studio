@@ -859,7 +859,8 @@ export const usePrepareStore = defineStore('prepare', () => {
       // what the tuning wizards found for this head, nozzle and material goes into the file (not saved with the job)
       if (j.process === 'fdm') {
         const t = tunedFor(await useTuningStore().load(), j.toolhead, j.fdm.nozzle, materialName(j.material))
-        if (t.pressureAdvance != null || t.rotationDistance != null) j.tuned = { pressureAdvance: t.pressureAdvance, rotationDistance: t.rotationDistance }
+        if (t.pressureAdvance != null || t.rotationDistance != null || t.extrusionMultiplier != null)
+          j.tuned = { pressureAdvance: t.pressureAdvance, rotationDistance: t.rotationDistance, extrusionMultiplier: t.extrusionMultiplier }
       }
       if (j.process === 'fdm' && j.engine === 'prusa') {
         const portal = useMaintenanceStore().portal()

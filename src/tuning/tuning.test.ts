@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { extrudeScript, extruderSettled, lastRun, materialKey, newRotationDistance, paPatternFile, paRefine, paValues, squishFile, squishFine, squishPatches, tunedFor, tuningStatus, zFineVariable, type TuningState } from './tuning'
+import { emCubesBounds, emCubesFile, emRefine, emValues, emWider, extrudeScript, extruderSettled, lastRun, materialKey, newRotationDistance, paPatternFile, paRefine, paValues, squishFile, squishFine, squishPatches, tunedFor, tuningStatus, zFineVariable, type TuningState } from './tuning'
 import { check } from '@/control/commands'
 
 const st: TuningState = {
@@ -96,5 +96,28 @@ describe('pressure advance pattern', () => {
     expect(Math.max(...xs)).toBeLessThan(545)
     expect(lines.at(-4)).toBe('SET_PRESSURE_ADVANCE ADVANCE=0.024 ; back to the usual')
     expect(lines.at(-1)).toBe('END_PRINT')
+  })
+})
+
+describe('extrusion multiplier cubes', () => {
+  const bed = { x: 550, y: 375 }
+  it('tries the usual range, refines round a pick, and has a wider spread for when they all look alike', () => {
+    expect(emValues(0.9, 0.02, 6)).toEqual([0.9, 0.92, 0.94, 0.96, 0.98, 1])
+    expect(emRefine(0.96)).toEqual({ start: 0.95, step: 0.005, count: 5 })
+    expect(emValues(emWider().start, emWider().step, emWider().count).at(-1)).toBe(1.06)
+  })
+  it('sets each cube’s multiplier before it on every layer, prints 3 mm of layers and puts 100 % back', () => {
+    const f = emCubesFile({ tool: 'BlockOne', material: 'PLA', nozzle: 0.4, path: 0, pressureAdvance: 0.033, bed, values: emValues(0.9, 0.02, 6) })
+    const lines = f.trim().split('\n')
+    expect(lines.filter((l) => l.startsWith(';LAYER_CHANGE'))).toHaveLength(15)
+    expect(lines.filter((l) => l === 'M221 S96')).toHaveLength(15)
+    expect(lines).toContain('SET_PRESSURE_ADVANCE ADVANCE=0.033 ; tuned (Studio tuning)')
+    expect(lines.at(-4)).toBe('M221 S100 ; back to 100 %')
+    const es = lines.flatMap((l) => (/^G1 X.* E(-?[\d.]+)/.exec(l) ? [Number(/ E(-?[\d.]+)/.exec(l)![1])] : []))
+    expect(Math.min(...es)).toBeGreaterThanOrEqual(0)
+    const b = emCubesBounds(bed, 6)
+    const xs = lines.flatMap((l) => (/ X(-?[\d.]+)/.exec(l) ? [Number(/ X(-?[\d.]+)/.exec(l)![1])] : []))
+    expect(Math.min(...xs)).toBeGreaterThanOrEqual(b.x0)
+    expect(Math.max(...xs)).toBeLessThanOrEqual(b.x1)
   })
 })
