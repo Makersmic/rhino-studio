@@ -147,15 +147,19 @@ export const BODY: Station[] = [
   { x: 0.7, bottom: 0.54, top: 0.84, w: 0.17 },
   { x: 0.76, bottom: 0.6, top: 0.78, w: 0.06 },
 ]
-/** Head, from the neck joint forwards (before it's tipped nose-down): big, deep at the jaw, with a square muzzle */
+/**
+ * Head, from the neck joint forwards (before it's tipped nose-down): big and deep at the jaw, waisted in the middle and
+ * wide again at the square muzzle, a little like a barbell (Mike, Nov 7)
+ */
 const HEAD: Station[] = [
   { x: -0.06, bottom: -0.14, top: 0.12, w: 0.1 },
   { x: 0.04, bottom: -0.2, top: 0.16, w: 0.17 },
-  { x: 0.18, bottom: -0.22, top: 0.14, w: 0.17 },
-  { x: 0.32, bottom: -0.2, top: 0.09, w: 0.15 },
-  { x: 0.46, bottom: -0.17, top: 0.05, w: 0.14 },
-  { x: 0.56, bottom: -0.15, top: 0.03, w: 0.13 },
-  { x: 0.61, bottom: -0.12, top: 0.0, w: 0.07 },
+  { x: 0.18, bottom: -0.22, top: 0.14, w: 0.16 },
+  { x: 0.3, bottom: -0.2, top: 0.1, w: 0.125 },
+  { x: 0.4, bottom: -0.18, top: 0.07, w: 0.125 },
+  { x: 0.5, bottom: -0.17, top: 0.05, w: 0.15 },
+  { x: 0.57, bottom: -0.15, top: 0.03, w: 0.15 },
+  { x: 0.615, bottom: -0.12, top: 0.0, w: 0.08 },
 ]
 /** A horn: a cone from its base along x, curving up (it's turned to stand on the snout) */
 function horn(length: number, base: number): BufferGeometry {
@@ -554,14 +558,14 @@ export function buildRhino(colour: string): Rhino3d {
   shapes.push({ bone: at(neck), dist: loftDist(HEAD, 2.6), box: loftBox(HEAD), blend: 0.07 })
   for (const side of [1, -1]) {
     // a flared nostril on each side of the muzzle, with its opening cut in
-    const flare: V3 = [0.56, 0.108 * side, -0.07]
-    shapes.push({ bone: at(neck), dist: ellipsoid(flare, [0.05, 0.04, 0.038]), box: coneBox(flare, flare, 0.05), blend: 0.02 })
-    const hole: V3 = [0.6, 0.118 * side, -0.068]
-    shapes.push({ bone: at(neck), dist: ellipsoid(hole, [0.038, 0.024, 0.022]), box: coneBox(hole, hole, 0.04), blend: 0.008, cut: true })
+    const flare: V3 = [0.56, 0.125 * side, -0.07]
+    shapes.push({ bone: at(neck), dist: ellipsoid(flare, [0.068, 0.052, 0.05]), box: coneBox(flare, flare, 0.068), blend: 0.022 })
+    const hole: V3 = [0.607, 0.14 * side, -0.068]
+    shapes.push({ bone: at(neck), dist: ellipsoid(hole, [0.052, 0.032, 0.03]), box: coneBox(hole, hole, 0.052), blend: 0.008, cut: true })
     // a heavy brow over each eye and a lower lid under it, so the eye sits in a hollow of skin
-    const brow: V3 = [0.28, 0.142 * side, 0.068]
+    const brow: V3 = [0.28, 0.128 * side, 0.068]
     shapes.push({ bone: at(neck), dist: ellipsoid(brow, [0.045, 0.02, 0.016]), box: coneBox(brow, brow, 0.045), blend: 0.02 })
-    const lid: V3 = [0.285, 0.14 * side, 0.016]
+    const lid: V3 = [0.285, 0.126 * side, 0.016]
     shapes.push({ bone: at(neck), dist: ellipsoid(lid, [0.035, 0.016, 0.011]), box: coneBox(lid, lid, 0.035), blend: 0.015 })
     // tube ears, standing up and out, angled back
     const base: V3 = [0.02, 0.1 * side, 0.13]
@@ -601,11 +605,11 @@ export function buildRhino(colour: string): Rhino3d {
   for (const side of [1, -1]) {
     const eye = piece(new SphereGeometry(1, 14, 10), eyeLight)
     eye.scale.set(0.024, 0.009, 0.012)
-    eye.position.set(0.285, 0.147 * side, 0.042)
+    eye.position.set(0.285, 0.133 * side, 0.042)
     eye.rotation.set(0, 0.25, 0) // the almond slopes down towards the nose
     neck.add(eye)
     const glint = piece(new SphereGeometry(0.0045, 6, 4), glow)
-    glint.position.set(0.291, 0.155 * side, 0.046)
+    glint.position.set(0.291, 0.141 * side, 0.046)
     neck.add(glint)
   }
 
