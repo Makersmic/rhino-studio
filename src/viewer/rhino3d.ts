@@ -379,17 +379,19 @@ function smin(a: number, b: number, k: number): number {
  * each shoulder, fading out before the belly, the same in front of each hind leg, and two folds round the neck. They're carved into the body's distance,
  * so they bend with the skin. Sizes in shoulder heights.
  */
-export function bodyFolds(x: number, z: number): number {
+export function bodyFolds(x: number, y: number, z: number): number {
   const g = (u: number, w: number) => Math.exp(-(u * u) / (w * w))
+  // the shoulder and hip folds stay on the sides: none over the spine (Mike, Nov 7)
+  const offSpine = Math.min(Math.max((Math.abs(y) - 0.08) / 0.12, 0), 1)
   // behind the shoulder: from high on the back (x 0.07) slanting back to behind the elbow (x 0.19)
   const xf = 0.07 + 0.12 * Math.min(Math.max((0.95 - z) / 0.5, 0), 1)
   const u = x - xf
   const sides = Math.min(Math.max((z - 0.36) / 0.12, 0), 1)
-  const shoulder = (0.024 * g(u, 0.022) - 0.016 * g(u + 0.042, 0.02)) * sides
+  const shoulder = (0.024 * g(u, 0.022) - 0.016 * g(u + 0.042, 0.02)) * sides * offSpine
   // in front of each hind leg, the same kind of fold slanting the other way: down and forwards round the thigh
   const xh = -0.2 + 0.08 * Math.min(Math.max((0.88 - z) / 0.42, 0), 1)
   const v = x - xh
-  const hips = (0.02 * g(v, 0.02) - 0.014 * g(v - 0.038, 0.018)) * Math.min(Math.max((z - 0.44) / 0.12, 0), 1)
+  const hips = (0.02 * g(v, 0.02) - 0.014 * g(v - 0.038, 0.018)) * Math.min(Math.max((z - 0.44) / 0.12, 0), 1) * offSpine
   // round the neck
   const neck = 0.017 * g(x - 0.5, 0.018) - 0.01 * g(x - 0.535, 0.012) + 0.013 * g(x - 0.57, 0.016)
   return shoulder + hips + neck
@@ -567,7 +569,7 @@ export function buildRhino(colour: string): Rhino3d {
   // ---- the shapes, each on its joint, in that joint's space. The body goes first; the rest blend into it.
   const at = (b: Bone) => joints.indexOf(b)
   const plain = loftDist(BODY, 2.5)
-  const shapes: Shape[] = [{ bone: at(body), dist: (x, y, z) => plain(x, y, z) - bodyFolds(x, z), box: loftBox(BODY), blend: 0 }]
+  const shapes: Shape[] = [{ bone: at(body), dist: (x, y, z) => plain(x, y, z) - bodyFolds(x, y, z), box: loftBox(BODY), blend: 0 }]
   {
     const a: V3 = [0, 0, 0]
     const b: V3 = [0, 0, -0.34]
