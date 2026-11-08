@@ -103,3 +103,12 @@ describe('the spine', () => {
     expect(bodyFolds(0.7, 0, 0.84)).toBeLessThan(0.001)
   })
 })
+
+describe('the hump', () => {
+  it('narrows the top over the shoulders but leaves the rump full', () => {
+    const shoulders = BODY.find((s) => s.x === 0.28)!
+    const rump = BODY.find((s) => s.x === -0.314)!
+    expect(shoulders.taper).toBeGreaterThan(0.3)
+    expect(rump.taper ?? 0).toBe(0)
+  })
+})

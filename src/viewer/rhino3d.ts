@@ -47,13 +47,15 @@ export interface Station {
   top: number
   w: number
   y?: number
+  /** how much the section narrows towards its top (0 none): the hump over the shoulders */
+  taper?: number
 }
 
 /** Catmull-Rom between stations, so the outline is smooth rather than a string of straight pieces */
 function smooth(st: Station[], steps: number): Station[] {
   if (st.length < 3) return st
   const out: Station[] = []
-  const keys: Array<keyof Station> = ['x', 'bottom', 'top', 'w', 'y']
+  const keys: Array<keyof Station> = ['x', 'bottom', 'top', 'w', 'y', 'taper']
   for (let i = 0; i < st.length - 1; i++) {
     const p0 = st[Math.max(i - 1, 0)]!
     const p1 = st[i]!
@@ -132,19 +134,20 @@ export function loft(stations: Station[], opts: { around?: number; steps?: numbe
 
 /**
  * Body, rear to front (Mike, Nov 7): a quarter shorter than a real white rhino's, with heavy shoulders and the back
- * sloping down to the rump. The rump (top 0.86, half-width 0.24) sits below and inside the shoulders (1.05, 0.37).
+ * sloping down to the rump. The rump (top 0.86, half-width 0.24) sits below and inside the shoulders (1.05, 0.37),
+ * whose sections narrow towards the top into the natural hump (Mike, Nov 7).
  */
 export const BODY: Station[] = [
   { x: -0.433, bottom: 0.58, top: 0.68, w: 0.03 },
   { x: -0.393, bottom: 0.49, top: 0.79, w: 0.16 },
   { x: -0.314, bottom: 0.44, top: 0.86, w: 0.24 },
   { x: -0.195, bottom: 0.4, top: 0.88, w: 0.27 },
-  { x: -0.024, bottom: 0.36, top: 0.9, w: 0.33 },
-  { x: 0.108, bottom: 0.37, top: 0.98, w: 0.37 },
-  { x: 0.28, bottom: 0.41, top: 1.05, w: 0.36 },
-  { x: 0.44, bottom: 0.47, top: 1.02, w: 0.3 },
-  { x: 0.58, bottom: 0.5, top: 0.92, w: 0.23 },
-  { x: 0.7, bottom: 0.54, top: 0.84, w: 0.17 },
+  { x: -0.024, bottom: 0.36, top: 0.9, w: 0.33, taper: 0.1 },
+  { x: 0.108, bottom: 0.37, top: 0.98, w: 0.37, taper: 0.3 },
+  { x: 0.28, bottom: 0.41, top: 1.05, w: 0.36, taper: 0.42 },
+  { x: 0.44, bottom: 0.47, top: 1.02, w: 0.3, taper: 0.36 },
+  { x: 0.58, bottom: 0.5, top: 0.92, w: 0.23, taper: 0.2 },
+  { x: 0.7, bottom: 0.54, top: 0.84, w: 0.17, taper: 0.08 },
   { x: 0.76, bottom: 0.6, top: 0.78, w: 0.06 },
 ]
 /**
@@ -345,7 +348,11 @@ function loftDist(stations: Station[], round: number): (x: number, y: number, z:
     const bottom = A.bottom + (B.bottom - A.bottom) * t
     const half = Math.max((top - bottom) / 2, 1e-3)
     const cy = (A.y ?? 0) + ((B.y ?? 0) - (A.y ?? 0)) * t
-    const q = Math.pow(Math.pow(Math.abs(y - cy) / w, round) + Math.pow(Math.abs(z - (top + bottom) / 2) / half, round), 1 / round)
+    // narrower towards the top where the section tapers (the hump)
+    const taper = (A.taper ?? 0) + ((B.taper ?? 0) - (A.taper ?? 0)) * t
+    const up = Math.min(Math.max((z - (top + bottom) / 2) / half, 0), 1)
+    const wz = w * Math.max(1 - taper * up * up, 0.2)
+    const q = Math.pow(Math.pow(Math.abs(y - cy) / wz, round) + Math.pow(Math.abs(z - (top + bottom) / 2) / half, round), 1 / round)
     const across = (q - 1) * Math.min(w, half)
     const dx = Math.max(x0 - x, x - x1, 0)
     return dx > 0 ? Math.hypot(dx, Math.max(across, 0)) : across
