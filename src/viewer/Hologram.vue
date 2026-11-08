@@ -21,7 +21,7 @@ import { parseInWorker, type ParseJob } from '@/gcode/parseInWorker'
 import { FileTooBig } from '@/gcode/run'
 import { BUDGET_REDUCED } from './draw'
 import { DIAL_PX, DIAL_RING, drawDial } from './dial'
-import { FINISH_SECONDS, FRAME_COUNT, FRAME_GLITCH, FRAME_H, FRAME_PROUD, FRAME_STAND, FRAME_W, SPARKLES, drawRunnerStrip, finishPose, glitching, trotFrame } from './runner'
+import { FINISH_SECONDS, FRAME_GLITCH, FRAME_PROUD, FRAME_STAND, LAP_END, SPARKLES, finishPose, glitching, trotPhase } from './runner'
 import { HOLO_MAX_BYTES, buildHologram, dialPlace, drawnDone, layerNow, loadHoloGlow, movesDone, saveHoloGlow } from './hologram'
 import type { GcodeScene } from './scene'
 import { colourOf } from './theme'
@@ -107,14 +107,9 @@ function showDial() {
   const first = !framed
   scene.setDial(dialCanvas, at.x, at.y, at.z, at.size)
   if (first) {
-    // The rhino: about as tall as the dial's big words (76 px of DIAL_PX), standing on the ring
-    const strip = document.createElement('canvas')
-    strip.width = FRAME_COUNT * FRAME_W
-    strip.height = FRAME_H
+    // The rhino: its shoulders about as high as the dial's big words (76 px of DIAL_PX), standing on the ring
     const colour = st.getPropertyValue('--rs-holo-ghost').trim() || '#3ff0dc'
-    const sg = strip.getContext('2d')
-    if (sg) drawRunnerStrip(sg, colour)
-    scene.setRunner(strip, FRAME_COUNT, sparkleCanvas(colour), { x: at.x, y: at.y, z: at.z, radius: (at.size * DIAL_RING) / DIAL_PX, height: ((76 / DIAL_PX) * at.size) * 1.9 })
+    scene.setRunner(colour, sparkleCanvas(colour), { x: at.x, y: at.y, z: at.z, radius: (at.size * DIAL_RING) / DIAL_PX, height: (76 / DIAL_PX) * at.size * 1.3 })
     startRunner()
     // Frame the part and its dial together, so the readings at the dial's edge stay in view
     framed = true
@@ -142,8 +137,8 @@ function sparkleCanvas(colour: string): HTMLCanvasElement {
   return c
 }
 
-// ---- the rhino's movement. With the part turning (not the kiosk): a trot while the dial moves, about 9 frames a
-// second. At the finish: it rears, hops, runs a lap of the dial, then stands proud among blinking sparkles. On the kiosk or with
+// ---- the rhino's movement. With the part turning (not the kiosk): a trot while the dial moves, 20 poses a
+// second. At the finish: it runs round the dial to the left side, rears, hops, then stands proud among blinking sparkles. On the kiosk or with
 // reduced motion it just stands, and stands proud at the finish.
 let runTimer: ReturnType<typeof setInterval> | null = null
 let finishFrame = 0
@@ -165,8 +160,8 @@ function startRunner() {
     if (!scene || document.hidden) return
     const t = (performance.now() - t0) / 1000
     const moving = Math.abs(scene.runnerMoving) > 1e-5
-    scene.setRunnerPose(glitching(t, seed) ? FRAME_GLITCH : moving ? trotFrame(t) : FRAME_STAND, 0, 0)
-  }, 70)
+    scene.setRunnerPose(glitching(t, seed) ? FRAME_GLITCH : moving ? trotPhase(t) : FRAME_STAND, 0, 0)
+  }, 50)
 }
 const sparkleLevels = (t: number) => SPARKLES.map((k) => Math.max(0, Math.sin((t * 1.4 + k.phase) * Math.PI * 2)))
 function finish() {
@@ -178,14 +173,14 @@ function finish() {
     if (!scene) return
     const t = (performance.now() - finishStart) / 1000
     const p = finishPose(t)
-    scene.setRunnerPose(p.frame, p.angle, p.lift, p.sparkles ? sparkleLevels(t) : [])
+    scene.setRunnerPose(p.frame, p.angle, p.lift, p.sparkles ? sparkleLevels(t) : [], { ccw: true, face: p.face })
     if (t < FINISH_SECONDS) finishFrame = requestAnimationFrame(step)
     else {
       finishFrame = 0
       // after the lap: the sparkles keep blinking, a few times a second
       runTimer = setInterval(() => {
         if (!scene || document.hidden) return
-        scene.setRunnerPose(FRAME_PROUD, 0, 0, sparkleLevels((performance.now() - finishStart) / 1000))
+        scene.setRunnerPose(FRAME_PROUD, LAP_END, 0, sparkleLevels((performance.now() - finishStart) / 1000), { ccw: true, face: true })
       }, 120)
     }
   }

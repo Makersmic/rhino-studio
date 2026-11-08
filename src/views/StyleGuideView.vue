@@ -10,6 +10,7 @@ import StatusChip from '@/components/StatusChip.vue'
 import Readout from '@/components/Readout.vue'
 import SectionRule from '@/components/SectionRule.vue'
 import BrandMark from '@/brand/BrandMark.vue'
+import RhinoPreview from '@/viewer/RhinoPreview.vue'
 import ToolheadBadge from '@/toolheads/ToolheadBadge.vue'
 import ToolTile from '@/toolheads/ToolTile.vue'
 import Icon from '@/icons/Icon.vue'
@@ -239,6 +240,12 @@ const isUnknown = (t: ToolheadLook) => t.icon === 'unknown'
         <BrandMark :size="22" :show-name="false" />
       </div>
       <p class="muted note">A rhino horn rising over a horizon, with a low sun, inside a dial ring. {{ brand.name }} is a working title; change the name and logo in <code>src/brand/brand.ts</code>.</p>
+    </RsPanel>
+
+    <SectionRule label="Hologram rhino" />
+    <RsPanel>
+      <RhinoPreview />
+      <p class="muted note">The rhino on the Dashboard's hologram dial, drawn large. It trots at the front of the dial during a job. When the job finishes it runs round the ring: up the right side going away, across the back, down the left side coming head-on, then rears, hops and stands proud. Drag to turn it.</p>
     </RsPanel>
 
     <SectionRule label="Safety conventions" />

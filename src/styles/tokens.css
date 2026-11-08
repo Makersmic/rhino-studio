@@ -223,6 +223,8 @@
   /* The Dashboard hologram only (Mike, roadmap item 9): turquoise, never used for anything else. The part still to make
      is a pale ghost; the finished part is the deeper turquoise, drawn more solid. Same in both themes: it sits on the camera. */
   --rs-holo-ghost: #3ff0dc;
+  /* behind the rhino preview in the Style guide: dark in both looks, as the hologram is light on a camera picture */
+  --rs-holo-backdrop: #0a1315;
   --rs-holo-done: #00b8aa;
   /* The layer being printed now: amber, the bed mesh's warm colour (never red, which means stop) */
   --rs-holo-now: #ffb347;

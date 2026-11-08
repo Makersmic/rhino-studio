@@ -12,7 +12,6 @@ import {
   InstancedMesh,
   Matrix4,
   SphereGeometry,
-  LinearMipmapLinearFilter,
   Sprite,
   SpriteMaterial,
   BufferAttribute,
@@ -41,7 +40,8 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import type { GcodeBounds } from '@/gcode/parse'
 import type { DrawData } from './draw'
 import { frameSeconds } from './spin'
-import { SPARKLES, facesRight } from './runner'
+import { FRAME_GLITCH, FRAME_STAND, SPARKLES, facesRight, framePose, ringPlace } from './runner'
+import { buildRhino, type Rhino3d } from './rhino3d'
 
 export interface Rgb {
   r: number
@@ -634,68 +634,60 @@ export class GcodeScene {
     this.dialTexture = null
   }
 
-  private runner: Mesh | null = null
-  private runnerTexture: CanvasTexture | null = null
+  private runner: Rhino3d | null = null
   private sparkles: Sprite[] = []
   private sparkleTexture: CanvasTexture | null = null
-  private runnerPlace = { x: 0, y: 0, z: 0, radius: 1, height: 1, width: 1, frames: 1 }
-  private runnerPose = { frame: 0, angle: 0, lift: 0, sparkles: [] as number[] }
+  private runnerPlace = { x: 0, y: 0, z: 0, radius: 1, height: 1 }
+  private runnerPose = { angle: 0, lift: 0, sparkles: [] as number[], ccw: false, face: false }
   private runnerAz: number | null = null
   private runnerRight = true
+  private runnerYaw: number | null = null
+  private runnerYawAt = 0
   /** how far the front of the dial turned at the last draw (radians): the rhino trots while it moves */
   runnerMoving = 0
 
   /**
-   * The rhino on the dial: `strip` holds its frames side by side (each facing right). It's an upright cut-out standing
-   * on the ring of `radius` around (x, y) at height z, `height` mm tall, turned to face along the ring the way it runs.
-   * It stands at the point of the ring nearest the camera; on the finish's lap it really runs round, so it's seen
-   * side-on at the front, edge-on at the sides and from its other side across the back. `sparkle` is the finish's
-   * sparkle picture.
+   * The rhino on the dial (rhino3d.ts), in `colour`, standing on the ring of `radius` around (x, y) at height z,
+   * `height` mm to the top of its shoulders. It stands at the point of the ring nearest the camera, facing the way the
+   * dial turns under it. On the finish's lap it really runs round counter-clockwise (`ccw`): seen from behind going away
+   * up the right side, head-on coming down the left. `sparkle` is the finish's sparkle picture.
    */
-  setRunner(strip: HTMLCanvasElement, frames: number, sparkle: HTMLCanvasElement, place: { x: number; y: number; z: number; radius: number; height: number }): void {
+  setRunner(colour: string, sparkle: HTMLCanvasElement, place: { x: number; y: number; z: number; radius: number; height: number }): void {
     this.clearRunner()
-    const width = place.height * (strip.width / frames / strip.height)
-    this.runnerPlace = { ...place, width, frames }
-    this.runnerTexture = new CanvasTexture(strip)
-    this.runnerTexture.colorSpace = SRGBColorSpace
-    this.runnerTexture.minFilter = LinearMipmapLinearFilter
-    this.runnerTexture.generateMipmaps = true
-    // a unit square standing up from the ring: x along the ring, z up, feet at z 0
-    const g = new PlaneGeometry(1, 1).translate(0, 0.5, 0).rotateX(Math.PI / 2)
-    this.runner = new Mesh(g, new MeshBasicMaterial({ map: this.runnerTexture, transparent: true, depthWrite: false, blending: AdditiveBlending, side: DoubleSide }))
-    this.runner.frustumCulled = false
-    this.runner.onBeforeRender = (_r, _s, camera) => this.placeRunner(camera)
-    this.scene.add(this.runner)
+    this.runnerPlace = { ...place }
+    this.runner = buildRhino(colour)
+    this.runner.group.scale.setScalar(place.height)
+    this.scene.add(this.runner.group)
     this.sparkleTexture = new CanvasTexture(sparkle)
     for (let i = 0; i < 6; i++) {
       const sp = new Sprite(new SpriteMaterial({ map: this.sparkleTexture, transparent: true, depthWrite: false, blending: AdditiveBlending }))
-      sp.scale.set(place.height * 0.45, place.height * 0.45, 1)
+      sp.scale.set(place.height * 0.6, place.height * 0.6, 1)
       sp.visible = false
       sp.frustumCulled = false
       this.sparkles.push(sp)
       this.scene.add(sp)
     }
-    this.showRunnerFrame()
-    this.draw()
+    this.setRunnerPose(FRAME_STAND, 0, 0)
   }
 
-  /** Which frame, how far round the ring from the front, how high off it (in rhino heights), and each sparkle's brightness */
-  setRunnerPose(frame: number, angle: number, lift: number, sparkles: number[] = []): void {
-    this.runnerPose = { frame, angle, lift, sparkles }
-    this.showRunnerFrame()
-    this.draw()
-  }
-
-  private showRunnerFrame(): void {
-    const t = this.runnerTexture
-    if (!t) return
-    const n = this.runnerPlace.frames
-    t.repeat.set(1 / n, 1)
-    t.offset.set(this.runnerPose.frame / n, 0)
-  }
-
-  private placeRunner(camera: { position: Vector3 }): void {
+  /**
+   * Which pose (runner.ts frame; fractional while trotting), how far round the ring from the front, how high off it
+   * (in rhino heights), each sparkle's brightness; `ccw` on the finish's counter-clockwise lap, and `face` to turn and
+   * look straight at the viewer
+   */
+  setRunnerPose(frame: number, angle: number, lift: number, sparkles: number[] = [], how: { ccw?: boolean; face?: boolean } = {}): void {
     if (!this.runner) return
+    const glitch = frame === FRAME_GLITCH
+    this.runner.setGlitch(glitch)
+    this.runner.setPose(framePose(glitch ? FRAME_STAND : frame))
+    this.runnerPose = { angle, lift, sparkles, ccw: !!how.ccw, face: !!how.face }
+    this.draw()
+  }
+
+  /** Put the rhino where it belongs for this camera: called just before each render */
+  private placeRunner(): void {
+    if (!this.runner) return
+    const camera = this.camera
     const p = this.runnerPlace
     const az = Math.atan2(camera.position.y - p.y, camera.position.x - p.x)
     if (this.runnerAz !== null) {
@@ -703,20 +695,30 @@ export class GcodeScene {
       if (d > Math.PI) d -= Math.PI * 2
       if (d < -Math.PI) d += Math.PI * 2
       this.runnerMoving = d
-      const right = facesRight(d, this.runnerRight)
-      this.runnerRight = right
+      this.runnerRight = facesRight(d, this.runnerRight)
     }
     this.runnerAz = az
-    // on a lap the rhino runs the way it faces: counter-clockwise when facing right
-    const dir = this.runnerRight ? 1 : -1
-    const a = az + dir * this.runnerPose.angle
-    const x = p.x + p.radius * Math.cos(a)
-    const y = p.y + p.radius * Math.sin(a)
+    const dir = this.runnerPose.ccw || this.runnerRight ? 1 : -1
+    const at = ringPlace(az, this.runnerPose.angle, dir, p.radius)
+    const x = p.x + at.x
+    const y = p.y + at.y
     const z = p.z + p.height * this.runnerPose.lift
-    this.runner.position.set(x, y, z)
-    // facing along the ring: its +x is the counter-clockwise tangent, mirrored when it runs the other way
-    this.runner.rotation.set(0, 0, a + Math.PI / 2)
-    this.runner.scale.set(dir * p.width, 1, p.height)
+    const g = this.runner.group
+    g.position.set(x, y, z)
+    // face along the ring the way it runs; turn round smoothly rather than snapping when that changes
+    const want = this.runnerPose.face ? Math.atan2(camera.position.y - y, camera.position.x - x) : at.yaw
+    const now = performance.now()
+    if (this.runnerYaw === null) this.runnerYaw = want
+    else {
+      let d = want - this.runnerYaw
+      d = Math.atan2(Math.sin(d), Math.cos(d))
+      const most = (Math.min(now - this.runnerYawAt, 200) / 1000) * 6
+      this.runnerYaw += Math.abs(d) <= most ? d : Math.sign(d) * most
+      if (Math.abs(d) > most) this.draw()
+    }
+    this.runnerYawAt = now
+    g.rotation.set(0, 0, this.runnerYaw)
+    this.runner.setFrame(p.z, p.height)
     // sparkles around it, laid out across the screen: to the camera's right is along the ring's turning direction
     const rx = -Math.sin(az)
     const ry = Math.cos(az)
@@ -731,9 +733,8 @@ export class GcodeScene {
 
   private clearRunner(): void {
     if (this.runner) {
-      this.scene.remove(this.runner)
-      this.runner.geometry.dispose()
-      ;(this.runner.material as MeshBasicMaterial).dispose()
+      this.scene.remove(this.runner.group)
+      this.runner.dispose()
       this.runner = null
     }
     for (const sp of this.sparkles) {
@@ -741,10 +742,10 @@ export class GcodeScene {
       ;(sp.material as SpriteMaterial).dispose()
     }
     this.sparkles = []
-    this.runnerTexture?.dispose()
     this.sparkleTexture?.dispose()
-    this.runnerTexture = this.sparkleTexture = null
+    this.sparkleTexture = null
     this.runnerAz = null
+    this.runnerYaw = null
   }
 
   /**
@@ -1111,6 +1112,7 @@ export class GcodeScene {
     this.pending = requestAnimationFrame(() => {
       this.pending = 0
       if (this.disposed) return
+      this.placeRunner()
       if (this.composer) this.composer.render()
       else this.renderer.render(this.scene, this.camera)
     })

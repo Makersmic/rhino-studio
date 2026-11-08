@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { FINISH_SECONDS, FRAME_HOP, FRAME_PROUD, FRAME_REAR, FRAME_STAND, FRAME_TROT, STANCE, facesRight, finishPose, framePose, glitching, legAt, trotFrame, trotPose } from './runner'
+import { FINISH_SECONDS, LAP_END, ringPlace, trotPhase, FRAME_HOP, FRAME_PROUD, FRAME_REAR, FRAME_STAND, FRAME_TROT, STANCE, facesRight, finishPose, framePose, glitching, legAt, trotFrame, trotPose } from './runner'
 
 describe('legAt', () => {
   it('is planted and straight, sweeping back, for most of the stride', () => {
@@ -59,13 +59,28 @@ describe('glitching', () => {
 })
 
 describe('finishPose', () => {
-  it('rears, hops, then runs a lap, then stands proud', () => {
-    expect(finishPose(0.5).frame).toBe(FRAME_REAR)
-    expect(Math.max(...[1.3, 1.45, 1.6].map((t) => finishPose(t).lift))).toBeGreaterThan(0.25)
-    expect([FRAME_HOP, FRAME_STAND]).toContain(finishPose(1.45).frame)
-    expect(finishPose(4.5).angle).toBeGreaterThan(1)
-    expect(finishPose(6.19).angle).toBeCloseTo(Math.PI * 2, 1)
-    expect(finishPose(FINISH_SECONDS + 1)).toEqual({ frame: FRAME_PROUD, angle: 0, lift: 0, sparkles: true })
+  it('runs round to the left side first, then rears, hops and stands proud there', () => {
+    // right side (a quarter round) going away, then across the back
+    expect(finishPose(1.2).angle).toBeGreaterThan(0.3)
+    expect(finishPose(1.2).angle).toBeLessThan(Math.PI)
+    expect(finishPose(3.59).angle).toBeCloseTo(LAP_END, 1)
+    // trotting smoothly while it runs
+    expect(finishPose(1.2).frame % 1).not.toBe(0)
+    expect(finishPose(4.0)).toMatchObject({ frame: FRAME_REAR, angle: LAP_END })
+    expect(Math.max(...[4.7, 4.85, 5.0].map((t) => finishPose(t).lift))).toBeGreaterThan(0.25)
+    expect([FRAME_HOP, FRAME_STAND]).toContain(finishPose(4.85).frame)
+    expect(finishPose(FINISH_SECONDS + 1)).toEqual({ frame: FRAME_PROUD, angle: LAP_END, lift: 0, sparkles: true, face: true })
+    expect(finishPose(1.2).face).toBe(false)
+    expect(finishPose(4.0).face).toBe(true)
+  })
+})
+
+describe('trotPhase', () => {
+  it('moves smoothly through the trot frames and wraps round', () => {
+    expect(trotPhase(0)).toBe(0)
+    expect(trotPhase(0.05)).toBeGreaterThan(0)
+    expect(trotPhase(0.05) % 1).not.toBe(0)
+    expect(Math.max(...Array.from({ length: 200 }, (_, i) => trotPhase(i / 50)))).toBeLessThan(FRAME_TROT.length)
   })
 })
 
@@ -74,5 +89,23 @@ describe('facesRight', () => {
     expect(facesRight(0.01, false)).toBe(true)
     expect(facesRight(-0.01, true)).toBe(false)
     expect(facesRight(0, false)).toBe(false)
+  })
+})
+
+describe('ringPlace', () => {
+  // the camera on +x, looking at the centre with +z up: its right is +y
+  const r = (v: number) => Math.round(v) + 0 // + 0 turns -0 into 0
+  const heading = (yaw: number) => [r(Math.cos(yaw)), r(Math.sin(yaw))]
+  it('runs up the right side going away, and down the left side coming head-on', () => {
+    const right = ringPlace(0, Math.PI / 2, 1, 10)
+    expect([r(right.x), r(right.y)]).toEqual([0, 10])
+    expect(heading(right.yaw)).toEqual([-1, 0]) // away from the camera: seen from behind
+    const left = ringPlace(0, LAP_END, 1, 10)
+    expect([r(left.x), r(left.y)]).toEqual([0, -10])
+    expect(heading(left.yaw)).toEqual([1, 0]) // straight at the camera: head-on
+  })
+  it('stands at the front, side-on, facing the way it runs', () => {
+    expect(heading(ringPlace(0, 0, 1, 10).yaw)).toEqual([0, 1])
+    expect(heading(ringPlace(0, 0, -1, 10).yaw)).toEqual([0, -1])
   })
 })
