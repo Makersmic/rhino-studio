@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /** The fields for one macro step (Settings › Macros). Edits the step in place; checks are in userMacros.ts. */
-import { computed, useId } from 'vue'
+import { computed, reactive, useId } from 'vue'
 import type { MacroStep } from './userMacros'
 
 const props = defineProps<{ step: MacroStep; macros: string[]; materials: string[] }>()
@@ -11,9 +11,24 @@ function setNum(key: string, v: string, blank = false) {
   const t = v.trim()
   ;(props.step as unknown as Record<string, unknown>)[key] = t === '' && blank ? null : Number(t)
 }
+// What's being typed in each number field while it has focus. The editor redraws whenever the machine's status changes
+// (its G-code preview follows the machine), and Vue writes :value back on every redraw, so without this the field
+// jumped back to the old value mid-typing (Mike, Nov 7; the same fix as PrusaOption).
+const typing = reactive<Record<string, string>>({})
 const val = (key: string) => {
+  if (key in typing) return typing[key]!
   const v = (props.step as unknown as Record<string, unknown>)[key]
   return v == null ? '' : String(v)
+}
+function focus(key: string) {
+  typing[key] = val(key)
+}
+function input(key: string, e: Event) {
+  typing[key] = (e.target as HTMLInputElement).value
+}
+function done(key: string, blank = false) {
+  if (key in typing) setNum(key, typing[key]!, blank)
+  delete typing[key]
 }
 </script>
 
@@ -30,17 +45,17 @@ const val = (key: string) => {
     <template v-else-if="s.kind === 'moveTo' || s.kind === 'moveBy'">
       <template v-for="k in (s.kind === 'moveTo' ? ['x', 'y', 'z'] : ['dx', 'dy', 'dz'])" :key="k">
         <label :for="`${id}-${k}`">{{ k.replace('d', '').toUpperCase() }}{{ s.kind === 'moveBy' ? ' by' : '' }} (mm)</label>
-        <input :id="`${id}-${k}`" :value="val(k)" inputmode="decimal" placeholder="stay" class="mono" @change="setNum(k, ($event.target as HTMLInputElement).value, true)" />
+        <input :id="`${id}-${k}`" :value="val(k)" inputmode="decimal" placeholder="stay" class="mono" @focus="focus(k)" @input="input(k, $event)" @change="done(k, true)" @blur="done(k, true)" />
       </template>
       <label :for="`${id}-s`">Speed (mm/s)</label>
-      <input :id="`${id}-s`" :value="val('speed')" inputmode="decimal" class="mono" @change="setNum('speed', ($event.target as HTMLInputElement).value)" />
+      <input :id="`${id}-s`" :value="val('speed')" inputmode="decimal" class="mono" @focus="focus('speed')" @input="input('speed', $event)" @change="done('speed')" @blur="done('speed')" />
     </template>
 
     <template v-else-if="s.kind === 'temp'">
       <label :for="`${id}-h`">Heater</label>
       <select :id="`${id}-h`" v-model="(step as Extract<MacroStep, { kind: 'temp' }>).heater"><option value="hotend">Hotend</option><option value="bed">Bed</option></select>
       <label :for="`${id}-t`">Temperature (°, 0 = off)</label>
-      <input :id="`${id}-t`" :value="val('target')" inputmode="numeric" class="mono" @change="setNum('target', ($event.target as HTMLInputElement).value)" />
+      <input :id="`${id}-t`" :value="val('target')" inputmode="numeric" class="mono" @focus="focus('target')" @input="input('target', $event)" @change="done('target')" @blur="done('target')" />
       <label class="check"><input v-model="(step as Extract<MacroStep, { kind: 'temp' }>).wait" type="checkbox" /> Wait until it’s there</label>
     </template>
 
@@ -54,12 +69,12 @@ const val = (key: string) => {
 
     <template v-else-if="s.kind === 'fan'">
       <label :for="`${id}-f`">Part fan (%)</label>
-      <input :id="`${id}-f`" :value="val('percent')" inputmode="numeric" class="mono" @change="setNum('percent', ($event.target as HTMLInputElement).value)" />
+      <input :id="`${id}-f`" :value="val('percent')" inputmode="numeric" class="mono" @focus="focus('percent')" @input="input('percent', $event)" @change="done('percent')" @blur="done('percent')" />
     </template>
 
     <template v-else-if="s.kind === 'wait'">
       <label :for="`${id}-w`">Seconds</label>
-      <input :id="`${id}-w`" :value="val('seconds')" inputmode="decimal" class="mono" @change="setNum('seconds', ($event.target as HTMLInputElement).value)" />
+      <input :id="`${id}-w`" :value="val('seconds')" inputmode="decimal" class="mono" @focus="focus('seconds')" @input="input('seconds', $event)" @change="done('seconds')" @blur="done('seconds')" />
     </template>
 
     <template v-else-if="s.kind === 'macro'">
