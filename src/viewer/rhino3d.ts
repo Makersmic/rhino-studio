@@ -131,17 +131,16 @@ export function loft(stations: Station[], opts: { around?: number; steps?: numbe
 // ---- the shape ----------------------------------------------------------------------------------------------------
 
 /**
- * Body, rear to front (Mike, Nov 7): short, a quarter shorter than a real white rhino's, with heavy shoulders and the
- * back sloping down to a small rump over short hind legs, a little like a hyena's. The rump (top 0.76, half-width 0.24)
- * sits well below and inside the shoulders (1.05, 0.37).
+ * Body, rear to front (Mike, Nov 7): a quarter shorter than a real white rhino's, with heavy shoulders and the back
+ * sloping down to the rump. The rump (top 0.86, half-width 0.24) sits below and inside the shoulders (1.05, 0.37).
  */
 export const BODY: Station[] = [
-  { x: -0.433, bottom: 0.48, top: 0.58, w: 0.03 },
-  { x: -0.393, bottom: 0.39, top: 0.69, w: 0.16 },
-  { x: -0.314, bottom: 0.34, top: 0.76, w: 0.24 },
-  { x: -0.195, bottom: 0.32, top: 0.8, w: 0.27 },
-  { x: -0.024, bottom: 0.31, top: 0.85, w: 0.33 },
-  { x: 0.108, bottom: 0.34, top: 0.95, w: 0.37 },
+  { x: -0.433, bottom: 0.58, top: 0.68, w: 0.03 },
+  { x: -0.393, bottom: 0.49, top: 0.79, w: 0.16 },
+  { x: -0.314, bottom: 0.44, top: 0.86, w: 0.24 },
+  { x: -0.195, bottom: 0.4, top: 0.88, w: 0.27 },
+  { x: -0.024, bottom: 0.36, top: 0.9, w: 0.33 },
+  { x: 0.108, bottom: 0.37, top: 0.98, w: 0.37 },
   { x: 0.28, bottom: 0.41, top: 1.05, w: 0.36 },
   { x: 0.44, bottom: 0.47, top: 1.02, w: 0.3 },
   { x: 0.58, bottom: 0.5, top: 0.92, w: 0.23 },
@@ -170,10 +169,10 @@ function horn(length: number, base: number): BufferGeometry {
   return loft(st, { around: 10, steps: 2, round: 2 })
 }
 
-/** Hips (back, right at the rump and shorter) and shoulders (front): where they join, and how long each half is */
+/** Hips (back, right at the rump) and shoulders (front): where they join, and how long each half is */
 export const LEG = {
   side: 0.14,
-  back: { x: -0.3, hipZ: 0.42, upper: 0.22, lower: 0.2 },
+  back: { x: -0.3, hipZ: 0.52, upper: 0.28, lower: 0.24 },
   front: { x: 0.28, hipZ: 0.52, upper: 0.28, lower: 0.24 },
 }
 /** where the head hangs from, and how far it tips nose-down (Mike, Nov 7: higher, further back, slanting down more) */
@@ -243,6 +242,8 @@ interface Shape {
   box: [V3, V3]
   /** blend radius into what's already there (shoulder heights) */
   blend: number
+  /** carved out of what's already there instead (a nostril) */
+  cut?: boolean
 }
 
 /**
@@ -332,7 +333,7 @@ function smin(a: number, b: number, k: number): number {
 
 /**
  * Skin folds on the body (Mike, Nov 7), as a rhino has: a ridge with a crease behind it running down and back behind
- * each shoulder, fading out before the belly, and two folds round the neck. They're carved into the body's distance,
+ * each shoulder, fading out before the belly, the same in front of each hind leg, and two folds round the neck. They're carved into the body's distance,
  * so they bend with the skin. Sizes in shoulder heights.
  */
 export function bodyFolds(x: number, z: number): number {
@@ -342,9 +343,13 @@ export function bodyFolds(x: number, z: number): number {
   const u = x - xf
   const sides = Math.min(Math.max((z - 0.36) / 0.12, 0), 1)
   const shoulder = (0.024 * g(u, 0.022) - 0.016 * g(u + 0.042, 0.02)) * sides
+  // in front of each hind leg, the same kind of fold slanting the other way: down and forwards round the thigh
+  const xh = -0.2 + 0.08 * Math.min(Math.max((0.88 - z) / 0.42, 0), 1)
+  const v = x - xh
+  const hips = (0.02 * g(v, 0.02) - 0.014 * g(v - 0.038, 0.018)) * Math.min(Math.max((z - 0.44) / 0.12, 0), 1)
   // round the neck
   const neck = 0.017 * g(x - 0.5, 0.018) - 0.01 * g(x - 0.535, 0.012) + 0.013 * g(x - 0.57, 0.016)
-  return shoulder + neck
+  return shoulder + hips + neck
 }
 
 /** How finely the skin is made: cells across the rhino's longest side */
@@ -391,6 +396,10 @@ function buildSkin(shapes: Shape[], joints: Bone[]): BufferGeometry {
       const sh = shapes[i]!
       local.set(x, y, z).applyMatrix4(toJoint[sh.bone]!)
       const e = sh.dist(local.x, local.y, local.z)
+      if (sh.cut) {
+        d = -smin(-d, e, sh.blend) // a smooth carve: the most of d and -e
+        continue
+      }
       d = i === 0 ? e : smin(d, e, sh.blend)
       if (wantJoints && e < perJoint[sh.bone]!) perJoint[sh.bone] = e
     }
@@ -493,7 +502,7 @@ export function buildRhino(colour: string): Rhino3d {
   }
   const tipper = joint(group, LEG.back.x, 0, LEG.back.hipZ)
   const body = joint(tipper, -LEG.back.x, 0, -LEG.back.hipZ)
-  const tail = joint(body, -0.41, 0, 0.64)
+  const tail = joint(body, -0.41, 0, 0.74)
   tail.rotation.y = 0.35 // hangs angled back
   const legs: Array<{ hip: Bone; knee: Bone; lower: number }> = []
   for (const [y, front] of [
@@ -517,9 +526,9 @@ export function buildRhino(colour: string): Rhino3d {
   const shapes: Shape[] = [{ bone: at(body), dist: (x, y, z) => plain(x, y, z) - bodyFolds(x, z), box: loftBox(BODY), blend: 0 }]
   {
     const a: V3 = [0, 0, 0]
-    const b: V3 = [0, 0, -0.24]
-    shapes.push({ bone: at(tail), dist: roundCone(a, b, 0.02, 0.013), box: coneBox(a, b, 0.02), blend: 0.03 })
-    shapes.push({ bone: at(tail), dist: ellipsoid([0, 0, -0.25], [0.03, 0.03, 0.04]), box: coneBox([0, 0, -0.25], [0, 0, -0.25], 0.04), blend: 0.02 })
+    const b: V3 = [0, 0, -0.34]
+    shapes.push({ bone: at(tail), dist: roundCone(a, b, 0.02, 0.012), box: coneBox(a, b, 0.02), blend: 0.03 })
+    shapes.push({ bone: at(tail), dist: ellipsoid([0, 0, -0.35], [0.028, 0.028, 0.045]), box: coneBox([0, 0, -0.35], [0, 0, -0.35], 0.045), blend: 0.02 })
   }
   legs.forEach((l, i) => {
     const front = i >= 2
@@ -531,12 +540,24 @@ export function buildRhino(colour: string): Rhino3d {
     // upper leg, tapering to the knee
     const top = front ? 0.115 : 0.095
     shapes.push({ bone: at(l.hip), dist: roundCone([0, 0, 0], [0, 0, -L.upper], top, 0.085), box: coneBox([0, 0, 0], [0, 0, -L.upper], top), blend: 0.05 })
-    // lower leg: a column that widens a little to a flat-ish foot standing on the ground
+    // lower leg: a column down to the foot
     const foot: V3 = [0.01, 0, -L.lower + 0.09]
     shapes.push({ bone: at(l.knee), dist: roundCone([0, 0, 0], foot, 0.085, 0.09), box: coneBox([0, 0, 0], foot, 0.09), blend: 0.04 })
+    // the foot flares into a wide pad on the ground, with three toes round its front
+    const pad: V3 = [0.015, 0, -L.lower + 0.04]
+    shapes.push({ bone: at(l.knee), dist: ellipsoid(pad, [0.11, 0.1, 0.04]), box: coneBox(pad, pad, 0.11), blend: 0.04 })
+    for (const a of [-0.75, 0, 0.75]) {
+      const toe: V3 = [0.015 + 0.09 * Math.cos(a), 0.09 * Math.sin(a), -L.lower + 0.032]
+      shapes.push({ bone: at(l.knee), dist: ellipsoid(toe, [0.036, 0.032, 0.032]), box: coneBox(toe, toe, 0.036), blend: 0.015 })
+    }
   })
   shapes.push({ bone: at(neck), dist: loftDist(HEAD, 2.6), box: loftBox(HEAD), blend: 0.07 })
   for (const side of [1, -1]) {
+    // a flared nostril on each side of the muzzle, with its opening cut in
+    const flare: V3 = [0.56, 0.108 * side, -0.07]
+    shapes.push({ bone: at(neck), dist: ellipsoid(flare, [0.05, 0.04, 0.038]), box: coneBox(flare, flare, 0.05), blend: 0.02 })
+    const hole: V3 = [0.6, 0.118 * side, -0.068]
+    shapes.push({ bone: at(neck), dist: ellipsoid(hole, [0.038, 0.024, 0.022]), box: coneBox(hole, hole, 0.04), blend: 0.008, cut: true })
     // a heavy brow over each eye and a lower lid under it, so the eye sits in a hollow of skin
     const brow: V3 = [0.28, 0.142 * side, 0.068]
     shapes.push({ bone: at(neck), dist: ellipsoid(brow, [0.045, 0.02, 0.016]), box: coneBox(brow, brow, 0.045), blend: 0.02 })

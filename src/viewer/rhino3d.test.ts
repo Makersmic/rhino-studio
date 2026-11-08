@@ -64,11 +64,10 @@ describe('the rhino', () => {
   })
 })
 
-describe('the hyena-like build (Mike, Nov 7)', () => {
-  it('has short hind legs right at the back, so its back slopes down from the shoulders', () => {
-    expect(LEG.back.upper + LEG.back.lower).toBeLessThan(LEG.front.upper + LEG.front.lower)
+describe('the build (Mike, Nov 7)', () => {
+  it('has its hind legs right at the back, as long as the front ones, and every foot on the ground', () => {
+    expect(LEG.back.upper + LEG.back.lower).toBeCloseTo(LEG.front.upper + LEG.front.lower)
     expect(LEG.back.upper + LEG.back.lower).toBeCloseTo(LEG.back.hipZ)
-    expect(LEG.front.upper + LEG.front.lower).toBeCloseTo(LEG.front.hipZ)
     expect(LEG.back.x).toBeLessThan(BODY[0]!.x + 0.15)
     const r = buildRhino('#3ff0dc')
     r.setPose(framePose(12))
@@ -82,6 +81,8 @@ describe('skin folds', () => {
     expect(bodyFolds(0.07, 0.95)).toBeGreaterThan(0.015) // the ridge, high on the back
     expect(bodyFolds(0.07 - 0.042, 0.95)).toBeLessThan(-0.008) // the crease just behind it
     expect(Math.abs(bodyFolds(0.19, 0.3))).toBeLessThan(0.001) // gone under the belly
-    expect(Math.abs(bodyFolds(-0.3, 0.8))).toBeLessThan(0.001) // nothing on the rump
+    expect(bodyFolds(-0.2, 0.88)).toBeGreaterThan(0.012) // in front of the hind leg too
+    expect(bodyFolds(-0.2 + 0.038, 0.88)).toBeLessThan(-0.006) // with its crease in front
+    expect(Math.abs(bodyFolds(-0.4, 0.8))).toBeLessThan(0.001) // nothing on the rump itself
   })
 })
