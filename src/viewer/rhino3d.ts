@@ -25,6 +25,7 @@ import {
   MeshBasicMaterial,
   ShaderMaterial,
   SphereGeometry,
+  Vector3,
   type Material,
 } from 'three'
 import type { Pose } from './runner'
@@ -119,17 +120,21 @@ export function loft(stations: Station[], opts: { around?: number; steps?: numbe
 
 // ---- the shape ----------------------------------------------------------------------------------------------------
 
-/** Body, rear to front. The rump (top 0.86, half-width 0.24) sits lower and narrower than the shoulders (1.0, 0.3). */
+/**
+ * Body, rear to front (Mike, Nov 7): short, a quarter shorter than a real white rhino's, with heavy shoulders and the
+ * back sloping down to a small rump over short hind legs, a little like a hyena's. The rump (top 0.76, half-width 0.24)
+ * sits well below and inside the shoulders (1.05, 0.37).
+ */
 export const BODY: Station[] = [
-  { x: -0.8, bottom: 0.6, top: 0.7, w: 0.03 },
-  { x: -0.74, bottom: 0.5, top: 0.8, w: 0.16 },
-  { x: -0.62, bottom: 0.44, top: 0.86, w: 0.24 },
-  { x: -0.44, bottom: 0.4, top: 0.88, w: 0.27 },
-  { x: -0.18, bottom: 0.36, top: 0.88, w: 0.31 },
-  { x: 0.08, bottom: 0.37, top: 0.92, w: 0.33 },
-  { x: 0.28, bottom: 0.41, top: 1.0, w: 0.31 },
-  { x: 0.44, bottom: 0.46, top: 0.97, w: 0.26 },
-  { x: 0.58, bottom: 0.5, top: 0.9, w: 0.21 },
+  { x: -0.433, bottom: 0.48, top: 0.58, w: 0.03 },
+  { x: -0.393, bottom: 0.39, top: 0.69, w: 0.16 },
+  { x: -0.314, bottom: 0.34, top: 0.76, w: 0.24 },
+  { x: -0.195, bottom: 0.32, top: 0.8, w: 0.27 },
+  { x: -0.024, bottom: 0.31, top: 0.85, w: 0.33 },
+  { x: 0.108, bottom: 0.34, top: 0.95, w: 0.37 },
+  { x: 0.28, bottom: 0.41, top: 1.05, w: 0.36 },
+  { x: 0.44, bottom: 0.47, top: 1.02, w: 0.3 },
+  { x: 0.58, bottom: 0.5, top: 0.92, w: 0.23 },
   { x: 0.7, bottom: 0.54, top: 0.84, w: 0.17 },
   { x: 0.76, bottom: 0.6, top: 0.78, w: 0.06 },
 ]
@@ -155,8 +160,12 @@ function horn(length: number, base: number): BufferGeometry {
   return loft(st, { around: 10, steps: 2, round: 2 })
 }
 
-/** Hips (back) and shoulders (front), and how long the upper and lower legs are */
-export const LEG = { backX: -0.5, frontX: 0.28, side: 0.14, hipZ: 0.52, upper: 0.28, lower: 0.24 }
+/** Hips (back, right at the rump and shorter) and shoulders (front): where they join, and how long each half is */
+export const LEG = {
+  side: 0.14,
+  back: { x: -0.3, hipZ: 0.42, upper: 0.22, lower: 0.2 },
+  front: { x: 0.28, hipZ: 0.52, upper: 0.28, lower: 0.24 },
+}
 const NECK = { x: 0.66, z: 0.74, down: 0.42 }
 /** The body tips around the back hips; rise is in the trot's own units, about a hundredth of the height */
 const RISE_UNIT = 1 / 110
@@ -164,6 +173,8 @@ const RISE_UNIT = 1 / 110
 export interface Rhino3d {
   group: Group
   setPose(p: Pose): void
+  /** how high each foot's sole is off the ground, in shoulder heights: [back far, back near, front far, front near] */
+  feet(): number[]
   /** 0 normally; 1 for the tenth of a second it glitches */
   setGlitch(on: boolean): void
   /** where its feet stand (scene z) and how tall it is (scene units), for the fade towards the feet */
@@ -237,16 +248,16 @@ export function buildRhino(colour: string): Rhino3d {
   const group = new Group()
   // the body hangs from the back hips, so tipping it rears it up round them
   const tipper = new Group()
-  tipper.position.set(LEG.backX, 0, LEG.hipZ)
+  tipper.position.set(LEG.back.x, 0, LEG.back.hipZ)
   group.add(tipper)
   const body = new Group()
-  body.position.set(-LEG.backX, 0, -LEG.hipZ)
+  body.position.set(-LEG.back.x, 0, -LEG.back.hipZ)
   tipper.add(body)
   body.add(part(loft(BODY, { around: 22, steps: 4, round: 2.5 })))
 
   // tail: thin, hanging from the top of the rump, with a tuft
   const tail = new Group()
-  tail.position.set(-0.76, 0, 0.78)
+  tail.position.set(-0.41, 0, 0.64)
   tail.rotation.y = 0.35 // hangs angled back
   tail.add(part(new CylinderGeometry(0.012, 0.018, 0.24, 6).translate(0, -0.12, 0).rotateX(Math.PI / 2)))
   const tuft = part(new SphereGeometry(0.03, 8, 6))
@@ -255,33 +266,35 @@ export function buildRhino(colour: string): Rhino3d {
   body.add(tail)
 
   // legs: [back far, back near, front far, front near], far on +y
-  const legs: Array<{ hip: Group; knee: Group }> = []
-  for (const [x, y, front] of [
-    [LEG.backX, LEG.side, false],
-    [LEG.backX, -LEG.side, false],
-    [LEG.frontX, LEG.side, true],
-    [LEG.frontX, -LEG.side, true],
-  ] as Array<[number, number, boolean]>) {
+  const legs: Array<{ hip: Group; knee: Group; lower: number }> = []
+  for (const [y, front] of [
+    [LEG.side, false],
+    [-LEG.side, false],
+    [LEG.side, true],
+    [-LEG.side, true],
+  ] as Array<[number, boolean]>) {
+    const L = front ? LEG.front : LEG.back
     const hip = new Group()
-    hip.position.set(x, y, LEG.hipZ)
-    // the thigh or shoulder: a heavy mass that blends into the body and swings with the leg
+    hip.position.set(L.x, y, L.hipZ)
+    // the thigh or shoulder: a heavy mass that blends into the body and swings with the leg; the shoulders are the
+    // heaviest part of it
     const mass = part(new SphereGeometry(1, 16, 12))
-    mass.scale.set(front ? 0.11 : 0.13, 0.08, front ? 0.14 : 0.15)
+    mass.scale.set(front ? 0.16 : 0.12, front ? 0.11 : 0.08, front ? 0.21 : 0.13)
     mass.position.set(front ? 0.01 : -0.02, 0, 0)
     hip.add(mass)
     // upper leg: tapering from that mass to the knee
-    hip.add(part(new CylinderGeometry(0.1, 0.085, LEG.upper, 12).translate(0, -LEG.upper / 2, 0).rotateX(Math.PI / 2)))
+    hip.add(part(new CylinderGeometry(front ? 0.115 : 0.095, 0.085, L.upper, 12).translate(0, -L.upper / 2, 0).rotateX(Math.PI / 2)))
     const knee = new Group()
-    knee.position.set(0, 0, -LEG.upper)
+    knee.position.set(0, 0, -L.upper)
     knee.add(part(new SphereGeometry(0.088, 12, 8)))
     // lower leg: a column that widens a little to the foot, which sits flat on the ground
-    knee.add(part(new CylinderGeometry(0.075, 0.085, LEG.lower - 0.03, 12).translate(0, -(LEG.lower - 0.03) / 2, 0).rotateX(Math.PI / 2)))
+    knee.add(part(new CylinderGeometry(0.075, 0.085, L.lower - 0.03, 12).translate(0, -(L.lower - 0.03) / 2, 0).rotateX(Math.PI / 2)))
     const foot = part(new CylinderGeometry(0.075, 0.095, 0.05, 12).rotateX(Math.PI / 2))
-    foot.position.set(0.01, 0, -LEG.lower + 0.025)
+    foot.position.set(0.01, 0, -L.lower + 0.025)
     knee.add(foot)
     hip.add(knee)
     body.add(hip)
-    legs.push({ hip, knee })
+    legs.push({ hip, knee, lower: L.lower })
   }
 
   // head: carried low from the neck, nose down
@@ -315,7 +328,7 @@ export function buildRhino(colour: string): Rhino3d {
 
   function setPose(p: Pose) {
     tipper.rotation.y = -p.tip
-    tipper.position.z = LEG.hipZ + p.rise * RISE_UNIT // the outer group is the scene's to place
+    tipper.position.z = LEG.back.hipZ + p.rise * RISE_UNIT // the outer group is the scene's to place
     neck.rotation.y = NECK.down + p.nod
     p.legs.forEach((leg, i) => {
       const l = legs[i]!
@@ -327,6 +340,11 @@ export function buildRhino(colour: string): Rhino3d {
   return {
     group,
     setPose,
+    feet() {
+      group.updateMatrixWorld(true)
+      const s = group.scale.z || 1
+      return legs.map((l) => (l.knee.localToWorld(new Vector3(0, 0, -l.lower)).z - group.position.z) / s)
+    },
     setGlitch(on) {
       uniforms.uGlitch.value = on ? 1 : 0
       glowUniforms.uGlitch.value = on ? 1 : 0

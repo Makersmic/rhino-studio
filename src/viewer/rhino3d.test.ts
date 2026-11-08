@@ -1,4 +1,4 @@
-import { Box3, Mesh, Vector3 } from 'three'
+import { Box3 } from 'three'
 import { describe, expect, it } from 'vitest'
 import { BODY, LEG, buildRhino, loft } from './rhino3d'
 import { FRAME_REAR, framePose, trotPose } from './runner'
@@ -7,10 +7,7 @@ const box = (r: ReturnType<typeof buildRhino>) => {
   r.group.updateMatrixWorld(true)
   return new Box3().setFromObject(r.group)
 }
-const footZ = (r: ReturnType<typeof buildRhino>, i: number) => {
-  r.group.updateMatrixWorld(true)
-  return new Vector3(0, 0, -LEG.lower).applyMatrix4((r.group.children[0]!.children[0]!.children.filter((c) => c.position.z === LEG.hipZ)[i]!.children.at(-1)! as Mesh).matrixWorld).z
-}
+const footZ = (r: ReturnType<typeof buildRhino>, i: number) => r.feet()[i]!
 
 describe('loft', () => {
   it('makes a closed skin through its stations', () => {
@@ -25,13 +22,13 @@ describe('loft', () => {
 
 describe('the rhino', () => {
   it('has a rump lower and narrower than its shoulders (not a big rear end)', () => {
-    const rump = BODY.filter((s) => s.x < -0.3)
+    const rump = BODY.filter((s) => s.x < -0.2)
     const shoulders = BODY.filter((s) => s.x > 0 && s.x < 0.4)
     expect(Math.max(...rump.map((s) => s.top))).toBeLessThan(Math.max(...shoulders.map((s) => s.top)) - 0.1)
     expect(Math.max(...rump.map((s) => s.w))).toBeLessThan(Math.max(...shoulders.map((s) => s.w)))
   })
 
-  it('stands on the ground, about a shoulder height tall and as long as a real rhino, facing +x', () => {
+  it('stands on the ground, about a shoulder height tall and short-bodied, facing +x', () => {
     const r = buildRhino('#3ff0dc')
     r.setPose(framePose(12))
     const b = box(r)
@@ -39,8 +36,9 @@ describe('the rhino', () => {
     expect(b.min.z).toBeLessThan(0.02)
     expect(b.max.z).toBeGreaterThan(0.95)
     expect(b.max.z).toBeLessThan(1.15)
+    // a quarter shorter in the body than a real white rhino (about 2.1-2.3 shoulder heights nose to tail)
     expect(b.max.x - b.min.x).toBeGreaterThan(1.5)
-    expect(b.max.x - b.min.x).toBeLessThan(2.35) // a white rhino is about 2.1-2.3 shoulder heights nose to tail
+    expect(b.max.x - b.min.x).toBeLessThan(1.95)
     // the head and horns are at the front
     expect(b.max.x).toBeGreaterThan(-b.min.x)
     r.dispose()
@@ -62,6 +60,19 @@ describe('the rhino', () => {
     expect(footZ(r, 2)).toBeGreaterThan(0.2)
     expect(footZ(r, 3)).toBeGreaterThan(0.2)
     expect(footZ(r, 0)).toBeLessThan(0.08)
+    r.dispose()
+  })
+})
+
+describe('the hyena-like build (Mike, Nov 7)', () => {
+  it('has short hind legs right at the back, so its back slopes down from the shoulders', () => {
+    expect(LEG.back.upper + LEG.back.lower).toBeLessThan(LEG.front.upper + LEG.front.lower)
+    expect(LEG.back.upper + LEG.back.lower).toBeCloseTo(LEG.back.hipZ)
+    expect(LEG.front.upper + LEG.front.lower).toBeCloseTo(LEG.front.hipZ)
+    expect(LEG.back.x).toBeLessThan(BODY[0]!.x + 0.15)
+    const r = buildRhino('#3ff0dc')
+    r.setPose(framePose(12))
+    r.feet().forEach((z) => expect(Math.abs(z)).toBeLessThan(0.02))
     r.dispose()
   })
 })
