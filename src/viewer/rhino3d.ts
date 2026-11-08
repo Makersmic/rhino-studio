@@ -10,24 +10,34 @@
  * The joints take runner.ts's poses, the same numbers the trot was tuned with: each leg swings at the hip and folds at
  * the knee, the body tips around the back hips and rises, and the head nods at the neck.
  *
+ * The shapes are blended into one smooth skin (Mike, Nov 7: "so I don't see the individual shapes"): a distance field,
+ * polygonised once, and skinned to joints so it bends rather than coming apart. Horns and eyes ride on the head.
+ *
  * It's drawn as light: see-through turquoise, brighter at its edges and along its back, fading towards the feet, with
- * scan lines. A depth pass first keeps only its nearest surface, so the parts don't show through each other.
+ * scan lines. A depth pass first keeps only its nearest surface, so the far side doesn't show through.
  */
 import {
   AdditiveBlending,
+  Bone,
   BufferGeometry,
   Color,
-  CylinderGeometry,
+  Euler,
   Float32BufferAttribute,
   Group,
   LessEqualDepth,
   Mesh,
   MeshBasicMaterial,
+  Object3D,
   ShaderMaterial,
+  Skeleton,
+  SkinnedMesh,
   SphereGeometry,
+  Uint16BufferAttribute,
   Vector3,
   type Material,
 } from 'three'
+import { MarchingCubes } from 'three/examples/jsm/objects/MarchingCubes.js'
+import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import type { Pose } from './runner'
 
 /** One cross-section of a loft: at `x`, from `bottom` to `top`, `w` either side of `y` */
@@ -184,16 +194,22 @@ export interface Rhino3d {
 }
 
 const VERT = `
+#include <common>
+#include <skinning_pars_vertex>
 uniform float uGlitch;
 varying vec3 vNormalW;
 varying vec3 vPosW;
 void main() {
-  vec3 p = position;
-  p.y += uGlitch * 0.05 * sin(p.z * 60.0);
-  vec4 w = modelMatrix * vec4(p, 1.0);
+  #include <beginnormal_vertex>
+  #include <skinbase_vertex>
+  #include <skinnormal_vertex>
+  #include <begin_vertex>
+  #include <skinning_vertex>
+  transformed.y += uGlitch * 0.05 * sin(transformed.z * 60.0);
+  vec4 w = modelMatrix * vec4(transformed, 1.0);
   vPosW = w.xyz;
-  vNormalW = normalize(mat3(modelMatrix) * normal);
-  gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
+  vNormalW = normalize(mat3(modelMatrix) * objectNormal);
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(transformed, 1.0);
 }`
 const FRAG = `
 uniform vec3 uColour;
@@ -216,6 +232,208 @@ void main() {
   gl_FragColor = vec4(c, 1.0);
 }`
 
+// ---- the skin: the shapes as one smooth distance field, turned into one surface ----------------------------------
+
+type V3 = [number, number, number]
+/** A shape in its joint's own space: how far a point is outside it (negative inside), and how softly it blends in */
+interface Shape {
+  bone: number
+  dist: (x: number, y: number, z: number) => number
+  /** corners of a box round it, in the joint's space */
+  box: [V3, V3]
+  /** blend radius into what's already there (shoulder heights) */
+  blend: number
+}
+
+/**
+ * Distance to a cone with rounded ends from a (radius ra) to b (radius rb). After Inigo Quilez's distance functions,
+ * https://iquilezles.org/articles/distfunctions/ (MIT licence).
+ */
+function roundCone(a: V3, b: V3, ra: number, rb: number): (x: number, y: number, z: number) => number {
+  const ba = [b[0] - a[0], b[1] - a[1], b[2] - a[2]]
+  const l2 = ba[0]! * ba[0]! + ba[1]! * ba[1]! + ba[2]! * ba[2]!
+  const rr = ra - rb
+  const a2 = l2 - rr * rr
+  const il2 = 1 / l2
+  return (x, y, z) => {
+    const pa = [x - a[0], y - a[1], z - a[2]]
+    const yy = pa[0]! * ba[0]! + pa[1]! * ba[1]! + pa[2]! * ba[2]!
+    const zz = yy - l2
+    const qx = pa[0]! * l2 - ba[0]! * yy
+    const qy = pa[1]! * l2 - ba[1]! * yy
+    const qz = pa[2]! * l2 - ba[2]! * yy
+    const x2 = qx * qx + qy * qy + qz * qz
+    const y2 = yy * yy * l2
+    const z2 = zz * zz * l2
+    const k = Math.sign(rr) * rr * rr * x2
+    if (Math.sign(zz) * a2 * z2 > k) return Math.sqrt(x2 + z2) * il2 - rb
+    if (Math.sign(yy) * a2 * y2 < k) return Math.sqrt(x2 + y2) * il2 - ra
+    return (Math.sqrt(x2 * a2 * il2) + yy * rr) * il2 - ra
+  }
+}
+/** Distance to an ellipsoid (a close estimate), after Inigo Quilez as above */
+function ellipsoid(c: V3, r: V3): (x: number, y: number, z: number) => number {
+  return (x, y, z) => {
+    const px = (x - c[0]) / r[0]
+    const py = (y - c[1]) / r[1]
+    const pz = (z - c[2]) / r[2]
+    const k0 = Math.hypot(px, py, pz)
+    const k1 = Math.hypot(px / r[0], py / r[1], pz / r[2])
+    return k1 === 0 ? -Math.min(...r) : (k0 * (k0 - 1)) / k1
+  }
+}
+/** Distance to a loft (an estimate that's exact on the surface itself) */
+function loftDist(stations: Station[], round: number): (x: number, y: number, z: number) => number {
+  const st = smooth(stations, 4)
+  const x0 = st[0]!.x
+  const x1 = st[st.length - 1]!.x
+  return (x, y, z) => {
+    const cx = Math.min(Math.max(x, x0), x1)
+    let i = 0
+    let j = st.length - 1
+    while (j - i > 1) {
+      const m = (i + j) >> 1
+      if (st[m]!.x <= cx) i = m
+      else j = m
+    }
+    const A = st[i]!
+    const B = st[j]!
+    const t = B.x === A.x ? 0 : (cx - A.x) / (B.x - A.x)
+    const w = Math.max(A.w + (B.w - A.w) * t, 1e-3)
+    const top = A.top + (B.top - A.top) * t
+    const bottom = A.bottom + (B.bottom - A.bottom) * t
+    const half = Math.max((top - bottom) / 2, 1e-3)
+    const cy = (A.y ?? 0) + ((B.y ?? 0) - (A.y ?? 0)) * t
+    const q = Math.pow(Math.pow(Math.abs(y - cy) / w, round) + Math.pow(Math.abs(z - (top + bottom) / 2) / half, round), 1 / round)
+    const across = (q - 1) * Math.min(w, half)
+    const dx = Math.max(x0 - x, x - x1, 0)
+    return dx > 0 ? Math.hypot(dx, Math.max(across, 0)) : across
+  }
+}
+function loftBox(stations: Station[]): [V3, V3] {
+  const w = Math.max(...stations.map((s) => s.w))
+  return [
+    [Math.min(...stations.map((s) => s.x)), -w, Math.min(...stations.map((s) => s.bottom))],
+    [Math.max(...stations.map((s) => s.x)), w, Math.max(...stations.map((s) => s.top))],
+  ]
+}
+function coneBox(a: V3, b: V3, r: number): [V3, V3] {
+  return [
+    [Math.min(a[0], b[0]) - r, Math.min(a[1], b[1]) - r, Math.min(a[2], b[2]) - r],
+    [Math.max(a[0], b[0]) + r, Math.max(a[1], b[1]) + r, Math.max(a[2], b[2]) + r],
+  ]
+}
+/** Blend b into a, rounding the join over `k` */
+function smin(a: number, b: number, k: number): number {
+  if (k <= 0) return Math.min(a, b)
+  const h = Math.max(k - Math.abs(a - b), 0) / k
+  return Math.min(a, b) - h * h * k * 0.25
+}
+
+/** How finely the skin is made: cells across the rhino's longest side */
+export const SKIN_CELLS = 72
+
+/**
+ * Turn the shapes (each in its joint's space, the joints in their resting pose) into one skin in the rhino's space:
+ * a smooth distance field, polygonised with three's MarchingCubes, then given skin weights so the joints bend it.
+ */
+function buildSkin(shapes: Shape[], joints: Bone[]): BufferGeometry {
+  const toModel = joints.map((b) => b.matrixWorld.clone())
+  const toJoint = toModel.map((m) => m.clone().invert())
+  // each shape's box in the rhino's space, for skipping shapes far from a point
+  const boxes = shapes.map((sh) => {
+    const lo = new Vector3(Infinity, Infinity, Infinity)
+    const hi = new Vector3(-Infinity, -Infinity, -Infinity)
+    const [a, b] = sh.box
+    for (const cx of [a[0], b[0]]) for (const cy of [a[1], b[1]]) for (const cz of [a[2], b[2]]) {
+      const v = new Vector3(cx, cy, cz).applyMatrix4(toModel[sh.bone]!)
+      lo.min(v)
+      hi.max(v)
+    }
+    const pad = sh.blend + 0.03
+    return { lo: lo.subScalar(pad), hi: hi.addScalar(pad) }
+  })
+  const lo = new Vector3(Infinity, Infinity, Infinity)
+  const hi = new Vector3(-Infinity, -Infinity, -Infinity)
+  for (const b of boxes) {
+    lo.min(b.lo)
+    hi.max(b.hi)
+  }
+  const centre = lo.clone().add(hi).multiplyScalar(0.5)
+  const half = hi.clone().sub(lo).multiplyScalar(0.5 * 1.04)
+  const res = SKIN_CELLS
+  const local = new Vector3()
+  /** each joint's nearest shape distance at a point in the rhino's space, and the blended skin distance */
+  const perJoint = new Float64Array(joints.length)
+  function field(x: number, y: number, z: number, wantJoints: boolean): number {
+    let d = 1
+    if (wantJoints) perJoint.fill(1)
+    for (let i = 0; i < shapes.length; i++) {
+      const b = boxes[i]!
+      if (!wantJoints && (x < b.lo.x || x > b.hi.x || y < b.lo.y || y > b.hi.y || z < b.lo.z || z > b.hi.z)) continue
+      const sh = shapes[i]!
+      local.set(x, y, z).applyMatrix4(toJoint[sh.bone]!)
+      const e = sh.dist(local.x, local.y, local.z)
+      d = i === 0 ? e : smin(d, e, sh.blend)
+      if (wantJoints && e < perJoint[sh.bone]!) perJoint[sh.bone] = e
+    }
+    return d
+  }
+  const mc = new MarchingCubes(res, new MeshBasicMaterial(), false, false, 120000)
+  mc.isolation = 0
+  for (let k = 0; k < res; k++)
+    for (let j = 0; j < res; j++)
+      for (let i = 0; i < res; i++) {
+        const f = (n: number) => (n - res / 2) / (res / 2)
+        mc.field[k * res * res + j * res + i] = -field(centre.x + f(i) * half.x, centre.y + f(j) * half.y, centre.z + f(k) * half.z, false)
+      }
+  mc.update()
+  const n = mc.count
+  const pos = new Float32Array(n * 3)
+  const nor = new Float32Array(n * 3)
+  for (let v = 0; v < n; v++) {
+    pos[v * 3] = centre.x + mc.positionArray[v * 3]! * half.x
+    pos[v * 3 + 1] = centre.y + mc.positionArray[v * 3 + 1]! * half.y
+    pos[v * 3 + 2] = centre.z + mc.positionArray[v * 3 + 2]! * half.z
+    // the field's slope was taken in grid steps: stretch it back to the rhino's space
+    const nx = mc.normalArray[v * 3]! / half.x
+    const ny = mc.normalArray[v * 3 + 1]! / half.y
+    const nz = mc.normalArray[v * 3 + 2]! / half.z
+    const l = Math.hypot(nx, ny, nz) || 1
+    nor[v * 3] = nx / l
+    nor[v * 3 + 1] = ny / l
+    nor[v * 3 + 2] = nz / l
+  }
+  mc.geometry.dispose()
+  ;(mc.material as Material).dispose()
+  let g = new BufferGeometry()
+  g.setAttribute('position', new Float32BufferAttribute(pos, 3))
+  g.setAttribute('normal', new Float32BufferAttribute(nor, 3))
+  g = mergeVertices(g, 1e-5)
+  // skin weights: each point follows the joints whose shapes it's nearest, softly, so the skin bends at the joins
+  const p = g.getAttribute('position')
+  const count = p.count
+  const idx = new Uint16Array(count * 4)
+  const wts = new Float32Array(count * 4)
+  for (let v = 0; v < count; v++) {
+    field(p.getX(v), p.getY(v), p.getZ(v), true)
+    const near = Math.min(...perJoint)
+    const ranked = Array.from(perJoint, (d, b) => ({ b, w: Math.exp(-(d - near) / 0.03) }))
+      .sort((a, b) => b.w - a.w)
+      .slice(0, 4)
+    const sum = ranked.reduce((t, r) => t + r.w, 0)
+    ranked.forEach((r, k) => {
+      idx[v * 4 + k] = r.b
+      wts[v * 4 + k] = r.w / sum
+    })
+  }
+  g.setAttribute('skinIndex', new Uint16BufferAttribute(idx, 4))
+  g.setAttribute('skinWeight', new Float32BufferAttribute(wts, 4))
+  return g
+}
+
+let skinMade: BufferGeometry | null = null
+
 /** Build the rhino in `colour` (CSS colour) */
 export function buildRhino(colour: string): Rhino3d {
   const uniforms = {
@@ -226,7 +444,7 @@ export function buildRhino(colour: string): Rhino3d {
     uBright: { value: 1 },
   }
   const light = new ShaderMaterial({ uniforms, vertexShader: VERT, fragmentShader: FRAG, transparent: true, depthWrite: false, depthFunc: LessEqualDepth, blending: AdditiveBlending })
-  // the eye and the horn tip glow
+  // the eyes and the horn tip glow
   const glowUniforms = { ...uniforms, uBright: { value: 3 } }
   const glow = new ShaderMaterial({ uniforms: glowUniforms, vertexShader: VERT, fragmentShader: FRAG, transparent: true, depthWrite: false, depthFunc: LessEqualDepth, blending: AdditiveBlending })
   // nudged a hair back: two shader programs needn't agree on depth to the last bit, and without this the light pass
@@ -235,8 +453,8 @@ export function buildRhino(colour: string): Rhino3d {
   const geometries: BufferGeometry[] = []
   const materials: Material[] = [light, glow, depth]
 
-  /** a part: drawn into depth first, then as light */
-  function part(g: BufferGeometry, m: ShaderMaterial = light): Group {
+  /** a rigid piece on a joint (horns, eyes): drawn into depth first, then as light */
+  function piece(g: BufferGeometry, m: ShaderMaterial = light): Group {
     geometries.push(g)
     const holder = new Group()
     const d = new Mesh(g, depth)
@@ -246,28 +464,21 @@ export function buildRhino(colour: string): Rhino3d {
     return holder
   }
 
+  // ---- the joints, resting: the body hangs from the back hips, so tipping it rears it up round them
   const group = new Group()
-  // the body hangs from the back hips, so tipping it rears it up round them
-  const tipper = new Group()
-  tipper.position.set(LEG.back.x, 0, LEG.back.hipZ)
-  group.add(tipper)
-  const body = new Group()
-  body.position.set(-LEG.back.x, 0, -LEG.back.hipZ)
-  tipper.add(body)
-  body.add(part(loft(BODY, { around: 22, steps: 4, round: 2.5 })))
-
-  // tail: thin, hanging from the top of the rump, with a tuft
-  const tail = new Group()
-  tail.position.set(-0.41, 0, 0.64)
+  const joints: Bone[] = []
+  const joint = (parent: Object3D, x: number, y: number, z: number): Bone => {
+    const b = new Bone()
+    b.position.set(x, y, z)
+    parent.add(b)
+    joints.push(b)
+    return b
+  }
+  const tipper = joint(group, LEG.back.x, 0, LEG.back.hipZ)
+  const body = joint(tipper, -LEG.back.x, 0, -LEG.back.hipZ)
+  const tail = joint(body, -0.41, 0, 0.64)
   tail.rotation.y = 0.35 // hangs angled back
-  tail.add(part(new CylinderGeometry(0.012, 0.018, 0.24, 6).translate(0, -0.12, 0).rotateX(Math.PI / 2)))
-  const tuft = part(new SphereGeometry(0.03, 8, 6))
-  tuft.position.set(0, 0, -0.25)
-  tail.add(tuft)
-  body.add(tail)
-
-  // legs: [back far, back near, front far, front near], far on +y
-  const legs: Array<{ hip: Group; knee: Group; lower: number }> = []
+  const legs: Array<{ hip: Bone; knee: Bone; lower: number }> = []
   for (const [y, front] of [
     [LEG.side, false],
     [-LEG.side, false],
@@ -275,56 +486,74 @@ export function buildRhino(colour: string): Rhino3d {
     [-LEG.side, true],
   ] as Array<[number, boolean]>) {
     const L = front ? LEG.front : LEG.back
-    const hip = new Group()
-    hip.position.set(L.x, y, L.hipZ)
-    // the thigh or shoulder: a heavy mass that blends into the body and swings with the leg; the shoulders are the
-    // heaviest part of it
-    const mass = part(new SphereGeometry(1, 16, 12))
-    mass.scale.set(front ? 0.16 : 0.12, front ? 0.11 : 0.08, front ? 0.21 : 0.13)
-    mass.position.set(front ? 0.01 : -0.02, 0, 0)
-    hip.add(mass)
-    // upper leg: tapering from that mass to the knee
-    hip.add(part(new CylinderGeometry(front ? 0.115 : 0.095, 0.085, L.upper, 12).translate(0, -L.upper / 2, 0).rotateX(Math.PI / 2)))
-    const knee = new Group()
-    knee.position.set(0, 0, -L.upper)
-    knee.add(part(new SphereGeometry(0.088, 12, 8)))
-    // lower leg: a column that widens a little to the foot, which sits flat on the ground
-    knee.add(part(new CylinderGeometry(0.075, 0.085, L.lower - 0.03, 12).translate(0, -(L.lower - 0.03) / 2, 0).rotateX(Math.PI / 2)))
-    const foot = part(new CylinderGeometry(0.075, 0.095, 0.05, 12).rotateX(Math.PI / 2))
-    foot.position.set(0.01, 0, -L.lower + 0.025)
-    knee.add(foot)
-    hip.add(knee)
-    body.add(hip)
+    const hip = joint(body, L.x, y, L.hipZ)
+    const knee = joint(hip, 0, 0, -L.upper)
     legs.push({ hip, knee, lower: L.lower })
   }
+  const neck = joint(body, NECK.x, 0, NECK.z)
+  neck.rotation.y = NECK.down
+  group.updateMatrixWorld(true)
 
-  // head: carried low from the neck, nose down
-  const neck = new Group()
-  neck.position.set(NECK.x, 0, NECK.z)
-  body.add(neck)
-  const head = new Group()
-  neck.add(head)
-  head.add(part(loft(HEAD, { around: 18, steps: 3, round: 2.6 })))
-  const front = part(horn(0.34, 0.075))
+  // ---- the shapes, each on its joint, in that joint's space. The body goes first; the rest blend into it.
+  const at = (b: Bone) => joints.indexOf(b)
+  const shapes: Shape[] = [{ bone: at(body), dist: loftDist(BODY, 2.5), box: loftBox(BODY), blend: 0 }]
+  {
+    const a: V3 = [0, 0, 0]
+    const b: V3 = [0, 0, -0.24]
+    shapes.push({ bone: at(tail), dist: roundCone(a, b, 0.02, 0.013), box: coneBox(a, b, 0.02), blend: 0.03 })
+    shapes.push({ bone: at(tail), dist: ellipsoid([0, 0, -0.25], [0.03, 0.03, 0.04]), box: coneBox([0, 0, -0.25], [0, 0, -0.25], 0.04), blend: 0.02 })
+  }
+  legs.forEach((l, i) => {
+    const front = i >= 2
+    const L = front ? LEG.front : LEG.back
+    // the thigh or shoulder mass, blending into the body; the shoulders are the heaviest part
+    const c: V3 = [front ? 0.01 : -0.02, 0, 0]
+    const r: V3 = front ? [0.16, 0.11, 0.21] : [0.12, 0.08, 0.13]
+    shapes.push({ bone: at(l.hip), dist: ellipsoid(c, r), box: coneBox(c, c, Math.max(...r)), blend: 0.08 })
+    // upper leg, tapering to the knee
+    const top = front ? 0.115 : 0.095
+    shapes.push({ bone: at(l.hip), dist: roundCone([0, 0, 0], [0, 0, -L.upper], top, 0.085), box: coneBox([0, 0, 0], [0, 0, -L.upper], top), blend: 0.05 })
+    // lower leg: a column that widens a little to a flat-ish foot standing on the ground
+    const foot: V3 = [0.01, 0, -L.lower + 0.09]
+    shapes.push({ bone: at(l.knee), dist: roundCone([0, 0, 0], foot, 0.085, 0.09), box: coneBox([0, 0, 0], foot, 0.09), blend: 0.04 })
+  })
+  shapes.push({ bone: at(neck), dist: loftDist(HEAD, 2.6), box: loftBox(HEAD), blend: 0.07 })
+  for (const side of [1, -1]) {
+    // tube ears, standing up and out, angled back
+    const base: V3 = [0.02, 0.1 * side, 0.13]
+    const up = new Vector3(0, 0, 0.13).applyEuler(new Euler(-0.45 * side, -0.35, 0))
+    const tip: V3 = [base[0] + up.x, base[1] + up.y, base[2] + up.z]
+    shapes.push({ bone: at(neck), dist: roundCone(base, tip, 0.038, 0.016), box: coneBox(base, tip, 0.04), blend: 0.025 })
+  }
+
+  // about 0.3 s on a desktop, so it's made once per page and shared (it doesn't depend on the colour)
+  skinMade ??= buildSkin(shapes, joints)
+  const skin = skinMade
+  const skeleton = new Skeleton(joints)
+  for (const m of [depth, light] as Material[]) {
+    const mesh = new SkinnedMesh(skin, m)
+    mesh.frustumCulled = false
+    group.add(mesh)
+    mesh.bind(skeleton)
+  }
+
+  // ---- horns and eyes: rigid, riding on the head
+  const front = piece(horn(0.34, 0.075))
   front.position.set(0.5, 0, 0.0)
   front.rotation.y = -1.25
-  head.add(front)
-  const tip = part(new SphereGeometry(0.014, 6, 4), glow)
+  neck.add(front)
+  const hornTip = piece(new SphereGeometry(0.014, 6, 4), glow)
   // the horn's own tip (0.34 along, 0.119 up), turned as the horn is
-  tip.position.set(0.5 + 0.34 * Math.cos(1.25) - 0.119 * Math.sin(1.25), 0, 0.34 * Math.sin(1.25) + 0.119 * Math.cos(1.25))
-  head.add(tip)
-  const rear = part(horn(0.16, 0.055))
+  hornTip.position.set(0.5 + 0.34 * Math.cos(1.25) - 0.119 * Math.sin(1.25), 0, 0.34 * Math.sin(1.25) + 0.119 * Math.cos(1.25))
+  neck.add(hornTip)
+  const rear = piece(horn(0.16, 0.055))
   rear.position.set(0.34, 0, 0.07)
   rear.rotation.y = -1.35
-  head.add(rear)
+  neck.add(rear)
   for (const side of [1, -1]) {
-    const ear = part(new CylinderGeometry(0.016, 0.04, 0.13, 8).translate(0, 0.065, 0).rotateX(Math.PI / 2))
-    ear.position.set(0.02, 0.1 * side, 0.13)
-    ear.rotation.set(-0.45 * side, -0.35, 0)
-    head.add(ear)
-    const eye = part(new SphereGeometry(0.016, 8, 6), glow)
+    const eye = piece(new SphereGeometry(0.016, 8, 6), glow)
     eye.position.set(0.28, 0.14 * side, 0.04)
-    head.add(eye)
+    neck.add(eye)
   }
 
   function setPose(p: Pose) {
