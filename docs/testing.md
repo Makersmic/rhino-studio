@@ -510,3 +510,9 @@ Have a hand near Stop. Nothing printing.
 - [ ] **MB7 Update after an edit.** Change Park (e.g. lift 15 mm) and save. *Pass if:* BlockOne's page says Park changed and offers **Update**; jobs keep the old lift until Update and a restart.
 - [ ] **MB8 Backup and restore.** Back up now, delete a macro, then restore only **Your macros** from that backup. *Pass if:* the macro is back. *Stop if:* anything else changes.
 
+## Print head tuning (needs Tool Manager 1.9.16 on the Rhino)
+
+- [ ] **TU1 Extruder calibration.** BlockOne mounted and confirmed, its page › Tune › Extruder calibration. Tick the checks, heat, mark the filament 120 mm above the extruder, Push 100 mm. *Pass if:* it asks first, pushes slowly for about 100 s, and the value it works out from what's left matches by hand (new = old × (120 − left) / 100). Repeat until two runs agree; Save. *Stop if:* the extruder clicks or skips, or Klipper says the move is too long (max_extrude_only_distance below 101: raise it in printer.cfg first).
+- [ ] **TU2 Prints use it.** After TU1, prepare a small print with BlockOne in Job setup. *Pass if:* the file has `SET_EXTRUDER_ROTATION_DISTANCE ... DISTANCE=<saved value>` right after START_JOB, and the print's walls look as before or better. *Stop if:* under- or over-extrusion appears: cancel and report the value.
+- [ ] **TU3 Shown and backed up.** BlockOne's page › Tuning shows Extruder calibration ✓ with the date. Back up now, then restore only "Print head tuning results". *Pass if:* the value is still there.
+
