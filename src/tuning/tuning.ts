@@ -175,3 +175,98 @@ export function squishFine(liveOffset: number, paperTest: number): number | null
   const v = Math.round((liveOffset - paperTest) * 1000) / 1000
   return Math.abs(v) <= 1 ? v : null
 }
+
+// ---- pressure advance (Ellis: the pattern method; sharpest corner wins) -------------------------------------------
+
+export const PA_PATTERN = { layers: 4, height: 0.2, walls: 3, leg: 15, pitch: 22, feed: 6000, firstFeed: 1800, travel: 9000 } as const
+
+/** The values tested, one per column, left to right */
+export function paValues(start: number, step: number, count: number): number[] {
+  return Array.from({ length: count }, (_, i) => Math.round((start + step * i) * 10000) / 10000)
+}
+
+/** A finer range round a pick (Ellis: refine at 0.001-0.002 steps for direct drive): 11 columns */
+export function paRefine(pick: number): { start: number; step: number; count: number } {
+  const step = 0.002
+  return { start: Math.max(0, Math.round((pick - 5 * step) * 10000) / 10000), step, count: 11 }
+}
+
+/**
+ * Ellis' pressure advance pattern as a job file: columns of nested sharp corners (<), one pressure advance each, set
+ * just before that column, over a few layers; counting marks under the columns on the first layer (long every fifth,
+ * starting with the first). The head goes back to its usual pressure advance before END_PRINT.
+ */
+export function paPatternFile(o: {
+  tool: string
+  material: string
+  nozzle: number
+  path: number
+  rotationDistance?: number
+  bed: { x: number; y: number; keepOut: Rect[] }
+  values: number[]
+  /** what to put back afterwards (printer.cfg's [extruder] pressure_advance) */
+  restore: number
+}): string {
+  const P = PA_PATTERN
+  const w = Number((o.nozzle * 1.2).toFixed(3))
+  const h = P.height
+  const e = (len: number) => Number(((w * h * len) / FILAMENT_AREA).toFixed(5))
+  const f = (v: number) => Number(v.toFixed(3))
+  const width = o.values.length * P.pitch
+  const x0 = Math.round((o.bed.x - width) / 2)
+  const yc = Math.round(o.bed.y / 2)
+  const out = [
+    `; rhino_toolhead = ${o.tool}`,
+    `; Rhino Studio pressure advance pattern (Ellis' Print Tuning Guide): ${o.values.length} columns, ${o.values[0]} to ${o.values.at(-1)}`,
+    'M140 S0 ; bed off until START_JOB heats it from the material table',
+    'M104 S0 ; nozzle off until START_JOB heats it',
+    `START_JOB TOOLHEAD=${o.tool} MATERIAL=${o.material} NOZZLE_SIZE=${f(o.nozzle)} EXTRUDER=${o.path}`,
+    ...(o.rotationDistance != null ? [`SET_EXTRUDER_ROTATION_DISTANCE EXTRUDER=extruder DISTANCE=${o.rotationDistance} ; calibrated (Studio tuning)`] : []),
+    'G90',
+    'G21',
+    'M83',
+    'G92 E0',
+  ]
+  const move = (x: number, y: number) => out.push(`G0 X${f(x)} Y${f(y)} F${P.travel}`)
+  for (let layer = 1; layer <= P.layers; layer++) {
+    const z = f(h * layer)
+    out.push(';LAYER_CHANGE', `;Z:${z}`, `G1 Z${z} F600`)
+    const feed = layer === 1 ? P.firstFeed : P.feed
+    if (layer === 1) {
+      // counting marks under the columns: long every fifth, from the first
+      out.push('SET_PRESSURE_ADVANCE ADVANCE=0')
+      o.values.forEach((_, i) => {
+        const x = x0 + i * P.pitch + P.leg / 2
+        const len = i % 5 === 0 ? 8 : 3
+        const y = yc - P.leg - 4
+        move(x, y)
+        out.push('G1 E0.8 F1800', `G1 X${f(x)} Y${f(y - len)} E${e(len)} F${P.firstFeed}`, 'G1 E-0.8 F1800')
+      })
+    }
+    o.values.forEach((pa, i) => {
+      const cx = x0 + i * P.pitch
+      out.push(`SET_PRESSURE_ADVANCE ADVANCE=${pa}`)
+      for (let k = 0; k < P.walls; k++) {
+        // each wall one line width further out, so the walls touch along the legs
+        const dx = k * w * Math.SQRT2
+        const a = [cx + dx, yc + P.leg]
+        const c = [cx + P.leg + dx, yc]
+        const b = [cx + dx, yc - P.leg]
+        const leg = P.leg * Math.SQRT2
+        move(a[0]!, a[1]!)
+        out.push('G1 E0.8 F1800', `G1 X${f(c[0]!)} Y${f(c[1]!)} E${e(leg)} F${feed}`, `G1 X${f(b[0]!)} Y${f(b[1]!)} E${e(leg)} F${feed}`, 'G1 E-0.8 F1800')
+      }
+    })
+  }
+  out.push(`SET_PRESSURE_ADVANCE ADVANCE=${o.restore} ; back to the usual`, `G1 Z${f(h * P.layers + 5)} F600`, 'M107', 'END_PRINT')
+  return out.join('\n') + '\n'
+}
+
+/** The pattern's footprint on the bed (for checking it against the areas to keep clear) */
+export function paPatternBounds(bed: { x: number; y: number }, columns: number): Rect {
+  const P = PA_PATTERN
+  const x0 = Math.round((bed.x - columns * P.pitch) / 2)
+  const yc = Math.round(bed.y / 2)
+  return { x0, y0: yc - P.leg - 12, x1: x0 + columns * P.pitch, y1: yc + P.leg }
+}
+export const patternClear = (r: Rect, keepOut: Rect[]) => !keepOut.some((z) => r.x0 < z.x1 && r.x1 > z.x0 && r.y0 < z.y1 && r.y1 > z.y0)

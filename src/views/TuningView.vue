@@ -9,6 +9,7 @@ import RsPanel from '@/components/RsPanel.vue'
 import RsButton from '@/components/RsButton.vue'
 import ExtruderCalWizard from '@/tuning/ExtruderCalWizard.vue'
 import FirstLayerWizard from '@/tuning/FirstLayerWizard.vue'
+import PressureAdvanceWizard from '@/tuning/PressureAdvanceWizard.vue'
 import { WIZARDS, lastRun, type TuningTest } from '@/tuning/tuning'
 import { usePrepareStore } from '@/stores/prepare'
 import { useTuningStore } from '@/stores/tuning'
@@ -26,7 +27,7 @@ watch(mats, (m) => { if (!matKey.value && m[0]) matKey.value = m[0].key }, { imm
 const mat = computed(() => mats.value.find((m) => m.key === matKey.value) ?? mats.value[0] ?? null)
 const temp = computed(() => mat.value?.extruderTemp ?? 210)
 const running = ref<TuningTest | null>(null)
-const BUILT: TuningTest[] = ['extruder_calibration', 'first_layer']
+const BUILT: TuningTest[] = ['extruder_calibration', 'first_layer', 'pressure_advance']
 const date = (t: number) => new Date(t * 1000).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })
 </script>
 
@@ -52,6 +53,10 @@ const date = (t: number) => new Date(t * 1000).toLocaleDateString(undefined, { d
 
     <RsPanel v-else-if="running === 'first_layer' && mat" :title="`First-layer squish: ${mat.name} ${mat.nozzle ?? 0.4} mm`" panel-id="tune.squish">
       <FirstLayerWizard :tool="tool" :mat="mat" @done="running = null" />
+    </RsPanel>
+
+    <RsPanel v-else-if="running === 'pressure_advance' && mat" :title="`Pressure advance: ${mat.name} ${mat.nozzle ?? 0.4} mm`" panel-id="tune.pa">
+      <PressureAdvanceWizard :tool="tool" :mat="mat" @done="running = null" />
     </RsPanel>
 
     <RsPanel v-else title="Tests, in order" panel-id="tune.list">

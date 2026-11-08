@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { extrudeScript, extruderSettled, lastRun, materialKey, newRotationDistance, squishFile, squishFine, squishPatches, tunedFor, tuningStatus, zFineVariable, type TuningState } from './tuning'
+import { extrudeScript, extruderSettled, lastRun, materialKey, newRotationDistance, paPatternFile, paRefine, paValues, squishFile, squishFine, squishPatches, tunedFor, tuningStatus, zFineVariable, type TuningState } from './tuning'
 import { check } from '@/control/commands'
 
 const st: TuningState = {
@@ -74,5 +74,27 @@ describe('first-layer squish', () => {
     expect(zFineVariable('BlockOne', 'PLA_0_4')).toBe('rhino_zfine_blockone_pla_0_4')
     expect(squishFine(-0.06, -0.02)).toBe(-0.04)
     expect(squishFine(3, 0)).toBeNull()
+  })
+})
+
+describe('pressure advance pattern', () => {
+  const bed = { x: 550, y: 375, keepOut: [] }
+  it('tests evenly spaced values, and refines round a pick', () => {
+    expect(paValues(0, 0.005, 21).at(-1)).toBe(0.1)
+    expect(paRefine(0.035)).toEqual({ start: 0.025, step: 0.002, count: 11 })
+    expect(paValues(0.025, 0.002, 11).at(-1)).toBe(0.045)
+    expect(paRefine(0.004).start).toBe(0)
+  })
+  it('sets each column’s value before it on every layer, stays on the bed and puts the usual value back', () => {
+    const values = paValues(0, 0.005, 21)
+    const f = paPatternFile({ tool: 'BlockOne', material: 'PLA', nozzle: 0.4, path: 0, bed, values, restore: 0.024 })
+    const lines = f.trim().split('\n')
+    expect(lines.filter((l) => l === 'SET_PRESSURE_ADVANCE ADVANCE=0.05')).toHaveLength(4)
+    expect(lines.filter((l) => l.startsWith(';LAYER_CHANGE'))).toHaveLength(4)
+    const xs = lines.flatMap((l) => (/ X(-?[\d.]+)/.exec(l) ? [Number(/ X(-?[\d.]+)/.exec(l)![1])] : []))
+    expect(Math.min(...xs)).toBeGreaterThan(5)
+    expect(Math.max(...xs)).toBeLessThan(545)
+    expect(lines.at(-4)).toBe('SET_PRESSURE_ADVANCE ADVANCE=0.024 ; back to the usual')
+    expect(lines.at(-1)).toBe('END_PRINT')
   })
 })
