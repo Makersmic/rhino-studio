@@ -227,6 +227,10 @@
   --rs-field-text: #151618;
   --rs-field-muted: #6b7075;
   --rs-field-disabled: #e4e4e1;
+  /* Preview: the model in the theme's selected colour, supports in its button colour (a lighter tint of the model when
+     the two are alike), Mike Nov 7 */
+  --rs-viewer-model: var(--rs-ink);
+  --rs-viewer-support: var(--rs-btn-fill);
   /* Job setup's 3D bed: a white build plate with grey grid lines, the same in day and night (Mike, Nov 7) */
   --rs-viewer-plate: #ffffff;
   --rs-viewer-plate-line: #7d8389;

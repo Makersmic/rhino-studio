@@ -18,13 +18,14 @@ import { usePrepareStore } from '@/stores/prepare'
 
 const GcodeViewer = defineAsyncComponent(() => import('@/viewer/GcodeViewer.vue'))
 
+const props = defineProps<{ embedded?: boolean }>()
 const route = useRoute()
 const router = useRouter()
 const machine = useMachineStore()
 const prep = usePrepareStore()
 
-const filePath = computed(() => (typeof route.query.file === 'string' ? route.query.file : null))
-const fromSetup = computed(() => route.query.from === 'setup')
+const filePath = computed(() => (!props.embedded && typeof route.query.file === 'string' ? route.query.file : null))
+const fromSetup = computed(() => props.embedded || route.query.from === 'setup')
 const setupFile = computed(() => (fromSetup.value ? (prep.result?.file ?? null) : null))
 const title = computed(() => filePath.value ?? setupFile.value?.name ?? '')
 
@@ -128,13 +129,22 @@ function readAnyway() {
 </script>
 
 <template>
-  <div class="view">
-    <div class="view-head">
+  <div :class="embedded ? 'embedded' : 'view'">
+    <div v-if="!embedded" class="view-head">
       <h1>Preview</h1>
       <p>Step through every layer and move before anything reaches the machine.</p>
     </div>
 
-    <EmptyState v-if="!filePath && !setupFile" title="Nothing to preview yet">
+    <RsPanel v-if="embedded && !setupFile" panel-id="preview.file" title="Toolpath">
+      <div v-if="prep.phase" class="reading" role="status">
+        <span>{{ prep.phase }}<template v-if="prep.progress != null"> {{ Math.round(prep.progress * 100) }}%</template></span>
+        <span class="bar" :class="{ indet: prep.progress == null }"><span :style="{ width: `${(prep.progress ?? 0.3) * 100}%` }" /></span>
+      </div>
+      <p v-else-if="prep.prepError" class="error" role="alert">Couldn't prepare: {{ prep.prepError }} <RsButton size="sm" @click="prep.prepare()">Try again</RsButton></p>
+      <p v-else class="muted">Nothing prepared yet. <RsButton size="sm" :disabled="!prep.part" @click="prep.prepare()">Prepare</RsButton></p>
+    </RsPanel>
+
+    <EmptyState v-else-if="!filePath && !setupFile" title="Nothing to preview yet">
       <template #art><Icon nav="preview" :size="64" /></template>
       In Files, open a G-code file's ⋯ menu and choose Preview, or prepare a job in Job setup.
       <template v-if="fromSetup"> The job from Job setup is no longer here, so prepare it again.</template>
@@ -146,7 +156,7 @@ function readAnyway() {
 
     <RsPanel v-else panel-id="preview.file" title="Toolpath">
       <p class="name">{{ title }}</p>
-      <PreviewActions :file-path="filePath" />
+      <PreviewActions v-if="!embedded" :file-path="filePath" />
       <div v-if="needsAsk" class="ask">
         <p>A job is running. Reading this file adds work for the Rhino while it runs, and a slow host can feel that.</p>
         <RsButton variant="primary" @click="readAnyway">Read it anyway</RsButton>

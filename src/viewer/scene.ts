@@ -74,6 +74,10 @@ const EARLIER_LAYERS = 0.8
 const LINE_VERTEX = /* glsl */ `
   attribute float shade;
   attribute vec3 tangent;
+  #ifdef FEATURES
+  attribute float support;
+  varying float vSupport;
+  #endif
   uniform int uDimBefore;
   uniform vec2 uHeight;
   varying float vShade;
@@ -83,6 +87,9 @@ const LINE_VERTEX = /* glsl */ `
   varying vec3 vWorld;
   void main() {
     vShade = shade;
+    #ifdef FEATURES
+    vSupport = support;
+    #endif
     vTangent = tangent;
     vWorld = (modelMatrix * vec4(position, 1.0)).xyz;
     vDim = gl_VertexID < uDimBefore ? 1.0 : 0.0;
@@ -103,6 +110,10 @@ const STRIP_VERTEX = /* glsl */ `
   attribute float iShade;
   attribute vec3 iTangent;
   attribute float iWidth;
+  #ifdef FEATURES
+  attribute float iSupport;
+  varying float vSupport;
+  #endif
   uniform int uDimBefore;
   uniform vec2 uHeight;
   uniform vec2 uResolution;
@@ -118,6 +129,9 @@ const STRIP_VERTEX = /* glsl */ `
   varying float vPixels;
   void main() {
     vShade = iShade;
+    #ifdef FEATURES
+    vSupport = iSupport;
+    #endif
     if (iShade < 0.002 && uTravel < 0.0) {
       // Hidden travel: skip it here, cheaper than discarding its pixels
       gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
@@ -163,6 +177,11 @@ const STRIP_VERTEX = /* glsl */ `
 `
 
 const FRAGMENT = /* glsl */ `
+  #ifdef FEATURES
+  uniform vec3 uModel;
+  uniform vec3 uSupportColour;
+  varying float vSupport;
+  #endif
   uniform vec3 uInk;
   uniform vec3 uPaper;
   uniform float uTravel;
@@ -202,16 +221,24 @@ const FRAGMENT = /* glsl */ `
     }
     // Thin lines have no surface to light, so earlier layers get fainter towards the bottom to show the shape
     if (vDim > 0.5) s *= uEarlier * mix(0.45, 1.0, vHeight);
-    gl_FragColor = vec4(mix(uPaper, uInk, s), 1.0);
+    #ifdef FEATURES
+    // the model in the theme's own colour, supports in its second one (Mike, Nov 7)
+    vec3 ink = mix(uModel, uSupportColour, step(0.5, vSupport));
+    #else
+    vec3 ink = uInk;
+    #endif
+    gl_FragColor = vec4(mix(uPaper, ink, s), 1.0);
   }
 `
 
-function material(strip: boolean): ShaderMaterial {
+function material(strip: boolean, features = false): ShaderMaterial {
   return new ShaderMaterial({
     vertexShader: strip ? STRIP_VERTEX : LINE_VERTEX,
     fragmentShader: FRAGMENT,
-    defines: strip ? { STRIP: 1 } : {},
+    defines: { ...(strip ? { STRIP: 1 } : {}), ...(features ? { FEATURES: 1 } : {}) },
     uniforms: {
+      uModel: { value: new Vector3(1, 1, 1) },
+      uSupportColour: { value: new Vector3(0.5, 0.5, 0.5) },
       uInk: { value: new Vector3(1, 1, 1) },
       uPaper: { value: new Vector3(0, 0, 0) },
       uTravel: { value: -1 },
@@ -466,8 +493,8 @@ export class GcodeScene {
   private camera = new PerspectiveCamera(FOV, 1, 1, 10000)
   private controls: OrbitControls
   private bedMaterial = material(false)
-  private lineMaterial = material(false)
-  private stripMaterial = material(true)
+  private lineMaterial = material(false, true)
+  private stripMaterial = material(true, true)
   private meshMaterial = modelMaterial()
   private wireMaterial = material(false)
   private outlineMat = outlineMaterial()
@@ -549,6 +576,7 @@ export class GcodeScene {
       g.setAttribute('iStart', new InterleavedBufferAttribute(ends, 3, 0))
       g.setAttribute('iEnd', new InterleavedBufferAttribute(ends, 3, 3))
       g.setAttribute('iShade', new InterleavedBufferAttribute(new InstancedInterleavedBuffer(d.shades, 2, 1), 1, 0, true))
+      g.setAttribute('iSupport', new InterleavedBufferAttribute(new InstancedInterleavedBuffer(d.support ?? new Uint8Array(d.drawnMoves * 2), 2, 1), 1, 0, true))
       g.setAttribute('iTangent', new InterleavedBufferAttribute(new InstancedInterleavedBuffer(d.tangents, 6, 1), 3, 0, true))
       // 255 = 1 after normalising, so the shader's 2.55 turns it back into millimetres
       g.setAttribute('iWidth', new InstancedBufferAttribute(d.widths, 1, true))
@@ -558,6 +586,7 @@ export class GcodeScene {
       const g = new BufferGeometry()
       g.setAttribute('position', new BufferAttribute(d.segments, 3))
       g.setAttribute('shade', new BufferAttribute(d.shades, 1, true))
+      g.setAttribute('support', new BufferAttribute(d.support ?? new Uint8Array(d.drawnMoves * 2), 1, true))
       g.setAttribute('tangent', new BufferAttribute(d.tangents, 3, true))
       this.path = new LineSegments(g, m)
     }
@@ -796,6 +825,20 @@ export class GcodeScene {
     this.draw()
   }
 
+  /**
+   * Preview's two colours: the model, and supports (from the theme, Mike Nov 7). Without them both follow the ink, as
+   * before.
+   */
+  setFeatureColours(model: Rgb, support: Rgb): void {
+    for (const m of [this.lineMaterial, this.stripMaterial]) {
+      m.uniforms.uModel!.value.set(model.r, model.g, model.b)
+      m.uniforms.uSupportColour!.value.set(support.r, support.g, support.b)
+    }
+    this.featureColours = true
+    this.draw()
+  }
+  private featureColours = false
+
   setColours(c: ViewerColours): void {
     for (const m of [this.bedMaterial, this.lineMaterial, this.stripMaterial, this.meshMaterial, this.wireMaterial, this.outlineMat]) {
       // on a plate, the bed's lines take the plate's own pair, so they show on it in day and night alike
@@ -804,6 +847,11 @@ export class GcodeScene {
       m.uniforms.uPaper!.value.set(cc.paper.r, cc.paper.g, cc.paper.b)
       m.uniforms.uInkIsDark!.value = cc.ink.r + cc.ink.g + cc.ink.b < cc.paper.r + cc.paper.g + cc.paper.b ? 1 : 0
     }
+    if (!this.featureColours)
+      for (const m of [this.lineMaterial, this.stripMaterial]) {
+        m.uniforms.uModel!.value.set(c.ink.r, c.ink.g, c.ink.b)
+        m.uniforms.uSupportColour!.value.set(c.ink.r, c.ink.g, c.ink.b)
+      }
     this.lastColours = c
     this.draw()
   }

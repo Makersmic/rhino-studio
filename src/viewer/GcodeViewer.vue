@@ -9,7 +9,7 @@ import RsButton from '@/components/RsButton.vue'
 import type { ParsedGcode } from '@/gcode/parse'
 import { BUDGET_NORMAL, BUDGET_REDUCED, buildDraw, fileMoveAt, previewNotes, visibleRange, type DrawData } from './draw'
 import type { BedShape, GcodeScene, ViewAngle } from './scene'
-import { colourOf, loadReduced, saveReduced, watchTheme } from './theme'
+import { colourOf, featureColours, loadReduced, saveReduced, watchTheme } from './theme'
 
 const props = defineProps<{ parsed: ParsedGcode; bed: BedShape }>()
 
@@ -50,7 +50,11 @@ let stopTheme: (() => void) | null = null
 function applyColours() {
   if (!box.value || !scene) return
   const st = getComputedStyle(box.value)
-  scene.setColours({ ink: colourOf(st.color), paper: colourOf(st.backgroundColor) })
+  const paper = colourOf(st.backgroundColor)
+  scene.setColours({ ink: colourOf(st.color), paper })
+  const tok = (name: string, fallback: string) => colourOf(st.getPropertyValue(name).trim() || fallback)
+  const f = featureColours(tok('--rs-viewer-model', st.color), tok('--rs-viewer-support', st.color), paper)
+  scene.setFeatureColours(f.model, f.support)
 }
 const onThemeChange = () => applyColours()
 const onVisible = () => {

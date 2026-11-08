@@ -44,3 +44,15 @@ export function saveReduced(on: boolean): void {
     /* storage blocked: it still applies to this view */
   }
 }
+
+/**
+ * Preview's model and support colours from the theme (Mike, Nov 7): the model in its selected colour, supports in its
+ * button colour. When the two are too alike to tell apart (the ink-and-paper look uses ink for both), supports are the
+ * model colour washed halfway towards the paper instead, so they always read as different.
+ */
+export function featureColours(model: Rgb, button: Rgb, paper: Rgb): { model: Rgb; support: Rgb } {
+  const d = Math.hypot(model.r - button.r, model.g - button.g, model.b - button.b)
+  if (d >= 0.25) return { model, support: button }
+  const k = 0.55
+  return { model, support: { r: model.r + (paper.r - model.r) * k, g: model.g + (paper.g - model.g) * k, b: model.b + (paper.b - model.b) * k } }
+}

@@ -11,9 +11,9 @@
  * The slicing runs in this browser (src/slicer/), so the Pi only ever receives
  * the finished file. See src/stores/prepare.ts.
  */
+import PreviewView from '@/views/PreviewView.vue'
 import StartEndLine from '@/toolmgr/StartEndLine.vue'
 import { computed, defineAsyncComponent, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
 import RsPanel from '@/components/RsPanel.vue'
 import RsButton from '@/components/RsButton.vue'
 import Icon from '@/icons/Icon.vue'
@@ -47,7 +47,6 @@ const spin = computed(() =>
   spinMode({ lighter: loadReduced(), reducedMotion: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false, failed: spinFailed.value }),
 )
 const machine = useMachineStore()
-const router = useRouter()
 
 const picker = ref<HTMLInputElement | null>(null)
 const dragging = ref(false)
@@ -123,10 +122,18 @@ function confirm() {
   if (chosen.value) prep.confirmProcess(chosen.value)
   choice.value = null
 }
-function goStep(s: 'file' | 'process') {
+function goStep(s: 'file' | 'process' | 'setup' | 'preview' | 'jobfile') {
   if (s === 'file') prep.clearPart()
-  else prep.changeProcess()
+  else if (s === 'process') prep.changeProcess()
+  else prep.goStage(s)
 }
+// Opening Preview prepares the file when the setup has changed since (a change clears the old result)
+watch(
+  () => prep.step,
+  (s) => {
+    if (s === 'preview' && !up.value && prep.part && !prep.result && !prep.phase && !suits.value) void prep.prepare()
+  },
+)
 /** small drawing of an uploaded file's toolpath for the Process step */
 const pathPreview = computed(() => {
   const u = prep.uploaded
@@ -378,8 +385,8 @@ const engineNote = computed(() => {
       </div>
     </RsPanel>
 
-    <!-- ============ 3. Set up & send -->
-    <div v-else-if="prep.step === 'setup'" class="layout">
+    <!-- ============ 3. Setup (kept in the page while Preview or Job file shows, so the 3D view and everything set stay) -->
+    <div v-else-if="prep.step === 'setup' || prep.step === 'preview' || prep.step === 'jobfile'" v-show="prep.step === 'setup'" class="layout">
       <!-- the bed -->
       <RsPanel
         panel-id="prepare.bed"
@@ -585,58 +592,65 @@ const engineNote = computed(() => {
           </div>
         </RsPanel>
 
-        <!-- the job file -->
-        <RsPanel v-if="job" panel-id="prepare.file" title="Job file" :status="prep.result ? prep.result.file.name : undefined">
-          <StartEndLine :tool="job.toolhead" />
-          <div v-if="!up" class="go">
-            <RsButton variant="primary" :disabled="!prep.part || !!prep.phase || !!suits || (proc === 'cnc' && !job.cnc.ops.some((o) => o.on))" @click="prep.prepare()">{{ prep.phase ? 'Preparing…' : prep.result ? 'Prepare again' : 'Prepare' }}</RsButton>
-            <span v-if="prep.phase" class="phase" role="status">
-              {{ prep.phase }}<template v-if="prep.progress != null"> {{ Math.round(prep.progress * 100) }}%</template>
-              <span class="bar" :class="{ indet: prep.progress == null }"><span :style="{ width: `${(prep.progress ?? 0.3) * 100}%` }" /></span>
-            </span>
-            <span v-else-if="!prep.part" class="muted small">Open a model first.</span>
-          </div>
-          <p v-if="prep.prepError" class="error" role="alert">Couldn't prepare: {{ prep.prepError }}</p>
-
-          <template v-if="prep.result">
-            <dl class="sum">
-              <div v-for="s in summary" :key="s.label" class="cell">
-                <dt>{{ s.label }}</dt>
-                <dd>{{ s.value }}</dd>
-                <dd v-if="s.note" class="note">{{ s.note }}</dd>
-              </div>
-            </dl>
-
-            <ul class="checks" aria-label="Checks">
-              <li v-for="c in prep.result.checks" :key="c.id" :class="`lvl-${c.level}`">
-                <span class="mark" aria-hidden="true">{{ c.level === 'ok' ? '✓' : c.level === 'warn' ? '!' : '✕' }}</span>
-                <span class="ctext">
-                  <span class="visually-hidden">{{ c.level === 'ok' ? 'Pass:' : c.level === 'warn' ? 'Note:' : 'Problem:' }}</span>
-                  {{ c.label }}
-                  <span v-if="c.detail" class="cdetail">{{ c.detail }}</span>
-                </span>
-              </li>
-            </ul>
-
-            <p v-if="prep.blocked.length" class="error" role="alert">{{ prep.blocked.length === 1 ? 'One problem stops' : `${prep.blocked.length} problems stop` }} this file going to the Rhino. Change the settings or the placement, then Prepare again.</p>
-
-            <div class="send">
-              <RsButton variant="primary" :disabled="!!prep.blocked.length || !machine.online || prep.sending != null" @click="prep.send()">
-                {{ prep.sending != null ? `Sending ${Math.round(prep.sending * 100)}%` : 'Send to Rhino' }}
-              </RsButton>
-              <RsButton @click="router.push({ path: '/preview', query: { from: 'setup' } })">Preview</RsButton>
-              <RsButton v-if="!up" :disabled="!!prep.blocked.length" @click="prep.download()">Download</RsButton>
-              <span v-if="!machine.online" class="muted small">Connect to send.<template v-if="!up"> Download works offline.</template></span>
-            </div>
-            <p v-if="prep.sendError" class="error" role="alert">{{ prep.sendError }}</p>
-            <p v-if="prep.sentPath" class="sent" role="status">
-              Sent as <strong>{{ prep.sentPath }}</strong>
-              <StartFile :file-path="prep.sentPath" files-link />
-            </p>
-            <p class="muted small">{{ prep.result.stats.moves.toLocaleString() }} moves. Starting checks the mounted toolhead again before anything runs<template v-if="proc !== 'fdm'">, and starts this through the {{ proc === 'laser' ? 'laser' : proc === 'cnc' ? 'CNC' : 'knife' }} setup wizard</template>.</p>
-          </template>
-        </RsPanel>
       </div>
+    </div>
+
+    <!-- ============ 4. Preview: the prepared file, prepared on the way in if the setup changed -->
+    <PreviewView v-if="prep.step === 'preview'" embedded />
+
+    <!-- ============ 5. Job file -->
+    <div v-if="prep.step === 'jobfile'" class="jobfile">
+    <!-- the job file -->
+    <RsPanel v-if="job" panel-id="prepare.file" title="Job file" :status="prep.result ? prep.result.file.name : undefined">
+      <StartEndLine :tool="job.toolhead" />
+      <div v-if="!up" class="go">
+        <RsButton variant="primary" :disabled="!prep.part || !!prep.phase || !!suits || (proc === 'cnc' && !job.cnc.ops.some((o) => o.on))" @click="prep.prepare()">{{ prep.phase ? 'Preparing…' : prep.result ? 'Prepare again' : 'Prepare' }}</RsButton>
+        <span v-if="prep.phase" class="phase" role="status">
+          {{ prep.phase }}<template v-if="prep.progress != null"> {{ Math.round(prep.progress * 100) }}%</template>
+          <span class="bar" :class="{ indet: prep.progress == null }"><span :style="{ width: `${(prep.progress ?? 0.3) * 100}%` }" /></span>
+        </span>
+        <span v-else-if="!prep.part" class="muted small">Open a model first.</span>
+      </div>
+      <p v-if="prep.prepError" class="error" role="alert">Couldn't prepare: {{ prep.prepError }}</p>
+
+      <template v-if="prep.result">
+        <dl class="sum">
+          <div v-for="s in summary" :key="s.label" class="cell">
+            <dt>{{ s.label }}</dt>
+            <dd>{{ s.value }}</dd>
+            <dd v-if="s.note" class="note">{{ s.note }}</dd>
+          </div>
+        </dl>
+
+        <ul class="checks" aria-label="Checks">
+          <li v-for="c in prep.result.checks" :key="c.id" :class="`lvl-${c.level}`">
+            <span class="mark" aria-hidden="true">{{ c.level === 'ok' ? '✓' : c.level === 'warn' ? '!' : '✕' }}</span>
+            <span class="ctext">
+              <span class="visually-hidden">{{ c.level === 'ok' ? 'Pass:' : c.level === 'warn' ? 'Note:' : 'Problem:' }}</span>
+              {{ c.label }}
+              <span v-if="c.detail" class="cdetail">{{ c.detail }}</span>
+            </span>
+          </li>
+        </ul>
+
+        <p v-if="prep.blocked.length" class="error" role="alert">{{ prep.blocked.length === 1 ? 'One problem stops' : `${prep.blocked.length} problems stop` }} this file going to the Rhino. Change the settings or the placement, then Prepare again.</p>
+
+        <div class="send">
+          <RsButton variant="primary" :disabled="!!prep.blocked.length || !machine.online || prep.sending != null" @click="prep.send()">
+            {{ prep.sending != null ? `Sending ${Math.round(prep.sending * 100)}%` : 'Send to Rhino' }}
+          </RsButton>
+          <RsButton @click="prep.goStage('preview')">Preview</RsButton>
+          <RsButton v-if="!up" :disabled="!!prep.blocked.length" @click="prep.download()">Download</RsButton>
+          <span v-if="!machine.online" class="muted small">Connect to send.<template v-if="!up"> Download works offline.</template></span>
+        </div>
+        <p v-if="prep.sendError" class="error" role="alert">{{ prep.sendError }}</p>
+        <p v-if="prep.sentPath" class="sent" role="status">
+          Sent as <strong>{{ prep.sentPath }}</strong>
+          <StartFile :file-path="prep.sentPath" files-link />
+        </p>
+        <p class="muted small">{{ prep.result.stats.moves.toLocaleString() }} moves. Starting checks the mounted toolhead again before anything runs<template v-if="proc !== 'fdm'">, and starts this through the {{ proc === 'laser' ? 'laser' : proc === 'cnc' ? 'CNC' : 'knife' }} setup wizard</template>.</p>
+      </template>
+    </RsPanel>
     </div>
   </div>
 </template>
@@ -652,6 +666,7 @@ const engineNote = computed(() => {
 .eng-seg input:focus-visible + span { box-shadow: var(--rs-focus); }
 .layout { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(320px, 1fr); gap: var(--rs-gap); align-items: start; }
 .side { display: flex; flex-direction: column; gap: var(--rs-gap); min-width: 0; }
+.jobfile { max-width: 860px; }
 @media (max-width: 1100px) { .layout { grid-template-columns: minmax(0, 1fr); } }
 
 .drop.dragging { outline: 2px dashed var(--rs-ink); outline-offset: -6px; }

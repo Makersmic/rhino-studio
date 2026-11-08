@@ -205,3 +205,21 @@ describe('notes', () => {
     expect(previewNotes(stats({ ignoredPower: 2 }), whole)[0]).toMatch(/Klipper ignores S/)
   })
 })
+
+describe('support flags (Preview colours supports apart)', () => {
+  const g = ['M83', ';LAYER_CHANGE', ';Z:0.2', 'G1 Z0.2', ';TYPE:External perimeter', 'G1 X10 Y0 E1', 'G1 X20 Y0 E1', ';TYPE:Support material', 'G1 X20 Y10 E1', 'G1 X20 Y20 E1', ';TYPE:Perimeter', 'G1 X10 Y20 E1'].join('\n')
+  it('marks support moves, and only those', () => {
+    const p = parseGcode(g)
+    const d = buildDraw(p, 1_000_000)
+    const per = Array.from({ length: d.drawnMoves }, (_, i) => d.support[i * 2])
+    expect(per.filter((v) => v === 255).length).toBe(2)
+    expect(per.at(-1)).toBe(0)
+  })
+  it('never merges a support move into a model one when moves are joined to fit the budget', () => {
+    const p = parseGcode(g)
+    const d = buildDraw(p, 2)
+    const sup = Array.from({ length: d.drawnMoves }, (_, i) => d.support[i * 2])
+    expect(sup).toContain(255)
+    expect(sup).toContain(0)
+  })
+})

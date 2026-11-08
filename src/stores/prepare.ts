@@ -168,7 +168,12 @@ export const usePrepareStore = defineStore('prepare', () => {
   const preset = ref<string | null>(null)
   /** a ready-made G-code file instead of a model */
   const uploaded = shallowRef<{ name: string; text: string; info: JobFileInfo } | null>(null)
-  const step = computed<'file' | 'process' | 'setup'>(() => (!raw.value && !uploaded.value ? 'file' : confirmed.value ? 'setup' : 'process'))
+  /** Past Process: which of Setup, Preview and Job file is showing (Mike, Nov 7). Moving between them keeps everything. */
+  const stage = ref<'setup' | 'preview' | 'jobfile'>('setup')
+  const step = computed<'file' | 'process' | 'setup' | 'preview' | 'jobfile'>(() => (!raw.value && !uploaded.value ? 'file' : confirmed.value ? stage.value : 'process'))
+  function goStage(s: 'setup' | 'preview' | 'jobfile') {
+    if (confirmed.value) stage.value = s
+  }
 
   // ---- the job
   const profilesStore = useSliceProfilesStore()
@@ -640,6 +645,7 @@ export const usePrepareStore = defineStore('prepare', () => {
   }
 
   function clearPart() {
+    stage.value = 'setup'
     loadSkipped.value = null
     supportMarks.value = null
     partsList.value = []
@@ -657,6 +663,7 @@ export const usePrepareStore = defineStore('prepare', () => {
   }
 
   function confirmProcess(tool: string) {
+    stage.value = 'setup'
     pickTool(tool)
     confirmed.value = true
   }
@@ -941,6 +948,8 @@ export const usePrepareStore = defineStore('prepare', () => {
     loadError,
     load,
     clearPart,
+    stage,
+    goStage,
     centre,
     phase,
     progress,
