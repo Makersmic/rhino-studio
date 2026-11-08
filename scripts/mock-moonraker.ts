@@ -617,6 +617,10 @@ function runLine(raw: string) {
     case 'G0':
     case 'G1': {
       if (/(^|\s)E-?[\d.]/i.test(line) && !status.extruder.can_extrude) throw new Error('Extrude below minimum temp\nSee the \'min_extrude_temp\' config option for details')
+      // Klipper refuses an extrude-only move longer than max_extrude_only_distance (default 50; MOCK_EXTRUDE_MAX)
+      const eOnly = /(^|\s)E-?[\d.]/i.test(line) && !/(^|\s)[XY]-?[\d.]/i.test(line) ? Math.abs(Number(/E(-?[\d.]+)/i.exec(line)?.[1])) : 0
+      const eMax = Number(process.env.MOCK_EXTRUDE_MAX) || 50
+      if (eOnly > eMax) throw new Error(`Extrude only move too long (${eOnly.toFixed(3)}mm vs ${eMax.toFixed(3)}mm)\nSee the 'max_extrude_only_distance' config option for details`)
       if (/(^|\s)E-?[\d.]/i.test(line)) respond(`// E${/E(-?[\d.]+)/i.exec(line)?.[1]} mm`)
       const pos = [...th.position]
       for (const [i, a] of ['X', 'Y', 'Z'].entries()) {
@@ -1166,7 +1170,7 @@ function handle(method: string, params: Record<string, unknown> | undefined): un
       // only what Studio asks for: the macro definitions (configfile settings)
       const settings = Object.fromEntries(Object.entries(HW_MACROS).map(([k, v]) => [`gcode_macro ${k.toLowerCase()}`, v]))
       // and the [extruder] section the tuning wizards start from (tools/3dp.cfg); MOCK_EXTRUDE_MAX sets max_extrude_only_distance
-      ;(settings as Record<string, unknown>).extruder = { rotation_distance: 4.487, pressure_advance: 0.024, nozzle_diameter: 0.8, max_extrude_only_distance: Number(process.env.MOCK_EXTRUDE_MAX) || 150 }
+      ;(settings as Record<string, unknown>).extruder = { rotation_distance: 4.487, pressure_advance: 0.024, nozzle_diameter: 0.8, max_extrude_only_distance: Number(process.env.MOCK_EXTRUDE_MAX) || 50 } // 50: Klipper's default, what the Rhino has
       // and Bed › Configuration's lead screws: [z_tilt] and the Z steppers, as the Rhino's printer.cfg has them
       Object.assign(settings as Record<string, unknown>, {
         stepper_z: { rotation_distance: 2 }, stepper_z1: { rotation_distance: 2 }, stepper_z2: { rotation_distance: 2 },

@@ -30,7 +30,12 @@ describe('extruder calibration', () => {
     expect(extruderSettled([97, 99.8, 100.3])).toBe(true)
   })
   it('extrudes 100 mm at 1 mm/s, and the console asks first', () => {
-    expect(extrudeScript()).toBe('M83\nG1 E100 F60')
+    // Klipper's default max_extrude_only_distance (50) refuses only a longer move: two 50 mm moves
+    expect(extrudeScript()).toBe('M83\nG1 E50 F60\nG1 E50 F60')
+    expect(extrudeScript(150)).toBe('M83\nG1 E100 F60')
+    expect(extrudeScript(30)).toBe('M83\nG1 E25 F60\nG1 E25 F60\nG1 E25 F60\nG1 E25 F60')
+    expect(extrudeScript(40)).toBe('M83\nG1 E33.333 F60\nG1 E33.333 F60\nG1 E33.334 F60')
+    expect(extrudeScript(NaN)).toBe('M83\nG1 E50 F60\nG1 E50 F60')
     expect(check(extrudeScript(), { jobActive: false }).needsConfirm).toBe(true)
   })
 })

@@ -64,9 +64,18 @@ export function lastRun(st: TuningState | null, tool: string, test: TuningTest, 
 
 export const EXTRUDER_TEST = { mark: 120, extrude: 100, feed: 60 } as const
 
-/** The lines that push the test length: relative extrusion, 100 mm at 1 mm/s */
-export function extrudeScript(): string {
-  return ['M83', `G1 E${EXTRUDER_TEST.extrude} F${EXTRUDER_TEST.feed}`].join('\n')
+/**
+ * The lines that push the test length: relative extrusion, 100 mm at 1 mm/s, in equal moves no longer than Klipper
+ * allows on their own (max_extrude_only_distance; Klipper's default is 50 and refuses only a move longer than it).
+ * The Rhino's [extruder] doesn't set it, so this is two 50 mm moves: no printer.cfg change, and the guard stays at 50.
+ */
+export const EXTRUDE_ONLY_DEFAULT = 50
+export function extrudeScript(maxOnly: number = EXTRUDE_ONLY_DEFAULT): string {
+  const max = Number.isFinite(maxOnly) && maxOnly >= 10 ? maxOnly : EXTRUDE_ONLY_DEFAULT
+  const n = Math.ceil(EXTRUDER_TEST.extrude / max - 1e-9)
+  const each = Math.floor((EXTRUDER_TEST.extrude / n) * 1000) / 1000
+  const moves = Array.from({ length: n }, (_, i) => (i < n - 1 ? each : Number((EXTRUDER_TEST.extrude - each * (n - 1)).toFixed(3))))
+  return ['M83', ...moves.map((d) => `G1 E${d} F${EXTRUDER_TEST.feed}`)].join('\n')
 }
 
 /**

@@ -3,14 +3,15 @@
  * Extruder calibration (Ellis' Print Tuning Guide, Extruder Calibration): mark the filament 120 mm above the extruder,
  * push 100 mm at 1 mm/s, measure what's left, and scale the rotation distance; repeat until two runs agree, then save
  * it for this print head. Every run sets the value being tested first, so the measurement always matches it. The push
- * goes through the console's check (it asks first). printer.cfg isn't touched: jobs Studio prepares use the result.
+ * goes through the console's check (it asks first), in moves no longer than max_extrude_only_distance (two of 50 mm on
+ * the Rhino, which keeps Klipper's default). printer.cfg isn't touched: jobs Studio prepares use the result.
  */
 import { computed, onMounted, ref } from 'vue'
 import RsButton from '@/components/RsButton.vue'
 import { useControlStore } from '@/stores/control'
 import { useMachineStore } from '@/stores/machine'
 import { useTuningStore } from '@/stores/tuning'
-import { EXTRUDER_TEST, extrudeScript, extruderSettled, newRotationDistance } from './tuning'
+import { EXTRUDER_TEST, EXTRUDE_ONLY_DEFAULT, extrudeScript, extruderSettled, newRotationDistance } from './tuning'
 
 const props = defineProps<{ tool: string; temp: number }>()
 const emit = defineEmits<{ done: [] }>()
@@ -42,7 +43,7 @@ const savedRd = computed(() => tuning.state?.heads[props.tool]?.rotation_distanc
 /** the value being tested: the head's saved one, else printer.cfg's */
 const current = ref<number | null>(null)
 const startRd = computed(() => savedRd.value ?? (Number.isFinite(configRd.value) ? configRd.value : null))
-const maxExtrude = computed(() => Number(config.value?.max_extrude_only_distance ?? 50))
+const maxExtrude = computed(() => Number(config.value?.max_extrude_only_distance ?? EXTRUDE_ONLY_DEFAULT))
 /** what it was before this save: the head's earlier saved value, else printer.cfg's */
 const wasRd = ref<number | null>(null)
 
@@ -53,8 +54,9 @@ const blockers = computed(() => {
   if (!machine.klippyReady) out.push('Klipper isn’t ready')
   if (control.jobActive) out.push('A job is running')
   if (!mounted.value) out.push(`Mount and confirm ${props.tool} first`)
-  if (config.value && maxExtrude.value < EXTRUDER_TEST.extrude + 1)
-    out.push(`Klipper allows only ${maxExtrude.value} mm of extrusion on its own (max_extrude_only_distance in [extruder]); this test needs 101 or more. Raise it in printer.cfg and restart, then come back`)
+  // the push is split into moves Klipper allows (extrudeScript); only a very small limit would make that silly
+  if (config.value && maxExtrude.value < 10)
+    out.push(`Klipper allows only ${maxExtrude.value} mm of extrusion on its own (max_extrude_only_distance in [extruder]); this test needs at least 10. Raise it in printer.cfg and restart, then come back`)
   if (startRd.value == null) out.push('The current rotation distance can’t be read from Klipper')
   return out
 })
@@ -76,7 +78,7 @@ async function heat() {
 /** set the value under test, then push 100 mm at 1 mm/s (the console asks first) */
 async function push() {
   if (current.value == null) return
-  const ok = await control.send(`SET_EXTRUDER_ROTATION_DISTANCE EXTRUDER=extruder DISTANCE=${current.value}\n${extrudeScript()}`, {
+  const ok = await control.send(`SET_EXTRUDER_ROTATION_DISTANCE EXTRUDER=extruder DISTANCE=${current.value}\n${extrudeScript(maxExtrude.value)}`, {
     label: 'Extruder calibration: 100 mm',
     confirmTitle: 'Push 100 mm of filament?',
     confirmBody: `It takes about ${EXTRUDER_TEST.extrude / (EXTRUDER_TEST.feed / 60)} seconds. Watch it: stop if the extruder clicks or skips.`,
