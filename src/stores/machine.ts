@@ -303,6 +303,10 @@ export const useMachineStore = defineStore('machine', () => {
     return macroDefs
   }
 
+  function extruderConfig() {
+    return need().extruderConfig()
+  }
+
   function historyTotals() {
     if (!client) return Promise.resolve(null)
     return client.historyTotals()
@@ -394,6 +398,7 @@ export const useMachineStore = defineStore('machine', () => {
     listHistory,
     historyTotals,
     macroDefinitions,
+    extruderConfig,
     listLogs,
     logUrl,
     power,

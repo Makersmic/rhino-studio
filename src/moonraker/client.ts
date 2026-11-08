@@ -341,6 +341,16 @@ export class MoonrakerClient {
     return out
   }
 
+  /**
+   * The [extruder] section as configured (configfile.settings): what the tuning wizards start from, e.g.
+   * rotation_distance, pressure_advance, max_extrude_only_distance. A read, through printer.objects.query.
+   */
+  async extruderConfig(): Promise<Record<string, unknown>> {
+    const r = (await this.call('printer.objects.query', { objects: { configfile: ['settings'] } })) as
+      { status?: { configfile?: { settings?: Record<string, Record<string, unknown>> } } }
+    return r?.status?.configfile?.settings?.extruder ?? {}
+  }
+
   /** Moonraker's running totals over every job it has kept. */
   async historyTotals(): Promise<HistoryTotals | null> {
     try {

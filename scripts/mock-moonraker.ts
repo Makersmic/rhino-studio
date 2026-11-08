@@ -1126,6 +1126,8 @@ function handle(method: string, params: Record<string, unknown> | undefined): un
     case 'printer.objects.query': {
       // only what Studio asks for: the macro definitions (configfile settings)
       const settings = Object.fromEntries(Object.entries(HW_MACROS).map(([k, v]) => [`gcode_macro ${k.toLowerCase()}`, v]))
+      // and the [extruder] section the tuning wizards start from (tools/3dp.cfg); MOCK_EXTRUDE_MAX sets max_extrude_only_distance
+      ;(settings as Record<string, unknown>).extruder = { rotation_distance: 4.487, pressure_advance: 0.024, nozzle_diameter: 0.8, max_extrude_only_distance: Number(process.env.MOCK_EXTRUDE_MAX) || 150 }
       return { eventtime: Date.now() / 1000, status: { configfile: { settings } } }
     }
     default:
@@ -1215,6 +1217,14 @@ function recount() {
 }
 recount()
 
+type TunedValue = { value: number; time: number; old: number | null }
+const tu = {
+  rev: 0,
+  updated: 0,
+  heads: {} as Record<string, Record<string, TunedValue>>,
+  materials: {} as Record<string, Record<string, TunedValue>>,
+  runs: [] as Array<Record<string, unknown>>,
+}
 type MockMacro = { id: string; name: string; toolheads: string[]; steps: unknown[]; notes: string; rev: number; created: number; updated: number }
 const um = {
   macros: [] as MockMacro[],
@@ -1480,6 +1490,28 @@ async function portal(req: IncomingMessage, res: import('node:http').ServerRespo
       updRun(String(body.zip))
       return json(res, 200, { ok: true, zip: body.zip }), true
     }
+  }
+  // Print head tuning (Tool Manager 1.9.16), kept in memory. MOCK_TUNING=old (Portal before 1.9.16)
+  if (url.startsWith('/api/tuning')) {
+    if (process.env.MOCK_TUNING === 'old') return json(res, 404, { ok: false, error: 'Not found' }), true
+    const path = url.split('?')[0]!
+    if (req.method === 'GET' && path === '/api/tuning') return json(res, 200, { ok: true, ...tu }), true
+    if (req.headers['x-rhino-token'] !== PORTAL_TOKEN) return json(res, 400, { ok: false, error: 'This page is out of date (the portal was restarted). Reload the page and try again.' }), true
+    const b = (await readBody(req)) as Record<string, unknown>
+    if (b.rev !== tu.rev) return json(res, 400, { ok: false, error: `Tuning was changed on another screen (now revision ${tu.rev}). Reload, then save again.` }), true
+    const now = Math.floor(Date.now() / 1000)
+    const head = b.test === 'extruder_calibration'
+    const key = { extruder_calibration: 'rotation_distance', first_layer: 'first_layer_fine', pressure_advance: 'pressure_advance', extrusion_multiplier: 'extrusion_multiplier' }[String(b.test)]
+    if (!key) return json(res, 400, { ok: false, error: 'Unknown tuning test' }), true
+    const slot = head ? (tu.heads[String(b.tool)] ??= {}) : (tu.materials[`${b.tool}|${Number(b.nozzle)}|${b.material}`] ??= {})
+    if (path === '/api/tuning/clear') delete slot[key]
+    else {
+      slot[key] = { value: Number(b.value), time: now, old: slot[key]?.value ?? null }
+      tu.runs.unshift({ tool: String(b.tool), test: String(b.test), value: Number(b.value), time: now, ...(head ? {} : { nozzle: Number(b.nozzle), material: String(b.material) }) })
+    }
+    tu.rev += 1
+    tu.updated = now
+    return json(res, 200, { ok: true, ...tu }), true
   }
   // Your macros (Tool Manager 1.9.13) and job hooks, kept in memory. MOCK_MACROS=old (Portal before 1.9.13)
   if (url.startsWith('/api/user-macros') || url.startsWith('/api/hooks') || url.startsWith('/api/preview/hooks')) {

@@ -65,6 +65,7 @@ import type { PortalState, PreviewResult, ToolDetail, ToolLists, ToolOptions, To
 
 /** GET /api/update (Tool Manager 1.5.3+) */
 import type { MacroDraft, UserMacro } from '@/control/userMacros'
+import type { TuningState, TuningTest } from '@/tuning/tuning'
 export interface MacroList {
   ok: boolean
   error?: string
@@ -143,6 +144,8 @@ export const PORTAL_PROFILES = [
  * console's check (src/control/userMacros.ts). Nothing here reaches Klipper.
  */
 export const PORTAL_MACROS = ['macro-create', 'macro-save', 'macro-delete', 'macro-revert', 'macro-undelete', 'macro-import'] as const
+/** Print head tuning results (Tool Manager 1.9.16): kept on the Rhino; Studio applies them in prepared files. */
+export const PORTAL_TUNING = ['tuning-result', 'tuning-clear'] as const
 export const PORTAL_NETWORK = ['net-hostname', 'net-ipv4', 'net-wifi', 'net-powersave', 'net-keep', 'net-undo'] as const
 
 export type WriteKind =
@@ -165,6 +168,7 @@ export type WriteKind =
   | (typeof PORTAL_BACKUP)[number]
   | (typeof PORTAL_PROFILES)[number]
   | (typeof PORTAL_MACROS)[number]
+  | (typeof PORTAL_TUNING)[number]
 
 /** The one request each write kind may make. */
 export const WRITE_ROUTES: Record<WriteKind, { method: 'POST' | 'DELETE'; path: RegExp }> = {
@@ -251,6 +255,8 @@ export const WRITE_ROUTES: Record<WriteKind, { method: 'POST' | 'DELETE'; path: 
   'macro-revert': { method: 'POST', path: /^\/api\/user-macros\/m_[a-z0-9]+\/revert$/ },
   'macro-undelete': { method: 'POST', path: /^\/api\/user-macros\/m_[a-z0-9]+\/undelete$/ },
   'macro-import': { method: 'POST', path: /^\/api\/user-macros-import$/ },
+  'tuning-result': { method: 'POST', path: /^\/api\/tuning\/result$/ },
+  'tuning-clear': { method: 'POST', path: /^\/api\/tuning\/clear$/ },
   'job-save': { method: 'POST', path: /^\/api\/prepare-jobs$/ },
   'job-delete': { method: 'DELETE', path: /^\/api\/prepare-jobs$/ },
 }
@@ -258,7 +264,7 @@ export const WRITE_ROUTES: Record<WriteKind, { method: 'POST' | 'DELETE'; path: 
 const ALLOWED = new Set<string>([
   ...PORTAL_WRITES, ...PORTAL_TOOL_CHECKS, ...PORTAL_TOOL_WRITES, ...PORTAL_THEME_IMAGES, ...PORTAL_RESTART,
   ...PORTAL_CARE_WRITES, ...PORTAL_CARE_SETUP, ...PORTAL_TOOL_SETUP, ...PORTAL_HARDWARE, ...PORTAL_HW_WIZARD, ...PORTAL_HOOKS, ...PORTAL_LABELS, ...PORTAL_NETWORK, ...PORTAL_SLICER, ...PORTAL_UPDATE, ...PORTAL_TRUST,
-  ...PORTAL_BACKUP, ...PORTAL_PROFILES, ...PORTAL_MACROS,
+  ...PORTAL_BACKUP, ...PORTAL_PROFILES, ...PORTAL_MACROS, ...PORTAL_TUNING,
 ])
 const enc = encodeURIComponent
 
@@ -811,6 +817,29 @@ export class PortalClient {
   async importProfiles(data: object): Promise<{ id: string; name: string }[]> {
     return (await this.write<{ added: { id: string; name: string }[] }>('profile-import', 'POST', '/api/slice-profiles-import', data)).added
   }
+  // ---- print head tuning (Tool Manager 1.9.16) -----------------------------------------------------------------
+
+  /** null from a Tool Manager before 1.9.16 */
+  async tuningState(): Promise<TuningState | null> {
+    try {
+      const r = await fetch(`${this.baseUrl}/api/tuning`, { headers: { Accept: 'application/json' } })
+      if (r.status === 404) return null
+      const d = (await r.json().catch(() => null)) as TuningState | null
+      if (!d) throw new Error(`Portal error (HTTP ${r.status})`)
+      return d
+    } catch (e) {
+      if (/not found/i.test((e as Error).message)) return null
+      throw e instanceof TypeError ? new Error("Can't reach the Rhino Portal - is it running?") : e
+    }
+  }
+  /** Keep a test's result; rev: the state it started from (a newer one is refused) */
+  async saveTuning(body: { rev: number; tool: string; test: TuningTest; value: number; nozzle?: number; material?: string }): Promise<TuningState> {
+    return this.write<TuningState>('tuning-result', 'POST', '/api/tuning/result', body)
+  }
+  async clearTuning(body: { rev: number; tool: string; test: TuningTest; nozzle?: number; material?: string }): Promise<TuningState> {
+    return this.write<TuningState>('tuning-clear', 'POST', '/api/tuning/clear', body)
+  }
+
   // ---- your macros (Tool Manager 1.9.13) ------------------------------------------------------------------------
 
   /** null from a Tool Manager before 1.9.13 */

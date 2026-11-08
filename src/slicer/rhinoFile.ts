@@ -35,6 +35,8 @@ export const PA_BOWDEN_CM: Record<string, number> = { BlockOne: 5.9, SwitchFly: 
 export const PA_MATERIALS = new Set(['PLA', 'PETG', 'ABS', 'TPU', 'NYLON', 'ASA', 'PVB', 'PA', 'FLEX'])
 
 export function paLine(job: PrepareJob): string | null {
+  // tuned with the pressure advance wizard: that value, not the estimate
+  if (job.tuned?.pressureAdvance != null) return `SET_PRESSURE_ADVANCE ADVANCE=${Number(job.tuned.pressureAdvance.toFixed(4))} ; tuned (Studio tuning)`
   const bowden = PA_BOWDEN_CM[job.toolhead]
   const mat = materialParam(job.material)
   if (bowden === undefined || !PA_MATERIALS.has(mat)) return null
@@ -174,6 +176,7 @@ export function rhinoFile(kiri: string, job: PrepareJob, part: PartInfo, _machin
         'M140 S0 ; bed off until START_JOB heats it from the material table',
         'M104 S0 ; nozzle off until START_JOB heats it',
         `START_JOB TOOLHEAD=${job.toolhead} MATERIAL=${mat} NOZZLE_SIZE=${fmt(f.nozzle)} EXTRUDER=${f.path}`,
+        ...(job.tuned?.rotationDistance != null ? [`SET_EXTRUDER_ROTATION_DISTANCE EXTRUDER=extruder DISTANCE=${Number(job.tuned.rotationDistance.toFixed(4))} ; calibrated (Studio tuning)`] : []),
         ...(paLine(job) ? [paLine(job)!] : []),
         'G90 ; absolute X/Y/Z',
         'G21 ; millimetres',

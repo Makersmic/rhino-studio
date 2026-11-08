@@ -45,6 +45,7 @@ export const router = createRouter({
       children: [
         { path: '', redirect: '/assets/toolheads' },
         { path: 'toolheads', component: () => import('./views/ToolheadsView.vue'), meta: { title: 'Toolheads' } },
+        { path: 'toolheads/:name/tune', component: () => import('./views/TuningView.vue'), meta: { title: 'Tune' } },
         { path: 'toolheads/:name', component: () => import('./views/ToolPageView.vue'), meta: { title: 'Toolhead' } },
         { path: 'connector', component: () => import('./views/toolheads/ConnectorView.vue'), meta: { title: 'Tool connector' } },
         { path: 'kinds', component: () => import('./views/toolheads/KindsView.vue'), meta: { title: 'Kinds of tool' } },

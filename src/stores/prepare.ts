@@ -17,6 +17,9 @@
  * for any other file. Any setting change throws the prepared file away, so
  * what is sent is always what the screen shows.
  */
+import { useTuningStore } from './tuning'
+import { tunedFor } from '@/tuning/tuning'
+import { materialName } from '@/slicer/profiles'
 import { defineStore } from 'pinia'
 import { computed, ref, shallowRef, watch } from 'vue'
 import { useMachineStore } from './machine'
@@ -853,6 +856,11 @@ export const usePrepareStore = defineStore('prepare', () => {
       const input = sliceInput(clone(job.value))
       if (!input) return
       const { job: j, part: p, vertices: model } = input
+      // what the tuning wizards found for this head, nozzle and material goes into the file (not saved with the job)
+      if (j.process === 'fdm') {
+        const t = tunedFor(await useTuningStore().load(), j.toolhead, j.fdm.nozzle, materialName(j.material))
+        if (t.pressureAdvance != null || t.rotationDistance != null) j.tuned = { pressureAdvance: t.pressureAdvance, rotationDistance: t.rotationDistance }
+      }
       if (j.process === 'fdm' && j.engine === 'prusa') {
         const portal = useMaintenanceStore().portal()
         if (!portal) throw new Error('PrusaSlicer runs on the Rhino: set the Rhino Portal’s address in Settings > Connection.')

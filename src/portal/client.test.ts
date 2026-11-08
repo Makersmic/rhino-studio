@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
-  PORTAL_BACKUP, PORTAL_PROFILES, PORTAL_MACROS, PORTAL_THEME_IMAGES, PORTAL_CARE_SETUP, PORTAL_CARE_WRITES, PORTAL_HARDWARE, PORTAL_HOOKS, PORTAL_HW_WIZARD, PORTAL_LABELS, PORTAL_NETWORK, PORTAL_SLICER, PORTAL_UPDATE, PORTAL_TRUST, PORTAL_RESTART, PORTAL_TOOL_CHECKS, PORTAL_TOOL_SETUP, PORTAL_TOOL_WRITES, PORTAL_WRITES, PortalClient, WRITE_ROUTES,
+  PORTAL_BACKUP, PORTAL_PROFILES, PORTAL_MACROS, PORTAL_TUNING, PORTAL_THEME_IMAGES, PORTAL_CARE_SETUP, PORTAL_CARE_WRITES, PORTAL_HARDWARE, PORTAL_HOOKS, PORTAL_HW_WIZARD, PORTAL_LABELS, PORTAL_NETWORK, PORTAL_SLICER, PORTAL_UPDATE, PORTAL_TRUST, PORTAL_RESTART, PORTAL_TOOL_CHECKS, PORTAL_TOOL_SETUP, PORTAL_TOOL_WRITES, PORTAL_WRITES, PortalClient, WRITE_ROUTES,
 } from './client'
 import type { TaskDef } from '@/maintenance/types'
 
@@ -98,7 +98,7 @@ describe('PortalClient', () => {
     const kinds = [
       ...PORTAL_WRITES, ...PORTAL_TOOL_CHECKS, ...PORTAL_TOOL_WRITES, ...PORTAL_THEME_IMAGES, ...PORTAL_RESTART,
       ...PORTAL_CARE_WRITES, ...PORTAL_CARE_SETUP, ...PORTAL_TOOL_SETUP, ...PORTAL_HARDWARE, ...PORTAL_HOOKS, ...PORTAL_HW_WIZARD, ...PORTAL_LABELS, ...PORTAL_NETWORK, ...PORTAL_SLICER, ...PORTAL_UPDATE, ...PORTAL_TRUST,
-      ...PORTAL_BACKUP, ...PORTAL_PROFILES, ...PORTAL_MACROS,
+      ...PORTAL_BACKUP, ...PORTAL_PROFILES, ...PORTAL_MACROS, ...PORTAL_TUNING,
     ]
     expect(new Set(kinds).size).toBe(kinds.length)
     expect(Object.keys(WRITE_ROUTES).sort()).toEqual([...kinds].sort())
@@ -131,6 +131,17 @@ describe('PortalClient', () => {
       expect(WRITE_ROUTES['macro-save']!.path.test(bad), bad).toBe(false)
       expect(WRITE_ROUTES['macro-delete']!.path.test(bad), bad).toBe(false)
     }
+  })
+
+  it('tuning writes go to their two fixed requests, with the token and the revision', async () => {
+    const p = fakePortal()
+    const c = new PortalClient('/portal')
+    await c.saveTuning({ rev: 3, tool: 'BlockOne', test: 'pressure_advance', value: 0.03, nozzle: 0.4, material: 'PLA' })
+    await c.clearTuning({ rev: 4, tool: 'BlockOne', test: 'extruder_calibration' })
+    const sent = p.calls.filter((x) => x.init?.method === 'POST')
+    expect(sent.map((x) => x.url)).toEqual(['/portal/api/tuning/result', '/portal/api/tuning/clear'])
+    expect(sent.every((x) => (x.init?.headers as Record<string, string>)['X-Rhino-Token'] === 'tok-1')).toBe(true)
+    expect(JSON.parse(String(sent[0]?.init?.body))).toMatchObject({ rev: 3, test: 'pressure_advance', value: 0.03 })
   })
 
   it('macro writes go to their fixed requests, with the token and the revision', async () => {

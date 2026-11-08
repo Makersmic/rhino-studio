@@ -189,6 +189,15 @@ describe('rhinoFile', () => {
     expect(lines[i + 1]).toBe('CALCULATE_PA BOWDEN_LENGTH=5.9 MATERIAL=PLA LAYER_HEIGHT=0.2 NOZZLE_SIZE=0.4 PRINT_SPEED=60 FILAMENT_DIAMETER=1.75 LINE_WIDTH=0.4')
     expect(blocking(checkFile(lines.join('\n'), j, part(), M).checks)).toEqual([])
   })
+  it('a tuned head and material: its rotation distance and pressure advance instead of the estimate, and the file still passes', () => {
+    const j = { ...newJob('BlockOne', 'fdm', materialsFor('BlockOne', null).list), tuned: { pressureAdvance: 0.032, rotationDistance: 4.3125 } }
+    const lines = rhinoFile(fdmKiri, j, part(), M, 'x').text.split('\n')
+    const i = lines.findIndex((l) => l.startsWith('START_JOB'))
+    expect(lines[i + 1]).toBe('SET_EXTRUDER_ROTATION_DISTANCE EXTRUDER=extruder DISTANCE=4.3125 ; calibrated (Studio tuning)')
+    expect(lines[i + 2]).toBe('SET_PRESSURE_ADVANCE ADVANCE=0.032 ; tuned (Studio tuning)')
+    expect(lines.some((l) => l.startsWith('CALCULATE_PA'))).toBe(false)
+    expect(blocking(checkFile(lines.join('\n'), j, part(), M).checks)).toEqual([])
+  })
   it('SwitchFly gets CALCULATE_PA with its 35 mm bowden (3.5 cm) on either path', () => {
     const list = materialsFor('SwitchFly', null).list
     const sf = newJob('SwitchFly', 'fdm', list)
