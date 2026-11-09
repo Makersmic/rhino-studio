@@ -531,3 +531,12 @@ Klipper v0.13.0-820 (the 7050). `[force_move]` is already enabled in toolchanger
 - [ ] **BC4 Turning by hand.** Tick one screw, Release to turn by hand (asks). *Pass if:* that motor turns freely by hand and the bed doesn't drop on its own; the map says "released"; Hold (or the next move) makes it hold again. *Stop if:* the bed sinks at that screw when released.
 - [ ] **BC5 Locks.** Unlock, then wait 60 s; unlock and leave the page; unlock and swap a tool. *Pass if:* it locks each time.
 - [ ] **BC6 The real recovery.** Next time Z-tilt faults out ("Move out of range" or "Too many retries"): Bed › Configuration shows the error under Home and level. Bring the bed close to level by eye with the screws, Home all, Level the gantry. *Pass if:* Z-tilt finishes and the table shows each pass with the range falling under 0.05. *Stop if:* homing Z goes wrong after the screw moves (it shouldn't: Z was marked not homed, and the saved park height was dropped so a laser or CNC won't take Z from it).
+
+## Settings › Host health (Studio 0.18.1, needs Tool Manager 1.9.19 on the Rhino)
+
+Read only: nothing on this page changes the machine. Best done once idle and once during a long print.
+
+- [ ] **HH1 Cores and temperatures.** Settings › Host health. *Pass if:* four cores show a load that moves every second, each with its own temperature (coretemp "Core 0-3") and clock, and the package temperature; the graphs fill in over a few minutes. *Stop if:* a core sits above 85 °C idle: check the 7050's vents and fan before the next long print.
+- [ ] **HH2 Programs.** *Pass if:* Klipper, Moonraker, Rhino Portal, Cameras and nginx are listed with CPU %, memory, the core each runs on and the cores it may use (0-3 unless core pinning is set up). Start a PrusaSlicer slice: it appears, then goes when it ends.
+- [ ] **HH3 Boards.** *Pass if:* the main board shows a load under 60 %, a round trip of a few ms, and "0 B" resent; during a print, still 0 B resent. *Stop if:* bytes are resent while idle: check the board's USB cable and note the count.
+- [ ] **HH4 Report.** Copy report, paste it into a note on the phone and the PC; Download saves a .txt. *Pass if:* both hold the same readings as the page, and "What to look at" says Normal when nothing is flagged.

@@ -25,6 +25,7 @@ import { useControlStore } from './control'
 import { useWebcamsStore } from './webcams'
 import { useTempsStore } from './temps'
 import { useUpdatesStore } from './updates'
+import { useHostHealthStore } from './hostHealth'
 import { useNetworkStore } from './network'
 import { readExtruder, type ExtruderStatus } from '@/control/extruder'
 import { checkTrust } from '@/moonraker/trust'
@@ -89,6 +90,7 @@ export const useMachineStore = defineStore('machine', () => {
         },
         onProcStats(st) {
           useNetworkStore().onProcStats(st)
+          useHostHealthStore().onProcStats(st)
         },
         onStatus(st, replace) {
           if (replace) {
@@ -352,6 +354,7 @@ export const useMachineStore = defineStore('machine', () => {
   // Settings / Software and Network
   const updateStatus = () => need().updateStatus()
   const systemInfo = () => need().systemInfo()
+  const hostObjects = (mcus: string[]) => need().hostObjects(mcus)
   const procStats = () => need().procStats()
   const ping = () => need().ping()
   const runUpdate = (method: string, params?: Record<string, unknown>) => need().update(method, params)
@@ -424,6 +427,7 @@ export const useMachineStore = defineStore('machine', () => {
     rootUrl,
     updateStatus,
     systemInfo,
+    hostObjects,
     procStats,
     ping,
     runUpdate,

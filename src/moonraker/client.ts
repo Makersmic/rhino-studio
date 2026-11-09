@@ -364,6 +364,20 @@ export class MoonrakerClient {
     return Object.fromEntries(Object.entries(all).filter(([k]) => k === 'z_tilt' || /^stepper_z\d*$/.test(k)))
   }
 
+  /**
+   * Settings › Host health: Klipper's system_stats and each board's last_stats (only boards Klipper has).
+   * A read, through printer.objects.query.
+   */
+  async hostObjects(mcus: string[]): Promise<{ system: Record<string, number> | null; mcus: Record<string, Record<string, unknown>> }> {
+    const objects: Record<string, string[]> = { system_stats: ['sysload', 'cputime', 'memavail'] }
+    for (const m of mcus) objects[m] = ['last_stats', 'mcu_version']
+    const r = (await this.call('printer.objects.query', { objects })) as { status?: Record<string, Record<string, unknown>> }
+    const st = r?.status ?? {}
+    const out: Record<string, Record<string, unknown>> = {}
+    for (const m of mcus) if (st[m]) out[m] = (st[m].last_stats as Record<string, unknown>) ?? {}
+    return { system: (st.system_stats as Record<string, number>) ?? null, mcus: out }
+  }
+
   /** Moonraker's running totals over every job it has kept. */
   async historyTotals(): Promise<HistoryTotals | null> {
     try {

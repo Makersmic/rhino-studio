@@ -55,6 +55,7 @@
  * it in a <meta name="rhino-token"> tag on its home page, so we read it from
  * there, and read it again if the Portal was restarted.
  */
+import type { HostStats } from '@/system/hostHealth'
 import type { JobsWeeks, MaintHistory, MaintOverview, TaskLibrary, MaintLists, TaskDef, BookDef, StatusEdit } from '@/maintenance/types'
 import type { NetState, WifiNetwork } from '@/system/network'
 import type { EngineAuto, SliceJobState, SlicerState } from '@/slicer/prusa/portal'
@@ -898,6 +899,11 @@ export class PortalClient {
     this.token = /<meta\s+name="rhino-token"\s+content="([^"]+)"/i.exec(html)?.[1] ?? null
     this.version = /class="version">\s*v?([\w.+-]+)/i.exec(html)?.[1] ?? null
     if (!this.token) throw new Error("The Portal didn't provide a write token")
+  }
+
+  /** Settings › Host health: sensors, cores, memory, disks and processes of the host (Tool Manager 1.9.19). Read only. */
+  async hostStats(): Promise<HostStats> {
+    return this.getJson<HostStats>('/api/host/stats')
   }
 
   // ---- internals -------------------------------------------------------

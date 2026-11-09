@@ -1039,13 +1039,46 @@ const wifiList = [
   { ssid: 'Neighbours', signal: 22, security: 'WPA3', in_use: false },
 ]
 let rx = 8.2e8, tx = 2.1e9
+// Settings › Host health: four cores, Klipper's (core 3) the busiest; MOCK_HEALTH=hot shows the findings
+const HOT = process.env.MOCK_HEALTH === 'hot'
+let tick = 0
+function mockCores() {
+  tick++
+  const w = (base: number, amp: number) => Math.max(0, Math.min(100, base + amp * Math.sin(tick / 9) + Math.random() * amp))
+  const c = [w(8, 6), w(5, 4), w(14, 10), HOT ? w(93, 4) : w(22, 8)]
+  return { cpu: c.reduce((a, b) => a + b, 0) / 4, cpu0: c[0], cpu1: c[1], cpu2: c[2], cpu3: c[3] }
+}
+function hostStats() {
+  const t = (c: number) => Math.round((c + Math.random()) * 10) / 10
+  const proc = (name: string, pid: number, cpu: number, rss: number, core: number, allowed = '0-3', nice = 0) => ({ name, pids: [pid], cpu, rss, core, allowed, nice, threads: 4 })
+  return {
+    ok: true, uptime: 3 * 86400 + 5 * 3600 + 120,
+    cpu: { model: 'Intel(R) Core(TM) i5-7500T CPU @ 2.70GHz', cores: [0, 1, 2, 3].map((id) => ({ id, mhz: 2700 + id * 150 })), governor: 'performance', online: '0-3', isolated: '' },
+    sensors: [
+      { chip: 'acpitz', label: 'temp1', c: t(27.8), high: null, crit: null },
+      { chip: 'coretemp', label: 'Package id 0', c: t(HOT ? 88 : 46), high: 100, crit: 100 },
+      ...[0, 1, 2, 3].map((i) => ({ chip: 'coretemp', label: `Core ${i}`, c: t((HOT && i === 3 ? 87 : 42) + i), high: 100, crit: 100 })),
+      { chip: 'nvme', label: 'Composite', c: t(36), high: 81.8, crit: 84.8 },
+      { chip: 'iwlwifi_1', label: 'temp1', c: t(41), high: null, crit: null },
+    ],
+    load: [0.42, 0.38, 0.31], pressure: { cpu: { some: HOT ? 14.2 : 0.3, full: 0 }, memory: { some: 0, full: 0 }, io: { some: 0.8, full: 0.1 } },
+    memory: { total: 8_090_000_000, available: 5_730_000_000, swap_total: 1_020_000_000, swap_free: 1_020_000_000 },
+    disks: [{ label: 'System disk', path: '/', total: 118e9, free: HOT ? 1.4e9 : 96.2e9 }],
+    processes: {
+      cpus: 4,
+      own: [proc('Klipper', 812, HOT ? 96 : 21.5, 61e6, 3), proc('Moonraker', 790, 3.1, 58e6, 1), proc('Rhino Portal', 845, 0.6, 72e6, 2), proc('Cameras', 901, 6.2, 19e6, 0), proc('nginx', 650, 0, 9e6, 1)],
+      others: [proc('NetworkManager', 512, 0.2, 21e6, 0), proc('systemd-journal', 233, 0.1, 30e6, 2)],
+    },
+  }
+}
 setInterval(() => {
   const bw = 380_000 + Math.random() * 90_000
   rx += bw * 0.2; tx += bw * 0.8
   notify('notify_proc_stat_update', [{
     moonraker_stats: { time: Date.now() / 1000, cpu_usage: 3.1, memory: 42000, mem_units: 'kB' },
     cpu_temp: 51.5, network: { lo: { rx_bytes: 1, tx_bytes: 1, bandwidth: 9000 }, wlan0: { rx_bytes: rx, tx_bytes: tx, bandwidth: bw } },
-    system_cpu_usage: { cpu: 12.5 }, websocket_connections: Math.max(1, sockets.size),
+    system_cpu_usage: mockCores(), system_memory: { total: 7_900_000, available: 5_600_000, used: 2_300_000 },
+    websocket_connections: Math.max(1, sockets.size),
   }])
 }, 1000)
 
@@ -1113,13 +1146,15 @@ function handle(method: string, params: Record<string, unknown> | undefined): un
       return 'ok'
     case 'machine.update.status': return updStatus()
     case 'machine.update.refresh': return updStatus()
-    case 'machine.system_info': return { system_info: { distribution: { name: 'Debian GNU/Linux 12 (bookworm)' }, network: {
+    case 'machine.system_info': return { system_info: { distribution: { name: 'Debian GNU/Linux 12 (bookworm)' },
+      service_state: { klipper: { active_state: 'active', sub_state: 'running' }, moonraker: { active_state: 'active', sub_state: 'running' }, crowsnest: HOT ? { active_state: 'failed', sub_state: 'failed' } : { active_state: 'active', sub_state: 'running' } },
+      network: {
       wlan0: { mac_address: 'b8:27:eb:4c:91:2e', ip_addresses: [{ family: 'ipv4', address: '192.168.1.50', is_link_local: false }] },
       lo: { mac_address: '00:00:00:00:00:00', ip_addresses: [{ family: 'ipv4', address: '127.0.0.1', is_link_local: false }] } } } }
     case 'machine.proc_stats': return { websocket_connections: sockets.size }
     case 'server.connection.identify': return { connection_id: 1 }
     case 'server.info': return { klippy_connected: true, klippy_state: klippy, moonraker_version: 'mock' }
-    case 'printer.objects.list': return { objects: [...new Set([...Object.keys(status), ...MACROS.map((m) => `gcode_macro ${m}`)])] }
+    case 'printer.objects.list': return { objects: [...new Set([...Object.keys(status), 'mcu', 'system_stats', ...MACROS.map((m) => `gcode_macro ${m}`)])] }
     case 'printer.objects.subscribe': {
       const wanted = Object.keys((params?.objects as object) ?? {})
       return { eventtime: Date.now() / 1000, status: Object.fromEntries(wanted.filter((k) => k in status).map((k) => [k, status[k]])) }
@@ -1167,6 +1202,14 @@ function handle(method: string, params: Record<string, unknown> | undefined): un
       emergencyStop('websocket')
       return 'ok'
     case 'printer.objects.query': {
+      // Settings › Host health: Klipper's system_stats and the main board's last_stats
+      const q = (params?.objects ?? {}) as Record<string, unknown>
+      if ('system_stats' in q) {
+        return { eventtime: Date.now() / 1000, status: {
+          system_stats: { sysload: 0.42, cputime: 1834.2, memavail: 5_600_000 },
+          mcu: { last_stats: { mcu_awake: HOT ? 3.4 : 0.021, mcu_task_avg: HOT ? 0.0012 : 0.000018, mcu_task_stddev: HOT ? 0.0002 : 0.000011, bytes_retransmit: HOT ? 90 + tick : 9, bytes_invalid: 0, srtt: 0.0011, freq: 180_000_000 } },
+        } }
+      }
       // only what Studio asks for: the macro definitions (configfile settings)
       const settings = Object.fromEntries(Object.entries(HW_MACROS).map(([k, v]) => [`gcode_macro ${k.toLowerCase()}`, v]))
       // and the [extruder] section the tuning wizards start from (tools/3dp.cfg); MOCK_EXTRUDE_MAX sets max_extrude_only_distance
@@ -1694,6 +1737,7 @@ async function portal(req: IncomingMessage, res: import('node:http').ServerRespo
   if (req.method === 'GET' && url === '/api/maint') return json(res, 200, maint), true
   if (req.method === 'GET' && url === '/api/maint/history') return json(res, 200, maintHistory), true
   if (req.method === 'GET' && url === '/api/dash/jobs') return json(res, 200, jobsPerWeek()), true
+  if (req.method === 'GET' && url === '/api/host/stats') return json(res, 200, hostStats()), true
   // Tool library, read-only, from the Portal's demo (scripts/fixtures/portal-*.json). Changes need the real
   // Portal: python3 dev/demo_server.py in Toolhead_Manager, then PORTAL=http://127.0.0.1:5055 npm run dev
   // Settings / Network (Portal 1.4.8)

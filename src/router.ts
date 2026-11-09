@@ -106,6 +106,7 @@ export const router = createRouter({
         { path: 'macros', component: () => import('./views/settings/MacrosView.vue'), meta: { title: 'Your macros', lead: 'Short routines built from steps, saved on the Rhino and run from Control.' } },
         { path: 'software', component: () => import('./views/settings/SoftwareView.vue'), meta: { title: 'Software and updates', lead: 'What Studio runs on, and what it is built with.' } },
         { path: 'host', component: () => import('./views/settings/HostView.vue'), meta: { title: 'Host', heading: 'Host, restarts and backups', lead: 'Restart Klipper and services, reboot or shut down the host, back up and restore. Never during a job.' } },
+        { path: 'health', component: () => import('./views/settings/HealthView.vue'), meta: { title: 'Host health', lead: 'How hard the host and the boards are working, how warm they are, and what deserves a look. Read only.' } },
         { path: 'logs', component: () => import('./views/settings/LogsView.vue'), meta: { title: 'Logs', lead: 'Klipper and Moonraker logs, and the last error in them.' } },
         { path: 'network', component: () => import('./views/settings/NetworkView.vue'), meta: { title: 'Network', lead: 'How this screen reaches the Rhino, and the Rhino’s own network.' } },
         { path: 'about', component: () => import('./views/settings/AboutView.vue'), meta: { title: 'About' } },
