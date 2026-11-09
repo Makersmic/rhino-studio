@@ -1887,6 +1887,10 @@ const server = createServer(async (req, res) => {
       const rel = folder ? `${folder}/${fname}` : fname
       const st = root === 'gcodes' || root === 'config' ? rootStore(root) : null
       if (!st) return void res.writeHead(403, { 'content-type': 'application/json' }).end(JSON.stringify({ error: { message: `Write access to root ${root} is not allowed` } }))
+      // as Moonraker: a folder in the file name itself must already exist (only 'path' makes one)
+      const nameDir = fname.includes('/') ? rel.slice(0, rel.lastIndexOf('/') + 1) : ''
+      if (nameDir && !Object.keys(st[0]).some((k) => k.startsWith(nameDir)))
+        return void res.writeHead(500, { 'content-type': 'application/json' }).end(JSON.stringify({ error: { message: 'Unable to save file' } }))
       try {
         inUse(`${root}/${rel}`)
       } catch (e) {

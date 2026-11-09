@@ -316,3 +316,39 @@ describe('MoonrakerClient and trusted_clients (0.6.3, as Mainsail)', () => {
     expect(FakeSocket.last).toBeNull()
   })
 })
+
+describe('uploadFile', () => {
+  afterEach(() => vi.unstubAllGlobals())
+  /** a stand-in XMLHttpRequest that keeps the form it was sent and answers with `status` / `body` */
+  function fakeXhr(status: number, body: string) {
+    const sent: FormData[] = []
+    class X {
+      status = status
+      responseText = body
+      upload = {}
+      onload: (() => void) | null = null
+      open() {}
+      send(f: FormData) { sent.push(f); this.onload?.() }
+    }
+    vi.stubGlobal('XMLHttpRequest', X)
+    return sent
+  }
+  it('sends a folder as the path field, not inside the file name (Moonraker only makes folders from path)', async () => {
+    const sent = fakeXhr(201, JSON.stringify({ item: { path: 'tuning/squish-BlockOne-PLA_0_4.gcode' } }))
+    const c = new MoonrakerClient('http://rhino.test', {})
+    const got = await c.uploadFile(new File(['G28\n'], 'tuning/squish-BlockOne-PLA_0_4.gcode'))
+    expect(got).toBe('tuning/squish-BlockOne-PLA_0_4.gcode')
+    expect(sent[0]!.get('path')).toBe('tuning')
+    expect((sent[0]!.get('file') as File).name).toBe('squish-BlockOne-PLA_0_4.gcode')
+    expect(sent[0]!.get('print')).toBe('false')
+  })
+  it('a plain name has no path field', async () => {
+    const sent = fakeXhr(201, '{}')
+    await new MoonrakerClient('http://rhino.test', {}).uploadFile(new File(['G28\n'], 'part.gcode'))
+    expect(sent[0]!.get('path')).toBeNull()
+  })
+  it('a refused upload says why, from Moonraker’s message', async () => {
+    fakeXhr(500, JSON.stringify({ error: { message: 'Unable to save file' } }))
+    await expect(new MoonrakerClient('http://rhino.test', {}).uploadFile(new File(['x'], 'a.gcode'))).rejects.toThrow('Upload failed: HTTP 500 (Unable to save file)')
+  })
+})

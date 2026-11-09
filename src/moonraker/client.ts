@@ -584,7 +584,11 @@ export class MoonrakerClient {
       const form = new FormData()
       form.append('root', 'gcodes')
       form.append('print', 'false')
-      form.append('file', file, file.name)
+      // Moonraker makes a missing folder only from the 'path' field, never from a slash in the file name
+      // (a name like tuning/x.gcode fails with HTTP 500 until tuning/ exists)
+      const cut = file.name.lastIndexOf('/')
+      if (cut > 0) form.append('path', file.name.slice(0, cut))
+      form.append('file', file, file.name.slice(cut + 1))
       const xhr = new XMLHttpRequest()
       xhr.open('POST', `${this.baseUrl}/server/files/upload`)
       xhr.upload.onprogress = (e) => e.lengthComputable && onProgress?.(e.loaded / e.total)
@@ -596,7 +600,14 @@ export class MoonrakerClient {
           } catch {
             resolve(file.name)
           }
-        } else reject(new Error(`Upload failed: HTTP ${xhr.status}`))
+        } else {
+          // Moonraker says why in {error: {message}}: show it, not just the status
+          let why = ''
+          try {
+            why = (JSON.parse(xhr.responseText) as { error?: { message?: string } }).error?.message ?? ''
+          } catch { /* not JSON */ }
+          reject(new Error(`Upload failed: HTTP ${xhr.status}${why ? ` (${why})` : ''}`))
+        }
       }
       xhr.onerror = () => reject(new Error('Upload failed: network error'))
       xhr.send(form)
