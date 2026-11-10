@@ -20,6 +20,7 @@
  * Text sits straight on live video, so it uses the overlay tokens: white
  * with a soft shadow, red only for what needs attention.
  */
+import { useSettingsStore } from '@/stores/settings'
 import { computed, defineAsyncComponent, onBeforeUnmount, ref, watch } from 'vue'
 import { fanStalls, rpmText, type FanReading } from '@/hardware/fans'
 import Icon from '@/icons/Icon.vue'
@@ -39,6 +40,7 @@ const machine = useMachineStore()
 const control = useControlStore()
 const care = useMaintenanceStore()
 const webcams = useWebcamsStore()
+const settings = useSettingsStore()
 
 // "Now", for the finish time
 const now = ref(new Date())
@@ -204,7 +206,7 @@ const list = computed(() =>
 
     <section class="screen" aria-label="Machine at a glance">
       <!-- background: the camera, or quiet e-paper if there isn't one -->
-      <WebcamView v-if="webcams.current" :key="webcams.current.uid" class="bg" :cam="webcams.current" fit="cover" fill />
+      <WebcamView v-if="webcams.current" :key="webcams.current.uid" class="bg" :cam="webcams.current" :fit="settings.camDashboard.fit" :zoom="settings.camDashboard.zoom" fill />
       <div v-else class="bg nocam">
         <Icon nav="camera" :size="34" />
         <span v-if="machine.online">No camera set up. <RouterLink to="/settings">Add one in Settings</RouterLink></span>

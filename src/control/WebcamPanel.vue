@@ -5,6 +5,7 @@
  * the cameras; the dots show which one is showing. The choice is shared
  * with the Dashboard.
  */
+import { useSettingsStore } from '@/stores/settings'
 import { computed } from 'vue'
 import RsPanel from '@/components/RsPanel.vue'
 import Icon from '@/icons/Icon.vue'
@@ -13,6 +14,7 @@ import { useWebcamsStore } from '@/stores/webcams'
 import { useMachineStore } from '@/stores/machine'
 
 const webcams = useWebcamsStore()
+const settings = useSettingsStore()
 const machine = useMachineStore()
 const count = computed(() => webcams.cameras.length)
 const status = computed(() => {
@@ -32,7 +34,7 @@ function onKey(e: KeyboardEvent) {
 <template>
   <RsPanel title="Camera" panel-id="control.camera" :status="status" flush>
     <div v-if="webcams.current" class="gallery" tabindex="0" aria-roledescription="carousel" :aria-label="`Cameras, showing ${webcams.current.name}`" @keydown="onKey">
-      <WebcamView :key="webcams.current.uid" :cam="webcams.current" fit="cover" fill>
+      <WebcamView :key="webcams.current.uid" :cam="webcams.current" :fit="settings.camControl.fit" :zoom="settings.camControl.zoom" fill>
         <span class="name">{{ webcams.current.name }}</span>
         <template v-if="count > 1">
           <button type="button" class="arrow prev" aria-label="Previous camera" @click="webcams.show(-1)">

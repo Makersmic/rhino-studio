@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { blankForm, cssAspect, cssTransform, formFrom, normalizeWebcam, normalizeWebcams, sourceUrl, step, toPostItem, validateForm, viewMode, withStamp } from './webcams'
+import { framingOf as _framingOf, withZoom as _withZoom, blankForm, cssAspect, cssTransform, formFrom, normalizeWebcam, normalizeWebcams, sourceUrl, step, toPostItem, validateForm, viewMode, withStamp } from './webcams'
 
 const raw = {
   name: 'Bed',
@@ -70,5 +70,19 @@ describe('cameras', () => {
     expect(step(2, 3, 1)).toBe(0)
     expect(step(0, 3, -1)).toBe(2)
     expect(step(0, 0, 1)).toBe(0)
+  })
+})
+
+describe('camera framing', () => {
+  it('keeps a good saved framing and fixes a bad one', () => {
+    expect(_framingOf({ fit: 'contain', zoom: 150 })).toEqual({ fit: 'contain', zoom: 150 })
+    expect(_framingOf({ fit: 'stretch', zoom: 900 })).toEqual({ fit: 'cover', zoom: 300 })
+    expect(_framingOf(null)).toEqual({ fit: 'cover', zoom: 100 })
+    expect(_framingOf({ zoom: 20 })).toEqual({ fit: 'cover', zoom: 100 })
+  })
+  it('adds the zoom after the turn and mirror', () => {
+    expect(_withZoom('none', 100)).toBe('none')
+    expect(_withZoom('none', 150)).toBe('scale(1.50)')
+    expect(_withZoom('rotate(180deg) scaleX(-1)', 200)).toBe('rotate(180deg) scaleX(-1) scale(2.00)')
   })
 })

@@ -179,7 +179,8 @@ const label = computed(() => (props.part ? `${props.part.name} on the bed in 3D$
       <button type="button" class="seg" :class="{ on: choice }" :aria-pressed="choice" @click="setChoice(true)">3D</button>
     </div>
 
-    <div :class="{ beside: allParts.length > 1 }">
+    <!-- several parts: their cards lie on the left of the drawing, which keeps the full width (Mike, Nov 9) -->
+    <div class="area" :class="{ over: allParts.length > 1 }">
     <div class="drawing">
     <template v-if="is3d && part && allParts.length">
       <PartWorkspace
@@ -194,6 +195,7 @@ const label = computed(() => (props.part ? `${props.part.name} on the bed in 3D$
         :marking="marking"
         :marks="marks"
         :overhang="overhang"
+        :contact="job.process === 'fdm'"
         @mark="(id, pt, r) => emit('mark', id, pt, r)"
         @erase="(pt, r) => emit('erase', pt, r)"
         :erasing="erasing"
@@ -218,7 +220,7 @@ const label = computed(() => (props.part ? `${props.part.name} on the bed in 3D$
     <template v-else-if="is3d && fileText">
       <p v-if="readError" class="error" role="alert">{{ readError }}</p>
       <p v-else-if="reading" class="muted" role="status">Reading the file…</p>
-      <GcodeViewer v-else-if="parsed" :key="parseId" :parsed="parsed" :bed="{ x: machine.workArea.x, y: machine.workArea.y, keepOut: machine.keepOut }" />
+      <GcodeViewer v-else-if="parsed" :key="parseId" :parsed="parsed" :bed="{ x: machine.workArea.x, y: machine.workArea.y, keepOut: machine.keepOut }" :plate-below="plateBelow" />
     </template>
     <BedView
       v-else
@@ -247,8 +249,12 @@ const label = computed(() => (props.part ? `${props.part.name} on the bed in 3D$
 <style scoped>
 .workspace { display: flex; flex-direction: column; gap: var(--rs-space-2); container-type: inline-size; }
 .drawing { display: flex; flex-direction: column; gap: var(--rs-space-2); min-width: 0; }
-.beside { display: flex; flex-direction: column; gap: var(--rs-space-3); }
-@container (min-width: 640px) { .beside { display: grid; grid-template-columns: minmax(0, 1fr) 210px; align-items: start; } }
+.area { position: relative; display: flex; flex-direction: column; gap: var(--rs-space-3); }
+/* wide enough: the list floats over the drawing's left side, short of its bottom (where the hints sit) */
+@container (min-width: 640px) {
+  .area.over > .list { position: absolute; top: var(--rs-space-2); left: var(--rs-space-2); width: 210px; z-index: 1; pointer-events: none; }
+  .area.over > .list :deep(ul) { max-height: calc(min(62vh, 640px) - 110px); }
+}
 .toggle { display: inline-flex; align-self: flex-start; border: 1px solid var(--rs-line-strong); border-radius: 8px; overflow: hidden; }
 .seg { min-height: 32px; padding: 0 var(--rs-space-3); font: inherit; font-size: var(--rs-text-xs); color: var(--rs-text-strong); background: transparent; border: 0; cursor: pointer; }
 .seg.on { color: var(--rs-surface); background: var(--rs-text-strong); }

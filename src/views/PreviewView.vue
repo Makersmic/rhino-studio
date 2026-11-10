@@ -15,6 +15,7 @@ import { parseInWorker, type ParseJob } from '@/gcode/parseInWorker'
 import Icon from '@/icons/Icon.vue'
 import { useMachineStore } from '@/stores/machine'
 import { usePrepareStore } from '@/stores/prepare'
+import { useSettingsStore } from '@/stores/settings'
 
 const GcodeViewer = defineAsyncComponent(() => import('@/viewer/GcodeViewer.vue'))
 
@@ -23,6 +24,7 @@ const route = useRoute()
 const router = useRouter()
 const machine = useMachineStore()
 const prep = usePrepareStore()
+const settings = useSettingsStore()
 
 const filePath = computed(() => (!props.embedded && typeof route.query.file === 'string' ? route.query.file : null))
 const fromSetup = computed(() => props.embedded || route.query.from === 'setup')
@@ -172,7 +174,7 @@ function readAnyway() {
         <RsButton size="sm" @click="cancel">Stop</RsButton>
       </div>
       <p v-else-if="parsed && !parsed.moveCount" class="muted">This file has no moves to draw.</p>
-      <GcodeViewer v-else-if="parsed" :key="parseId" :parsed="parsed" :bed="bed" />
+      <GcodeViewer v-else-if="parsed" :key="parseId" :parsed="parsed" :bed="bed" :plate-below="settings.plateSeeThrough" />
     </RsPanel>
   </div>
 </template>

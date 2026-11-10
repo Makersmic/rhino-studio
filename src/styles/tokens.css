@@ -236,6 +236,10 @@
   /* Job setup's 3D bed: a white build plate with grey grid lines, the same in day and night (Mike, Nov 7) */
   --rs-viewer-plate: #ffffff;
   --rs-viewer-plate-line: #7d8389;
+  /* Job setup's 3D view: where a print sits on the plate (its face on the bed, and a thin rim round it), Mike Nov 9 */
+  --rs-viewer-contact: #22a447;
+  /* cards lying on a drawing (Job setup's parts list): a soft lift off the 3D view */
+  --rs-float-shadow: 0 1px 2px rgb(0 0 0 / 0.12), 0 4px 12px rgb(0 0 0 / 0.1);
   --rs-holo-ghost: #3ff0dc;
   /* behind the rhino preview in the Style guide: dark in both looks, as the hologram is light on a camera picture */
   --rs-holo-backdrop: #0a1315;

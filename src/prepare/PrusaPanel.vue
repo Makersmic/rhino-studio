@@ -35,6 +35,15 @@ const mode = ref<Mode>(load('rs.prusa.mode', 'simple'))
 const tabId = ref<string>(load('rs.prusa.tab', 'print'))
 const pageByTab = ref<Record<string, string>>(load('rs.prusa.pages', {}))
 const query = ref('')
+/** groups folded shut, by "tab › page › group" (a per-viewer convenience, Mike Nov 9: every section folds) */
+const folded = ref<Record<string, boolean>>(load('rs.prusa.folded', {}))
+watch(folded, (v) => save('rs.prusa.folded', v), { deep: true })
+const foldKey = (g: string) => `${tab.value.id} › ${page.value?.label ?? ''} › ${g}`
+function toggleFold(g: string, e: Event) {
+  folded.value = { ...folded.value, [foldKey(g)]: !(e.target as HTMLDetailsElement).open }
+}
+/** the page that holds the support options: Studio's support controls go at its top */
+const isSupportPage = (label: string | undefined) => !!label && /support/i.test(label)
 watch(mode, (v) => save('rs.prusa.mode', v))
 watch(tabId, (v) => save('rs.prusa.tab', v))
 watch(pageByTab, (v) => save('rs.prusa.pages', v), { deep: true })
@@ -137,12 +146,17 @@ const MODES: { value: Mode; label: string }[] = [
         </button>
       </div>
 
-      <section v-for="g in page?.groups ?? []" :key="g.label" class="group">
-        <h4>{{ g.label }}</h4>
+      <div v-if="isSupportPage(page?.label) && $slots.support" class="studio-support"><slot name="support" /></div>
+      <details v-for="g in page?.groups ?? []" :key="`${tab.id}|${page?.label}|${g.label}`" class="group" :open="!folded[foldKey(g.label)]" @toggle="toggleFold(g.label, $event)">
+        <summary>
+          <span class="chev" aria-hidden="true">▸</span>
+          <span class="gt">{{ g.label }}</span>
+          <span v-if="changedOn(g.options)" class="dot" :title="`${changedOn(g.options)} changed`">{{ changedOn(g.options) }}</span>
+        </summary>
         <div class="opts">
           <PrusaOption v-for="k in g.options" :key="k" :k="k" :schema="schema" :ctx="ctx" @set="(key, v) => emit('set', key, v)" />
         </div>
-      </section>
+      </details>
       <p v-if="!tab.pages.length" class="note">Nothing on this tab in {{ mode }} mode.</p>
     </template>
   </div>
@@ -172,7 +186,14 @@ const MODES: { value: Mode; label: string }[] = [
 .dot { min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; background: var(--rs-surface-2); color: var(--rs-text-strong); font-size: 10px; line-height: 16px; text-align: center; }
 .on .dot { background: var(--rs-on-ink); color: var(--rs-ink); }
 .group { border-top: 1px dotted var(--rs-line-strong); padding-top: var(--rs-space-2); }
-.group h4 { margin: 0 0 2px; font-size: var(--rs-text-xs); font-weight: var(--rs-weight-medium); color: var(--rs-text-strong); text-transform: none; }
+.group summary { display: flex; align-items: center; gap: 8px; min-height: 32px; cursor: pointer; list-style: none; font-size: var(--rs-text-xs); font-weight: var(--rs-weight-medium); color: var(--rs-text-strong); }
+.group summary::-webkit-details-marker { display: none; }
+.group summary:focus-visible { outline: 2px solid var(--rs-text-strong); outline-offset: 2px; border-radius: 4px; }
+.chev { display: inline-block; width: 10px; font-size: 10px; transition: transform var(--rs-dur, 0.15s); }
+.group[open] .chev { transform: rotate(90deg); }
+.group[open] > .opts { padding-bottom: var(--rs-space-2); }
+.studio-support { padding-top: var(--rs-space-2); }
+@media (prefers-reduced-motion: reduce) { .chev { transition: none; } }
 .opts { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 0 var(--rs-space-4); }
 .hit { border-top: 1px solid var(--rs-line); padding-top: 4px; }
 .path { font-size: 10px; color: var(--rs-text-muted); }

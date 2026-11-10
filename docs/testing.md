@@ -540,3 +540,15 @@ Read only: nothing on this page changes the machine. Best done once idle and onc
 - [ ] **HH2 Programs.** *Pass if:* Klipper, Moonraker, Rhino Portal, Cameras and nginx are listed with CPU %, memory, the core each runs on and the cores it may use (0-3 unless core pinning is set up). Start a PrusaSlicer slice: it appears, then goes when it ends.
 - [ ] **HH3 Boards.** *Pass if:* the main board shows a load under 60 %, a round trip of a few ms, and "0 B" resent; during a print, still 0 B resent. *Stop if:* bytes are resent while idle: check the board's USB cable and note the count.
 - [ ] **HH4 Report.** Copy report, paste it into a note on the phone and the PC; Download saves a .txt. *Pass if:* both hold the same readings as the page, and "What to look at" says Normal when nothing is flagged.
+
+## Job setup, Preview and cameras (Studio 0.19.0, Nov 9)
+
+- [ ] **JS1 Parts on the 3D view.** Job setup with two models. *Pass if:* the 3D view fills the panel's width and the parts cards lie over its left side; clicking a card selects that part, and the view still turns by dragging beside the cards. *Stop if:* a card can't be clicked or the view can't be dragged.
+- [ ] **JS2 Green on the plate.** A print with a flat bottom, then Lay flat on another face. *Pass if:* a thin green line runs round the base, and the face laid flat is green seen from below. A tilted part shows green only where it touches. *Stop if:* green shows on a part that's floating.
+- [ ] **JS3 Supports in Settings.** Kiri:Moto, then PrusaSlicer. *Pass if:* Supports (Off, Automatic, Only where I mark) and Mark supports are at the top of Kiri's Support section and of PrusaSlicer's Support material page; marking still works on the 3D view. *Stop if:* a mark placed doesn't reach the sliced file (check in Preview).
+- [ ] **JS4 PrusaSlicer sections fold.** *Pass if:* each section folds and opens from its title, and stays folded after a reload.
+- [ ] **JS5 Prepare.** Change a setting, press Prepare at the bottom of Settings. *Pass if:* it slices and opens Preview, the same as the Preview step.
+- [ ] **JS6 File name.** Job file: type a name, Send to Rhino. *Pass if:* Files shows it under that name (spaces become _), and Start job sits in the same row as Send, Preview and Download. *Stop if:* a file lands anywhere but the gcodes folder.
+- [ ] **PV8 Preview plate.** *Pass if:* Preview shows the same white plate and grid as Job setup, in day and night, and see-through from below by the Appearance setting.
+- [ ] **CM1 Camera framing.** Settings › Appearance › Cameras: Dashboard zoom 150 %, Control Whole picture. *Pass if:* the Dashboard picture is enlarged from the middle and Control shows the whole picture with bars; Reset puts both back. *Stop if:* a camera turned or mirrored in Settings › Cameras shows the wrong way after zooming.
+- [ ] **CM2 Camera preview.** Settings › Cameras › Edit. *Pass if:* the preview is as tall as the form beside it.

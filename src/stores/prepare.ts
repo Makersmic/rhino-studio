@@ -37,6 +37,7 @@ import { runPrusa, type SlicerState } from '@/slicer/prusa/portal'
 import { useMaintenanceStore } from './maintenance'
 import { useSliceProfilesStore } from './sliceProfiles'
 import { sameIfEqual } from '@/prepare/stable'
+import { baseOf, extOf as fileExt, outFileName, safeName } from '@/prepare/jobName'
 import {
   applyProfile, builtinId, defaultsFor, diffSettings, engineOf, isBuiltin, jobSettings, profileStatus, setJobSettings,
   type AnySettings, type SavedJob,
@@ -48,11 +49,7 @@ export function suits(process: Process, flat: boolean): boolean {
 }
 
 /** Safe for FILE= on the setup wizards and for Moonraker: letters, digits, - _ . only */
-export function safeName(name: string): string {
-  const dot = name.lastIndexOf('.')
-  const base = (dot > 0 ? name.slice(0, dot) : name).replace(/[^A-Za-z0-9_.-]+/g, '_').replace(/^_+|_+$/g, '') || 'job'
-  return `${base}${dot > 0 ? name.slice(dot).toLowerCase() : '.gcode'}`
-}
+export { safeName }
 
 export interface PrepTool {
   name: string
@@ -785,6 +782,16 @@ export const usePrepareStore = defineStore('prepare', () => {
 
   const blocked = computed(() => (result.value ? blocking(result.value.checks) : []))
 
+  // ---- the job file's name (Mike, Nov 9): typed in the Job file step, kept while the same model or file is set up
+  const typedName = ref<string | null>(null)
+  watch([fileName, uploaded], () => (typedName.value = null))
+  const outName = computed(() => typedName.value ?? (result.value ? baseOf(result.value.file.name) : ''))
+  const outExt = computed(() => (result.value ? fileExt(result.value.file.name) : '.gcode'))
+  const outFile = computed(() => (result.value ? outFileName(typedName.value, result.value.file.name) : ''))
+  function setOutName(v: string | null) {
+    typedName.value = v
+  }
+
   // ---- PrusaSlicer on the Rhino ------------------------------------------------
   const schema = shallowRef<Schema | null>(null)
   const schemaError = ref<string | null>(null)
@@ -908,7 +915,7 @@ export const usePrepareStore = defineStore('prepare', () => {
     sending.value = 0
     sendError.value = null
     try {
-      const f = new File([r.file.text], r.file.name, { type: 'text/plain' })
+      const f = new File([r.file.text], outFile.value, { type: 'text/plain' })
       sentPath.value = await machine.uploadFile(f, (x) => (sending.value = x))
     } catch (e) {
       sendError.value = (e as Error).message
@@ -922,7 +929,7 @@ export const usePrepareStore = defineStore('prepare', () => {
     if (!r || blocked.value.length) return
     const a = document.createElement('a')
     a.href = URL.createObjectURL(new Blob([r.file.text], { type: 'text/plain' }))
-    a.download = r.file.name
+    a.download = outFile.value
     a.click()
     setTimeout(() => URL.revokeObjectURL(a.href), 10_000)
   }
@@ -1002,6 +1009,10 @@ export const usePrepareStore = defineStore('prepare', () => {
     send,
     sending,
     sentPath,
+    outName,
+    outExt,
+    outFile,
+    setOutName,
     sendError,
     download,
     schema,

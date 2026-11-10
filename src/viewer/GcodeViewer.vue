@@ -11,7 +11,8 @@ import { BUDGET_NORMAL, BUDGET_REDUCED, buildDraw, fileMoveAt, previewNotes, vis
 import type { BedShape, GcodeScene, ViewAngle } from './scene'
 import { colourOf, featureColours, loadReduced, saveReduced, watchTheme } from './theme'
 
-const props = defineProps<{ parsed: ParsedGcode; bed: BedShape }>()
+/** plateBelow: the build plate as Job setup draws it (white, see-through from below by this %), so both views match */
+const props = defineProps<{ parsed: ParsedGcode; bed: BedShape; plateBelow?: number }>()
 
 const canvas = ref<HTMLCanvasElement | null>(null)
 const box = ref<HTMLDivElement | null>(null)
@@ -55,7 +56,12 @@ function applyColours() {
   const tok = (name: string, fallback: string) => colourOf(st.getPropertyValue(name).trim() || fallback)
   const f = featureColours(tok('--rs-viewer-model', st.color), tok('--rs-viewer-support', st.color), paper)
   scene.setFeatureColours(f.model, f.support)
+  if (props.plateBelow !== undefined) {
+    scene.setPlateBelow(props.plateBelow / 100)
+    scene.setPlate({ plate: tok('--rs-viewer-plate', '#ffffff'), line: tok('--rs-viewer-plate-line', '#7d8389') })
+  }
 }
+watch(() => props.plateBelow, (v) => v !== undefined && scene?.setPlateBelow(v / 100))
 const onThemeChange = () => applyColours()
 const onVisible = () => {
   if (!document.hidden) scene?.draw()

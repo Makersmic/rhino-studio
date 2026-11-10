@@ -4,7 +4,8 @@ import NumField from './NumField.vue'
 import FoldGroup from './FoldGroup.vue'
 import type { FdmSettings } from '@/slicer/types'
 
-defineProps<{ fdm: FdmSettings }>()
+/** supportNote: what the supports are set to; the support controls come in the `support` slot, at the top of Support */
+defineProps<{ fdm: FdmSettings; supportNote?: string }>()
 </script>
 
 <template>
@@ -60,7 +61,8 @@ defineProps<{ fdm: FdmSettings }>()
       <label class="check"><input v-model="fdm.avoidCrossing" type="checkbox" /> Travel around gaps instead of retracting</label>
     </FoldGroup>
 
-    <FoldGroup title="Support" :note="fdm.supports ? 'on' : 'off (tick Supports above)'">
+    <FoldGroup title="Support" :note="supportNote ?? (fdm.supports ? 'on' : 'off')" :open="!!$slots.support">
+      <slot name="support" />
       <NumField v-model="fdm.supportAngle" label="Overhang angle" unit="°" :min="10" :max="85" />
       <NumField v-model="fdm.supportDensity" label="Density" unit="%" :min="0.05" :max="1" :step="0.05" percent />
       <NumField v-model="fdm.supportGapXY" label="Gap to the part" unit="mm" :min="0" :max="5" :step="0.1" hint="Sideways" />

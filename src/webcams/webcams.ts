@@ -208,3 +208,29 @@ export function step(index: number, count: number, dir: 1 | -1): number {
   if (count <= 0) return 0
   return (((index + dir) % count) + count) % count
 }
+
+/**
+ * How a screen shows its camera (Settings › Appearance, Mike Nov 9): fill the box and crop the edges, or the whole
+ * picture with bars; then zoomed in from the middle, 100-300 %. Kept per browser, per screen (Dashboard, Control).
+ */
+export interface CamFraming {
+  fit: 'cover' | 'contain'
+  zoom: number
+}
+export const CAM_ZOOM = { min: 100, max: 300, step: 10 } as const
+export const DEFAULT_FRAMING: CamFraming = { fit: 'cover', zoom: 100 }
+
+/** A saved framing, or the default for anything missing or out of range */
+export function framingOf(v: unknown): CamFraming {
+  const o = (v && typeof v === 'object' ? v : {}) as Partial<CamFraming>
+  const fit = o.fit === 'contain' ? 'contain' : 'cover'
+  const z = typeof o.zoom === 'number' && Number.isFinite(o.zoom) ? Math.round(o.zoom) : 100
+  return { fit, zoom: Math.min(Math.max(z, CAM_ZOOM.min), CAM_ZOOM.max) }
+}
+
+/** The camera's own turn and mirror, then the zoom on top */
+export function withZoom(transform: string, zoomPct: number): string {
+  const z = zoomPct / 100
+  if (!(z > 1)) return transform
+  return `${transform === 'none' ? '' : `${transform} `}scale(${z.toFixed(2)})`
+}

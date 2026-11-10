@@ -32,6 +32,8 @@ const props = defineProps<{
   brush?: number
   /** tint faces that need support past this angle, or null */
   overhang?: number | null
+  /** colour where a print touches the plate, so a face laid flat shows green (print jobs, Mike Nov 9) */
+  contact?: boolean
 }>()
 const emit = defineEmits<{
   select: [id: number]
@@ -73,6 +75,7 @@ function applyColours() {
   scene.setPaintColours(colourOf(st.getPropertyValue('--rs-viewer-paint').trim() || st.color), colourOf(st.getPropertyValue('--rs-text-muted').trim() || '#888888'))
   scene.setPlateBelow((props.plateBelow ?? 75) / 100)
   scene.setPlate({ plate: colourOf(st.getPropertyValue('--rs-viewer-plate').trim() || '#ffffff'), line: colourOf(st.getPropertyValue('--rs-viewer-plate-line').trim() || '#7d8389') })
+  scene.setContact(props.contact ? colourOf(st.getPropertyValue('--rs-viewer-contact').trim() || '#22a447') : null)
 }
 const onVisible = () => {
   if (!document.hidden) scene?.draw()
@@ -312,6 +315,7 @@ watch(() => props.boxes, (b) => scene?.setBoxes(b))
 watch(() => props.marks, (m) => scene?.setMarks(m ?? []), { deep: true })
 watch(() => [props.marking, props.erasing], ([m, er]) => { if (!m && !er) scene?.setBrush(null, 0) })
 watch(() => props.overhang, (a) => scene?.setOverhang(a ?? null))
+watch(() => props.contact, applyColours)
 watch(() => props.bed, (b) => {
   scene?.setBed(b)
   look(angle.value)

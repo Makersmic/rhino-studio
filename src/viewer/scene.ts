@@ -342,6 +342,9 @@ function modelMaterial(): ShaderMaterial {
       uniform vec3 uLight;
       uniform float uOverhang;
       uniform vec3 uWarm;
+      // where the part touches the plate (0 = not shown): green, so a face laid flat reads as sitting on the bed
+      uniform vec3 uContact;
+      uniform float uContactOn;
       // support marks painted on the part (Mike, Nov 7): each a centre and radius in bed millimetres
       uniform vec4 uPaint[${PAINT_MAX}];
       uniform int uPaintCount;
@@ -362,6 +365,8 @@ function modelMaterial(): ShaderMaterial {
         vec3 c = uInkIsDark > 0.5 ? mix(uInk, uPaper, 0.12 + 0.7 * lit) : mix(uPaper, uInk, 0.14 + 0.78 * lit);
         // faces hanging down past the support angle: tinted amber, where support will be needed
         if (vFacing < uOverhang) c = mix(c, uWarm, 0.65);
+        // on the plate: within 0.2 mm of Z 0, at least a pixel and a half on screen, so the rim shows from any distance
+        if (uContactOn > 0.5 && vWorld.z < max(0.2, fwidth(vWorld.z) * 1.5)) c = mix(c, uContact, 0.88);
         // painted marks: filled in the theme's accent, the selected one fully, with a fine edge. Only on faces that hang
         // down (where support touches), so a mark under a thin wing doesn't show through on its top
         float under = vFacing < -0.2 ? 1.0 : 0.0;
@@ -388,6 +393,8 @@ function modelMaterial(): ShaderMaterial {
       uLight: { value: new Vector3(1, -0.45, 0.35).normalize() },
       uOverhang: { value: -2 },
       uWarm: { value: new Vector3(0.96, 0.66, 0.2) },
+      uContact: { value: new Vector3(0.13, 0.64, 0.28) },
+      uContactOn: { value: 0 },
       uPaint: { value: Array.from({ length: PAINT_MAX }, () => new Vector4()) },
       uPaintCount: { value: 0 },
       uPaintSel: { value: -1 },
@@ -993,6 +1000,14 @@ export class GcodeScene {
    * Tint faces that hang down past `angleDeg` (Kiri's support angle: support goes under faces whose outward normal
    * points down by more than its sine), or null for no tint
    */
+  /** Colour where a part touches the plate (its bottom face and a thin rim above it), or null for none */
+  setContact(colour: Rgb | null): void {
+    const u = this.meshMaterial.uniforms
+    if (colour) (u.uContact!.value as Vector3).set(colour.r, colour.g, colour.b)
+    u.uContactOn!.value = colour ? 1 : 0
+    this.draw()
+  }
+
   setOverhang(angleDeg: number | null): void {
     this.meshMaterial.uniforms.uOverhang!.value = angleDeg === null ? -2 : -Math.sin((angleDeg * Math.PI) / 180)
     this.draw()

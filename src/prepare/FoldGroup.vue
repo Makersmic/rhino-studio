@@ -1,10 +1,10 @@
 <script setup lang="ts">
-/** A titled fold-out for advanced settings. Remembers nothing; closed by default. */
-defineProps<{ title: string; note?: string }>()
+/** A titled fold-out for advanced settings. Remembers nothing; closed unless `open`. */
+defineProps<{ title: string; note?: string; open?: boolean }>()
 </script>
 
 <template>
-  <details class="fold">
+  <details class="fold" :open="open">
     <summary>
       <span class="chev" aria-hidden="true">▸</span>
       <span class="t">{{ title }}</span>

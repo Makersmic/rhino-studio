@@ -23,12 +23,12 @@ import FileMenu, { type MenuItem } from '@/files/FileMenu.vue'
 import StartFile from '@/files/StartFile.vue'
 import { laidFlat, turned } from '@/viewer/placement'
 import { footprints, partsBox, spinMode } from '@/viewer/spin'
-import { MARK_SIZES, SHOW_BLOCKS, marksNote } from '@/prepare/supportMarks'
 import { loadReduced } from '@/viewer/theme'
 import NumField from '@/prepare/NumField.vue'
 import StepBar from '@/prepare/StepBar.vue'
 import FdmAdvanced from '@/prepare/FdmAdvanced.vue'
 import FoldGroup from '@/prepare/FoldGroup.vue'
+import SupportControls from '@/prepare/SupportControls.vue'
 import PrusaPanel from '@/prepare/PrusaPanel.vue'
 import ProfileBar from '@/prepare/ProfileBar.vue'
 import { rhinoBase, firstOf, valueOf } from '@/slicer/prusa/config'
@@ -124,8 +124,7 @@ function confirm() {
   if (chosen.value) prep.confirmProcess(chosen.value)
   choice.value = null
 }
-// the selected mark's reach, for its size field; Delete removes it and Esc lets it go while marking
-const selReach = computed({ get: () => prep.selectedMarkReach ?? MARK_SIZES.start, set: (v: number) => prep.setSelectedReach(v) })
+// Delete removes the selected mark and Esc lets it go while marking
 function onMarkKey(e: KeyboardEvent) {
   if (prep.selectedMark == null || prep.step !== 'setup') return
   const t = e.target as HTMLElement | null
@@ -178,6 +177,10 @@ const fmtTime = (s: number) => {
 const fmtLen = (mm: number) => (mm >= 1000 ? `${(mm / 1000).toFixed(2)} m` : `${Math.round(mm)} mm`)
 const fmt = (v: number) => (Math.round(v * 10) / 10).toString()
 
+// ---- the job file's name: typed without .gcode; what's sent is cleaned (src/prepare/jobName.ts)
+const nameField = computed({ get: () => prep.outName, set: (v: string) => prep.setOutName(v) })
+const nameNote = computed(() => (prep.result && prep.outFile !== `${prep.outName.trim()}${prep.outExt}` ? `Saved on the Rhino as ${prep.outFile}` : null))
+
 const summary = computed(() => {
   const r = prep.result
   if (!r || !proc.value) return []
@@ -209,10 +212,7 @@ watch(marking, (k) => {
 watch(() => prep.canMark, (ok) => !ok && (marking.value = null))
 // erase mode ends with the last mark: its button goes, so it mustn't be left on
 watch(() => prep.supportMarks?.marks.length ?? 0, (n) => { if (!n && marking.value === 'erase') marking.value = null })
-const marksMessage = computed(() => marksNote(prep.supportMarks, prep.supportMode))
-function toggleMarking(k: 'mark' | 'block' | 'erase') {
-  marking.value = marking.value === k ? null : k
-}
+const supportNote = computed(() => ({ off: 'off', auto: 'automatic', marked: 'only where marked' })[prep.supportMode])
 /** tint overhangs while supports are on, so it's clear what they'll hold up (Kiri only: PrusaSlicer has its own) */
 const overhang = computed(() => {
   const j = prep.job
@@ -469,33 +469,9 @@ const engineNote = computed(() => {
                 <RsButton size="sm" variant="quiet" @click="turn('x')">Turn on X</RsButton>
                 <RsButton size="sm" variant="quiet" @click="turn('y')">Turn on Y</RsButton>
                 <RsButton v-if="is3d" size="sm" variant="quiet" :aria-pressed="picking" @click="picking = !picking">{{ picking ? 'Cancel lay flat' : 'Lay flat' }}</RsButton>
-                <RsButton v-if="is3d && prep.canMark" size="sm" :variant="marking === 'mark' ? 'primary' : 'quiet'" :aria-pressed="marking === 'mark'" @click="toggleMarking('mark')">{{ marking === 'mark' ? 'Done marking' : 'Mark supports' }}</RsButton>
-                <RsButton v-if="is3d && prep.canMark && prep.supportMarks?.marks.length" size="sm" :variant="marking === 'erase' ? 'primary' : 'quiet'" :aria-pressed="marking === 'erase'" @click="toggleMarking('erase')">{{ marking === 'erase' ? 'Done erasing' : 'Erase marks' }}</RsButton>
-                <RsButton v-if="SHOW_BLOCKS && is3d && prep.canMark && job.engine === 'prusa'" size="sm" :variant="marking === 'block' ? 'primary' : 'quiet'" :aria-pressed="marking === 'block'" @click="toggleMarking('block')">{{ marking === 'block' ? 'Done blocking' : 'Block supports' }}</RsButton>
               </template>
               <RsButton v-if="proc !== 'cnc'" size="sm" variant="quiet" @click="prep.centre()">Centre</RsButton>
             </div>
-          </div>
-          <div v-if="proc === 'fdm'" class="marks" role="group" aria-label="Supports">
-            <div class="field">
-              <label for="prep-supports">Supports</label>
-              <select id="prep-supports" :value="prep.supportMode" :disabled="job.engine === 'prusa' && !prep.schema" @change="prep.setSupportMode(($event.target as HTMLSelectElement).value as 'off' | 'auto' | 'marked')">
-                <option value="off">Off</option>
-                <option value="auto">Automatic</option>
-                <option value="marked">Only where I mark</option>
-              </select>
-            </div>
-            <template v-if="prep.canMark">
-              <div v-if="prep.selectedMarkReach != null" class="selmark" role="group" aria-label="The selected mark">
-                <RsButton size="sm" aria-label="Smaller" @click="prep.setSelectedReach(prep.selectedMarkReach - 0.5)">−</RsButton>
-                <NumField v-model="selReach" label="Selected mark's reach" unit="mm" :min="MARK_SIZES.min" :max="MARK_SIZES.max" :step="0.5" hint="Delete removes it, Esc lets it go" />
-                <RsButton size="sm" aria-label="Bigger" @click="prep.setSelectedReach(prep.selectedMarkReach + 0.5)">+</RsButton>
-                <RsButton size="sm" variant="danger-outline" @click="prep.removeSelectedMark()">Remove</RsButton>
-              </div>
-              <NumField v-else v-model="prep.markSize" label="Mark reach" unit="mm" :min="MARK_SIZES.min" :max="MARK_SIZES.max" :step="0.5" hint="New marks and the eraser; or press and drag on the part" />
-              <RsButton v-if="prep.supportMarks?.marks.length" size="sm" variant="quiet" @click="prep.clearMarks()">Clear marks</RsButton>
-            </template>
-            <p v-if="marksMessage" class="small" role="status">{{ marksMessage }}<template v-if="job.engine !== 'prusa' && prep.supportMarks?.marks.some((m) => m.kind === 'block')"> Kiri:Moto can't block support, so blocked spots are left out with it.</template></p>
           </div>
           <p class="muted small">{{ prep.part.triangles.toLocaleString() }} triangles<template v-if="proc !== 'cnc'"> · arrow keys move the {{ prep.parts.length > 1 ? 'selected part' : 'part' }} (Shift = 10 mm)</template> · right-click or long-press a part for more</p>
           <p v-if="prep.loadError" class="error" role="alert">{{ prep.loadError }}</p>
@@ -543,7 +519,9 @@ const engineNote = computed(() => {
             <p v-if="job.engine === 'prusa'" class="muted small">{{ engineNote }}<template v-if="prep.slicer && !prep.slicer.engine.installed"> <RouterLink to="/settings/software">Open Software</RouterLink></template></p>
           </div>
           <template v-if="proc === 'fdm' && job.engine === 'prusa'">
-            <PrusaPanel v-if="prep.schema && prep.rhinoCtx" :schema="prep.schema" :ctx="prep.rhinoCtx" @set="setPrusa" @reset-all="resetPrusa" />
+            <PrusaPanel v-if="prep.schema && prep.rhinoCtx" :schema="prep.schema" :ctx="prep.rhinoCtx" @set="setPrusa" @reset-all="resetPrusa">
+              <template #support><SupportControls v-model:marking="marking" :is3d="is3d" /></template>
+            </PrusaPanel>
             <p v-else-if="prep.schemaError" class="error">{{ prep.schemaError }}</p>
             <p v-else class="muted small">Loading PrusaSlicer’s options…</p>
           </template>
@@ -570,7 +548,9 @@ const engineNote = computed(() => {
             </div>
             <p v-if="job.toolhead === 'SwitchFly'" class="muted small wide">Filament path {{ job.fdm.path === 1 ? '2 (T1)' : '1 (T0)' }}, from the material.</p>
           </div>
-          <FdmAdvanced v-if="proc === 'fdm' && job.engine !== 'prusa'" :fdm="job.fdm" />
+          <FdmAdvanced v-if="proc === 'fdm' && job.engine !== 'prusa'" :fdm="job.fdm" :support-note="supportNote">
+            <template #support><SupportControls v-model:marking="marking" :is3d="is3d" /></template>
+          </FdmAdvanced>
 
           <div v-else-if="proc === 'laser'" class="grid">
             <NumField v-model="job.laser.power" label="Power" unit="%" :min="0.01" :max="1" :step="0.05" percent :hint="`S ${Math.round(job.laser.power * prep.machineInfo.laserSMax)} of ${prep.machineInfo.laserSMax}`" />
@@ -619,6 +599,12 @@ const engineNote = computed(() => {
             <NumField v-model="job.cnc.extraTop" label="Stock above the part" unit="mm" :min="0" :max="50" :step="0.5" hint="0 = stock as thick as the part" />
             <p class="muted small wide">One tool per job: the Rhino has no tool changer. Clamp the stock, then CNC_JOB_SETUP sets X0 Y0 on its front-left corner and Z0 on its top.</p>
           </div>
+
+          <!-- the same as the Preview step: prepares the file if the setup changed, then shows it (Mike, Nov 9) -->
+          <div class="prep-go">
+            <RsButton variant="primary" :disabled="!prep.part || !!suits" @click="goStep('preview')">Prepare</RsButton>
+            <span class="muted small">{{ prep.result ? 'Prepared: opens it in Preview.' : 'Slices it and opens Preview.' }}</span>
+          </div>
         </RsPanel>
 
       </div>
@@ -664,19 +650,26 @@ const engineNote = computed(() => {
 
         <p v-if="prep.blocked.length" class="error" role="alert">{{ prep.blocked.length === 1 ? 'One problem stops' : `${prep.blocked.length} problems stop` }} this file going to the Rhino. Change the settings or the placement, then Prepare again.</p>
 
+        <label class="fname">
+          <span>File name</span>
+          <span class="fname-box">
+            <input v-model="nameField" type="text" spellcheck="false" autocomplete="off" :aria-describedby="nameNote ? 'prep-fname-note' : undefined" @blur="prep.outName.trim() || prep.setOutName(null)" @keydown.enter="($event.target as HTMLInputElement).blur()" />
+            <span class="ext" aria-hidden="true">{{ prep.outExt }}</span>
+          </span>
+          <span v-if="nameNote" id="prep-fname-note" class="muted small">{{ nameNote }}</span>
+        </label>
+
         <div class="send">
           <RsButton variant="primary" :disabled="!!prep.blocked.length || !machine.online || prep.sending != null" @click="prep.send()">
             {{ prep.sending != null ? `Sending ${Math.round(prep.sending * 100)}%` : 'Send to Rhino' }}
           </RsButton>
           <RsButton @click="prep.goStage('preview')">Preview</RsButton>
           <RsButton v-if="!up" :disabled="!!prep.blocked.length" @click="prep.download()">Download</RsButton>
+          <StartFile v-if="prep.sentPath" :file-path="prep.sentPath" files-link />
           <span v-if="!machine.online" class="muted small">Connect to send.<template v-if="!up"> Download works offline.</template></span>
         </div>
         <p v-if="prep.sendError" class="error" role="alert">{{ prep.sendError }}</p>
-        <p v-if="prep.sentPath" class="sent" role="status">
-          Sent as <strong>{{ prep.sentPath }}</strong>
-          <StartFile :file-path="prep.sentPath" files-link />
-        </p>
+        <p v-if="prep.sentPath" class="sent" role="status">Sent as <strong>{{ prep.sentPath }}</strong></p>
         <p class="muted small">{{ prep.result.stats.moves.toLocaleString() }} moves. Starting checks the mounted toolhead again before anything runs<template v-if="proc !== 'fdm'">, and starts this through the {{ proc === 'laser' ? 'laser' : proc === 'cnc' ? 'CNC' : 'knife' }} setup wizard</template>.</p>
       </template>
     </RsPanel>
@@ -696,7 +689,13 @@ const engineNote = computed(() => {
 .layout { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(320px, 1fr); gap: var(--rs-gap); align-items: start; }
 .side { display: flex; flex-direction: column; gap: var(--rs-gap); min-width: 0; }
 .jobfile { max-width: 860px; }
-.selmark { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--rs-space-2); }
+.prep-go { display: flex; align-items: center; flex-wrap: wrap; gap: var(--rs-space-3); margin-top: var(--rs-space-4); padding-top: var(--rs-space-4); border-top: 1px dotted var(--rs-line-strong); }
+.fname { display: flex; flex-direction: column; gap: 4px; max-width: 520px; margin-top: var(--rs-space-4); }
+.fname > span:first-child { font-size: 12px; font-weight: var(--rs-weight-medium); color: var(--rs-text-muted); }
+.fname-box { display: flex; align-items: center; height: 38px; border: 1px solid var(--rs-line-strong); border-radius: var(--rs-radius-md); background: var(--rs-field-bg); color: var(--rs-field-text); overflow: hidden; }
+.fname-box:focus-within { border-color: var(--rs-text-strong); box-shadow: var(--rs-focus); }
+.fname-box input { flex: 1; min-width: 0; height: 100%; padding: 0 0 0 10px; border: 0; background: transparent; color: inherit; font-family: var(--rs-font-code); font-size: var(--rs-text-sm); outline: none; }
+.fname-box .ext { padding: 0 10px 0 2px; font-family: var(--rs-font-code); font-size: var(--rs-text-sm); color: var(--rs-field-muted); }
 @media (max-width: 1100px) { .layout { grid-template-columns: minmax(0, 1fr); } }
 
 .drop.dragging { outline: 2px dashed var(--rs-ink); outline-offset: -6px; }
@@ -733,8 +732,6 @@ const engineNote = computed(() => {
 .empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--rs-space-2); min-height: 340px; border: 1px dashed var(--rs-line-strong); border-radius: var(--rs-radius-md); cursor: pointer; text-align: center; padding: var(--rs-space-5); color: var(--rs-text-muted); }
 .empty .big { color: var(--rs-text-strong); font-weight: var(--rs-weight-medium); }
 .small { font-size: var(--rs-text-xs); }
-.marks { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--rs-space-3); margin-top: var(--rs-space-2); }
-.marks p { margin: 0; flex-basis: 100%; color: var(--rs-text-strong); }
 .error { color: var(--rs-danger); font-size: var(--rs-text-sm); margin-top: var(--rs-space-3); }
 .notice { color: var(--rs-text-strong); border: 1px solid var(--rs-line-strong); background: var(--rs-surface-2); padding: 8px 12px; border-radius: var(--rs-radius-md); margin-top: var(--rs-space-3); }
 

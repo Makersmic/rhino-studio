@@ -15,12 +15,13 @@
  * Read-only: a camera can't move or power anything.
  */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { cssAspect, cssTransform, sourceUrl, viewMode, withStamp, type Webcam } from './webcams'
+import { cssAspect, cssTransform, withZoom, sourceUrl, viewMode, withStamp, type Webcam } from './webcams'
 import { useWebcamsStore } from '@/stores/webcams'
 import { useNetworkStore } from '@/stores/network'
 
 /** thumb: a small preview (Settings › Cameras) - one still a second when the camera has a snapshot address, never a full stream */
-const props = withDefaults(defineProps<{ cam: Webcam; fit?: 'contain' | 'cover'; fill?: boolean; thumb?: boolean }>(), { fit: 'contain', fill: false, thumb: false })
+/** zoom: % from the middle (Settings › Appearance, per screen); 100 = none */
+const props = withDefaults(defineProps<{ cam: Webcam; fit?: 'contain' | 'cover'; fill?: boolean; thumb?: boolean; zoom?: number }>(), { fit: 'contain', fill: false, thumb: false, zoom: 100 })
 
 const webcams = useWebcamsStore()
 const root = ref<HTMLElement | null>(null)
@@ -34,7 +35,7 @@ const asSnapshots = computed(() => viewMode(props.cam.service) === 'mjpeg' && !!
 const mode = computed(() => (asSnapshots.value ? 'snapshot' : viewMode(props.cam.service)))
 const url = computed(() => webcams.url(asSnapshots.value ? props.cam.snapshotUrl : sourceUrl(props.cam)))
 const fps = computed(() => (props.thumb && asSnapshots.value ? 1 : asSnapshots.value ? Math.min(props.cam.targetFps || net.snapshotFps, net.snapshotFps) : props.cam.targetFps || 5))
-const transform = computed(() => cssTransform(props.cam))
+const transform = computed(() => withZoom(cssTransform(props.cam), props.zoom))
 const aspect = computed(() => cssAspect(props.cam))
 
 type Phase = 'loading' | 'live' | 'error' | 'paused'

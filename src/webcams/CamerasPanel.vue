@@ -181,8 +181,11 @@ async function toggle(cam: Webcam) {
       </div>
       <div class="preview">
         <span class="k">Preview</span>
-        <WebcamView v-if="preview" :key="`${preview.service}|${preview.streamUrl}|${preview.snapshotUrl}`" :cam="preview" />
-        <div v-else class="nopreview">Enter an address to see the picture</div>
+        <!-- as tall as the form beside it, so the picture lines up with it top and bottom (Mike, Nov 9) -->
+        <div class="pv-box">
+          <WebcamView v-if="preview" :key="`${preview.service}|${preview.streamUrl}|${preview.snapshotUrl}`" :cam="preview" fill />
+          <div v-else class="nopreview">Enter an address to see the picture</div>
+        </div>
         <small class="muted">Paths starting with / are on the Pi (crowsnest serves /webcam/, /webcam2/ …).</small>
       </div>
     </form>
@@ -237,11 +240,12 @@ h3 { font-size: var(--rs-text-md); font-weight: var(--rs-weight-medium); margin:
 .errors { margin: 0; padding: 8px 12px; list-style: none; font-size: var(--rs-text-sm); color: var(--rs-text-strong); border-left: 3px solid var(--rs-ink); background: var(--rs-dither-faint); }
 .row { display: flex; gap: var(--rs-space-2); }
 .preview { display: flex; flex-direction: column; gap: var(--rs-space-2); min-width: 0; }
-.preview :deep(.cam) { border-radius: var(--rs-radius-md); }
+.pv-box { position: relative; flex: 1; min-height: 240px; border-radius: var(--rs-radius-md); overflow: hidden; background: var(--rs-cam-bg); }
 .k { font-size: var(--rs-text-xs); color: var(--rs-text-muted); font-weight: var(--rs-weight-medium); }
-.nopreview { aspect-ratio: 16 / 9; display: grid; place-items: center; border-radius: var(--rs-radius-md); background: var(--rs-dither-faint); color: var(--rs-text-muted); font-size: var(--rs-text-sm); }
+.nopreview { position: absolute; inset: 0; display: grid; place-items: center; border-radius: var(--rs-radius-md); background: var(--rs-dither-faint); color: var(--rs-text-muted); font-size: var(--rs-text-sm); }
 @media (max-width: 900px) {
   .editor { grid-template-columns: 1fr; }
+  .pv-box { flex: none; min-height: 0; aspect-ratio: 16 / 9; }
   .list li { flex-wrap: wrap; }
   .acts { width: 100%; justify-content: flex-end; }
 }
