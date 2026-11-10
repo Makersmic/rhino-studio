@@ -30,7 +30,7 @@ export function volumeOf(v: unknown): number {
 export function micError(status: number | null, text = ''): string {
   if (status === null) return `The Rhino didn't answer${text ? ` (${text})` : ''}.`
   if (status === 404 || status === 502 || status === 503 || status === 504)
-    return "The microphone service isn't running on the Rhino. It's set up from Tool Manager's docs/install-mic.md."
+    return "The microphone service isn't running on the Rhino. Tool Manager 1.9.21 and later set it up when a USB camera with a microphone is plugged in (docs/install-mic.md)."
   if (status === 403) return "This screen's address isn't allowed to listen (home network only)."
   return `The microphone service answered ${status}${text ? `: ${text.slice(0, 120)}` : ''}.`
 }

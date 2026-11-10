@@ -223,7 +223,8 @@ onBeforeUnmount(() => mic.stop())
         <MicControl />
       </div>
       <p class="muted small">
-        Needs the microphone service on the Rhino (Tool Manager's <code>docs/install-mic.md</code>). The Dashboard shows a
+        Needs the microphone service on the Rhino: Tool Manager 1.9.21 and later set it up when a USB camera with a
+        microphone is plugged in (<code>docs/install-mic.md</code>). The Dashboard shows a
         Sound button; a tap starts it on that screen only, with its own volume, and leaving the page stops it. Anyone who
         can open Studio on your network can listen while it's on.
       </p>
