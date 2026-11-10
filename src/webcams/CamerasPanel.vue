@@ -200,9 +200,8 @@ onBeforeUnmount(() => mic.stop())
         </div>
       </div>
       <div class="preview">
-        <span class="k">Preview</span>
-        <!-- as tall as the form beside it, so the picture lines up with it top and bottom (Mike, Nov 9) -->
-        <div class="pv-box">
+        <!-- a 16:9 picture, a little wider than the form's column, with the same space above and below (Mike, Nov 9) -->
+        <div class="pv-box" role="group" aria-label="Preview">
           <WebcamView v-if="preview" :key="`${preview.service}|${preview.streamUrl}|${preview.snapshotUrl}`" :cam="preview" fill />
           <div v-else class="nopreview">Enter an address to see the picture</div>
         </div>
@@ -260,7 +259,7 @@ code { font-family: var(--rs-font-mono); font-size: 0.92em; }
   .thumb { width: 100%; margin-left: 0; }
 }
 
-.editor { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--rs-space-5); margin-top: var(--rs-space-3); padding-top: var(--rs-space-4); background: radial-gradient(var(--rs-dot-faint) 0.9px, transparent 1.1px) 0 0 / 5px 2px repeat-x; }
+.editor { --cam-gap: 22px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); align-items: start; gap: var(--rs-space-5); margin-top: var(--rs-space-3); padding-top: var(--rs-space-4); background: radial-gradient(var(--rs-dot-faint) 0.9px, transparent 1.1px) 0 0 / 5px 2px repeat-x; }
 h3 { font-size: var(--rs-text-md); font-weight: var(--rs-weight-medium); margin: 0 0 var(--rs-space-2); }
 .fields { display: flex; flex-direction: column; gap: var(--rs-space-3); min-width: 0; }
 .field { display: flex; flex-direction: column; gap: 4px; font-size: var(--rs-text-sm); min-width: 0; }
@@ -278,8 +277,8 @@ h3 { font-size: var(--rs-text-md); font-weight: var(--rs-weight-medium); margin:
 .check input { width: 16px; height: 16px; accent-color: var(--rs-text-strong); }
 .errors { margin: 0; padding: 8px 12px; list-style: none; font-size: var(--rs-text-sm); color: var(--rs-text-strong); border-left: 3px solid var(--rs-ink); background: var(--rs-dither-faint); }
 .row { display: flex; gap: var(--rs-space-2); }
-.preview { display: flex; flex-direction: column; gap: var(--rs-space-2); min-width: 0; }
-.pv-box { position: relative; flex: 1; min-height: 240px; border-radius: var(--rs-radius-md); overflow: hidden; background: var(--rs-cam-bg); }
+.preview { display: flex; flex-direction: column; min-width: 0; }
+.pv-box { position: relative; aspect-ratio: 16 / 9; margin: var(--cam-gap) 0; border-radius: var(--rs-radius-md); overflow: hidden; background: var(--rs-cam-bg); }
 .k { font-size: var(--rs-text-xs); color: var(--rs-text-muted); font-weight: var(--rs-weight-medium); }
 .sound { display: flex; flex-direction: column; gap: var(--rs-space-3); margin-top: var(--rs-space-4); padding-top: var(--rs-space-4); background: radial-gradient(var(--rs-dot-faint) 0.9px, transparent 1.1px) 0 0 / 5px 2px repeat-x; }
 .sound h3 { margin: 0; }
@@ -288,7 +287,6 @@ h3 { font-size: var(--rs-text-md); font-weight: var(--rs-weight-medium); margin:
 .nopreview { position: absolute; inset: 0; display: grid; place-items: center; border-radius: var(--rs-radius-md); background: var(--rs-dither-faint); color: var(--rs-text-muted); font-size: var(--rs-text-sm); }
 @media (max-width: 900px) {
   .editor { grid-template-columns: 1fr; }
-  .pv-box { flex: none; min-height: 0; aspect-ratio: 16 / 9; }
   .list li { flex-wrap: wrap; }
   .acts { width: 100%; justify-content: flex-end; }
 }
