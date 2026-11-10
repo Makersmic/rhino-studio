@@ -1911,6 +1911,8 @@ const server = createServer(async (req, res) => {
   if (await themeImageRoutes(req, res, url)) return
   if (await trustRoutes(req, res, url)) return
   if (await portal(req, res, url)) return
+  // the Rhino's nginx with no microphone service behind /mic (go2rtc not installed)
+  if (url === '/mic/webrtc') return void res.writeHead(502, { 'content-type': 'text/html' }).end('<html><body>502 Bad Gateway</body></html>')
   if (req.method === 'POST' && url === '/printer/emergency_stop') {
     emergencyStop('http')
     res.writeHead(200, { 'content-type': 'application/json' }).end('{"result":"ok"}')

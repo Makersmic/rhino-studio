@@ -111,6 +111,8 @@ export default defineConfig({
       '/access': originFix,
       // Cameras: crowsnest streams that the Pi's nginx serves at /webcam/, /webcam2/ ...
       '^/webcam\\d*/': originFix,
+      // The camera's microphone (go2rtc on the Rhino, behind its nginx)
+      '/mic/': originFix,
       '/portal': {
         target: portalTarget,
         changeOrigin: true,

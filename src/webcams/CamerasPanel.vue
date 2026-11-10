@@ -6,7 +6,9 @@
  * a change here shows there too. Cameras written in moonraker.conf can only
  * be changed in that file. Nothing here reaches Klipper or the machine.
  */
-import { computed, ref } from 'vue'
+import MicControl from './MicControl.vue'
+import { useMicStore } from '@/stores/mic'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import RsPanel from '@/components/RsPanel.vue'
 import RsButton from '@/components/RsButton.vue'
 import Icon from '@/icons/Icon.vue'
@@ -86,6 +88,24 @@ async function toggle(cam: Webcam) {
     error.value = `Couldn't change it: ${(e as Error).message}`
   }
 }
+
+// ---- sound: whether the Dashboard offers it is shared by every screen
+const mic = useMicStore()
+const soundBusy = ref(false)
+const soundError = ref<string | null>(null)
+watch(() => machine.online, (on) => on && void mic.load(), { immediate: true })
+async function setSound(on: boolean) {
+  soundBusy.value = true
+  soundError.value = null
+  try {
+    await mic.setOffered(on)
+  } catch (e) {
+    soundError.value = `Couldn't save: ${(e as Error).message}`
+  } finally {
+    soundBusy.value = false
+  }
+}
+onBeforeUnmount(() => mic.stop())
 </script>
 
 <template>
@@ -191,6 +211,24 @@ async function toggle(cam: Webcam) {
     </form>
 
     <p v-if="error && !form" class="errors" role="alert">{{ error }}</p>
+
+    <!-- the camera's microphone (Mike, Nov 9): sound only, from the Rhino's microphone service -->
+    <section v-if="machine.online" class="sound" aria-labelledby="cam-sound-h">
+      <h3 id="cam-sound-h">Sound</h3>
+      <label class="check">
+        <input type="checkbox" :checked="mic.offered" :disabled="soundBusy" @change="setSound(($event.target as HTMLInputElement).checked)" />
+        Play the camera's microphone on the Dashboard
+      </label>
+      <div class="row">
+        <MicControl />
+      </div>
+      <p class="muted small">
+        Needs the microphone service on the Rhino (Tool Manager's <code>docs/install-mic.md</code>). The Dashboard shows a
+        Sound button; a tap starts it on that screen only, with its own volume, and leaving the page stops it. Anyone who
+        can open Studio on your network can listen while it's on.
+      </p>
+      <p v-if="soundError" class="errors" role="alert">{{ soundError }}</p>
+    </section>
   </RsPanel>
 </template>
 
@@ -242,6 +280,10 @@ h3 { font-size: var(--rs-text-md); font-weight: var(--rs-weight-medium); margin:
 .preview { display: flex; flex-direction: column; gap: var(--rs-space-2); min-width: 0; }
 .pv-box { position: relative; flex: 1; min-height: 240px; border-radius: var(--rs-radius-md); overflow: hidden; background: var(--rs-cam-bg); }
 .k { font-size: var(--rs-text-xs); color: var(--rs-text-muted); font-weight: var(--rs-weight-medium); }
+.sound { display: flex; flex-direction: column; gap: var(--rs-space-3); margin-top: var(--rs-space-4); padding-top: var(--rs-space-4); background: radial-gradient(var(--rs-dot-faint) 0.9px, transparent 1.1px) 0 0 / 5px 2px repeat-x; }
+.sound h3 { margin: 0; }
+.sound p { margin: 0; }
+.sound .row { align-items: center; flex-wrap: wrap; }
 .nopreview { position: absolute; inset: 0; display: grid; place-items: center; border-radius: var(--rs-radius-md); background: var(--rs-dither-faint); color: var(--rs-text-muted); font-size: var(--rs-text-sm); }
 @media (max-width: 900px) {
   .editor { grid-template-columns: 1fr; }

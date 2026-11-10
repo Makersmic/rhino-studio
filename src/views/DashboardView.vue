@@ -20,6 +20,8 @@
  * Text sits straight on live video, so it uses the overlay tokens: white
  * with a soft shadow, red only for what needs attention.
  */
+import MicControl from '@/webcams/MicControl.vue'
+import { useMicStore } from '@/stores/mic'
 import { useSettingsStore } from '@/stores/settings'
 import { computed, defineAsyncComponent, onBeforeUnmount, ref, watch } from 'vue'
 import { fanStalls, rpmText, type FanReading } from '@/hardware/fans'
@@ -41,6 +43,8 @@ const control = useControlStore()
 const care = useMaintenanceStore()
 const webcams = useWebcamsStore()
 const settings = useSettingsStore()
+const mic = useMicStore()
+watch(() => machine.online, (on) => on && void mic.load(), { immediate: true })
 
 // "Now", for the finish time
 const now = ref(new Date())
@@ -265,6 +269,7 @@ const list = computed(() =>
           <span class="k">{{ it.label }}</span>
           <span class="val" :class="{ mono: it.mono }">{{ it.value }}<em v-if="it.sub">{{ it.sub }}</em></span>
         </RouterLink>
+        <MicControl v-if="mic.offered && webcams.current" overlay class="sound" />
         <span v-if="webcams.current" class="camname">{{ webcams.current.name }} camera<template v-if="webcams.cameras.length > 1"> · {{ webcams.index + 1 }}/{{ webcams.cameras.length }}</template></span>
       </footer>
     </section>
@@ -371,6 +376,8 @@ a.hero:hover .file { text-decoration: underline; text-underline-offset: 4px; }
   background: var(--rs-overlay-button); border: 1px solid var(--rs-overlay-faint); border-radius: 6px; cursor: pointer;
 }
 .holo-toggle:focus-visible { outline: 2px solid var(--rs-overlay-text); outline-offset: 2px; }
+.sound { margin-left: auto; align-self: flex-end; }
+.sound + .camname { margin-left: 0; }
 .camname { margin-left: auto; align-self: flex-end; font-size: var(--rs-text-xs); color: var(--rs-overlay-muted); white-space: nowrap; }
 
 @media (max-width: 720px) {
@@ -381,6 +388,7 @@ a.hero:hover .file { text-decoration: underline; text-underline-offset: 4px; }
   .hero { flex-direction: column; align-items: flex-start; gap: var(--rs-space-2); }
   .rail { display: grid; grid-template-columns: 1fr 1fr; }
   .camname { grid-column: 1 / -1; margin-left: 0; }
+  .sound { grid-column: 1 / -1; margin-left: 0; }
   .holo-area { justify-self: stretch; width: auto; min-height: 260px; }
   .bottom-scrim { height: 70%; }
 }
