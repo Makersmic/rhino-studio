@@ -11,6 +11,33 @@ import type { UpdateRun, UpdateState } from '@/portal/client'
 
 export const ZIP_NAME = /^rhino-config-\d+\.\d+\.\d+\.zip$/
 
+/**
+ * The two files a release is installed from (Tool Manager 1.9.29): the zip and its `.sig`, the ed25519 signature the
+ * release workflow made with Mike's key. The updater refuses a zip without a signature that checks out, so a zip
+ * someone else made can't be installed from Studio. `have` is what was dropped before; files replace by kind.
+ */
+export type ReleasePair = { zip: File | null; sig: File | null }
+export function pairFiles(files: ArrayLike<File>, have: ReleasePair = { zip: null, sig: null }): { pair: ReleasePair; problem: string | null } {
+  const pair = { ...have }
+  const odd: string[] = []
+  for (const f of Array.from(files)) {
+    if (/\.zip$/i.test(f.name)) pair.zip = f
+    else if (/\.zip\.sig$/i.test(f.name)) pair.sig = f
+    else odd.push(f.name)
+  }
+  if (odd.length) return { pair, problem: `${odd.join(', ')} isn't a release zip or its .sig file. Both come from the release on GitHub.` }
+  if (pair.zip && pair.sig && pair.sig.name.toLowerCase() !== `${pair.zip.name.toLowerCase()}.sig`)
+    return { pair, problem: `${pair.sig.name} doesn't belong to ${pair.zip.name}: the signature is named <zip>.sig.` }
+  return { pair, problem: null }
+}
+/** What the drop area should ask for next, or null when both files are there. */
+export function pairMissing(p: ReleasePair): string | null {
+  if (p.zip && p.sig) return null
+  if (p.zip) return `Now drop ${p.zip.name}.sig, the signature next to the zip on the GitHub release.`
+  if (p.sig) return `Now drop ${p.sig.name.replace(/\.sig$/i, '')}, the zip that signature belongs to.`
+  return null
+}
+
 export function cmpVersion(a: string, b: string): number {
   const pa = a.split('.').map(Number)
   const pb = b.split('.').map(Number)
@@ -34,9 +61,9 @@ export function stepMarks(run: UpdateRun): { name: string; mark: StepMark }[] {
   }))
 }
 
-/** The kept zip for the newest version older than the installed one, if any. */
+/** The kept zip for the newest version older than the installed one, if any (only one with its signature, 1.9.29+). */
 export function goBackZip(s: Pick<UpdateState, 'installed' | 'zips'>): { zip: string; version: string } | null {
-  const older = s.zips.filter((z) => cmpVersion(z.version, s.installed) < 0).sort((a, b) => cmpVersion(b.version, a.version))
+  const older = s.zips.filter((z) => z.signed !== false && cmpVersion(z.version, s.installed) < 0).sort((a, b) => cmpVersion(b.version, a.version))
   return older[0] ?? null
 }
 

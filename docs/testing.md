@@ -598,3 +598,16 @@ On scrap plywood, glasses on, extraction running. A drawing with an outline and 
 - [ ] **LO2 The job.** Prepare, then run it through the start wizard. *Pass if:* the Preview and the cut follow the list: the fill engraves the hole at its power and spacing, the other hole is cut by Everything else, and the outline is cut once everything inside it is done (move it to the bottom first). *Stop if:* the laser fires at a power or place that isn't in the list, or the outline is cut before the work inside it.
 - [ ] **LO3 Kept with the file.** Close Studio, open Job setup with the same drawing. *Pass if:* the operations and their picks come back; moving the part keeps the picks. *Stop if:* the picks land on other loops.
 - [ ] **SW6 Start a CNC job from Studio** (Tool Manager 1.9.27). Files › a HotJoe file › Start. *Pass if:* six steps: the checklist; X/Y zero with the jog panel under it (Set X/Y zero here asks, nothing moves); Z zero in Klipper's window; Trace the outline traces the job 5 mm above the stock, spindle off, starting from the X/Y zero just set; Start the spindle asks, checks the lid, lifts 10 mm and ramps to the throttle typed, and the page says "Spindle running at …% throttle", the same number Control shows; ±5 % each ask; Start the job asks, the job starts, Control opens. *Stop if:* anything moves or spins without asking, the outline lands away from the stock, or the job starts with the spindle stopped. Stop the spindle on the Spindle step: *pass if* it stops and the bit lifts.
+
+## Console reads lines like Klipper; Install from zip takes the .sig (Studio 0.25.0, Tool Manager 1.9.29)
+
+- [ ] **CS1 Line numbers.** Console, with any tool mounted: `N1 M3 S0`. *Pass if:* the confirmation names M3 ("switches
+  the laser or spindle on"); Cancel. *Stop if:* it is sent without asking.
+- [ ] **CS2 The raw command behind a wrapper.** With the LightSaber mounted: `G28.1 X Y` (X and Y only; never Z without
+  a print head). *Pass if:* it asks, and the reason ends "…the raw Klipper command behind the Rhino's G28 wrapper: its
+  own checks are skipped"; Cancel. Then `M104.1 S0`: asks the same way. *Stop if:* either goes without asking.
+- [ ] **CS3 Quoted values.** `SET_GCODE_VARIABLE MACRO="SWAP_TOOL" VARIABLE=current_tool VALUE=0` (VALUE=0 is what
+  Klipper already has after a restart; still Cancel). *Pass if:* it asks as a tool-state change.
+- [ ] **ZS1 Zip and signature.** Settings › Software › Install from zip: drop the zip alone. *Pass if:* the drop area says
+  "…is here: now its .sig" and nothing uploads; drop the `.sig`; both upload and the zip shows as checked. The `.sig` of
+  another release: "doesn't belong to". *Stop if:* a zip is kept without its signature.

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { cmpVersion, compareText, goBackZip, installBlock, stepMarks } from './zipUpdate'
+import { cmpVersion, compareText, goBackZip, installBlock, pairFiles, pairMissing, stepMarks } from './zipUpdate'
 
 describe('zip updates', () => {
   it('compares versions as numbers', () => {
@@ -30,5 +30,26 @@ describe('zip updates', () => {
     expect(installBlock({ ...base, busy: true })).toMatch(/running/)
     expect(installBlock({ ...base, helper: false })).toMatch(/once by hand/)
     expect(installBlock({ ...base, portalOnline: false })).toMatch(/Portal/)
+  })
+})
+
+describe('the zip and its signature (Tool Manager 1.9.29)', () => {
+  const f = (name: string) => new File(['x'], name)
+  it('pairs a zip with its .sig, in either order', () => {
+    const a = pairFiles([f('rhino-config-1.9.29.zip')])
+    expect(a.problem).toBeNull()
+    expect(pairMissing(a.pair)).toContain('rhino-config-1.9.29.zip.sig')
+    const b = pairFiles([f('rhino-config-1.9.29.zip.sig')], a.pair)
+    expect(b.problem).toBeNull()
+    expect(pairMissing(b.pair)).toBeNull()
+    expect(pairFiles([f('rhino-config-1.9.29.zip.sig'), f('rhino-config-1.9.29.zip')]).problem).toBeNull()
+  })
+  it('refuses a signature for another zip and files that are neither', () => {
+    expect(pairFiles([f('rhino-config-1.9.29.zip'), f('rhino-config-1.9.28.zip.sig')]).problem).toContain("doesn't belong")
+    expect(pairFiles([f('notes.txt')]).problem).toContain("isn't a release zip")
+  })
+  it('Go back skips a kept zip without its signature', () => {
+    expect(goBackZip({ installed: '1.9.30', zips: [{ zip: 'rhino-config-1.9.28.zip', version: '1.9.28', size: 1, at: 1, signed: false }] })).toBeNull()
+    expect(goBackZip({ installed: '1.9.30', zips: [{ zip: 'rhino-config-1.9.29.zip', version: '1.9.29', size: 1, at: 1, signed: true }] })?.version).toBe('1.9.29')
   })
 })

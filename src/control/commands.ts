@@ -17,6 +17,11 @@
  * This is a guard against slips, not a sandbox: anyone at the console can
  * still confirm a dangerous command. Klipper's own limits and the Rhino
  * macros' checks still apply on the machine.
+ *
+ * Lines are read the way Klipper's gcode.py reads them (audit, Nov 2026): a
+ * leading line number ("N1 G28") is skipped, quoted parameter values count
+ * ("MACRO=\"SWAP_TOOL\""), and a dotted command such as G28.1 is the raw
+ * Klipper command behind a Rhino wrapper, so it asks and says so.
  */
 
 export type Risk = 'none' | 'heat' | 'motion' | 'power' | 'tool-state' | 'restart' | 'job' | 'internal' | 'stop'
@@ -116,13 +121,21 @@ const JOB: Record<string, string> = {
 const STOP = new Set(['M112', 'EMERGENCY_STOP'])
 const HEAT = new Set(['M104', 'M109', 'M140', 'M190', 'SET_HEATER_TEMPERATURE'])
 
-/** First word of a line, upper case. "g1x10" -> "G1", "set_pin pin=x" -> "SET_PIN". */
+/** A line without its G-code line number: Klipper skips a leading "N12 " before reading the command (gcode.py). */
+export function stripLineNumber(line: string): string {
+  return line.trim().replace(/^N\d+\s*/i, '')
+}
+
+/** First word of a line, upper case. "g1x10" -> "G1", "set_pin pin=x" -> "SET_PIN", "N1 G28" -> "G28". */
 export function commandOf(line: string): string {
-  const t = line.trim()
+  const t = stripLineNumber(line)
   const g = /^([GMT]\d+(?:\.\d+)?)/i.exec(t)
   if (g) return g[1]!.toUpperCase()
   return (t.split(/\s+/)[0] ?? '').toUpperCase()
 }
+
+/** Dotted G-codes Klipper has of its own; every other "G28.1" / "M104.1" is a rename_existing target (see checkLine). */
+const KLIPPER_DOTTED = new Set(['G38.2', 'G38.3', 'G38.4', 'G38.5'])
 
 function param(line: string, name: string): string | null {
   const m = new RegExp(`(?:^|\\s)${name}\\s*=\\s*("?)([^\\s"]*)\\1`, 'i').exec(line)
@@ -132,8 +145,24 @@ function param(line: string, name: string): string | null {
   return g?.[1] ?? null
 }
 
-function checkLine(line: string): LineCheck {
+function checkLine(typed: string): LineCheck {
+  const line = stripLineNumber(typed)
   const command = commandOf(line)
+  const c = classify(command, line)
+  // "G28.1", "M104.1", "G1.1": the raw Klipper command a Rhino [gcode_macro] wraps with rename_existing. Typing it skips
+  // the wrapper's own checks (Z homing without a print head, heating with a laser mounted), so it always asks, as at
+  // least an internal command, and says what it skips.
+  const dotted = /^[GM]\d+\.\d+$/.exec(command)
+  if (dotted && !KLIPPER_DOTTED.has(command)) {
+    const base = command.replace(/\.\d+$/, '')
+    const b = classify(base, line)
+    const risk = ORDER.indexOf(b.risk) > ORDER.indexOf('internal') ? b.risk : 'internal'
+    return { line: typed, command, risk, reason: `${b.reason || `runs ${base}`}, through the raw Klipper command behind the Rhino's ${base} wrapper: its own checks are skipped` }
+  }
+  return { ...c, line: typed }
+}
+
+function classify(command: string, line: string): LineCheck {
   const r = (risk: Risk, reason: string): LineCheck => ({ line, command, risk, reason })
 
   if (STOP.has(command)) return r('stop', 'emergency stop')
@@ -142,12 +171,14 @@ function checkLine(line: string): LineCheck {
   if (RESTART[command]) return r('restart', RESTART[command]!)
   if (JOB[command]) return r('job', JOB[command]!)
 
-  if (command === 'SET_GCODE_OFFSET' && /MOVE\s*=\s*1/i.test(line)) return r('motion', 'applies the offset by moving the head')
+  // Klipper reads KEY=VALUE parameters with shlex, so MOVE="1" and MOVE=1 are the same: param() handles both
+  if (command === 'SET_GCODE_OFFSET' && param(line, 'MOVE') != null && Number(param(line, 'MOVE')) !== 0)
+    return r('motion', 'applies the offset by moving the head')
   if (command === 'SWAP_TOOL' && param(line, 'TOOL') != null)
     return r('motion', 'starts a tool swap straight away: the machine cools down and lowers the bed')
-  if (command === 'SET_GCODE_VARIABLE' && /MACRO\s*=\s*SWAP_TOOL/i.test(line))
+  if (command === 'SET_GCODE_VARIABLE' && (param(line, 'MACRO') ?? '').toUpperCase() === 'SWAP_TOOL')
     return r('tool-state', 'changes which toolhead Klipper believes is mounted, without a physical swap')
-  if (command === 'SAVE_VARIABLE' && /VARIABLE\s*=\s*current_tool\b/i.test(line))
+  if (command === 'SAVE_VARIABLE' && (param(line, 'VARIABLE') ?? '').toLowerCase() === 'current_tool')
     return r('tool-state', 'changes the saved toolhead, without a physical swap')
   if (command === 'CONFIRM_TOOL_INSTALL') return r('tool-state', 'records a toolhead as mounted')
   // Rhino setup wizards end by starting a job; with FROM=STUDIO (Tool Manager 1.9.25) they start it straight away

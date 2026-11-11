@@ -16,7 +16,7 @@ import type { UpdateState } from '@/portal/client'
 import { useMaintenanceStore } from '@/stores/maintenance'
 import { useMachineStore } from '@/stores/machine'
 import { useControlStore } from '@/stores/control'
-import { compareText, goBackZip, installBlock, stepMarks, ZIP_NAME } from './zipUpdate'
+import { compareText, goBackZip, installBlock, pairFiles, pairMissing, stepMarks, ZIP_NAME, type ReleasePair } from './zipUpdate'
 
 const care = useMaintenanceStore()
 const machine = useMachineStore()
@@ -28,6 +28,8 @@ const tooOld = ref(false)
 const uploading = ref(false)
 const msg = ref<{ text: string; bad: boolean } | null>(null)
 const picked = ref<{ zip: string; version: string } | null>(null)
+/** The zip and its .sig gathered so far (they can be dropped one at a time) */
+const pair = ref<ReleasePair>({ zip: null, sig: null })
 const dragging = ref(false)
 const picker = ref<HTMLInputElement | null>(null)
 const reloadIn = ref<number | null>(null)
@@ -114,18 +116,23 @@ const status = computed<{ tone: 'ok' | 'busy' | 'bad' | 'idle'; text: string; de
 })
 
 async function upload(files: FileList | null) {
-  const f = files?.[0]
+  const list = Array.from(files ?? []) // copy first: clearing the picker empties its live FileList
   if (picker.value) picker.value.value = ''
-  if (!f) return
-  if (!/\.zip$/i.test(f.name)) return void (msg.value = { text: `${f.name} isn't a zip. Pick rhino-config-<version>.zip.`, bad: true })
+  if (!list.length) return
+  const { pair: p, problem } = pairFiles(list, pair.value)
+  pair.value = p
+  if (problem) return void (msg.value = { text: problem, bad: true })
+  const missing = pairMissing(p)
+  if (missing) return void (msg.value = { text: missing, bad: false })
   const c = care.portal()
   if (!c) return
   uploading.value = true
   msg.value = null
   picked.value = null
   try {
-    const r = await c.uploadUpdate(f)
+    const r = await c.uploadUpdate(p.zip!, p.sig!)
     picked.value = { zip: r.zip, version: r.version }
+    pair.value = { zip: null, sig: null }
     await poll()
   } catch (e) {
     msg.value = { text: (e as Error).message, bad: true }
@@ -175,7 +182,7 @@ const ago = (t?: number | null) => (t ? new Date(t * 1000).toLocaleString(undefi
     <template v-else-if="st">
       <p class="muted small lead">
         Installed: <strong class="mono">{{ st.installed }}</strong>.
-        For a zip you downloaded (or no internet on the Rhino): drop <span class="mono">rhino-config-1.5.x.zip</span> here; it's checked before anything happens, and nothing installs until you press Install. Update in the table above fetches the newest one from GitHub instead.
+        For a release you downloaded (or no internet on the Rhino): drop <span class="mono">rhino-config-1.9.x.zip</span> and its <span class="mono">.sig</span> from the GitHub release here, together or one after the other. The signature proves the zip is a Rhino release; without one nothing is kept, and nothing installs until you press Install. Update in the table above fetches the newest one from GitHub instead.
       </p>
 
       <!-- running / finished -->
@@ -218,10 +225,10 @@ const ago = (t?: number | null) => (t ? new Date(t * 1000).toLocaleString(undefi
         @drop.prevent="onDrop"
       >
         <Icon nav="files" :size="26" />
-        <span class="big">{{ uploading ? 'Uploading and checking…' : 'Drop the release zip here, or click to choose' }}</span>
-        <span class="small">rhino-config-1.5.x.zip · checked before anything happens</span>
+        <span class="big">{{ uploading ? 'Uploading and checking…' : pair.zip ? `${pair.zip.name} is here: now its .sig` : pair.sig ? `${pair.sig.name} is here: now the zip` : 'Drop the release zip and its .sig here, or click to choose' }}</span>
+        <span class="small">rhino-config-1.9.x.zip + .zip.sig · the signature is checked before anything happens</span>
       </button>
-      <input ref="picker" type="file" accept=".zip" class="visually-hidden" @change="upload(($event.target as HTMLInputElement).files)" />
+      <input ref="picker" type="file" accept=".zip,.sig" multiple class="visually-hidden" @change="upload(($event.target as HTMLInputElement).files)" />
 
       <div v-if="picked && !running" class="picked">
         <span class="txt">

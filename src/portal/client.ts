@@ -92,7 +92,8 @@ export interface UpdateState {
   installed: string
   /** the updater is set up on this Rhino (installed once by hand) */
   helper: boolean
-  zips: { zip: string; version: string; size: number; at: number }[]
+  /** signed: the zip's .sig is kept beside it (Tool Manager 1.9.29+; older Portals don't say) */
+  zips: { zip: string; version: string; size: number; at: number; signed?: boolean }[]
   busy: boolean
   status: UpdateRun
   /** GitHub's newest release (Tool Manager 1.5.8+), or why it can't say */
@@ -715,10 +716,11 @@ export class PortalClient {
   async updateState(fresh = false): Promise<UpdateState> {
     return this.getJson<UpdateState & { ok: boolean }>(fresh ? '/api/update?refresh=1' : '/api/update')
   }
-  /** Upload a rhino-config-<version>.zip; the Portal checks and keeps it. Nothing is installed yet. */
-  uploadUpdate(zip: File): Promise<{ ok: boolean; zip: string; version: string; installed: string }> {
+  /** Upload a rhino-config-<version>.zip with its .sig; the Portal checks both and keeps them. Nothing is installed yet. */
+  uploadUpdate(zip: File, sig: File): Promise<{ ok: boolean; zip: string; version: string; installed: string }> {
     const f = new FormData()
     f.append('zip', zip, zip.name)
+    f.append('sig', sig, sig.name)
     return this.write('update-upload', 'POST', '/api/update/upload', f)
   }
   /** Ask the root-owned updater to install a kept zip (also how "Go back" works). */

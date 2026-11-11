@@ -8,6 +8,52 @@ describe('check (console safety)', () => {
     expect(commandOf('g1x10 y5')).toBe('G1')
     expect(commandOf('  set_pin PIN=x VALUE=1')).toBe('SET_PIN')
     expect(commandOf('G38.2 Z-5')).toBe('G38.2')
+    // Klipper skips a leading line number (gcode.py: "Skip line number at start of command")
+    expect(commandOf('N1 G28')).toBe('G28')
+    expect(commandOf('n7 force_move STEPPER=stepper_z DISTANCE=50')).toBe('FORCE_MOVE')
+  })
+
+  it.each([
+    ['N1 G28', 'motion'],
+    ['N12 M3 S255', 'power'],
+    ['n7 FORCE_MOVE STEPPER=stepper_z DISTANCE=50 VELOCITY=50', 'motion'],
+    ['N3 SET_PIN PIN=SERVO_LASER VALUE=1', 'power'],
+  ])('a line number hides nothing: %s (%s)', (line, risk) => {
+    const c = check(line, idle)
+    expect(c.lines[0]!.risk).toBe(risk)
+    expect(c.needsConfirm).toBe(true)
+    expect(c.script).toBe(line) // sent as typed; Klipper drops the number itself
+  })
+
+  it.each([
+    ['SET_GCODE_VARIABLE MACRO="SWAP_TOOL" VARIABLE=current_tool VALUE=1', 'tool-state'],
+    ['set_gcode_variable macro=swap_tool variable=current_tool value=1', 'tool-state'],
+    ['SAVE_VARIABLE VARIABLE="current_tool" VALUE=1', 'tool-state'],
+    ['SET_GCODE_OFFSET Z=0.1 MOVE="1"', 'motion'],
+    ['SET_GCODE_OFFSET Z=0.1 MOVE=2', 'motion'],
+  ])('quoted parameter values count, as Klipper reads them with shlex: %s', (line, risk) => {
+    expect(check(line, idle).lines[0]!.risk).toBe(risk)
+  })
+
+  it('leaves SET_GCODE_OFFSET without a move, and other macro variables, alone', () => {
+    expect(check('SET_GCODE_OFFSET Z=0.1 MOVE=0', idle).needsConfirm).toBe(false)
+    expect(check('SET_GCODE_VARIABLE MACRO=RHINO_MESH VARIABLE=soak_min VALUE=5', idle).needsConfirm).toBe(false)
+  })
+
+  it.each([
+    ['G28.1 Z', 'motion', 'G28'],
+    ['G1.1 X10', 'motion', 'G1'],
+    ['M104.1 S250', 'internal', 'M104'],
+    ['M109.1 S250', 'internal', 'M109'],
+  ])('the raw command behind a Rhino wrapper asks and says so: %s', (line, risk, base) => {
+    const c = check(line, idle)
+    expect(c.lines[0]!.risk).toBe(risk)
+    expect(c.needsConfirm).toBe(true)
+    expect(c.lines[0]!.reason).toContain(`${base} wrapper`)
+  })
+
+  it("keeps Klipper's own dotted G-codes as they are", () => {
+    expect(check('G38.2 Z-5', idle).lines[0]!.reason).toBe('probes (moves the machine)')
   })
 
   it.each([

@@ -1650,12 +1650,16 @@ async function portal(req: IncomingMessage, res: import('node:http').ServerRespo
     if (req.method === 'POST' && url === '/api/update/upload') {
       const chunks: Buffer[] = []
       for await (const d of req) chunks.push(d as Buffer)
-      const name = /filename="([^"]+)"/.exec(Buffer.concat(chunks).toString('latin1'))?.[1] ?? ''
+      const text = Buffer.concat(chunks).toString('latin1')
+      const name = /name="zip"; filename="([^"]+)"/.exec(text)?.[1] ?? ''
       const v = /rhino-config-(\d+\.\d+\.\d+)\.zip$/.exec(name)?.[1]
+      // Tool Manager 1.9.29: the release's .sig must come with the zip; MOCK_SIG=bad pretends it was another key's
+      if (!/name="sig"; filename="/.test(text)) return json(res, 400, { ok: false, error: "Send the zip's .sig file with it (next to the zip on the GitHub release). Without it nothing is kept." }), true
+      if (process.env.MOCK_SIG === 'bad') return json(res, 400, { ok: false, error: "This zip isn't signed by the Rhino release key, so it wasn't kept. Only releases from github.com/Makersmic/Toolhead_Manager install from Studio; anything else goes in by hand (rhino.sh option 3)." }), true
       if (busy) return json(res, 400, { ok: false, error: 'An install is running. Wait for it to finish.' }), true
       if (!v) return json(res, 400, { ok: false, error: "This isn't a Rhino Tool Manager release zip (missing VERSION, install.sh, rhino.sh)." }), true
       const zip = `rhino-config-${v}.zip`
-      upd.zips = [...upd.zips.filter((z) => z.zip !== zip), { zip, version: v, size: chunks.reduce((n, c) => n + c.length, 0), at: Date.now() / 1000 }]
+      upd.zips = [...upd.zips.filter((z) => z.zip !== zip), { zip, version: v, size: chunks.reduce((n, c) => n + c.length, 0), at: Date.now() / 1000, signed: true }]
       return json(res, 200, { ok: true, zip, version: v, installed: upd.installed }), true
     }
     if (req.method === 'POST' && url === '/api/update/install') {
