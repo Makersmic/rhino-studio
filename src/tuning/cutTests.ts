@@ -1,5 +1,5 @@
 /**
- * Laser and drag knife tuning (Tool Manager docs/phase-tool-wizards.md, L1-L4 and K1-K2): the test files Studio makes,
+ * Laser, drag knife and spindle tuning (Tool Manager docs/phase-tool-wizards.md, L1-L4, K1-K2, C2-C4): the test files Studio makes,
  * the values they find, and the sums. Plain functions, tested without a screen (cutTests.test.ts).
  *
  * Every test is an ordinary job of that tool: it starts through LASER_JOB_SETUP / DRAGKNIFE_JOB_SETUP FILE= (checklist,
@@ -9,22 +9,31 @@
  *
  * The laser focus ramp is the one file with Z moves: for it, SET_Z_ZERO is taken where the laser's shroud touches the
  * material, and the ramp climbs from 1 mm above that, so it can never press into the stock (focusRampSafe).
+ *
+ * The spindle's tests (1.9.26) run through CNC_JOB_SETUP like any CNC job: X/Y zero on the stock's front-left corner,
+ * Z0 on its top, the spindle started by the setup at the throttle chosen there (the file's M3 does nothing). Results
+ * are per bit (the Portal's bit list): its true diameter per tool and bit, the rest per tool, material and bit.
  */
 import { patternClear, type Rect } from './tuning'
-import type { KnifeSettings, LaserSettings } from '@/slicer/types'
+import type { CncSettings, KnifeSettings, LaserSettings } from '@/slicer/types'
 
-export type CutProcess = 'laser' | 'dragknife'
+export type CutProcess = 'laser' | 'dragknife' | 'cnc'
 export type CutTest = 'laser_focus' | 'laser_cut' | 'laser_engrave' | 'laser_passes' | 'laser_kerf' | 'knife_depth' | 'knife_offset'
-/** What the Portal keeps (rhino/tuning.py TESTS): head = once per tool, stock = per tool and material */
+  | 'cnc_feed' | 'cnc_depth' | 'cnc_size'
+/**
+ * What the Portal keeps (rhino/tuning.py TESTS): head = once per tool, stock = per tool and material, bit = per tool
+ * and bit, cut = per tool, material and bit
+ */
 export type CutValue =
   | 'laser_focus_height' | 'laser_cut_power' | 'laser_cut_speed' | 'laser_engrave_power' | 'laser_engrave_speed'
   | 'laser_passes' | 'laser_kerf' | 'knife_depth' | 'knife_pressure' | 'knife_blade_offset'
+  | 'cnc_diameter' | 'cnc_feed' | 'cnc_throttle' | 'cnc_depth' | 'cnc_plunge'
 
 export interface CutWizard {
   test: CutTest
   process: CutProcess
   title: string
-  scope: 'head' | 'stock'
+  scope: 'head' | 'stock' | 'bit' | 'cut'
   saves: CutValue[]
   why: string
 }
@@ -38,6 +47,9 @@ export const CUT_WIZARDS: CutWizard[] = [
   { test: 'laser_kerf', process: 'laser', title: 'Kerf', scope: 'stock', saves: ['laser_kerf'], why: 'Last: at the tuned cut settings, a measured square says how much the beam takes away, so parts come out the right size.' },
   { test: 'knife_depth', process: 'dragknife', title: 'Depth', scope: 'stock', saves: ['knife_depth', 'knife_pressure'], why: 'First: a cut that doesn’t go through hides every other result. The shallowest depth that cuts cleanly with the backing intact.' },
   { test: 'knife_offset', process: 'dragknife', title: 'Blade offset', scope: 'head', saves: ['knife_blade_offset'], why: 'At that depth, squares with the offset stepped show which one turns sharp, closed corners. Once per blade.' },
+  { test: 'cnc_size', process: 'cnc', title: 'True diameter', scope: 'bit', saves: ['cnc_diameter'], why: 'First: one slot you measure across. Its width is what the bit really cuts, runout and all, so parts come out the right size. Once per bit.' },
+  { test: 'cnc_feed', process: 'cnc', title: 'Feed', scope: 'cut', saves: ['cnc_feed', 'cnc_throttle'], why: 'Slots at one shallow depth with the feed stepped across the row, at the throttle you set in the setup. The fastest slot with smooth walls and a steady sound is your feed.' },
+  { test: 'cnc_depth', process: 'cnc', title: 'Depth per pass', scope: 'cut', saves: ['cnc_depth', 'cnc_plunge'], why: 'At that feed and throttle, slots each deeper than the last. The deepest clean one is your depth per pass.' },
 ]
 
 /** Lowest and highest the Portal accepts (rhino/tuning.py TESTS keeps the same numbers) */
@@ -52,11 +64,24 @@ export const CUT_LIMITS: Record<CutValue, [number, number]> = {
   knife_depth: [0.01, 3],
   knife_pressure: [0, 1000],
   knife_blade_offset: [0, 2],
+  cnc_diameter: [0.1, 25],
+  cnc_feed: [10, 6000],
+  cnc_throttle: [0.3, 1],
+  cnc_depth: [0.05, 10],
+  cnc_plunge: [10, 3000],
 }
 
 export const cutWizardsFor = (p: CutProcess) => CUT_WIZARDS.filter((w) => w.process === p)
 /** Values kept once per tool (the lens, the blade); the rest are per tool and material */
 export const HEAD_VALUES: ReadonlySet<CutValue> = new Set<CutValue>(['laser_focus_height', 'knife_blade_offset'])
+/** The spindle's values: kept per bit (diameter) or per bit and material (the rest) */
+export const BIT_VALUES: ReadonlySet<CutValue> = new Set<CutValue>(['cnc_diameter'])
+export const CUT_VALUES: ReadonlySet<CutValue> = new Set<CutValue>(['cnc_feed', 'cnc_throttle', 'cnc_depth', 'cnc_plunge'])
+/**
+ * The ESC's pin value as the CNC setup's prompt shows it ("Spindle running at 60% throttle" for 0.6; 0.3 is stopped,
+ * 1.0 full), since that's where it's read and set. Control shows the same number (Nov 11).
+ */
+export const throttlePct = (v: number) => Math.round(v * 100)
 
 const fmt = (v: number) => {
   const s = v.toFixed(3)
@@ -101,27 +126,32 @@ export const labelWidth = (text: string, h: number) => [...text].reduce((w, ch) 
 export interface CutFileBase {
   tool: string
   material: string
-  /** front-left corner of the pattern, machine X/Y */
+  /** front-left corner of the pattern: machine X/Y (laser, knife), or from the work zero (spindle) */
   x: number
   y: number
+  /** the spindle's bit (the Portal's bit list) */
+  bit?: string
 }
 
 function wrap(test: CutTest, o: CutFileBase, process: CutProcess, body: string[]): string {
   const w = CUT_WIZARDS.find((c) => c.test === test)!
   const start = process === 'laser'
     ? '; Start with LASER_JOB_SETUP FILE=<this file> (Studio: Files > Start). Z0 is the focus the setup sets.'
-    : '; Start with DRAGKNIFE_JOB_SETUP FILE=<this file> (Studio: Files > Start). Z0 is the material surface.'
+    : process === 'cnc'
+      ? '; Start with CNC_JOB_SETUP FILE=<this file>. X/Y zero: the stock\'s front-left corner. Z0: its top. The setup starts the spindle.'
+      : '; Start with DRAGKNIFE_JOB_SETUP FILE=<this file> (Studio: Files > Start). Z0 is the material surface.'
   const head = [
     `; Made by Rhino Studio: ${w.title} test`,
     `; rhino_toolhead = ${o.tool}`,
     `; rhino_process = ${process}`,
     `; rhino_material = ${o.material}`,
     `; rhino_tuning = ${test}`,
+    ...(o.bit ? [`; rhino_bit = ${o.bit}`] : []),
     test === 'laser_focus' ? '; Start with LASER_JOB_SETUP FILE=<this file>. Set Z zero where the shroud just touches the material: this file lifts from there.' : start,
     'G21',
     'G90',
   ]
-  const tail = process === 'laser' ? ['M5', 'DEACTIVATE_LASER', 'END_PRINT'] : ['END_PRINT']
+  const tail = process === 'laser' ? ['M5', 'DEACTIVATE_LASER', 'END_PRINT'] : process === 'cnc' ? ['M5', 'END_PRINT'] : ['END_PRINT']
   return [...head, ...(process === 'laser' ? ['M5'] : []), ...body, ...tail, ''].join('\n')
 }
 
@@ -353,11 +383,54 @@ export const offsetBounds = (o: { x: number; y: number; count: number; most: num
 
 // ---- results -----------------------------------------------------------------------------------------------------------
 
-export interface CutRun { tool: string; test: string; value: number; time: number; material?: string }
+// ---- C2-C4 spindle: slots ---------------------------------------------------------------------------------------------
 
-/** The last saved run of a value, for this tool (and material when it's per material) */
-export function lastCut(runs: CutRun[] | undefined, tool: string, value: CutValue, material?: string): CutRun | null {
-  return runs?.find((r) => r.tool === tool && r.test === value && (HEAD_VALUES.has(value) || r.material === material)) ?? null
+/** clear: mm above the stock between slots; wall: mm of stock left between slots; slot: mm long */
+export const SLOT = { length: 30, wall: 4, clear: 5, travel: 3000, count: 5 } as const
+
+export interface SlotOpts extends CutFileBase {
+  diameter: number
+  plunge: number
+  /** one entry per slot, left to right */
+  slots: Array<{ depth: number; feed: number }>
+}
+
+const slotX = (o: { x: number; diameter: number }, k: number) => o.x + o.diameter / 2 + k * (o.diameter + SLOT.wall)
+
+/** Straight slots along Y, each in one pass at its own depth and feed; lifts clear between them. */
+export function slotFile(o: SlotOpts, test: CutTest): string {
+  const body: string[] = [`G0 Z${SLOT.clear} F600`]
+  o.slots.forEach((sl, k) => {
+    const x = slotX(o, k)
+    body.push(
+      `G0 X${fmt(x)} Y${fmt(o.y)} F${SLOT.travel}`,
+      `G1 Z${fmt(-sl.depth)} F${fmt(o.plunge)}`,
+      `G1 Y${fmt(o.y + SLOT.length)} F${fmt(sl.feed)}`,
+      `G0 Z${SLOT.clear} F600`,
+    )
+  })
+  return wrap(test, o, 'cnc', body)
+}
+
+export function slotBounds(o: { x: number; y: number; diameter: number }, count: number): Rect {
+  return { x0: o.x, y0: o.y, x1: o.x + count * o.diameter + (count - 1) * SLOT.wall, y1: o.y + SLOT.length }
+}
+
+/** The bit's true cutting diameter from a measured slot width, or why not (more than 20 % off the bit's size) */
+export function diameterFrom(measured: number, nominal: number): { value: number } | { error: string } {
+  if (!(measured > 0)) return { error: 'Type the slot’s width.' }
+  if (Math.abs(measured - nominal) > nominal * 0.2)
+    return { error: `${fmt(measured)} mm is far from the bit’s ${fmt(nominal)} mm: measure across the slot with the caliper’s inside jaws, at the top.` }
+  return { value: Number(measured.toFixed(3)) }
+}
+
+export interface CutRun { tool: string; test: string; value: number; time: number; material?: string; bit?: string }
+
+/** The last saved run of a value, for this tool (and material when it's per material, and bit when it's per bit) */
+export function lastCut(runs: CutRun[] | undefined, tool: string, value: CutValue, material?: string, bit?: string): CutRun | null {
+  const perBit = BIT_VALUES.has(value) || CUT_VALUES.has(value)
+  const perMat = !HEAD_VALUES.has(value) && !BIT_VALUES.has(value)
+  return runs?.find((r) => r.tool === tool && r.test === value && (!perMat || r.material === material) && (!perBit || r.bit === bit)) ?? null
 }
 
 /** A value inside the Portal's limits, or why not */
@@ -390,16 +463,31 @@ export interface CutInputs {
   offsetFrom: number
   offsetTo: number
   depth: number
+  /** spindle: the bit's diameter (true one when measured) and cutting length, and the plunge feed */
+  diameter: number
+  length: number
+  plunge: number
 }
-export const COUNT = { grid: 5, depth: 6, offset: 5 } as const
+export const COUNT = { grid: 5, depth: 6, offset: 5, slots: SLOT.count } as const
 
 /** Starting values: tuned results where there are some, else the material's, else safe defaults */
-export function cutDefaults(test: CutTest, known: { power?: number; feed?: number; passes?: number; depth?: number }): Omit<CutInputs, 'x' | 'y'> {
+export function cutDefaults(
+  test: CutTest,
+  known: { power?: number; feed?: number; passes?: number; depth?: number; diameter?: number; length?: number; plunge?: number },
+): Omit<CutInputs, 'x' | 'y'> {
   const base = {
     zFrom: 2, zTo: 14,
     powerFrom: 0.4, powerTo: 1, feedFrom: 200, feedTo: 1000,
     power: known.power ?? 0.8, feed: known.feed ?? 600, passes: known.passes ?? 1,
     depthFrom: 0.1, depthStep: 0.05, offsetFrom: 0.1, offsetTo: 0.5, depth: known.depth ?? 0.3,
+    diameter: known.diameter ?? 3.175, length: known.length ?? 12, plunge: known.plunge ?? 150,
+  }
+  if (test.startsWith('cnc_')) {
+    const d = base.diameter
+    // shallow first: half the bit's diameter at most 1 mm for the feed test; depths from a quarter to the full diameter
+    const shallow = Number(Math.min(1, d / 2).toFixed(2))
+    const step = Number(Math.max(0.1, d / 4).toFixed(2))
+    return { ...base, feedFrom: 300, feedTo: 1500, feed: known.feed ?? 600, depth: known.depth ?? shallow, depthFrom: step, depthStep: step }
   }
   if (test === 'laser_engrave') return { ...base, powerFrom: 0.1, powerTo: 0.5, feedFrom: 1000, feedTo: 3000 }
   if (test === 'knife_depth' || test === 'knife_offset') return { ...base, feed: known.feed ?? KNIFE.feed }
@@ -415,7 +503,16 @@ export function cutBounds(test: CutTest, i: CutInputs): Rect {
     case 'laser_kerf': return kerfBounds(i)
     case 'knife_depth': return depthBounds({ x: i.x, y: i.y, count: COUNT.depth })
     case 'knife_offset': return offsetBounds({ x: i.x, y: i.y, count: COUNT.offset, most: i.offsetTo })
+    case 'cnc_size': return slotBounds(i, 1)
+    case 'cnc_feed':
+    case 'cnc_depth': return slotBounds(i, COUNT.slots)
   }
+}
+
+/** Spindle: the stock the test needs, from the work zero (its front-left corner), with 5 mm all round */
+export const stockNeeded = (test: CutTest, i: CutInputs) => {
+  const b = cutBounds(test, i)
+  return { x: Math.ceil(b.x1 + 5), y: Math.ceil(b.y1 + 5) }
 }
 
 /** Front-left corner that puts the pattern in the middle of the work area */
@@ -426,6 +523,7 @@ export function centred(test: CutTest, i: Omit<CutInputs, 'x' | 'y'>, area: { x:
 
 /** Why these settings can't make a test, or null */
 export function cutProblem(test: CutTest, i: CutInputs, m: { workArea: { x: number; y: number }; keepOut: Rect[] }): string | null {
+  if (test.startsWith('cnc_')) return spindleProblem(test, i, m)
   const b = cutBounds(test, i)
   if (b.x0 < 0 || b.y0 < 0 || b.x1 > m.workArea.x || b.y1 > m.workArea.y)
     return `The test needs X ${fmt(b.x0)} to ${fmt(b.x1)}, Y ${fmt(b.y0)} to ${fmt(b.y1)}: move it inside the bed (${fmt(m.workArea.x)} x ${fmt(m.workArea.y)} mm).`
@@ -442,6 +540,22 @@ export function cutProblem(test: CutTest, i: CutInputs, m: { workArea: { x: numb
   return null
 }
 
+/** Spindle tests are placed from the work zero (the stock's corner), so they're checked against the bit and the stock */
+function spindleProblem(test: CutTest, i: CutInputs, m: { workArea: { x: number; y: number } }): string | null {
+  if (!(i.x >= 0 && i.y >= 0)) return 'The test starts at the work zero (the stock’s front-left corner) or further in: X and Y 0 or more.'
+  const need = stockNeeded(test, i)
+  if (need.x > m.workArea.x || need.y > m.workArea.y) return `The test needs ${need.x} x ${need.y} mm of stock, more than the machine reaches.`
+  if (!(i.diameter >= CUT_LIMITS.cnc_diameter[0] && i.diameter <= CUT_LIMITS.cnc_diameter[1])) return 'Pick a bit first (Assets › Parts › Bits).'
+  if (!(i.plunge >= CUT_LIMITS.cnc_plunge[0] && i.plunge <= CUT_LIMITS.cnc_plunge[1])) return `Plunge: ${CUT_LIMITS.cnc_plunge[0]} to ${CUT_LIMITS.cnc_plunge[1]} mm/min.`
+  const deepest = test === 'cnc_depth' ? i.depthFrom + i.depthStep * (COUNT.slots - 1) : i.depth
+  if (!(i.depth > 0 && i.depthFrom > 0 && i.depthStep > 0)) return 'Depths above 0.'
+  if (deepest > i.length) return `${fmt(deepest)} mm is deeper than the bit’s ${fmt(i.length)} mm cutting length: the shank would rub.`
+  if (deepest > 2 * i.diameter) return `${fmt(deepest)} mm in one pass is more than twice the bit’s diameter: too much for one slot.`
+  if (test === 'cnc_feed' && !(i.feedFrom >= CUT_LIMITS.cnc_feed[0] && i.feedTo > i.feedFrom && i.feedTo <= CUT_LIMITS.cnc_feed[1])) return `Feed runs from a slower to a faster speed, ${CUT_LIMITS.cnc_feed[0]} to ${CUT_LIMITS.cnc_feed[1]} mm/min.`
+  if (test !== 'cnc_feed' && !(i.feed >= CUT_LIMITS.cnc_feed[0] && i.feed <= CUT_LIMITS.cnc_feed[1])) return 'Set the feed first (the Feed test finds it).'
+  return null
+}
+
 export function cutFile(test: CutTest, base: Omit<CutFileBase, 'x' | 'y'>, i: CutInputs, sMax: number): string {
   const o = { ...base, x: i.x, y: i.y }
   switch (test) {
@@ -453,8 +567,12 @@ export function cutFile(test: CutTest, base: Omit<CutFileBase, 'x' | 'y'>, i: Cu
     case 'laser_kerf': return kerfFile({ ...o, power: i.power, feed: i.feed, passes: i.passes, sMax })
     case 'knife_depth': return depthFile({ ...o, depths: depthValues(i), feed: i.feed })
     case 'knife_offset': return offsetFile({ ...o, offsets: stepValues(i.offsetFrom, i.offsetTo, COUNT.offset), depth: i.depth, feed: i.feed })
+    case 'cnc_size': return slotFile({ ...o, diameter: i.diameter, plunge: i.plunge, slots: [{ depth: i.depth, feed: i.feed }] }, test)
+    case 'cnc_feed': return slotFile({ ...o, diameter: i.diameter, plunge: i.plunge, slots: stepValues(i.feedFrom, i.feedTo, COUNT.slots).map((f) => ({ depth: i.depth, feed: Math.round(f) })) }, test)
+    case 'cnc_depth': return slotFile({ ...o, diameter: i.diameter, plunge: i.plunge, slots: slotDepths(i).map((d) => ({ depth: d, feed: i.feed })) }, test)
   }
 }
+export const slotDepths = (i: Pick<CutInputs, 'depthFrom' | 'depthStep'>) => Array.from({ length: COUNT.slots }, (_, k) => Number((i.depthFrom + k * i.depthStep).toFixed(3)))
 export const depthValues = (i: Pick<CutInputs, 'depthFrom' | 'depthStep'>) => Array.from({ length: COUNT.depth }, (_, k) => Number((i.depthFrom + k * i.depthStep).toFixed(3)))
 
 export interface CutChoice {
@@ -481,12 +599,15 @@ export function cutChoices(test: CutTest, i: CutInputs): CutChoice[] {
     case 'laser_kerf': return []
     case 'knife_depth': return depthValues(i).map((d) => ({ label: `${fmt(d)} mm`, values: { knife_depth: d } }))
     case 'knife_offset': return stepValues(i.offsetFrom, i.offsetTo, COUNT.offset).map((r) => ({ label: `${fmt(r)} mm`, values: { knife_blade_offset: r } }))
+    case 'cnc_size': return []
+    case 'cnc_feed': return stepValues(i.feedFrom, i.feedTo, COUNT.slots).map((f) => ({ label: `${Math.round(f)} mm/min`, values: { cnc_feed: Math.round(f) } }))
+    case 'cnc_depth': return slotDepths(i).map((d) => ({ label: `${fmt(d)} mm`, values: { cnc_depth: d, cnc_plunge: i.plunge } }))
   }
 }
 
 /** The file's name on the Rhino: letters, digits, - _ . only (FILE= on the setup macros) */
-export function cutFileName(test: CutTest, tool: string, material: string): string {
-  return `tune-${test}-${tool}-${material}`.replace(/[^A-Za-z0-9_-]+/g, '_') + '.gcode'
+export function cutFileName(test: CutTest, tool: string, material: string, bit?: string): string {
+  return `tune-${test}-${tool}-${material}${bit ? `-${bit}` : ''}`.replace(/[^A-Za-z0-9_-]+/g, '_') + '.gcode'
 }
 
 // ---- Job setup: what a laser or knife job starts from ------------------------------------------------------------------
@@ -495,6 +616,10 @@ export function cutFileName(test: CutTest, tool: string, material: string): stri
 export interface Tuned {
   laser: Partial<Pick<LaserSettings, 'power' | 'feed' | 'passes' | 'kerf'>>
   knife: Partial<Pick<KnifeSettings, 'depth' | 'tip'>>
+  /** the spindle, for one bit: its measured diameter, and feed, plunge and depth per pass on this material */
+  cnc: Partial<Pick<CncSettings, 'toolDiameter' | 'feed' | 'plunge' | 'stepDown'>>
+  /** the throttle the feed was found at (the ESC pin, as CNC_JOB_SETUP sets it): shown, set in the setup */
+  throttle?: number
   /** newest save among them (unix s), for "tuned on ..." */
   time: number
 }
@@ -502,14 +627,15 @@ type TunedStore = { ok?: boolean; heads: Record<string, Partial<Record<string, {
 
 /**
  * The tuned values for a tool and material (the material's name, as the tests save it), as Job setup fields:
- * the laser's cut power, speed, passes and kerf; the knife's depth and blade offset. Engrave values aren't used yet:
- * Studio's laser jobs are cuts. Null when nothing is tuned.
+ * the laser's cut power, speed, passes and kerf; the knife's depth and blade offset; with a bit, the spindle's measured
+ * diameter, feed, plunge and depth per pass. Engrave values aren't used yet: Studio's laser jobs are cuts. Null when
+ * nothing is tuned.
  */
-export function tunedFor(st: TunedStore | null | undefined, tool: string, material: string): Tuned | null {
+export function tunedFor(st: TunedStore | null | undefined, tool: string, material: string, bit?: string): Tuned | null {
   if (!st || st.ok === false) return null
   const head = st.heads[tool] ?? {}
   const mat = st.materials[`${tool}|${material}`] ?? {}
-  const t: Tuned = { laser: {}, knife: {}, time: 0 }
+  const t: Tuned = { laser: {}, knife: {}, cnc: {}, time: 0 }
   const take = <T extends object>(into: T, k: keyof T, v: { value: number; time: number } | undefined) => {
     if (!v || !Number.isFinite(v.value)) return
     ;(into as Record<keyof T, number>)[k] = v.value
@@ -521,22 +647,33 @@ export function tunedFor(st: TunedStore | null | undefined, tool: string, materi
   take(t.laser, 'kerf', mat.laser_kerf)
   take(t.knife, 'depth', mat.knife_depth)
   take(t.knife, 'tip', head.knife_blade_offset)
+  if (bit) {
+    const b = st.materials[`${tool}|bit=${bit}`] ?? {}
+    const c = st.materials[`${tool}|${material}|bit=${bit}`] ?? {}
+    take(t.cnc, 'toolDiameter', b.cnc_diameter)
+    take(t.cnc, 'feed', c.cnc_feed)
+    take(t.cnc, 'plunge', c.cnc_plunge)
+    take(t.cnc, 'stepDown', c.cnc_depth)
+    if (c.cnc_throttle && Number.isFinite(c.cnc_throttle.value)) t.throttle = c.cnc_throttle.value
+  }
   return t.time ? t : null
 }
 
 /** The fields of a job that differ from what's tuned, for "Use tuned values" */
-export function tunedDiff(job: { process: string; laser: LaserSettings; knife: KnifeSettings }, t: Tuned | null): string[] {
+type TunedJob = { process: string; laser: LaserSettings; knife: KnifeSettings; cnc: CncSettings }
+const tunedPart = (job: TunedJob, t: Tuned): object => (job.process === 'laser' ? t.laser : job.process === 'dragknife' ? t.knife : job.process === 'cnc' ? t.cnc : {})
+const jobPart = (job: TunedJob): object => (job.process === 'laser' ? job.laser : job.process === 'dragknife' ? job.knife : job.cnc)
+export function tunedDiff(job: TunedJob, t: Tuned | null): string[] {
   if (!t) return []
-  const src = job.process === 'laser' ? t.laser : job.process === 'dragknife' ? t.knife : {}
-  const cur = (job.process === 'laser' ? job.laser : job.knife) as unknown as Record<string, number>
+  const src = tunedPart(job, t)
+  const cur = jobPart(job) as unknown as Record<string, number>
   return Object.entries(src).filter(([k, v]) => Math.abs((cur[k] ?? NaN) - (v as number)) > 1e-9).map(([k]) => k)
 }
 
-/** Puts the tuned values into a laser or knife job (nothing for other processes) */
-export function applyTuned(job: { process: string; laser: LaserSettings; knife: KnifeSettings }, t: Tuned | null): void {
-  if (!t) return
-  if (job.process === 'laser') Object.assign(job.laser, t.laser)
-  else if (job.process === 'dragknife') Object.assign(job.knife, t.knife)
+/** Puts the tuned values into a laser, knife or CNC job (nothing for print jobs) */
+export function applyTuned(job: TunedJob, t: Tuned | null): void {
+  if (!t || job.process === 'fdm') return
+  Object.assign(jobPart(job), tunedPart(job, t))
 }
 
 /** "power 85 %, speed 600 mm/min, kerf 0.1 mm" */
@@ -551,6 +688,12 @@ export function tunedText(process: string, t: Tuned): string {
   } else if (process === 'dragknife') {
     if (t.knife.depth != null) parts.push(`depth ${t.knife.depth} mm`)
     if (t.knife.tip != null) parts.push(`blade offset ${t.knife.tip} mm`)
+  } else if (process === 'cnc') {
+    const c = t.cnc
+    if (c.toolDiameter != null) parts.push(`diameter ${c.toolDiameter} mm (measured)`)
+    if (c.feed != null) parts.push(`feed ${c.feed} mm/min${t.throttle != null ? ` at ${throttlePct(t.throttle)} % throttle` : ''}`)
+    if (c.stepDown != null) parts.push(`${c.stepDown} mm per pass`)
+    if (c.plunge != null) parts.push(`plunge ${c.plunge} mm/min`)
   }
   return parts.join(', ')
 }

@@ -23,7 +23,8 @@ import { useMachineStore } from './machine'
 import { BUILT_IN_TOOLHEADS, lookFor, type ToolheadLook } from '@/toolheads/registry'
 import { applyMaterial, materialsFor, newJob, normalizeJob, processFor, type Material } from '@/slicer/profiles'
 import { cutHeight, kiriJob } from '@/slicer/kiriSettings'
-import { rhinoFile, type RhinoFile } from '@/slicer/rhinoFile'
+import { engineBody, rhinoFile, type RhinoFile } from '@/slicer/rhinoFile'
+import { laserLoops as loopsOf, type Loop } from '@/slicer/laserOps'
 import { checkFile, blocking, type Check, type FileStats } from '@/slicer/check'
 import { FLAT_TYPES, combine, extOf, merge, partInfo, transform } from '@/slicer/model'
 import { planDrop, skippedMessage } from '@/prepare/dropPlan'
@@ -41,7 +42,7 @@ import { applyTuned, tunedDiff, tunedFor, type Tuned } from '@/tuning/cutTests'
 import { sameIfEqual } from '@/prepare/stable'
 import { baseOf, extOf as fileExt, outFileName, safeName } from '@/prepare/jobName'
 import {
-  applyProfile, builtinId, defaultsFor, diffSettings, engineOf, isBuiltin, jobSettings, profileStatus, setJobSettings,
+  applyProfile, builtinId, defaultsFor, diffSettings, engineOf, isBuiltin, jobSettings, profileSettings, profileStatus, setJobSettings,
   type AnySettings, type SavedJob,
 } from '@/slicer/sliceProfiles'
 
@@ -211,15 +212,17 @@ export const usePrepareStore = defineStore('prepare', () => {
   // before anything typed here. A saved job for this very file keeps its own values.
   const tuning = useTuningStore()
   void tuning.load()
+  // the spindle (1.9.26): per bit, picked from the Rhino's bit list
   function tunedOf(j: PrepareJob): Tuned | null {
-    if (j.process !== 'laser' && j.process !== 'dragknife') return null
+    if (j.process !== 'laser' && j.process !== 'dragknife' && j.process !== 'cnc') return null
+    if (j.process === 'cnc' && !j.cnc.bit) return null
     const name = materialsOf(j.toolhead).find((m) => m.key === j.material)?.name ?? j.material
-    return tunedFor(tuning.state, j.toolhead, name)
+    return tunedFor(tuning.state, j.toolhead, name, j.process === 'cnc' ? j.cnc.bit : undefined)
   }
   /** set when a job was set up before the tuning results arrived: they're applied when they do */
   let tunedPending = false
   function startFromTuned(j: PrepareJob) {
-    if (j.process !== 'laser' && j.process !== 'dragknife') return
+    if (j.process !== 'laser' && j.process !== 'dragknife' && j.process !== 'cnc') return
     if (tuning.state) applyTuned(j, tunedOf(j))
     else tunedPending = true
   }
@@ -235,6 +238,18 @@ export const usePrepareStore = defineStore('prepare', () => {
   const tunedOff = computed(() => (job.value ? tunedDiff(job.value, tuned.value) : []))
   function useTuned() {
     if (job.value) applyTuned(job.value, tuned.value)
+  }
+  /** A bit from the Rhino's list: its type, size and cutting length, then what's tuned for it on this material. '' = typed by hand. */
+  function pickBit(name: string, bits: { name: string; type: 'endmill' | 'ballmill'; diameter: number; length: number }[]) {
+    const j = job.value
+    if (!j || j.process !== 'cnc') return
+    const b = bits.find((x) => x.name === name)
+    j.cnc.bit = b ? b.name : ''
+    if (!b) return
+    j.cnc.toolType = b.type
+    j.cnc.toolDiameter = b.diameter
+    j.cnc.fluteLength = b.length
+    startFromTuned(j)
   }
 
   function pickTool(name: string) {
@@ -288,7 +303,7 @@ export const usePrepareStore = defineStore('prepare', () => {
     (on) => {
       const j = job.value
       // untouched: nothing differs from the profile, or only the tuned values Studio put in
-      const tunedKeys = new Set(Object.keys(j ? ((j.process === 'laser' ? tuned.value?.laser : tuned.value?.knife) ?? {}) : {}))
+      const tunedKeys = new Set(Object.keys(j ? ((j.process === 'laser' ? tuned.value?.laser : j.process === 'cnc' ? tuned.value?.cnc : tuned.value?.knife) ?? {}) : {}))
       const untouched = Object.keys(overrides.value).every((k) => tunedKeys.has(k)) && !tunedOff.value.length
       if (on && j && !saved[j.toolhead] && isBuiltin(j.profileId) && untouched) {
         fromRhino(j, [...(fileName.value ? [fileName.value] : []), `tool/${j.toolhead}`])
@@ -345,14 +360,14 @@ export const usePrepareStore = defineStore('prepare', () => {
     const j = job.value
     const p = profile.value
     if (!j || !p) return
-    const next = await profilesStore.save(p.id, { name: p.name, engine: p.engine, process: p.process, toolhead: p.toolhead, material: p.material, notes: p.notes, settings: jobSettings(j) }, j.profileRev ?? p.rev)
+    const next = await profilesStore.save(p.id, { name: p.name, engine: p.engine, process: p.process, toolhead: p.toolhead, material: p.material, notes: p.notes, settings: profileSettings(j) }, j.profileRev ?? p.rev)
     j.profileRev = next.rev
   }
   async function saveAsNew(name: string, forThisTool: boolean) {
     const j = job.value
     if (!j) return
     const p = await profilesStore.create({
-      name, engine: engineOf(j), process: j.process, toolhead: forThisTool ? j.toolhead : null, material: j.material || null, notes: '', settings: jobSettings(j),
+      name, engine: engineOf(j), process: j.process, toolhead: forThisTool ? j.toolhead : null, material: j.material || null, notes: '', settings: profileSettings(j),
     })
     j.profileId = p.id
     j.profileRev = p.rev
@@ -886,6 +901,32 @@ export const usePrepareStore = defineStore('prepare', () => {
     { immediate: true },
   )
 
+  // ---- laser operations (Job setup › Settings): the loops of the drawing, from Kiri's cut, to pick from --------------
+  const laserLoops = shallowRef<Loop[] | null>(null)
+  const findingLoops = ref(false)
+  const loopsError = ref<string | null>(null)
+  /** Slice once with the job's settings to find its loops (Prepare does the same and keeps them) */
+  async function findLoops() {
+    if (!job.value || job.value.process !== 'laser' || findingLoops.value) return
+    const input = sliceInput(clone(job.value))
+    if (!input) return
+    findingLoops.value = true
+    loopsError.value = null
+    try {
+      const kiri = await runKiri(input.vertices, kiriJob(input.job, input.part, machineInfo.value), () => {})
+      laserLoops.value = loopsOf(engineBody(kiri))
+    } catch (e) {
+      loopsError.value = (e as Error).message ?? String(e)
+    } finally {
+      findingLoops.value = false
+    }
+  }
+  // a different drawing, outline height, kerf or smoothing makes different loops
+  watch(
+    () => [vertices.value, job.value?.process, job.value?.laser.cutHeight, job.value?.laser.kerf, job.value?.laser.smooth, job.value?.laser.outerOnly],
+    () => { laserLoops.value = null },
+  )
+
   async function prepare() {
     if (!job.value || !vertices.value || !part.value) return
     const id = ++runId
@@ -936,6 +977,7 @@ export const usePrepareStore = defineStore('prepare', () => {
       }
       const kiri = await runKiri(model, kj, onPhase, undefined, marks)
       if (id !== runId) return
+      if (j.process === 'laser') laserLoops.value = loopsOf(engineBody(kiri))
       const file = rhinoFile(kiri, j, p, m, STUDIO_VERSION)
       const { checks, stats } = checkFile(file.text, j, p, m)
       const t = /print time: (\d+)s/.exec(kiri)
@@ -999,6 +1041,11 @@ export const usePrepareStore = defineStore('prepare', () => {
     tuned,
     tunedOff,
     useTuned,
+    pickBit,
+    laserLoops,
+    findingLoops,
+    loopsError,
+    findLoops,
     confirmProcess,
     changeProcess,
     machineInfo,

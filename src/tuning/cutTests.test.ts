@@ -195,3 +195,97 @@ describe('Job setup from tuned values', () => {
     expect(tunedText('dragknife', tunedFor(st, 'DragKnife', 'VINYL')!)).toBe('depth 0.25 mm, blade offset 0.3 mm')
   })
 })
+
+import { diameterFrom, slotBounds, stockNeeded, throttlePct } from './cutTests'
+
+describe('C2-C4 spindle slots', () => {
+  const m = DEFAULT_MACHINE
+  const cncJob = () => newJob('HotJoe', 'cnc', [])
+  const bit = { diameter: 3.175, length: 12 }
+  for (const t of ['cnc_size', 'cnc_feed', 'cnc_depth'] as const) {
+    it(`${t}: from the work zero, inside the bit, and its file passes the check`, () => {
+      const d = cutDefaults(t, bit)
+      const i = { ...d, x: 5, y: 5 }
+      expect(cutProblem(t, i, m)).toBeNull()
+      const text = cutFile(t, { tool: 'HotJoe', material: 'SOFT_WOOD', bit: 'flat3' }, i, 1000)
+      expect(errors(text, cncJob())).toEqual([])
+      expect(text).toContain('; rhino_bit = flat3')
+      expect(text).toContain('CNC_JOB_SETUP')
+      const lines = text.split('\n')
+      // lifts before the first move across, plunges at the plunge feed, never deeper than the deepest slot
+      expect(lines.findIndex((l) => l.startsWith('G0 Z5'))).toBeLessThan(lines.findIndex((l) => l.startsWith('G0 X')))
+      expect(lines.filter((l) => /^G1 Z-/.test(l)).every((l) => l.endsWith(` F${d.plunge}`))).toBe(true)
+      expect(lines.slice(-3)).toEqual(['M5', 'END_PRINT', ''])
+      expect(lines.some((l) => /^M3|^SET_PIN|^Spindle_ACTIVATE/i.test(l))).toBe(false) // the setup runs the spindle, not the file
+      if (t !== 'cnc_size') expect(cutChoices(t, i)).toHaveLength(5)
+    })
+  }
+  it('starts shallow: half the bit, at most 1 mm, for the feed', () => {
+    expect(cutDefaults('cnc_feed', bit).depth).toBe(1)
+    expect(cutDefaults('cnc_feed', { diameter: 1, length: 4 }).depth).toBe(0.5)
+    expect(cutDefaults('cnc_depth', bit).depthFrom).toBeCloseTo(0.79, 2)
+  })
+  it('refuses cuts past the flutes, too deep for one pass, or off the zero', () => {
+    const d = { ...cutDefaults('cnc_depth', bit), x: 5, y: 5 }
+    expect(cutProblem('cnc_depth', { ...d, depthStep: 3 }, m)).toMatch(/cutting length/)
+    expect(cutProblem('cnc_depth', { ...d, length: 40, depthFrom: 2, depthStep: 1.5 }, m)).toMatch(/twice/)
+    expect(cutProblem('cnc_feed', { ...d, x: -1 }, m)).toMatch(/work zero/)
+    expect(cutProblem('cnc_feed', { ...d, feedTo: 100, feedFrom: 300 }, m)).toMatch(/slower to a faster/)
+  })
+  it('says how much stock the test needs', () => {
+    const i = { ...cutDefaults('cnc_feed', bit), x: 5, y: 5 }
+    const b = slotBounds(i, 5)
+    expect(b.x1).toBeCloseTo(5 + 5 * 3.175 + 4 * 4, 3)
+    expect(stockNeeded('cnc_feed', i)).toEqual({ x: Math.ceil(b.x1 + 5), y: 40 })
+  })
+  it('takes the true diameter from the slot, refusing a far-off reading', () => {
+    expect(diameterFrom(3.22, 3.175)).toEqual({ value: 3.22 })
+    expect('error' in diameterFrom(5, 3.175)).toBe(true)
+    expect('error' in diameterFrom(0, 3.175)).toBe(true)
+  })
+  it('shows the throttle as the CNC setup does', () => {
+    expect(throttlePct(0.6)).toBe(60)
+  })
+  it('keeps the spindle results per bit, and per material too where they count', () => {
+    const runs = [
+      { tool: 'HotJoe', test: 'cnc_feed', value: 900, time: 3, material: 'MDF', bit: 'flat3' },
+      { tool: 'HotJoe', test: 'cnc_diameter', value: 3.2, time: 2, bit: 'flat3' },
+      { tool: 'HotJoe', test: 'cnc_feed', value: 700, time: 1, material: 'MDF', bit: 'ball6' },
+    ]
+    expect(lastCut(runs, 'HotJoe', 'cnc_feed', 'MDF', 'ball6')?.value).toBe(700)
+    expect(lastCut(runs, 'HotJoe', 'cnc_feed', 'PINE', 'flat3')).toBeNull()
+    expect(lastCut(runs, 'HotJoe', 'cnc_diameter', 'ANY', 'flat3')?.value).toBe(3.2)
+    expect(cutFileName('cnc_feed', 'HotJoe', 'MDF', 'flat3')).toBe('tune-cnc_feed-HotJoe-MDF-flat3.gcode')
+  })
+})
+
+describe('Job setup from tuned values: the spindle, per bit', () => {
+  const v = (value: number, time = 10) => ({ value, time })
+  const st = {
+    heads: {},
+    materials: {
+      'HotJoe|bit=flat3': { cnc_diameter: v(3.22) },
+      'HotJoe|MDF|bit=flat3': { cnc_feed: v(900, 20), cnc_plunge: v(150), cnc_depth: v(1), cnc_throttle: v(0.6) },
+      'HotJoe|MDF|bit=ball6': { cnc_feed: v(400) },
+    },
+  }
+  it('reads the bit’s measured diameter and its cut values on the material', () => {
+    const t = tunedFor(st, 'HotJoe', 'MDF', 'flat3')!
+    expect(t.cnc).toEqual({ toolDiameter: 3.22, feed: 900, plunge: 150, stepDown: 1 })
+    expect(t.throttle).toBe(0.6)
+    expect(t.time).toBe(20)
+    expect(tunedFor(st, 'HotJoe', 'MDF', 'ball6')!.cnc).toEqual({ feed: 400 })
+    expect(tunedFor(st, 'HotJoe', 'MDF')).toBeNull() // no bit: nothing for the spindle
+    expect(tunedFor(st, 'HotJoe', 'PINE', 'flat3')!.cnc).toEqual({ toolDiameter: 3.22 }) // the diameter follows the bit
+  })
+  it('fills a CNC job, and says so with the throttle to set', () => {
+    const j = newJob('HotJoe', 'cnc', [])
+    j.cnc.stepDown = 2
+    const t = tunedFor(st, 'HotJoe', 'MDF', 'flat3')!
+    expect(tunedDiff(j, t).sort()).toEqual(['feed', 'plunge', 'stepDown', 'toolDiameter'])
+    applyTuned(j, t)
+    expect([j.cnc.toolDiameter, j.cnc.feed, j.cnc.plunge, j.cnc.stepDown]).toEqual([3.22, 900, 150, 1])
+    expect(tunedDiff(j, t)).toEqual([])
+    expect(tunedText('cnc', t)).toBe('diameter 3.22 mm (measured), feed 900 mm/min at 60 % throttle, 1 mm per pass, plunge 150 mm/min')
+  })
+})

@@ -41,6 +41,7 @@ const groups = computed<SectionGroup[]>(() => {
       items: [
         { to: '/assets/materials', label: 'Materials' },
         { to: '/assets/nozzles', label: 'Nozzles' },
+        { to: '/assets/bits', label: 'Bits' },
         { to: '/assets/categories', label: 'Categories' },
       ],
     },

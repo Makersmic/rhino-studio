@@ -93,6 +93,12 @@ export const engineOf = (j: Pick<PrepareJob, 'process' | 'engine'>): Engine => (
 export function jobSettings(j: PrepareJob): AnySettings {
   return engineOf(j) === 'prusa' ? clone(j.prusa ?? {}) : clone(j[SETTINGS_KEY[j.process]] as unknown as AnySettings)
 }
+/** What a profile keeps: the job's settings without anything tied to this one drawing (the laser's operations) */
+export function profileSettings(j: PrepareJob): AnySettings {
+  const s = jobSettings(j)
+  delete (s as Record<string, unknown>).ops
+  return s
+}
 export function setJobSettings(j: PrepareJob, s: AnySettings): void {
   if (engineOf(j) === 'prusa') j.prusa = clone(s) as Record<string, string>
   else (j as unknown as Record<string, AnySettings>)[SETTINGS_KEY[j.process]] = clone(s)

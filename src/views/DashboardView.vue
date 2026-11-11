@@ -81,7 +81,7 @@ const stats = computed<Stat[]>(() => {
       case 'bed-warm': return { id: r, label: (machine.bed.target ?? 0) > 0 ? 'Bed heating' : 'Bed still warm', value: t(machine.bed.temp), unit: '°', sub: setLine(machine.bed), alert: (machine.bed.target ?? 0) > 0 }
       case 'fan': return { id: r, label: 'Part fan', value: o.fan == null ? null : pc(o.fan), unit: '%', sub: 'Cooling' }
       case 'laser': return { id: r, label: 'Laser', value: o.laser?.armed ? pc(o.laser.power) : '0', unit: '%', sub: o.laser?.armed ? (o.laser.power > 0 ? 'Firing' : 'Armed') : 'Off', alert: !!o.laser?.armed }
-      case 'spindle': return { id: r, label: 'Spindle', value: o.spindle?.on ? pc(o.spindle.throttle) : '0', unit: '%', sub: o.spindle?.on ? 'Running · throttle' : 'Off' }
+      case 'spindle': return { id: r, label: 'Spindle', value: o.spindle?.on ? pc(o.spindle.throttle) : '0', unit: '%', sub: o.spindle?.turning ? 'Running · throttle' : o.spindle?.on ? 'Relay on · stopped' : 'Off' }
       case 'power': return { id: r, label: 'Tool power', value: o.toolPower?.active ? pc(o.toolPower.level) : '0', unit: '%', sub: o.toolPower?.active ? 'On' : 'Off' }
     }
   })

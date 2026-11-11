@@ -79,7 +79,28 @@ export interface FdmSettings {
   vase: boolean
 }
 
+/** A loop as a laser operation remembers it: centre and size (mm) from the drawing's lower-left corner */
+export interface LoopRef { x: number; y: number; w: number; h: number }
+
+/** One laser operation (src/slicer/laserOps.ts): its own settings for the loops it picked */
+export interface LaserOp {
+  id: string
+  kind: 'cut' | 'score' | 'fill'
+  name: string
+  /** 0..1 of the laser's full power */
+  power: number
+  /** mm/min */
+  feed: number
+  passes: number
+  /** fill: mm between engrave lines, and their angle in degrees */
+  spacing: number
+  angle: number
+  loops: LoopRef[]
+}
+
 export interface LaserSettings {
+  /** operations in the order they run; loops none of them picked use the settings below, last. Empty = one cut. */
+  ops?: LaserOp[]
   /** 0..1 of the laser's full power (laser_s_max) */
   power: number
   /** mm/min while cutting */
@@ -140,6 +161,8 @@ export interface CncOp {
 }
 
 export interface CncSettings {
+  /** the bit from the Rhino's bit list (Assets › Parts › Bits, Tool Manager 1.9.26): fills the tool fields; '' = typed */
+  bit?: string
   /** older jobs: became ops */
   operation?: CncOperation
   ops: CncOp[]

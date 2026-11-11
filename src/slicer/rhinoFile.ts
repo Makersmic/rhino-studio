@@ -22,6 +22,7 @@
  *              is started and stopped by CNC_JOB_SETUP / M5, not by this file.
  */
 import type { MachineInfo, PartInfo, PrepareJob } from './types'
+import { assembleLaser } from './laserOps'
 
 export const STUDIO_FILE_VERSION = 1
 
@@ -103,6 +104,11 @@ const PRUSA_KEEP = /^;(LAYER_CHANGE|Z:|HEIGHT:|TYPE:|WIDTH:|BEFORE_LAYER_CHANGE|
  * are dropped; from PrusaSlicer, every comment except its layer and feature
  * markers (its settings dump at the end would double the file).
  */
+/** The engine's moves, without its header comments (laser operations read the cut's loops from these) */
+export function engineBody(out: string, engine = 'Kiri:Moto'): string[] {
+  return body(out, engine)
+}
+
 function body(out: string, engine: string): string[] {
   if (engine === 'PrusaSlicer') {
     return out
@@ -189,12 +195,9 @@ export function rhinoFile(kiri: string, job: PrepareJob, part: PartInfo, _machin
       break
     }
     case 'laser': {
-      const passes = Math.max(1, Math.round(job.laser.passes))
       out.push('G21 ; millimetres', 'G90 ; absolute machine X/Y, same as the Studio bed', 'M5 ; laser off before the first move')
-      for (let p = 1; p <= passes; p++) {
-        if (passes > 1) out.push(`; pass ${p} of ${passes}`)
-        append(out, cut)
-      }
+      // by operation when the job has some (laserOps.ts), else the cut as Kiri wrote it, once per pass
+      append(out, assembleLaser(cut, job.laser, _machine.laserSMax))
       out.push('M5 ; laser off', 'DEACTIVATE_LASER ; laser power rail off', 'END_PRINT')
       break
     }

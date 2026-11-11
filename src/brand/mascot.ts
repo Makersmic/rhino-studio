@@ -37,6 +37,9 @@ export const TUNING_POSE: Record<string, Pose> = {
   laser_kerf: 'calipers',
   knife_offset: 'pipewrench',
   knife_depth: 'calipers',
+  cnc_size: 'calipers',
+  cnc_feed: 'spindle',
+  cnc_depth: 'spindle',
 }
 
 /** Done, and something went wrong (a refused save, a failed check) */

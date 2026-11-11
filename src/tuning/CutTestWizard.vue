@@ -1,10 +1,11 @@
 <script setup lang="ts">
 /**
- * One laser or drag knife tuning test (cutTests.ts): set it up, make the file, start it through the tool's setup macro
- * (Files' Start: LASER_JOB_SETUP / DRAGKNIFE_JOB_SETUP FILE=), pick what came out best, save. The file is checked like
- * any prepared job before it goes to the Rhino; the focus ramp's Z moves are allowed only by its own check.
+ * One laser, drag knife or spindle tuning test (cutTests.ts): set it up, make the file, start it through the tool's setup
+ * macro (Files' Start: LASER_JOB_SETUP / DRAGKNIFE_JOB_SETUP / CNC_JOB_SETUP FILE=), pick what came out best, save. The
+ * file is checked like any prepared job before it goes to the Rhino; the focus ramp's Z moves are allowed only by its
+ * own check. Spindle tests are per bit, and note the throttle the setup ran the spindle at.
  */
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import RsButton from '@/components/RsButton.vue'
 import '@/toolmgr/forms.css'
 import MascotRow from '@/components/MascotRow.vue'
@@ -17,11 +18,12 @@ import { useMachineStore } from '@/stores/machine'
 import { usePrepareStore } from '@/stores/prepare'
 import { useTuningStore } from '@/stores/tuning'
 import {
-  CUT_WIZARDS, COUNT, HEAD_VALUES, centred, cutChoices, cutDefaults, cutFile, cutFileName, cutProblem, cutValueProblem, focusRampSafe,
-  kerfFrom, lastCut, type CutChoice, type CutInputs, type CutTest, type CutValue,
+  BIT_VALUES, CUT_WIZARDS, COUNT, HEAD_VALUES, centred, cutChoices, cutDefaults, cutFile, cutFileName, cutProblem, cutValueProblem,
+  diameterFrom, focusRampSafe, kerfFrom, lastCut, stockNeeded, throttlePct, type CutChoice, type CutInputs, type CutTest, type CutValue,
 } from './cutTests'
+import type { Bit } from '@/toolmgr/bits'
 
-const props = defineProps<{ tool: string; test: CutTest; mat: Material }>()
+const props = defineProps<{ tool: string; test: CutTest; mat: Material; bit?: Bit | null }>()
 const emit = defineEmits<{ done: [] }>()
 const machine = useMachineStore()
 const control = useControlStore()
@@ -31,16 +33,22 @@ onMounted(() => { if (!tuning.state) void tuning.load() })
 
 const w = CUT_WIZARDS.find((c) => c.test === props.test)!
 const laser = w.process === 'laser'
-const tuned = (v: CutValue) => lastCut(tuning.state?.runs, props.tool, v, props.mat.name)?.value
+const spindle = w.process === 'cnc'
+const tuned = (v: CutValue) => lastCut(tuning.state?.runs, props.tool, v, props.mat.name, props.bit?.name)?.value
 const inp = reactive<CutInputs>((() => {
-  const d = cutDefaults(props.test, {
-    power: tuned('laser_cut_power') ?? props.mat.laserPower,
-    feed: (laser ? tuned('laser_cut_speed') : undefined) ?? props.mat.feed,
-    passes: tuned('laser_passes'),
-    depth: tuned('knife_depth'),
-  })
-  return { ...d, ...centred(props.test, d, prep.machineInfo.workArea) }
+  const d = cutDefaults(props.test, spindle
+    ? { feed: tuned('cnc_feed'), depth: props.test === 'cnc_depth' ? tuned('cnc_depth') : undefined, plunge: tuned('cnc_plunge'),
+        diameter: tuned('cnc_diameter') ?? props.bit?.diameter, length: props.bit?.length }
+    : {
+        power: tuned('laser_cut_power') ?? props.mat.laserPower,
+        feed: (laser ? tuned('laser_cut_speed') : undefined) ?? props.mat.feed,
+        passes: tuned('laser_passes'),
+        depth: tuned('knife_depth'),
+      })
+  // spindle tests are placed from the work zero (the stock's corner), 5 mm in
+  return { ...d, ...(spindle ? { x: 5, y: 5 } : centred(props.test, d, prep.machineInfo.workArea)) }
 })())
+const stock = computed(() => (spindle ? stockNeeded(props.test, inp) : null))
 // the form shows % for power
 const pct = (k: 'power' | 'powerFrom' | 'powerTo') => computed({ get: () => Math.round(inp[k] * 100), set: (v: number) => { inp[k] = v / 100 } })
 const power = pct('power')
@@ -53,6 +61,7 @@ const blockers = computed(() => {
   const out: string[] = []
   if (!machine.klippyReady) out.push('Klipper isn’t ready')
   if (!mounted.value) out.push(`Mount and confirm ${props.tool} first`)
+  if (spindle && !props.bit) out.push('Pick a bit first')
   return out
 })
 
@@ -68,7 +77,7 @@ async function makeTest() {
   msg.value = null
   try {
     const sMax = prep.machineInfo.laserSMax
-    const text = cutFile(props.test, { tool: props.tool, material: props.mat.name }, inp, sMax)
+    const text = cutFile(props.test, { tool: props.tool, material: props.mat.name, bit: props.bit?.name }, inp, sMax)
     // checked like a prepared job: the same refusals, the knife held to this test's deepest cut
     const job = newJob(props.tool, w.process, [])
     job.material = props.mat.key
@@ -77,7 +86,7 @@ async function makeTest() {
     const allowed = props.test === 'laser_focus' ? bad.filter((c) => c.id !== 'laserz') : bad
     const own = props.test === 'laser_focus' ? focusRampSafe(text, sMax) : null
     if (allowed.length || own) throw new Error(`Studio won’t send this test: ${own ?? allowed.map((c) => c.detail ?? c.label).join('; ')}`)
-    uploaded.value = await machine.uploadFile(new File([text], cutFileName(props.test, props.tool, props.mat.name), { type: 'text/plain' }))
+    uploaded.value = await machine.uploadFile(new File([text], cutFileName(props.test, props.tool, props.mat.name, props.bit?.name), { type: 'text/plain' }))
     step.value = 'run'
   } catch (e) {
     msg.value = { text: (e as Error).message, bad: true }
@@ -86,6 +95,16 @@ async function makeTest() {
   }
 }
 const running = computed(() => control.jobActive && !!uploaded.value && !!machine.job.filename && uploaded.value.endsWith(machine.job.filename))
+// the spindle's throttle while this test runs (the ESC pin: 0.3 stopped, 1.0 full): what the feed was found at
+const throttle = ref<number | null>(null)
+watch(
+  () => (machine.status['output_pin SPINDLE_SPEED'] as { value?: number } | undefined)?.value,
+  (v) => { if (spindle && running.value && typeof v === 'number' && v > 0.3 && (throttle.value == null || v > throttle.value)) throttle.value = v },
+)
+const throttlePctIn = computed({
+  get: () => (throttle.value == null ? null : throttlePct(throttle.value)),
+  set: (p: number | null) => { throttle.value = p == null || !Number.isFinite(p) ? null : Number((p / 100).toFixed(3)) },
+})
 
 // ---- judging
 const choices = computed(() => cutChoices(props.test, inp))
@@ -94,10 +113,12 @@ const pickedAt = ref<number | null>(null)
 const picked = computed<CutChoice | null>(() => (pickedAt.value == null ? null : (choices.value[pickedAt.value] ?? null)))
 const measured = ref<number | null>(null)
 const pressure = ref<number | null>(null)
-const kerf = computed(() => (measured.value == null ? null : kerfFrom(measured.value)))
+const kerf = computed(() => (measured.value == null ? null : props.test === 'cnc_size' ? diameterFrom(measured.value, props.bit?.diameter ?? inp.diameter) : kerfFrom(measured.value)))
 const toSave = computed<Partial<Record<CutValue, number>> | null>(() => {
   if (props.test === 'laser_kerf') return kerf.value && 'value' in kerf.value ? { laser_kerf: kerf.value.value, laser_cut_power: inp.power, laser_cut_speed: inp.feed, laser_passes: inp.passes } : null
+  if (props.test === 'cnc_size') return kerf.value && 'value' in kerf.value ? { cnc_diameter: kerf.value.value } : null
   if (!picked.value) return null
+  if (props.test === 'cnc_feed') return throttle.value != null ? { ...picked.value.values, cnc_throttle: throttle.value } : null
   return props.test === 'knife_depth' && pressure.value != null ? { ...picked.value.values, knife_pressure: pressure.value } : picked.value.values
 })
 const saveProblem = computed(() => {
@@ -110,10 +131,14 @@ const saveProblem = computed(() => {
 const LABEL: Record<CutValue, string> = {
   laser_focus_height: 'Focus height', laser_cut_power: 'Cut power', laser_cut_speed: 'Cut speed', laser_engrave_power: 'Engrave power',
   laser_engrave_speed: 'Engrave speed', laser_passes: 'Passes', laser_kerf: 'Kerf', knife_depth: 'Depth', knife_pressure: 'Pressure dial',
-  knife_blade_offset: 'Blade offset',
+  knife_blade_offset: 'Blade offset', cnc_diameter: 'True diameter', cnc_feed: 'Feed', cnc_throttle: 'Throttle', cnc_depth: 'Depth per pass',
+  cnc_plunge: 'Plunge',
 }
-const UNIT: Partial<Record<CutValue, string>> = { laser_focus_height: ' mm', laser_cut_speed: ' mm/min', laser_engrave_speed: ' mm/min', laser_kerf: ' mm', knife_depth: ' mm', knife_pressure: ' g', knife_blade_offset: ' mm' }
-const show = (k: CutValue, v: number) => (k.endsWith('_power') ? `${Math.round(v * 100)} %` : `${v}${UNIT[k] ?? ''}`)
+const UNIT: Partial<Record<CutValue, string>> = {
+  laser_focus_height: ' mm', laser_cut_speed: ' mm/min', laser_engrave_speed: ' mm/min', laser_kerf: ' mm', knife_depth: ' mm', knife_pressure: ' g',
+  knife_blade_offset: ' mm', cnc_diameter: ' mm', cnc_feed: ' mm/min', cnc_depth: ' mm', cnc_plunge: ' mm/min',
+}
+const show = (k: CutValue, v: number) => (k.endsWith('_power') ? `${Math.round(v * 100)} %` : k === 'cnc_throttle' ? `${throttlePct(v)} %` : `${v}${UNIT[k] ?? ''}`)
 const rows = computed(() => Object.entries(toSave.value ?? {}).map(([k, v]) => {
   const old = tuned(k as CutValue)
   return { k: k as CutValue, now: show(k as CutValue, v), was: old == null ? 'Not tuned' : show(k as CutValue, old) }
@@ -124,7 +149,11 @@ async function save() {
   busy.value = true
   msg.value = null
   try {
-    for (const [k, v] of Object.entries(toSave.value)) await tuning.save({ tool: props.tool, test: k as CutValue, value: v, material: HEAD_VALUES.has(k as CutValue) ? undefined : props.mat.name })
+    for (const [k, v] of Object.entries(toSave.value)) {
+      const key = k as CutValue
+      const perMat = !HEAD_VALUES.has(key) && !BIT_VALUES.has(key)
+      await tuning.save({ tool: props.tool, test: key, value: v, material: perMat ? props.mat.name : undefined, bit: spindle ? props.bit?.name : undefined })
+    }
     step.value = 'saved'
   } catch (e) {
     msg.value = { text: (e as Error).message, bad: true }
@@ -146,6 +175,11 @@ const gridRows = computed(() => [...Array(COUNT.grid).keys()].reverse()) // back
         <li>Laser glasses on, fume extraction running, an extinguisher nearby; you stay for the whole test.</li>
         <li v-if="test === 'laser_focus'">When the setup asks you to set focus, lower the laser until its shroud <strong>just touches</strong> the material (a sheet of paper should drag). The ramp lifts from 1 mm above that.</li>
         <li v-else>Set focus as usual when the setup asks{{ tuned('laser_focus_height') != null ? ` (tuned: ${tuned('laser_focus_height')} mm above the surface)` : '' }}.</li>
+      </ul>
+      <ul v-else-if="spindle" class="safety">
+        <li>Glasses and hearing protection on, extraction or a vacuum ready. Scrap stock of this material at least {{ stock?.x }} x {{ stock?.y }} mm, held down flat.</li>
+        <li>When the setup asks: X/Y zero on the stock’s front-left corner, Z zero on its top. Note the throttle you start the spindle at: Studio keeps it with the feed.</li>
+        <li v-if="bit">The {{ bit.name }} in the collet: {{ inp.diameter }} mm{{ tuned('cnc_diameter') != null ? ' (measured)' : '' }}, {{ bit.length }} mm cutting.</li>
       </ul>
       <ul v-else class="safety">
         <li>Material taped flat, backing sheet or mat under it, blade extended. Set Z zero on the surface when the setup asks.</li>
@@ -178,10 +212,28 @@ const gridRows = computed(() => [...Array(COUNT.grid).keys()].reverse()) // back
           <label>to<input v-model.number="inp.offsetTo" type="number" step="0.05" class="tm-in" /></label>
           <label>Depth (mm)<input v-model.number="inp.depth" type="number" min="0.01" step="0.05" class="tm-in" /></label>
         </template>
-        <label>Front-left corner X<input v-model.number="inp.x" type="number" class="tm-in" /></label>
+        <template v-else-if="test === 'cnc_feed'">
+          <label>Feed from (mm/min)<input v-model.number="inp.feedFrom" type="number" min="10" step="50" class="tm-in" /></label>
+          <label>to<input v-model.number="inp.feedTo" type="number" step="50" class="tm-in" /></label>
+          <label>Depth (mm)<input v-model.number="inp.depth" type="number" min="0.05" step="0.1" class="tm-in" /></label>
+          <label>Plunge (mm/min)<input v-model.number="inp.plunge" type="number" min="10" step="10" class="tm-in" /></label>
+        </template>
+        <template v-else-if="test === 'cnc_depth'">
+          <label>First depth (mm)<input v-model.number="inp.depthFrom" type="number" min="0.05" step="0.1" class="tm-in" /></label>
+          <label>Step (mm)<input v-model.number="inp.depthStep" type="number" min="0.05" step="0.1" class="tm-in" /></label>
+          <label>Feed (mm/min)<input v-model.number="inp.feed" type="number" min="10" step="50" class="tm-in" /></label>
+          <label>Plunge (mm/min)<input v-model.number="inp.plunge" type="number" min="10" step="10" class="tm-in" /></label>
+        </template>
+        <template v-else-if="test === 'cnc_size'">
+          <label>Depth (mm)<input v-model.number="inp.depth" type="number" min="0.05" step="0.1" class="tm-in" /></label>
+          <label>Feed (mm/min)<input v-model.number="inp.feed" type="number" min="10" step="50" class="tm-in" /></label>
+          <label>Plunge (mm/min)<input v-model.number="inp.plunge" type="number" min="10" step="10" class="tm-in" /></label>
+        </template>
+        <label>{{ spindle ? 'From the zero, X' : 'Front-left corner X' }}<input v-model.number="inp.x" type="number" class="tm-in" /></label>
         <label>Y<input v-model.number="inp.y" type="number" class="tm-in" /></label>
       </div>
-      <p class="hint">X and Y are machine positions: put the material under them. Studio keeps the test inside the bed and clear of the leadscrew.</p>
+      <p v-if="spindle" class="hint">X and Y are from the work zero you set on the stock’s corner. Studio keeps each cut within the bit’s cutting length and at most twice its diameter deep.</p>
+      <p v-else class="hint">X and Y are machine positions: put the material under them. Studio keeps the test inside the bed and clear of the leadscrew.</p>
 
       <ul v-if="blockers.length || problem" class="block">
         <li v-for="b in blockers" :key="b">{{ b }}</li>
@@ -196,7 +248,11 @@ const gridRows = computed(() => [...Array(COUNT.grid).keys()].reverse()) // back
     <!-- ===== run, then judge ===== -->
     <template v-else-if="step === 'run'">
       <ol class="run">
-        <li>Start it. The {{ laser ? 'laser' : 'knife' }} setup runs as for any job: the checklist, Z zero, the test {{ laser ? 'fire' : 'cut' }}, then the test.
+        <li v-if="spindle">Start it. The CNC setup runs as for any job: the checklist, X/Y zero on the corner, Z zero on the top, the spindle warm-up and its throttle, then the test.
+          <StartFile v-if="uploaded && !running" :file-path="uploaded" stay />
+          <span v-else-if="running" class="muted"> Running…{{ throttle != null ? ` Spindle at ${throttlePct(throttle)} %.` : '' }}</span>
+        </li>
+        <li v-else>Start it. The {{ laser ? 'laser' : 'knife' }} setup runs as for any job: the checklist, Z zero, the test {{ laser ? 'fire' : 'cut' }}, then the test.
           <StartFile v-if="uploaded && !running" :file-path="uploaded" stay />
           <span v-else-if="running" class="muted"> Running…</span>
         </li>
@@ -206,6 +262,9 @@ const gridRows = computed(() => [...Array(COUNT.grid).keys()].reverse()) // back
         <li v-else-if="test === 'laser_passes'">Squares from the left had 1 to 5 passes. Pick the fewest that cut right through.</li>
         <li v-else-if="test === 'laser_kerf'">Measure the square part that dropped out with calipers, across the flats.</li>
         <li v-else-if="test === 'knife_depth'">Lines from the left are deeper each time. Pick the shallowest that cut through cleanly, with the backing still whole.</li>
+        <li v-else-if="test === 'cnc_size'">Brush the chips out and measure across the slot with the caliper’s inside jaws, near the top.</li>
+        <li v-else-if="test === 'cnc_feed'">Slots from the left are faster each time. Pick the fastest with smooth walls, no burning or chatter, and a steady sound while it cut.</li>
+        <li v-else-if="test === 'cnc_depth'">Slots from the left are deeper each time. Pick the deepest that cut cleanly without the spindle bogging down or the bit deflecting.</li>
         <li v-else>Squares from the left have more offset each time. Pick the one with the sharpest, closed corners.</li>
       </ol>
 
@@ -221,8 +280,11 @@ const gridRows = computed(() => [...Array(COUNT.grid).keys()].reverse()) // back
       </div>
       <div class="form">
         <label v-if="test === 'laser_kerf'">The part measures (mm)<input v-model.number="measured" type="number" step="0.01" class="tm-in" /></label>
+        <label v-if="test === 'cnc_size'">The slot measures (mm)<input v-model.number="measured" type="number" step="0.01" class="tm-in" /></label>
+        <label v-if="test === 'cnc_feed'">Throttle it cut at (%)<input v-model.number="throttlePctIn" type="number" min="30" max="100" step="5" class="tm-in" /></label>
         <label v-if="test === 'knife_depth'">Pressure dial (g, optional)<input v-model.number="pressure" type="number" min="0" step="10" class="tm-in" /></label>
       </div>
+      <p v-if="test === 'cnc_feed' && picked && throttle == null" class="hint">Type the throttle the spindle ran at: the setup’s Ready to cut window says “Spindle running at …% throttle”.</p>
       <p v-if="kerf && 'error' in kerf" class="bad">{{ kerf.error }}</p>
 
       <table v-if="rows.length" class="was">
@@ -238,7 +300,7 @@ const gridRows = computed(() => [...Array(COUNT.grid).keys()].reverse()) // back
 
     <!-- ===== saved ===== -->
     <template v-else>
-      <p class="q">Saved for {{ tool }}{{ w.scope === 'stock' ? ` on ${mat.name}` : '' }}.</p>
+      <p class="q">Saved for {{ tool }}{{ w.scope === 'bit' ? ` with ${bit?.name}` : w.scope === 'cut' ? ` with ${bit?.name} on ${mat.name}` : w.scope === 'stock' ? ` on ${mat.name}` : '' }}.</p>
       <p class="hint">It's on the Rhino, in the backup, with what it replaced.</p>
       <div class="acts"><RsButton variant="primary" @click="emit('done')">Back to the tests</RsButton></div>
     </template>

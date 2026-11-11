@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * Under a laser or drag knife job's settings: what's tuned for this tool and material (cutTests.ts tunedFor), a way
+ * Under a laser, drag knife or CNC job's settings: what's tuned for this tool and material (cutTests.ts tunedFor), a way
  * back to those values after editing, or where to tune when nothing is.
  */
 import { computed } from 'vue'
@@ -16,12 +16,15 @@ const tuneLink = computed(() => `#/assets/toolheads/${encodeURIComponent(j.value
 
 <template>
   <p v-if="j && prep.tuned" class="tuned wide">
-    <span>Tuned for {{ matName }} on {{ date(prep.tuned.time) }}: {{ tunedText(j.process, prep.tuned) }}.</span>
+    <span>Tuned for {{ matName }}{{ j.process === 'cnc' ? ` with ${j.cnc.bit}` : '' }} on {{ date(prep.tuned.time) }}: {{ tunedText(j.process, prep.tuned) }}.<template v-if="j.process === 'cnc' && prep.tuned.throttle != null"> Set the throttle in the setup.</template></span>
     <button v-if="prep.tunedOff.length" type="button" class="link" @click="prep.useTuned()">Use tuned values</button>
     <span v-else class="muted">In use.</span>
   </p>
+  <p v-else-if="j && j.process === 'cnc' && !j.cnc.bit" class="tuned wide muted">
+    Pick one of your bits to start from its tested values (<a href="#/assets/bits">your bits</a>).
+  </p>
   <p v-else-if="j" class="tuned wide muted">
-    Not tuned for {{ matName }} yet. <a :href="tuneLink">Tune {{ j.toolhead }}</a> to start from tested values.
+    Not tuned for {{ matName }}{{ j.process === 'cnc' ? ` with ${j.cnc.bit}` : '' }} yet. <a :href="tuneLink">Tune {{ j.toolhead }}</a> to start from tested values.
   </p>
 </template>
 

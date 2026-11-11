@@ -24,10 +24,10 @@ import { useMachineStore } from '@/stores/machine'
 const route = useRoute()
 const tool = computed(() => String(route.params.name ?? ''))
 const prep = usePrepareStore()
-// a laser or a drag knife gets its own tests; everything else here is for print heads
+// a laser, a drag knife or the spindle gets its own tests; everything else here is for print heads
 const cut = computed(() => {
   const p = prep.tools.find((t) => t.name === tool.value)?.process
-  return p === 'laser' || p === 'dragknife' ? p : null
+  return p === 'laser' || p === 'dragknife' || p === 'cnc' ? p : null
 })
 const tuning = useTuningStore()
 onMounted(() => void tuning.load())
@@ -59,6 +59,7 @@ const date = (t: number) => new Date(t * 1000).toLocaleDateString(undefined, { d
     <div class="view-head">
       <h1>Tune {{ tool }}</h1>
       <p v-if="cut === 'laser'">Guided tests that each cut or mark a little scrap: focus, power and speed, passes, kerf. Each asks what you see and keeps the result on the Rhino, in the backup, for Job setup to start from.</p>
+      <p v-else-if="cut === 'cnc'">Guided tests that each cut a few slots in scrap: the bit’s true diameter, then feed, then depth per pass. Each asks what you see and keeps the result on the Rhino for that bit and material, for Job setup to start from.</p>
       <p v-else-if="cut">Guided tests that each cut a little scrap: depth, then blade offset. Each asks what you see and keeps the result on the Rhino, in the backup, for Job setup to start from.</p>
       <p v-else>Guided tests after Ellis’ Print Tuning Guide. Each one prints or pushes a little filament, asks what you see, and keeps the result on the Rhino, in the backup.</p>
     </div>

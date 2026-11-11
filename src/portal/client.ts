@@ -834,10 +834,10 @@ export class PortalClient {
     }
   }
   /** Keep a test's result; rev: the state it started from (a newer one is refused) */
-  async saveTuning(body: { rev: number; tool: string; test: SavedTest; value: number; nozzle?: number; material?: string }): Promise<TuningState> {
+  async saveTuning(body: { rev: number; tool: string; test: SavedTest; value: number; nozzle?: number; material?: string; bit?: string }): Promise<TuningState> {
     return this.write<TuningState>('tuning-result', 'POST', '/api/tuning/result', body)
   }
-  async clearTuning(body: { rev: number; tool: string; test: SavedTest; nozzle?: number; material?: string }): Promise<TuningState> {
+  async clearTuning(body: { rev: number; tool: string; test: SavedTest; nozzle?: number; material?: string; bit?: string }): Promise<TuningState> {
     return this.write<TuningState>('tuning-clear', 'POST', '/api/tuning/clear', body)
   }
 

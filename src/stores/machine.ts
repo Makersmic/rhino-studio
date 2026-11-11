@@ -231,8 +231,13 @@ export const useMachineStore = defineStore('machine', () => {
     return {
       fan: num(status.value.fan?.speed),
       laser: rail == null && laserPwm == null ? null : { armed: (rail ?? 0) > 0.01, power: laserPwm ?? 0 },
-      // The ESC reads 0.3 as stopped and 1.0 as full throttle
-      spindle: relay == null ? null : { on: relay > 0.5, throttle: relay > 0.5 && duty != null ? Math.max(0, Math.min(1, (duty - 0.3) / 0.7)) : 0 },
+      // The ESC reads 0.3 as stopped and 1.0 as full. Throttle is the pin's own value, as CNC_JOB_SETUP shows it
+      // ("Spindle running at 60% throttle"; Mike, Nov 11), so Control and the setup say the same number.
+      spindle: relay == null ? null : {
+        on: relay > 0.5,
+        throttle: relay > 0.5 && duty != null ? Math.max(0, Math.min(1, duty)) : 0,
+        turning: relay > 0.5 && duty != null && duty > 0.31,
+      },
       toolPower: tp ? { active: Number(tp.active) > 0, level: num(tp.level) ?? 0, suspended: Number(tp.suspended) > 0 } : null,
     }
   })

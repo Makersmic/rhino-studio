@@ -527,6 +527,7 @@ const prompt = (lines: string[]) => lines.forEach((l) => respond(`// action:${l}
 let relative = false
 let jobFile = ''
 let zeroNext = '' // SET_Z_ZERO NEXT= (mock)
+let mockBits: Array<Record<string, unknown>> = []
 const name = (slot: number) => toolMapping[slot] ?? (custom.tool_mapping as Record<number, string>)[slot] ?? `slot ${slot}`
 const arg = (line: string, k: string) => new RegExp(`${k}=("?)([^\\s"]+)\\1`, 'i').exec(line)?.[2]
 
@@ -1642,18 +1643,23 @@ async function portal(req: IncomingMessage, res: import('node:http').ServerRespo
     const b = (await readBody(req)) as Record<string, unknown>
     if (b.rev !== tu.rev) return json(res, 400, { ok: false, error: `Tuning was changed on another screen (now revision ${tu.rev}). Reload, then save again.` }), true
     const now = Math.floor(Date.now() / 1000)
-    // laser and drag knife values (Tool Manager 1.9.23): the key is the test; per tool, or per tool and material with no nozzle
+    // laser and drag knife values (Tool Manager 1.9.23): the key is the test; per tool, or per tool and material with no nozzle.
+    // The spindle's (1.9.26): per tool and bit (diameter), or per tool, material and bit.
     const t = String(b.test)
-    const cutKey = /^(laser|knife)_/.test(t) ? t : undefined
+    const cutKey = /^(laser|knife|cnc)_/.test(t) ? t : undefined
     const head = t === 'extruder_calibration' || t === 'laser_focus_height' || t === 'knife_blade_offset'
     const stock = !!cutKey && !head
+    const spindle = t.startsWith('cnc_')
+    if (spindle && !/^[A-Za-z0-9_.-]{1,40}$/.test(String(b.bit ?? ''))) return json(res, 400, { ok: false, error: 'Which bit?' }), true
     const key = cutKey ?? { extruder_calibration: 'rotation_distance', first_layer: 'first_layer_fine', pressure_advance: 'pressure_advance', extrusion_multiplier: 'extrusion_multiplier' }[t]
     if (!key) return json(res, 400, { ok: false, error: 'Unknown tuning test' }), true
-    const slot = head ? (tu.heads[String(b.tool)] ??= {}) : stock ? (tu.materials[`${b.tool}|${b.material}`] ??= {}) : (tu.materials[`${b.tool}|${Number(b.nozzle)}|${b.material}`] ??= {})
+    const slotKey = spindle ? (t === 'cnc_diameter' ? `${b.tool}|bit=${b.bit}` : `${b.tool}|${b.material}|bit=${b.bit}`) : stock ? `${b.tool}|${b.material}` : `${b.tool}|${Number(b.nozzle)}|${b.material}`
+    const slot = head ? (tu.heads[String(b.tool)] ??= {}) : (tu.materials[slotKey] ??= {})
     if (path === '/api/tuning/clear') delete slot[key]
     else {
       slot[key] = { value: Number(b.value), time: now, old: slot[key]?.value ?? null }
-      tu.runs.unshift({ tool: String(b.tool), test: String(b.test), value: Number(b.value), time: now, ...(head ? {} : stock ? { material: String(b.material) } : { nozzle: Number(b.nozzle), material: String(b.material) }) })
+      const where = head ? {} : spindle ? { bit: String(b.bit), ...(t === 'cnc_diameter' ? {} : { material: String(b.material) }) } : stock ? { material: String(b.material) } : { nozzle: Number(b.nozzle), material: String(b.material) }
+      tu.runs.unshift({ tool: String(b.tool), test: String(b.test), value: Number(b.value), time: now, ...where })
     }
     tu.rev += 1
     tu.updated = now
@@ -1920,7 +1926,18 @@ async function portal(req: IncomingMessage, res: import('node:http').ServerRespo
     }
   }
   if (req.method === 'GET' && url === '/api/options') return json(res, 200, portalFixture('options')), true
-  if (req.method === 'GET' && url === '/api/lists') return json(res, 200, portalFixture('lists')), true
+  // the spindle's bits (Tool Manager 1.9.26), kept in memory; MOCK_BITS=old: a Portal without them
+  if (req.method === 'GET' && url === '/api/lists') return json(res, 200, { ...(portalFixture('lists') as object), ...(process.env.MOCK_BITS === 'old' ? {} : { bits: mockBits }) }), true
+  if (req.method === 'POST' && url === '/api/lists') {
+    const b = (await readBody(req)) as { bits?: Array<Record<string, unknown>> }
+    if (Array.isArray(b.bits)) {
+      const names = b.bits.map((x) => String(x.name ?? ''))
+      if (names.some((n) => !/^[A-Za-z0-9_.-]{1,40}$/.test(n))) return json(res, 400, { ok: false, error: 'Bit name: no spaces' }), true
+      if (new Set(names).size !== names.length) return json(res, 400, { ok: false, error: 'Two bits share a name' }), true
+      mockBits = b.bits.map((x) => ({ name: String(x.name), type: x.type === 'ballmill' ? 'ballmill' : 'endmill', diameter: Number(x.diameter), flutes: Number(x.flutes), length: Number(x.length), note: String(x.note ?? '') }))
+    }
+    return json(res, 200, { ok: true, ...(portalFixture('lists') as object), bits: mockBits }), true
+  }
   if (req.method === 'GET' && url === '/api/maint/tasklib') return json(res, 200, portalFixture('tasklib')), true
   if (req.method === 'GET' && url === '/api/maint/lists') return json(res, 200, portalFixture('maint-lists')), true
   const sheet = url.match(/^\/api\/tools\/([^/]+)\/sheet$/)

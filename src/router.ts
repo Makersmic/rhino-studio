@@ -67,6 +67,7 @@ export const router = createRouter({
         { path: 'hooks', component: () => import('./views/toolheads/JobHooksView.vue'), meta: { title: 'Job hooks' } },
         { path: 'materials', component: () => import('./views/toolheads/ToolListsView.vue'), props: { part: 'materials' }, meta: { title: 'Materials' } },
         { path: 'nozzles', component: () => import('./views/toolheads/ToolListsView.vue'), props: { part: 'nozzles' }, meta: { title: 'Nozzles' } },
+        { path: 'bits', component: () => import('./views/toolheads/BitsView.vue'), meta: { title: 'Bits' } },
         { path: 'categories', component: () => import('./views/toolheads/ToolListsView.vue'), props: { part: 'categories' }, meta: { title: 'Categories' } },
       ],
     },

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 /** The tool page's Tuning panel: which wizards have been run for this tool (per material where it counts), and Tune. */
 import { computed, onMounted } from 'vue'
+import { useToolMgrStore } from '@/stores/toolmgr'
 import RsButton from '@/components/RsButton.vue'
 import { usePrepareStore } from '@/stores/prepare'
 import { useTuningStore } from '@/stores/tuning'
@@ -18,11 +19,16 @@ const head = computed(() => lastRun(tuning.state, props.tool, 'extruder_calibrat
 const perMat = WIZARDS.filter((w) => w.scope === 'material')
 // laser and drag knife: each test's values, per lens/blade or per material
 const proc = computed(() => processFor(props.type))
-const cut = computed(() => (proc.value === 'laser' || proc.value === 'dragknife' ? cutWizardsFor(proc.value) : null))
+const cut = computed(() => (proc.value === 'laser' || proc.value === 'dragknife' || proc.value === 'cnc' ? cutWizardsFor(proc.value) : null))
+// the spindle: per bit (true diameter), and per bit and material (feed, depth)
+const tm = useToolMgrStore()
+onMounted(() => { if (proc.value === 'cnc' && !tm.lists) void tm.loadLists().catch(() => {}) })
+const bitNames = computed(() => (tm.lists?.bits ?? []).map((b) => b.name))
+const bitTests = computed(() => (cut.value ?? []).filter((c) => c.scope === 'bit' || c.scope === 'cut'))
 const headTests = computed(() => (cut.value ?? []).filter((c) => c.saves.every((x) => HEAD_VALUES.has(x))))
 const stockTests = computed(() => (cut.value ?? []).filter((c) => c.scope === 'stock'))
 const cutMats = computed(() => [...new Set(prep.materialsOf(props.tool).map((m) => m.name))])
-const cutDone = (vals: CutValue[], mat?: string) => vals.map((v) => lastCut(tuning.state?.runs, props.tool, v, mat)).find((r) => r) ?? null
+const cutDone = (vals: CutValue[], mat?: string, bit?: string) => vals.map((v) => lastCut(tuning.state?.runs, props.tool, v, mat, bit)).find((r) => r) ?? null
 const seen = computed(() => {
   const out = new Map<string, { name: string; nozzle: number }>()
   for (const m of mats.value) out.set(materialKey(props.tool, m.nozzle, m.name), { name: m.name, nozzle: m.nozzle })
@@ -33,6 +39,27 @@ const seen = computed(() => {
 <template>
   <div class="tt">
     <p v-if="!tuning.supported" class="muted">Tuning needs Tool Manager 1.9.16 on the Rhino.</p>
+    <template v-else-if="cut && proc === 'cnc'">
+      <p v-if="!bitNames.length" class="muted">No bits yet: add them in Assets › Parts › Bits, then tune each one.</p>
+      <table v-else class="tgrid">
+        <thead>
+          <tr><th>Bit</th><th>Material</th><th v-for="w in bitTests" :key="w.test">{{ w.title }}</th></tr>
+        </thead>
+        <tbody>
+          <template v-for="b in bitNames" :key="b">
+            <tr v-for="m in (cutMats.length ? cutMats : [''])" :key="`${b}|${m}`">
+              <th>{{ b }}</th>
+              <td class="muted">{{ m || '–' }}</td>
+              <td v-for="w in bitTests" :key="w.test">
+                <template v-if="cutDone(w.saves, m, b)">✓ {{ date(cutDone(w.saves, m, b)!.time) }}</template>
+                <span v-else class="muted">–</span>
+              </td>
+            </tr>
+          </template>
+        </tbody>
+      </table>
+      <div class="acts"><RsButton size="sm" variant="primary" @click="$router.push(`/assets/toolheads/${encodeURIComponent(tool)}/tune`)">Tune {{ tool }}</RsButton></div>
+    </template>
     <template v-else-if="cut">
       <p v-for="w in headTests" :key="w.test" class="row" :class="{ done: cutDone(w.saves) }">
         <span class="mark" aria-hidden="true">{{ cutDone(w.saves) ? '✓' : '○' }}</span>

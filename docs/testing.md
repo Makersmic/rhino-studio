@@ -579,3 +579,21 @@ Run with the Rhino's network unplugged from the internet (the router's WAN cable
 ### Start wizard (laser and drag knife, Tool Manager 1.9.25)
 
 - [ ] **SW5 Start a laser job from Studio.** Files › a LightSaber file › Start. *Pass if:* the start wizard opens; Next stays off until every checklist line is ticked and until SET in Klipper's Set Z zero window; Trace the outline asks, then traces the job's corners 5 mm above the zero with the laser off; Test fire asks, fires the 5 % pulse, then asks "Is there a small, sharp mark"; Start the job asks, the job starts, Control opens and the laser only powers once the file has loaded. Repeat with the DragKnife (test cut, then "Cut looks good"). *Stop if:* anything moves or fires without asking, the outline is traced with the laser on or outside where the job sits, or the job starts without a fresh zero. Swap tools half way: *pass if* the wizard goes back to the Z zero step.
+
+### Spindle tuning and bits (Tool Manager 1.9.26)
+
+In scrap of the material, clamped flat, glasses and hearing protection on, extraction running.
+
+- [ ] **CT1 Bits.** Assets › Parts › Bits: add the bit in the collet (name without spaces, its packet diameter, flutes, cutting length), Save bits. *Pass if:* it's listed after a reload, and Tune HotJoe and Job setup offer it. *Stop if:* a bit saves with a space in its name.
+- [ ] **CT2 True diameter.** Tune HotJoe › True diameter, start it. In the CNC setup: X/Y zero on the stock's front-left corner, Z zero on its top. *Pass if:* one 30 mm slot 5 mm in from both edges, as deep as set; the caliper's inside jaws read close to the bit's size (within 0.1 mm), and Save keeps it once for the bit. *Stop if:* the bit plunges outside the stock, deeper than set, or before the spindle runs.
+- [ ] **CT3 Feed.** *Pass if:* five slots left to right, faster each time, all at the same shallow depth; the bit lifts 5 mm between them; the Was/Now table shows the throttle the setup ran at; Save keeps feed and throttle for this bit and material. *Stop if:* a slot runs at a feed other than its label (watch the console), or the spindle stops mid-slot.
+- [ ] **CT4 Depth per pass.** *Pass if:* five slots, deeper each time, never deeper than the bit's cutting length; Save keeps depth and plunge. *Stop if:* the spindle bogs down or the bit deflects visibly on the first slot: stop and lower the first depth.
+- [ ] **CT5 Job setup.** A CNC job for that material: pick the bit. *Pass if:* tool type, the measured diameter, cutting length, feed, plunge and depth per pass fill in, and the line under the settings names the bit and the throttle to set in the setup. *Stop if:* another bit's or material's values appear.
+
+### Laser operations (Job setup › Settings)
+
+On scrap plywood, glasses on, extraction running. A drawing with an outline and two holes inside it.
+
+- [ ] **LO1 Picking.** Add an Engrave fill, click one hole on the drawing; add a Cut, click the outline. *Pass if:* the drawing shows the numbers on the loops, the fill hatched; a loop picked for a second cut leaves the first; the warning says the outline cuts around loops that run after it until it's the last operation. *Stop if:* a click picks a different loop than the one under the pointer.
+- [ ] **LO2 The job.** Prepare, then run it through the start wizard. *Pass if:* the Preview and the cut follow the list: the fill engraves the hole at its power and spacing, the other hole is cut by Everything else, and the outline is cut once everything inside it is done (move it to the bottom first). *Stop if:* the laser fires at a power or place that isn't in the list, or the outline is cut before the work inside it.
+- [ ] **LO3 Kept with the file.** Close Studio, open Job setup with the same drawing. *Pass if:* the operations and their picks come back; moving the part keeps the picks. *Stop if:* the picks land on other loops.

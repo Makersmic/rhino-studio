@@ -117,10 +117,10 @@ const jobLabel: Record<string, string> = { standby: 'Idle', printing: 'Running',
       <OutputCell
         v-else-if="r === 'spindle' && out.spindle"
         label="Spindle"
-        :state="out.spindle.on ? 'Running' : 'Off'"
+        :state="out.spindle.turning ? 'Running' : out.spindle.on ? 'Stopped' : 'Off'"
         :live="out.spindle.on"
         :percent="out.spindle.on ? pct(out.spindle.throttle) : 0"
-        :sub="out.spindle.on ? 'Throttle' : 'Relay open'"
+        :sub="out.spindle.turning ? 'Throttle' : out.spindle.on ? 'Relay on · 30 % is stopped' : 'Relay open'"
       />
       <OutputCell
         v-else-if="r === 'power' && out.toolPower"

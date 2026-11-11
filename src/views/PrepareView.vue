@@ -34,6 +34,8 @@ import PrusaPanel from '@/prepare/PrusaPanel.vue'
 import ProfileBar from '@/prepare/ProfileBar.vue'
 import { rhinoBase, firstOf, valueOf } from '@/slicer/prusa/config'
 import CncOps from '@/prepare/CncOps.vue'
+import CncBitField from '@/prepare/CncBitField.vue'
+import LaserOps from '@/prepare/LaserOps.vue'
 import ToolCard from '@/prepare/ToolCard.vue'
 import { PROCESS_ACTION, PROCESS_LABEL, prettyMaterial, toolFacts } from '@/prepare/facts'
 import { usePrepareStore } from '@/stores/prepare'
@@ -556,10 +558,11 @@ const engineNote = computed(() => {
           <div v-else-if="proc === 'laser'" class="grid">
             <NumField v-model="job.laser.power" label="Power" unit="%" :min="0.01" :max="1" :step="0.05" percent :hint="`S ${Math.round(job.laser.power * prep.machineInfo.laserSMax)} of ${prep.machineInfo.laserSMax}`" />
             <NumField v-model="job.laser.feed" label="Speed" unit="mm/min" :min="10" :max="6000" :step="10" />
-            <NumField v-model="job.laser.passes" label="Passes" :min="1" :max="20" hint="The whole cut, repeated" />
+            <NumField v-model="job.laser.passes" label="Passes" :min="1" :max="20" :hint="job.laser.ops?.length ? 'Everything else, repeated' : 'The whole cut, repeated'" />
             <NumField v-model="job.laser.kerf" label="Kerf" unit="mm" :min="0" :max="1" :step="0.05" hint="Beam width allowance" />
             <NumField v-if="!prep.flat" v-model="job.laser.cutHeight" label="Cut outline at" unit="mm" :min="0.01" :max="prep.part?.size.z ?? 1000" :step="0.5" hint="Height above the bed" />
             <TunedNote />
+            <LaserOps />
           </div>
           <div v-if="proc === 'laser'" class="adv">
             <FoldGroup title="Advanced" note="smoothing, outer outline only">
@@ -585,6 +588,7 @@ const engineNote = computed(() => {
           </div>
 
           <div v-else-if="proc === 'cnc'" class="grid">
+            <CncBitField />
             <div class="field">
               <label for="prep-tool">Tool</label>
               <select id="prep-tool" v-model="job.cnc.toolType">
@@ -600,6 +604,7 @@ const engineNote = computed(() => {
             <CncOps :cnc="job.cnc" />
             <NumField v-model="job.cnc.margin" label="Stock margin" unit="mm" :min="0" :max="100" hint="Each side of the part" />
             <NumField v-model="job.cnc.extraTop" label="Stock above the part" unit="mm" :min="0" :max="50" :step="0.5" hint="0 = stock as thick as the part" />
+            <TunedNote />
             <p class="muted small wide">One tool per job: the Rhino has no tool changer. Clamp the stock, then CNC_JOB_SETUP sets X0 Y0 on its front-left corner and Z0 on its top.</p>
           </div>
 

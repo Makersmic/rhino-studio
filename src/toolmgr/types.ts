@@ -223,6 +223,8 @@ export interface ToolLists {
   materials: Record<string, string[]>
   nozzles: number[]
   hw_categories: { id: string; label: string }[]
+  /** Tool Manager 1.9.26+: the spindle's bits (src/toolmgr/bits.ts) */
+  bits?: import('./bits').Bit[]
   in_use: { kinds: Record<string, string[]>; hw_categories: Record<string, string[]> }
   builtin_kinds: string[]
   categories: { value: string; label: string; help?: string }[]
