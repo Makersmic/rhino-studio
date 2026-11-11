@@ -30,6 +30,7 @@ describe('help', () => {
     expect(helpFor('/assets/toolheads/LightSaber/tune', proc)).toEqual({ chapter: 'tuning-a-laser-or-drag-knife' })
     expect(helpFor('/assets/toolheads/DragKnife/tune', proc)).toEqual({ chapter: 'tuning-a-laser-or-drag-knife' })
     expect(helpFor('/assets/toolheads/BlockOne/tune', proc)).toEqual({ chapter: 'tuning-a-print-head' })
+    expect(helpFor('/start')).toEqual({ chapter: 'running-a-job', section: 'start-wizard' })
     expect(helpFor('/settingsx')).toBeNull()
     expect(helpFor('/style')).toBeNull()
   })

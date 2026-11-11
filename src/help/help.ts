@@ -25,7 +25,7 @@ export const HELP_FOR: [prefix: string, target: HelpTarget][] = [
   ['/setup', { chapter: 'job-setup-and-preview' }],
   ['/preview', { chapter: 'job-setup-and-preview' }],
   ['/control', { chapter: 'control' }],
-  ['/start', { chapter: 'running-a-job' }],
+  ['/start', { chapter: 'running-a-job', section: 'start-wizard' }],
   ['/pendant', { chapter: 'control' }],
   ['/bed/mesh', { chapter: 'bed', section: 'bed-mesh' }],
   ['/bed/config', { chapter: 'bed', section: 'configuration-moving-one-lead-screw' }],
