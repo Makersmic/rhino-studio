@@ -4,7 +4,7 @@
  */
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { storeScript, unstoreScript, type TuningState, type TuningTest } from '@/tuning/tuning'
+import { storeScript, unstoreScript, type SavedTest, type TuningState } from '@/tuning/tuning'
 import { useToolMgrStore } from './toolmgr'
 import { useControlStore } from './control'
 
@@ -26,7 +26,7 @@ export const useTuningStore = defineStore('tuning', () => {
     }
     return state.value
   }
-  async function save(body: { tool: string; test: TuningTest; value: number; nozzle?: number; material?: string }): Promise<TuningState> {
+  async function save(body: { tool: string; test: SavedTest; value: number; nozzle?: number; material?: string }): Promise<TuningState> {
     const cur = state.value ?? (await load())
     const s = await tm.client().saveTuning({ rev: cur?.rev ?? 0, ...body })
     state.value = { ...s, ok: true }
@@ -36,7 +36,7 @@ export const useTuningStore = defineStore('tuning', () => {
       throw new Error('Saved in Studio, but Klipper didn’t store it, so jobs won’t use it yet. Use “Store on the Rhino” on the Tune page.')
     return state.value
   }
-  async function clear(body: { tool: string; test: TuningTest; nozzle?: number; material?: string }) {
+  async function clear(body: { tool: string; test: SavedTest; nozzle?: number; material?: string }) {
     const cur = state.value ?? (await load())
     state.value = { ...(await tm.client().clearTuning({ rev: cur?.rev ?? 0, ...body })), ok: true }
     const line = unstoreScript(body.test, body.tool, body.nozzle, body.material)

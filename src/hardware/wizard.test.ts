@@ -13,7 +13,7 @@ const dev = (over: Partial<HwDevice>): HwDevice => ({
 describe('Add hardware wizard', () => {
   it('five questions plus the check, each with its mascot pose', () => {
     expect(WIZ_STEPS).toEqual(['What', 'Wiring', 'Tools', 'Follows', 'Shows', 'Check'])
-    expect(WIZ_STEPS.map((s) => STEP_POSE[s])).toEqual(['what', 'wiring', 'tools', 'follows', 'shows', 'done'])
+    expect(WIZ_STEPS.map((s) => STEP_POSE[s])).toEqual(['carry', 'connect', 'wrench', 'meter', 'pendant', 'calipers'])
   })
 
   it('a new draft takes the catalog defaults and the first follows rule that is built', () => {

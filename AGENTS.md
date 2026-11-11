@@ -42,7 +42,8 @@ and keep it maintained. Vue 3 + TypeScript (strict) + Vite, Pinia, vue-router (h
 - Archivo for the interface; DSEG7 (`.rs-num`) only for big readouts; JetBrains Mono for positions, G-code and the console.
 - Every colour and size comes from `src/styles/tokens.css`. Check light and dark, desktop and phone (and about 760 px).
 - Sentence case, plain verbs, say what will happen. Empty states explain what's missing.
-- The wizard mascot appears only in the Add hardware wizard and only from `scripts/wizard_poses.py`.
+- The wizard mascot is Mike's rhino crew: every wizard step stands beside a pose (`MascotRow`, poses chosen in
+  `src/brand/mascot.ts`, pictures cut by `scripts/wizard_art.py`). Nowhere else. The shocked rhinos only mean trouble.
 
 ## Where things live
 

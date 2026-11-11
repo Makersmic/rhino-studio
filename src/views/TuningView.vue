@@ -1,7 +1,8 @@
 <script setup lang="ts">
 /**
  * Tune a print head (Assets › Toolheads › a print head › Tune): the wizards in Ellis' order, each with why it comes
- * there and when it was last run, and the one being run. 3D printing first (Mike, Nov 8); other heads later.
+ * there and when it was last run, and the one being run. 3D printing first (Mike, Nov 8); the laser and the drag knife
+ * have their own tests (CutTuning.vue, Nov 10). Every running wizard sits beside the mascot.
  */
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
@@ -11,6 +12,9 @@ import ExtruderCalWizard from '@/tuning/ExtruderCalWizard.vue'
 import FirstLayerWizard from '@/tuning/FirstLayerWizard.vue'
 import PressureAdvanceWizard from '@/tuning/PressureAdvanceWizard.vue'
 import ExtrusionWizard from '@/tuning/ExtrusionWizard.vue'
+import CutTuning from '@/tuning/CutTuning.vue'
+import MascotRow from '@/components/MascotRow.vue'
+import { TUNING_POSE } from '@/brand/mascot'
 import { WIZARDS, lastRun, unstored, type TuningTest } from '@/tuning/tuning'
 import { usePrepareStore } from '@/stores/prepare'
 import { useTuningStore } from '@/stores/tuning'
@@ -20,6 +24,11 @@ import { useMachineStore } from '@/stores/machine'
 const route = useRoute()
 const tool = computed(() => String(route.params.name ?? ''))
 const prep = usePrepareStore()
+// a laser or a drag knife gets its own tests; everything else here is for print heads
+const cut = computed(() => {
+  const p = prep.tools.find((t) => t.name === tool.value)?.process
+  return p === 'laser' || p === 'dragknife' ? p : null
+})
 const tuning = useTuningStore()
 onMounted(() => void tuning.load())
 
@@ -49,8 +58,13 @@ const date = (t: number) => new Date(t * 1000).toLocaleDateString(undefined, { d
   <div class="view">
     <div class="view-head">
       <h1>Tune {{ tool }}</h1>
-      <p>Guided tests after Ellis’ Print Tuning Guide. Each one prints or pushes a little filament, asks what you see, and keeps the result on the Rhino, in the backup.</p>
+      <p v-if="cut === 'laser'">Guided tests that each cut or mark a little scrap: focus, power and speed, passes, kerf. Each asks what you see and keeps the result on the Rhino, in the backup, for Job setup to start from.</p>
+      <p v-else-if="cut">Guided tests that each cut a little scrap: depth, then blade offset. Each asks what you see and keeps the result on the Rhino, in the backup, for Job setup to start from.</p>
+      <p v-else>Guided tests after Ellis’ Print Tuning Guide. Each one prints or pushes a little filament, asks what you see, and keeps the result on the Rhino, in the backup.</p>
     </div>
+
+    <CutTuning v-if="cut" :tool="tool" :process="cut" />
+    <template v-else>
 
     <RsPanel title="Material" panel-id="tune.material">
       <label class="fld">
@@ -73,19 +87,19 @@ const date = (t: number) => new Date(t * 1000).toLocaleDateString(undefined, { d
     </RsPanel>
 
     <RsPanel v-if="running === 'extruder_calibration'" title="Extruder calibration" panel-id="tune.extruder">
-      <ExtruderCalWizard :tool="tool" :temp="temp" @done="running = null" />
+      <MascotRow :pose="TUNING_POSE[running!]!"><ExtruderCalWizard :tool="tool" :temp="temp" @done="running = null" /></MascotRow>
     </RsPanel>
 
     <RsPanel v-else-if="running === 'first_layer' && mat" :title="`First-layer squish: ${mat.name} ${mat.nozzle ?? 0.4} mm`" panel-id="tune.squish">
-      <FirstLayerWizard :tool="tool" :mat="mat" @done="running = null" />
+      <MascotRow :pose="TUNING_POSE[running!]!"><FirstLayerWizard :tool="tool" :mat="mat" @done="running = null" /></MascotRow>
     </RsPanel>
 
     <RsPanel v-else-if="running === 'pressure_advance' && mat" :title="`Pressure advance: ${mat.name} ${mat.nozzle ?? 0.4} mm`" panel-id="tune.pa">
-      <PressureAdvanceWizard :tool="tool" :mat="mat" @done="running = null" />
+      <MascotRow :pose="TUNING_POSE[running!]!"><PressureAdvanceWizard :tool="tool" :mat="mat" @done="running = null" /></MascotRow>
     </RsPanel>
 
     <RsPanel v-else-if="running === 'extrusion_multiplier' && mat" :title="`Extrusion multiplier: ${mat.name} ${mat.nozzle ?? 0.4} mm`" panel-id="tune.em">
-      <ExtrusionWizard :tool="tool" :mat="mat" @done="running = null" />
+      <MascotRow :pose="TUNING_POSE[running!]!"><ExtrusionWizard :tool="tool" :mat="mat" @done="running = null" /></MascotRow>
     </RsPanel>
 
     <RsPanel v-else title="Tests, in order" panel-id="tune.list">
@@ -104,6 +118,7 @@ const date = (t: number) => new Date(t * 1000).toLocaleDateString(undefined, { d
         </li>
       </ol>
     </RsPanel>
+    </template>
   </div>
 </template>
 

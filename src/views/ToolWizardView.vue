@@ -13,6 +13,8 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import RsButton from '@/components/RsButton.vue'
 import RsPanel from '@/components/RsPanel.vue'
+import MascotRow from '@/components/MascotRow.vue'
+import { TOOL_STEP_POSE } from '@/brand/mascot'
 import ToolConnector from '@/toolmgr/ToolConnector.vue'
 import MaterialsTable from '@/toolmgr/MaterialsTable.vue'
 import ItemsPanel from '@/toolmgr/ItemsPanel.vue'
@@ -195,7 +197,7 @@ function onPhotos(e: Event) {
       </ol>
 
       <RsPanel :title="`${String(at + 1).padStart(2, '0')} · ${step}`" panel-id="wizard.step">
-        <div class="stepbody">
+        <MascotRow :pose="TOOL_STEP_POSE[step]"><div class="stepbody">
           <!-- ===== Tool ===== -->
           <template v-if="step === 'Tool'">
             <fieldset class="tm-set">
@@ -334,7 +336,7 @@ function onPhotos(e: Event) {
               </div>
             </template>
           </template>
-        </div>
+        </div></MascotRow>
       </RsPanel>
 
       <p v-if="error" class="tm-err" role="alert">{{ error }}</p>

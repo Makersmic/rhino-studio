@@ -6,8 +6,11 @@
  * multiplier (_RHINO_APPLY_TUNING), CALCULATE_PA the pressure advance. Stored if there is one, printer.cfg (or the PA
  * estimate) if not; so a test file or any other job file never carries tuned values of its own.
  */
+import type { CutValue } from './cutTests'
 
 export type TuningTest = 'extruder_calibration' | 'first_layer' | 'pressure_advance' | 'extrusion_multiplier'
+/** What the Portal keeps: a print head test, or a laser / drag knife value (cutTests.ts) */
+export type SavedTest = TuningTest | CutValue
 
 export interface TunedValue {
   value: number
@@ -16,7 +19,7 @@ export interface TunedValue {
 }
 export interface TuningRun {
   tool: string
-  test: TuningTest
+  test: SavedTest
   value: number
   time: number
   nozzle?: number
@@ -27,8 +30,10 @@ export interface TuningState {
   error?: string
   rev: number
   updated: number
-  heads: Record<string, { rotation_distance?: TunedValue }>
-  materials: Record<string, { pressure_advance?: TunedValue; extrusion_multiplier?: TunedValue; first_layer_fine?: TunedValue }>
+  /** per tool: rotation_distance, laser_focus_height, knife_blade_offset */
+  heads: Record<string, Partial<Record<string, TunedValue>>>
+  /** "tool|nozzle|material" (print heads) or "tool|material" (laser, knife) */
+  materials: Record<string, Partial<Record<string, TunedValue>>>
   runs: TuningRun[]
 }
 
@@ -54,14 +59,14 @@ export function nozzleKey(n: number): string {
 /** The tests whose result Klipper applies at job start; the first-layer fine-tune has its own (zFineVariable) */
 export const STORED_TESTS = ['extruder_calibration', 'pressure_advance', 'extrusion_multiplier'] as const
 export type StoredTest = (typeof STORED_TESTS)[number]
-const isStored = (t: TuningTest): t is StoredTest => (STORED_TESTS as readonly string[]).includes(t)
+const isStored = (t: SavedTest): t is StoredTest => (STORED_TESTS as readonly string[]).includes(t)
 
 /**
  * The save variable for a result: rhino_rd_<head> (once per head), rhino_pa_<head>_<material>_<nozzle> and
  * rhino_em_<head>_<material>_<nozzle>. The material is its short name (PLA), as START_JOB's MATERIAL=, with no
  * SwitchFly path: both paths feed the same extruder, so a value covers both. Lower case, as Klipper keeps them.
  */
-export function storedVariable(test: TuningTest, tool: string, nozzle?: number, material?: string): string | null {
+export function storedVariable(test: SavedTest, tool: string, nozzle?: number, material?: string): string | null {
   if (!isStored(test)) return null
   if (test === 'extruder_calibration') return `rhino_rd_${tool}`.toLowerCase()
   if (nozzle == null || !material) return null
@@ -69,12 +74,12 @@ export function storedVariable(test: TuningTest, tool: string, nozzle?: number, 
   return `${test === 'pressure_advance' ? 'rhino_pa' : 'rhino_em'}_${k}`
 }
 /** The line that stores it (null for a test Klipper doesn't apply) */
-export function storeScript(test: TuningTest, tool: string, value: number, nozzle?: number, material?: string): string | null {
+export function storeScript(test: SavedTest, tool: string, value: number, nozzle?: number, material?: string): string | null {
   const v = storedVariable(test, tool, nozzle, material)
   return v && Number.isFinite(value) ? `SAVE_VARIABLE VARIABLE=${v} VALUE=${value}` : null
 }
 /** The line that forgets it: None reads as "not tuned" in the macros */
-export function unstoreScript(test: TuningTest, tool: string, nozzle?: number, material?: string): string | null {
+export function unstoreScript(test: SavedTest, tool: string, nozzle?: number, material?: string): string | null {
   const v = storedVariable(test, tool, nozzle, material)
   return v ? `SAVE_VARIABLE VARIABLE=${v} VALUE=None` : null
 }
@@ -160,7 +165,7 @@ export const SQUISH = { height: 0.25, widthFactor: 1.2, size: 30, feed: 1200, tr
 /** Filament area for 1.75 mm filament (mm²) */
 const FILAMENT_AREA = Math.PI * (1.75 / 2) ** 2
 
-type Rect = { x0: number; y0: number; x1: number; y1: number }
+export type Rect = { x0: number; y0: number; x1: number; y1: number }
 const overlaps = (a: Rect, b: Rect) => a.x0 < b.x1 && a.x1 > b.x0 && a.y0 < b.y1 && a.y1 > b.y0
 
 /** Where the patches go: the middle and four spots towards the corners, each moved clear of the areas to keep clear */

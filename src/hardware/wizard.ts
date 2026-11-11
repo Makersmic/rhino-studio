@@ -4,6 +4,7 @@
  * body the Portal saves. The Portal checks everything again before writing; these checks only stop a
  * step that obviously isn't finished.
  */
+import type { Pose } from '@/brand/mascot'
 
 export type PinKind = 'digital_in' | 'digital_out' | 'pwm_out' | 'adc' | 'spi_cs' | 'i2c' | 'data' | 'clock' | 'step' | 'dir' | 'enable' | 'tach'
 
@@ -120,14 +121,14 @@ export const STEP_HELP: Record<WizStep, string> = {
   Shows: 'Control tab, Dashboard, macros',
   Check: 'Checked against your config',
 }
-/** The mascot pose beside each question (rhino-studio/src/assets/wizard/, from scripts/wizard_poses.py). */
-export const STEP_POSE: Record<WizStep, string> = {
-  What: 'what',
-  Wiring: 'wiring',
-  Tools: 'tools',
-  Follows: 'follows',
-  Shows: 'shows',
-  Check: 'done',
+/** The mascot pose beside each question (src/brand/mascot.ts) */
+export const STEP_POSE: Record<WizStep, Pose> = {
+  What: 'carry',
+  Wiring: 'connect',
+  Tools: 'wrench',
+  Follows: 'meter',
+  Shows: 'pendant',
+  Check: 'calipers',
 }
 
 /** Settings that describe the wiring; the rest describe behaviour and go under Follows. */

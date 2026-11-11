@@ -1582,7 +1582,7 @@ async function portal(req: IncomingMessage, res: import('node:http').ServerRespo
       return json(res, 200, { ok: true, zip: body.zip }), true
     }
   }
-  // Print head tuning (Tool Manager 1.9.16), kept in memory. MOCK_TUNING=old (Portal before 1.9.16)
+  // Tuning (Tool Manager 1.9.16; laser and knife 1.9.23), kept in memory. MOCK_TUNING=old (Portal before 1.9.16)
   if (url.startsWith('/api/tuning')) {
     if (process.env.MOCK_TUNING === 'old') return json(res, 404, { ok: false, error: 'Not found' }), true
     const path = url.split('?')[0]!
@@ -1591,14 +1591,18 @@ async function portal(req: IncomingMessage, res: import('node:http').ServerRespo
     const b = (await readBody(req)) as Record<string, unknown>
     if (b.rev !== tu.rev) return json(res, 400, { ok: false, error: `Tuning was changed on another screen (now revision ${tu.rev}). Reload, then save again.` }), true
     const now = Math.floor(Date.now() / 1000)
-    const head = b.test === 'extruder_calibration'
-    const key = { extruder_calibration: 'rotation_distance', first_layer: 'first_layer_fine', pressure_advance: 'pressure_advance', extrusion_multiplier: 'extrusion_multiplier' }[String(b.test)]
+    // laser and drag knife values (Tool Manager 1.9.23): the key is the test; per tool, or per tool and material with no nozzle
+    const t = String(b.test)
+    const cutKey = /^(laser|knife)_/.test(t) ? t : undefined
+    const head = t === 'extruder_calibration' || t === 'laser_focus_height' || t === 'knife_blade_offset'
+    const stock = !!cutKey && !head
+    const key = cutKey ?? { extruder_calibration: 'rotation_distance', first_layer: 'first_layer_fine', pressure_advance: 'pressure_advance', extrusion_multiplier: 'extrusion_multiplier' }[t]
     if (!key) return json(res, 400, { ok: false, error: 'Unknown tuning test' }), true
-    const slot = head ? (tu.heads[String(b.tool)] ??= {}) : (tu.materials[`${b.tool}|${Number(b.nozzle)}|${b.material}`] ??= {})
+    const slot = head ? (tu.heads[String(b.tool)] ??= {}) : stock ? (tu.materials[`${b.tool}|${b.material}`] ??= {}) : (tu.materials[`${b.tool}|${Number(b.nozzle)}|${b.material}`] ??= {})
     if (path === '/api/tuning/clear') delete slot[key]
     else {
       slot[key] = { value: Number(b.value), time: now, old: slot[key]?.value ?? null }
-      tu.runs.unshift({ tool: String(b.tool), test: String(b.test), value: Number(b.value), time: now, ...(head ? {} : { nozzle: Number(b.nozzle), material: String(b.material) }) })
+      tu.runs.unshift({ tool: String(b.tool), test: String(b.test), value: Number(b.value), time: now, ...(head ? {} : stock ? { material: String(b.material) } : { nozzle: Number(b.nozzle), material: String(b.material) }) })
     }
     tu.rev += 1
     tu.updated = now

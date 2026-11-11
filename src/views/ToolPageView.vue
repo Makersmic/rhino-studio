@@ -159,8 +159,8 @@ function pick(n: number) {
             <p class="sub">{{ d.builtin ? 'Built-in materials are set in variables.cfg.' : 'Change materials with Edit tool.' }}</p>
           </RsPanel>
 
-          <RsPanel v-if="d.type === 'DEPOSITION'" title="Tuning" panel-id="tool.tuning">
-            <ToolTuning :tool="name" />
+          <RsPanel v-if="['DEPOSITION', 'LASER', 'DRAG_KNIFE'].includes(d.type)" title="Tuning" panel-id="tool.tuning">
+            <ToolTuning :tool="name" :type="d.type" />
           </RsPanel>
 
           <RsPanel title="Start and end G-code" panel-id="tool.startend">

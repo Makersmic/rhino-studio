@@ -1,12 +1,14 @@
 <script setup lang="ts">
-/** The tool page's Tuning panel: which wizards have been run for this print head, per material, and Tune. */
+/** The tool page's Tuning panel: which wizards have been run for this tool (per material where it counts), and Tune. */
 import { computed, onMounted } from 'vue'
 import RsButton from '@/components/RsButton.vue'
 import { usePrepareStore } from '@/stores/prepare'
 import { useTuningStore } from '@/stores/tuning'
 import { WIZARDS, lastRun, materialKey } from './tuning'
+import { HEAD_VALUES, cutWizardsFor, lastCut, type CutValue } from './cutTests'
+import { processFor } from '@/slicer/profiles'
 
-const props = defineProps<{ tool: string }>()
+const props = defineProps<{ tool: string; type?: string }>()
 const tuning = useTuningStore()
 const prep = usePrepareStore()
 onMounted(() => void tuning.load())
@@ -14,6 +16,13 @@ const mats = computed(() => prep.materialsOf(props.tool).map((m) => ({ key: m.ke
 const date = (t: number) => new Date(t * 1000).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
 const head = computed(() => lastRun(tuning.state, props.tool, 'extruder_calibration'))
 const perMat = WIZARDS.filter((w) => w.scope === 'material')
+// laser and drag knife: each test's values, per lens/blade or per material
+const proc = computed(() => processFor(props.type))
+const cut = computed(() => (proc.value === 'laser' || proc.value === 'dragknife' ? cutWizardsFor(proc.value) : null))
+const headTests = computed(() => (cut.value ?? []).filter((c) => c.saves.every((x) => HEAD_VALUES.has(x))))
+const stockTests = computed(() => (cut.value ?? []).filter((c) => c.scope === 'stock'))
+const cutMats = computed(() => [...new Set(prep.materialsOf(props.tool).map((m) => m.name))])
+const cutDone = (vals: CutValue[], mat?: string) => vals.map((v) => lastCut(tuning.state?.runs, props.tool, v, mat)).find((r) => r) ?? null
 const seen = computed(() => {
   const out = new Map<string, { name: string; nozzle: number }>()
   for (const m of mats.value) out.set(materialKey(props.tool, m.nozzle, m.name), { name: m.name, nozzle: m.nozzle })
@@ -24,6 +33,28 @@ const seen = computed(() => {
 <template>
   <div class="tt">
     <p v-if="!tuning.supported" class="muted">Tuning needs Tool Manager 1.9.16 on the Rhino.</p>
+    <template v-else-if="cut">
+      <p v-for="w in headTests" :key="w.test" class="row" :class="{ done: cutDone(w.saves) }">
+        <span class="mark" aria-hidden="true">{{ cutDone(w.saves) ? '✓' : '○' }}</span>
+        <span>{{ w.title }}</span>
+        <span class="when">{{ cutDone(w.saves) ? date(cutDone(w.saves)!.time) : 'Not run' }}</span>
+      </p>
+      <table v-if="cutMats.length" class="tgrid">
+        <thead>
+          <tr><th>Material</th><th v-for="w in stockTests" :key="w.test">{{ w.title }}</th></tr>
+        </thead>
+        <tbody>
+          <tr v-for="m in cutMats" :key="m">
+            <th>{{ m }}</th>
+            <td v-for="w in stockTests" :key="w.test">
+              <template v-if="cutDone(w.saves, m)">✓ {{ date(cutDone(w.saves, m)!.time) }}</template>
+              <span v-else class="muted">–</span>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="acts"><RsButton size="sm" variant="primary" @click="$router.push(`/assets/toolheads/${encodeURIComponent(tool)}/tune`)">Tune {{ tool }}</RsButton></div>
+    </template>
     <template v-else>
       <p class="row" :class="{ done: head }">
         <span class="mark" aria-hidden="true">{{ head ? '✓' : '○' }}</span>
