@@ -14,6 +14,7 @@ import { speedScript, zStepScript, zResetScript, limitsScript, isTuningScript } 
 import { approve, check, fromPrompt, heaterScript, jogScript, type Axis, type CheckedScript, type ScriptCheck } from '@/control/commands'
 import { PromptTracker, type Prompt, type PromptButton } from '@/control/prompts'
 import { checkStart, type StartCheck } from '@/control/jobs'
+import { startToolFor } from '@/control/startWizard'
 import { feedBlock, feedScript, flowScript, pathBlock, pressureAdvanceScript } from '@/control/extruder'
 import type { GcodeStoreEntry } from '@/moonraker/client'
 import { useSettingsStore } from './settings'
@@ -524,11 +525,22 @@ export const useControlStore = defineStore('control', () => {
     })
   }
 
-  async function startJob(path: string, fileTool: string | null | undefined, careNote: string | null) {
+  /**
+   * Start a file that's on the Rhino. A LightSaber or DragKnife file opens Studio's start wizard (/start) instead,
+   * when the Rhino's config supports it, and this returns 'wizard'. inPlace: use the Rhino's own prompt chain here
+   * (the tuning tests, which keep their page open to pick the result).
+   */
+  async function startJob(path: string, fileTool: string | null | undefined, careNote: string | null, opts: { inPlace?: boolean } = {}): Promise<boolean | 'wizard'> {
     const c = startCheck(path, fileTool)
     if (!c.ok || !c.method) {
       log('error', `Can't start ${path}: ${c.block}`)
       return false
+    }
+    const zeroFlag = (machine.status['gcode_macro SET_Z_ZERO'] as Record<string, unknown> | undefined)?.zeroed
+    if (!opts.inPlace && c.method.kind === 'wizard' && startToolFor(machine.mountedName, c.method.macro, zeroFlag)) {
+      const { router } = await import('@/router')
+      await router.push({ path: '/start', query: { file: path } })
+      return 'wizard'
     }
     const how =
       machine.adapter.style === 'automatic'

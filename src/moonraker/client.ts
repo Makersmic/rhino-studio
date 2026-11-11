@@ -173,6 +173,8 @@ export const WATCHED_OBJECTS: Record<string, string[] | null> = {
   // Bed › Configuration: which Z motors are switched on (released for turning by hand or not)
   stepper_enable: ['steppers'],
   'gcode_macro RHINO_MESH': ['match_c', 'cold_c', 'soak_min'],
+  // Tool Manager 1.9.25: which tool the Z zero was set for (Studio's start wizard; cleared by a swap or restart)
+  'gcode_macro SET_Z_ZERO': ['zeroed'],
 }
 
 /** One finished (or running) job in Moonraker's history. */

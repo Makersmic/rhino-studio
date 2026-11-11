@@ -16,7 +16,7 @@ import { useControlStore } from '@/stores/control'
 import { useMachineStore } from '@/stores/machine'
 import { useMaintenanceStore } from '@/stores/maintenance'
 
-/** stay: don't open Control after starting (a tuning wizard keeps its own page) */
+/** stay: don't open Control after starting, and use the Rhino's prompts in place of Studio's start wizard (a tuning wizard keeps its own page) */
 const props = defineProps<{ filePath: string; download?: boolean; filesLink?: boolean; stay?: boolean }>()
 const router = useRouter()
 const machine = useMachineStore()
@@ -51,8 +51,8 @@ async function start() {
   starting.value = true
   try {
     const tool = fileTool.value ?? machine.mountedName
-    const ok = await control.startJob(props.filePath, fileTool.value ?? null, jobCareNote(tool ? care.forTool(tool) : null, tool))
-    if (ok && !props.stay) void router.push('/control')
+    const ok = await control.startJob(props.filePath, fileTool.value ?? null, jobCareNote(tool ? care.forTool(tool) : null, tool), { inPlace: props.stay })
+    if (ok === true && !props.stay) void router.push('/control')
   } finally {
     starting.value = false
   }

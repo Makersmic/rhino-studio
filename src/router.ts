@@ -28,6 +28,8 @@ export const router = createRouter({
     { path: '/prepare', redirect: '/setup' },
     { path: '/preview', component: () => import('./views/PreviewView.vue'), meta: { title: 'Preview' } },
     { path: '/control', component: () => import('./views/ControlView.vue'), meta: { title: 'Control' } },
+    // Laser and drag knife jobs start here (Tool Manager 1.9.25+): checklist, Z zero, frame, test, start
+    { path: '/start', component: () => import('./views/StartWizardView.vue'), meta: { title: 'Start a job', nav: '/control' } },
     { path: '/device', redirect: '/control' },
     // Bed (was Bed mesh; Mike, Nov 8 2026): the mesh, and Configuration (moving the Z lead screws)
     {

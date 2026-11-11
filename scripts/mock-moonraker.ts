@@ -88,6 +88,8 @@ const status: Record<string, Record<string, unknown>> = {
   extruder: { temperature: 24.1, target: 0, can_extrude: false, pressure_advance: 0.024, smooth_time: 0.04 },
   heater_bed: { temperature: 23.6, target: 0 },
   'gcode_macro SWAP_TOOL': { current_tool: tool.current_tool, pending_tool: tool.pending_tool },
+  // Tool Manager 1.9.25: which tool the Z zero was set for (Studio's start wizard). MOCK_OLD_ZERO=1: an older config without it
+  ...(process.env.MOCK_OLD_ZERO ? {} : { 'gcode_macro SET_Z_ZERO': { zeroed: '' } }),
   'gcode_macro VARIABLES': { tool_mapping: toolMapping, toolheads },
   'gcode_macro RHINO_POSITIONS': { park_x: 545, park_y: 370 },
   'gcode_macro CUSTOM_TOOLS': custom,
@@ -493,7 +495,7 @@ const RHINO_MACROS = [
   'TOOL_JOB_SETUP', 'SET_WORK_ZERO', 'LASER_FOCUS_ALIGN', 'NOZZLE_HEIGHT_CALIBRATE', 'BACKUP_CFG', 'PM_STATUS', 'LEDMAX', 'LEDOFF',
   'LIST_TOOLHEADS', 'CALIBRATE_ESC', 'DEACTIVATE_LASER', 'SWITCH_T1', 'CANCEL_PRINT', 'PAUSE', 'RESUME', 'G28', 'SWITCH_T0', 'ACTIVATE_LASER', 'SET_TOOL_POWER', 'BED_COOLDOWN',
   'RHINO_POSITIONS', 'CHECK_TOOLHEADS', 'SHOW_BACKUP_LOCATION', 'TURN_ON_MOTORS', 'M0', 'SET_SERVO_ANGLE', // ones a real Rhino (1.4.x) has that no group claims
-  '_LASER_START', '_LASER_ABORT', '_RESTORE_TOOL_CONFIRM', 'VARIABLES', 'CUSTOM_TOOLS',
+  '_LASER_START', '_LASER_ABORT', '_RESTORE_TOOL_CONFIRM', '_LASER_TEST_FIRE', '_DK_TEST_CUT', '_DK_XY_ZERO', '_Z_ZERO_SAVE', '_DK_START', 'VARIABLES', 'CUSTOM_TOOLS',
   'RHINO_MESH', 'RHINO_MESH_CALIBRATE', 'RHINO_MESH_REMOVE', // Tool Manager 1.6.0 (Bed mesh page)
 ]
 const HW_MACROS: Record<string, { gcode: string; description: string }> = process.env.MOCK_HARDWARE
@@ -524,6 +526,7 @@ function update(obj: string, fields: Record<string, unknown>) {
 const prompt = (lines: string[]) => lines.forEach((l) => respond(`// action:${l}`))
 let relative = false
 let jobFile = ''
+let zeroNext = '' // SET_Z_ZERO NEXT= (mock)
 const name = (slot: number) => toolMapping[slot] ?? (custom.tool_mapping as Record<number, string>)[slot] ?? `slot ${slot}`
 const arg = (line: string, k: string) => new RegExp(`${k}=("?)([^\\s"]+)\\1`, 'i').exec(line)?.[2]
 
@@ -679,6 +682,13 @@ function runLine(raw: string) {
       })
       return
     }
+    case 'SET_GCODE_VARIABLE':
+      if (/MACRO\s*=\s*SET_Z_ZERO/i.test(line) && /VARIABLE\s*=\s*zeroed/i.test(line) && status['gcode_macro SET_Z_ZERO']) {
+        update('gcode_macro SET_Z_ZERO', { zeroed: (/VALUE\s*=\s*"?'([^']*)'/i.exec(line)?.[1]) ?? '' })
+        return
+      }
+      respond(`// ${cmd} done (mock)`)
+      return
     case 'SAVE_VARIABLE': {
       const name = arg(line, 'VARIABLE'), value = arg(line, 'VALUE')
       if (name) update('save_variables', { variables: { ...(status.save_variables.variables as object), [name.toLowerCase()]: Number.isFinite(Number(value)) ? Number(value) : value } })
@@ -771,6 +781,7 @@ function runLine(raw: string) {
         return
       }
       update('gcode_macro SWAP_TOOL', { pending_tool: Number(t) })
+      if (status['gcode_macro SET_Z_ZERO']) update('gcode_macro SET_Z_ZERO', { zeroed: '' }) // a new tool needs a new zero
       update('extruder', { target: 0 })
       update('toolhead', { position: [th.position[0], th.position[1], 150, 0] })
       prompt([
@@ -836,7 +847,18 @@ function runLine(raw: string) {
     case 'LASER_JOB_SETUP':
     case 'DRAGKNIFE_JOB_SETUP':
     case 'TOOL_JOB_SETUP': {
+      if (status.print_stats.state === 'printing' || status.print_stats.state === 'paused') throw new Error(`${cmd}: a job is running`)
       jobFile = arg(line, 'FILE') ?? ''
+      if (/FROM\s*=\s*STUDIO/i.test(line) && cmd !== 'TOOL_JOB_SETUP') {
+        // Tool Manager 1.9.25: straight to the start, only with a zero for this tool
+        const want = cmd === 'LASER_JOB_SETUP' ? 'LightSaber' : 'DragKnife'
+        const z = (status['gcode_macro SET_Z_ZERO'] as { zeroed?: string } | undefined)?.zeroed
+        if (z !== want) throw new Error(`${cmd} FROM=STUDIO: set the Z zero for the ${want} first (SET_Z_ZERO). A tool change or a Klipper restart clears it.`)
+        if (want === 'LightSaber') return runLine('_LASER_START')
+        respond('// G54 Material Surface Set')
+        startJob(jobFile)
+        return
+      }
       prompt([
         `prompt_begin ${cmd === 'LASER_JOB_SETUP' ? 'Laser setup' : 'Job setup'}`,
         `prompt_text File: ${jobFile || '(none)'}`,
@@ -863,7 +885,36 @@ function runLine(raw: string) {
       respond('// Setup cancelled, tool off')
       return
     case 'SET_Z_ZERO':
-      respond('// SET_Z_ZERO: move the bed with the buttons, then SET (mock)')
+      zeroNext = arg(line, 'NEXT') ?? ''
+      prompt([
+        `prompt_begin Set Z zero - ${name(swap.current_tool)}`,
+        'prompt_text Move the bed up until the tool tip just touches the top of the material, then press SET.',
+        `prompt_text Bed at Z ${(th.position[2] as number).toFixed(2)} (mock: the buttons don't move it).`,
+        'prompt_button_group_start',
+        'prompt_button Bed up 1 mm|_Z_ZERO_MOVE D=-1|warning',
+        'prompt_button Bed down 1 mm|_Z_ZERO_MOVE D=1|info',
+        'prompt_button_group_end',
+        'prompt_button SET - Z zero here|_Z_ZERO_SAVE|primary',
+        'prompt_footer_button Cancel|action:prompt_end|error',
+        'prompt_show',
+      ])
+      return
+    case '_Z_ZERO_MOVE':
+      return
+    case '_Z_ZERO_SAVE':
+      prompt(['prompt_end'])
+      if (status['gcode_macro SET_Z_ZERO']) update('gcode_macro SET_Z_ZERO', { zeroed: name(swap.current_tool) })
+      respond(`// Z zero set at bed height Z ${(th.position[2] as number).toFixed(3)}. G-code Z0 is now this height.`)
+      if (zeroNext === '_DK_XY_ZERO') respond('// G54 Material Surface Set')
+      zeroNext = ''
+      return
+    case '_LASER_TEST_FIRE':
+      respond('// Test firing at low power... (mock: 5 % for 0.2 s)')
+      return
+    case '_DK_TEST_CUT':
+      if (/QUIET\s*=\s*1/i.test(line) && (status['gcode_macro SET_Z_ZERO'] as { zeroed?: string } | undefined)?.zeroed !== 'DragKnife')
+        throw new Error('_DK_TEST_CUT QUIET=1: set the Z zero for the DragKnife first (SET_Z_ZERO NEXT=_DK_XY_ZERO).')
+      respond('// Scoring complete (mock: 10 mm line at 0.3 mm)')
       return
     case 'SET_WORK_ZERO':
       update('gcode_move', { homing_origin: [...th.position], gcode_position: [0, 0, 0, 0] })

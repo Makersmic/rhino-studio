@@ -150,6 +150,10 @@ function checkLine(line: string): LineCheck {
   if (command === 'SAVE_VARIABLE' && /VARIABLE\s*=\s*current_tool\b/i.test(line))
     return r('tool-state', 'changes the saved toolhead, without a physical swap')
   if (command === 'CONFIRM_TOOL_INSTALL') return r('tool-state', 'records a toolhead as mounted')
+  // Rhino setup wizards end by starting a job; with FROM=STUDIO (Tool Manager 1.9.25) they start it straight away
+  if (/^[A-Z_]*JOB_SETUP$/.test(command))
+    return r('job', /FROM\s*=\s*STUDIO/i.test(line) ? 'checks the zero and starts the job straight away' : 'runs the setup wizard, which ends by starting the job')
+  if (command === 'SET_Z_ZERO') return r('motion', 'may home, then moves the bed to set the work Z zero')
   // Loading a mesh changes where Z goes from the next move (a spindle's cut depth too)
   if (command === 'BED_MESH_PROFILE' && param(line, 'LOAD') != null) return r('motion', 'loads a bed mesh: from the next move Z follows it')
 
