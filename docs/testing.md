@@ -567,3 +567,11 @@ Run the laser tests on scrap plywood with glasses on, extraction running and an 
 - [ ] **KT2 Blade offset.** *Pass if:* five 15 mm squares with offsets 0.1 to 0.5 mm; one has sharp, closed corners; Save keeps it once for the knife (not per material). *Stop if:* the knife drags across the work between squares (it lifts 2 mm first).
 - [ ] **TP1 Tool page.** LightSaber's and DragKnife's pages. *Pass if:* a Tuning panel shows each test once per lens or blade, and per material in a table, with ✓ and the date after a save.
 - [ ] **JS7 Job setup starts from tuned values.** After LT2 and LT4 (or KT1-KT2), Job setup with a drawing for that tool and material. *Pass if:* Power, Speed, Passes and Kerf (knife: Depth per pass, Blade offset) show the tuned values and the line under them reads "Tuned for <material> on <date> … In use."; change one, "Use tuned values" appears and puts it back. A material with nothing tuned says "Not tuned for … yet" with a link to Tune. *Stop if:* a file sliced for one material uses another material's tuned values.
+
+### Help (Settings › Help, the ? in the top bar)
+
+Run with the Rhino's network unplugged from the internet (the router's WAN cable out, or the host's gateway blocked), so it proves Help needs nothing outside the shop.
+
+- [ ] **HP1 Help offline.** Settings › Help. *Pass if:* the contents list six parts; Bed opens with its pictures; the search finds "pressure advance" and a hit opens its section; the footer names the installed Tool Manager version. *Stop if:* a page is blank, a picture is broken, or anything waits on the internet (only Printable PDF may).
+- [ ] **HP2 The ? opens this screen's chapter.** Press ? on Control, Job setup, Bed › Configuration, Files, Assets, a Tune page, Care and Settings. *Pass if:* each opens its own chapter (Bed › Configuration at the lead screw section, Tune at Tuning a print head); on Help itself the ? is filled and opens the contents. *Stop if:* the ? is missing on a phone, or covers Stop.
+- [ ] **HP3 A missing page.** Open `http://rhino.local/#/settings/help/nope`, then `http://rhino.local/help/nope.html` in the address bar. *Pass if:* the first says there's no such page and shows the contents; the second is a plain 404.

@@ -2,7 +2,9 @@ import { defineConfig } from 'vitest/config'
 import type { ProxyOptions } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { fileURLToPath, URL } from 'node:url'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
+import { extname, join, normalize, resolve } from 'node:path'
+import type { Plugin } from 'vite'
 
 const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')) as { version: string }
 
@@ -90,12 +92,31 @@ const originFix: ProxyOptions = {
   },
 }
 
+/**
+ * Help (Settings › Help) while developing: the manual's web pages from the Tool Manager next to this repo
+ * (python3 manual/web.py there), or HELP_DIR. A release copies them in as help/ (Tool Manager dev/make_zip.sh).
+ */
+const helpDir = resolve(process.env.HELP_DIR ?? fileURLToPath(new URL('../Toolhead_Manager/manual/web', import.meta.url)))
+const HELP_TYPES: Record<string, string> = { '.json': 'application/json', '.html': 'text/html; charset=utf-8', '.webp': 'image/webp', '.png': 'image/png', '.jpg': 'image/jpeg' }
+const helpPages: Plugin = {
+  name: 'rhino-help',
+  configureServer(server) {
+    server.middlewares.use('/help', (req, res, next) => {
+      const rel = normalize(decodeURIComponent((req.url ?? '/').split('?')[0]!)).replace(/^(\.\.[/\\])+/, '')
+      const file = join(helpDir, rel)
+      if (!file.startsWith(helpDir) || !existsSync(file) || !HELP_TYPES[extname(file)]) return next()
+      res.setHeader('Content-Type', HELP_TYPES[extname(file)]!)
+      res.end(readFileSync(file))
+    })
+  },
+}
+
 // base: './' makes the built app work from any folder (e.g. served by the
 // Pi's nginx under /studio/) without rebuilding. The router uses hash history
 // for the same reason: no server rewrite rules are needed.
 export default defineConfig({
   base: './',
-  plugins: [vue()],
+  plugins: [vue(), helpPages],
   // Written into every job file Prepare makes (; Made by Rhino Studio <version>)
   define: { __APP_VERSION__: JSON.stringify(pkg.version), __BUILT_WITH__: JSON.stringify(builtWith) },
   resolve: {

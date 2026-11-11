@@ -4,7 +4,7 @@
  *   Appearance
  *   Machine   Connection, Trusted addresses, Tool changing, Cameras, Slice profiles
  *   System    Software (with the number of updates ready), Network, Host, Logs
- *   About
+ *   Help (the manual), About
  * Each page gets its title and one line about it from the route.
  */
 import { computed } from 'vue'
@@ -42,7 +42,7 @@ const groups = computed<SectionGroup[]>(() => [
       { to: '/settings/logs', label: 'Logs' },
     ],
   },
-  { id: 'about', items: [{ to: '/settings/about', label: 'About' }] },
+  { id: 'about', items: [{ to: '/settings/help', label: 'Help' }, { to: '/settings/about', label: 'About' }] },
 ])
 const title = computed(() => (route.meta.heading as string | undefined) ?? (route.meta.title as string | undefined) ?? 'Settings')
 const lead = computed(() => route.meta.lead as string | undefined)

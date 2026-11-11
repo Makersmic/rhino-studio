@@ -9,12 +9,16 @@ import SwapMenu from './SwapMenu.vue'
 import { useMachineStore } from '@/stores/machine'
 import { useControlStore } from '@/stores/control'
 import { useRoute } from 'vue-router'
+import { helpFor, helpRoute } from '@/help/help'
 
 const machine = useMachineStore()
 const control = useControlStore()
 const route = useRoute()
 // The Dashboard is look-only (wizard questions don't open there), so Swap isn't offered on it
 const canOfferSwap = computed(() => !route.meta.lookOnly)
+// Help for the screen you're on (Settings › Help); on Help itself it opens the contents
+const onHelp = computed(() => route.path.startsWith('/settings/help'))
+const help = computed(() => (onHelp.value ? '/settings/help' : helpRoute(helpFor(route.path))))
 
 const connection = computed(() => {
   switch (machine.connection) {
@@ -65,6 +69,7 @@ const caption = computed(() => {
     </template>
 
     <div class="right">
+      <RouterLink :to="help" class="help" :class="{ on: onHelp }" aria-label="Help for this screen" title="Help for this screen">?</RouterLink>
       <CareChip />
       <StatusChip :tone="connection.tone" :title="machine.connectionDetail ?? undefined">{{ connection.text }}</StatusChip>
       <EStopButton />
@@ -92,6 +97,13 @@ const caption = computed(() => {
     radial-gradient(var(--rs-dot) 0.9px, transparent 1.15px) 0 100% / 4px 3px repeat-x,
     var(--rs-bg);
 }
+.help {
+  width: 32px; height: 32px; flex: none; display: inline-grid; place-items: center; border-radius: 50%;
+  border: 1px solid var(--rs-line-strong); color: var(--rs-text-strong); font-size: var(--rs-text-sm);
+  font-weight: var(--rs-weight-medium); text-decoration: none;
+}
+.help:hover { background: var(--rs-surface-2); }
+.help.on { background: var(--rs-ink); border-color: var(--rs-ink); color: var(--rs-on-ink); }
 .home { text-decoration: none; display: inline-flex; border-radius: var(--rs-radius-md); }
 .mounted {
   display: flex;
