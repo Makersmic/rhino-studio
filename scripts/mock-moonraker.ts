@@ -90,6 +90,8 @@ const status: Record<string, Record<string, unknown>> = {
   'gcode_macro SWAP_TOOL': { current_tool: tool.current_tool, pending_tool: tool.pending_tool },
   // Tool Manager 1.9.25: which tool the Z zero was set for (Studio's start wizard). MOCK_OLD_ZERO=1: an older config without it
   ...(process.env.MOCK_OLD_ZERO ? {} : { 'gcode_macro SET_Z_ZERO': { zeroed: '' } }),
+  // Tool Manager 1.9.27: the CNC setup's throttle and FROM=STUDIO; MOCK_OLD_CNC=1: a config before it
+  'gcode_macro CNC_JOB_SETUP': { duty: 0.6, ...(process.env.MOCK_OLD_CNC ? {} : { studio_start: 1 }) },
   'gcode_macro VARIABLES': { tool_mapping: toolMapping, toolheads },
   'gcode_macro RHINO_POSITIONS': { park_x: 545, park_y: 370 },
   'gcode_macro CUSTOM_TOOLS': custom,
@@ -495,7 +497,7 @@ const RHINO_MACROS = [
   'TOOL_JOB_SETUP', 'SET_WORK_ZERO', 'LASER_FOCUS_ALIGN', 'NOZZLE_HEIGHT_CALIBRATE', 'BACKUP_CFG', 'PM_STATUS', 'LEDMAX', 'LEDOFF',
   'LIST_TOOLHEADS', 'CALIBRATE_ESC', 'DEACTIVATE_LASER', 'SWITCH_T1', 'CANCEL_PRINT', 'PAUSE', 'RESUME', 'G28', 'SWITCH_T0', 'ACTIVATE_LASER', 'SET_TOOL_POWER', 'BED_COOLDOWN',
   'RHINO_POSITIONS', 'CHECK_TOOLHEADS', 'SHOW_BACKUP_LOCATION', 'TURN_ON_MOTORS', 'M0', 'SET_SERVO_ANGLE', // ones a real Rhino (1.4.x) has that no group claims
-  '_LASER_START', '_LASER_ABORT', '_RESTORE_TOOL_CONFIRM', '_LASER_TEST_FIRE', '_DK_TEST_CUT', '_DK_XY_ZERO', '_Z_ZERO_SAVE', '_DK_START', 'VARIABLES', 'CUSTOM_TOOLS',
+  '_LASER_START', '_LASER_ABORT', '_RESTORE_TOOL_CONFIRM', '_LASER_TEST_FIRE', '_DK_TEST_CUT', '_DK_XY_ZERO', '_Z_ZERO_SAVE', '_DK_START', '_CNC_SAVE_XY', '_CNC_WARMUP', '_CNC_ADJUST_SPEED', 'VARIABLES', 'CUSTOM_TOOLS',
   'RHINO_MESH', 'RHINO_MESH_CALIBRATE', 'RHINO_MESH_REMOVE', // Tool Manager 1.6.0 (Bed mesh page)
 ]
 const HW_MACROS: Record<string, { gcode: string; description: string }> = process.env.MOCK_HARDWARE
@@ -688,6 +690,10 @@ function runLine(raw: string) {
         update('gcode_macro SET_Z_ZERO', { zeroed: (/VALUE\s*=\s*"?'([^']*)'/i.exec(line)?.[1]) ?? '' })
         return
       }
+      if (/MACRO\s*=\s*CNC_JOB_SETUP/i.test(line) && /VARIABLE\s*=\s*duty/i.test(line) && status['gcode_macro CNC_JOB_SETUP']) {
+        update('gcode_macro CNC_JOB_SETUP', { duty: Number(arg(line, 'VALUE') ?? 0.6) })
+        return
+      }
       respond(`// ${cmd} done (mock)`)
       return
     case 'SAVE_VARIABLE': {
@@ -820,7 +826,15 @@ function runLine(raw: string) {
       return
     }
     case 'CNC_JOB_SETUP': {
+      if (status.print_stats.state === 'printing' || status.print_stats.state === 'paused') throw new Error('CNC_JOB_SETUP: a job is running')
       jobFile = arg(line, 'FILE') ?? ''
+      if (/FROM\s*=\s*STUDIO/i.test(line) && status['gcode_macro CNC_JOB_SETUP']?.studio_start) {
+        // Tool Manager 1.9.27: straight to the start, only with the HotJoe's zero and a running spindle
+        if ((status['gcode_macro SET_Z_ZERO'] as { zeroed?: string } | undefined)?.zeroed !== 'HotJoe') throw new Error('CNC_JOB_SETUP FROM=STUDIO: set the Z zero for the HotJoe first (SET_Z_ZERO). A tool change or a Klipper restart clears it.')
+        if (Number(status['output_pin Spindle_power']?.value) < 0.5 || Number(status['output_pin SPINDLE_SPEED']?.value) <= 0.31) throw new Error("CNC_JOB_SETUP FROM=STUDIO: the spindle isn't running. Warm it up first (_CNC_WARMUP).")
+        startJob(jobFile)
+        return
+      }
       prompt([
         'prompt_begin CNC setup',
         `prompt_text File: ${jobFile || '(none)'}`,
@@ -840,6 +854,26 @@ function runLine(raw: string) {
       update('output_pin SPINDLE_SPEED', { value: 0.72 })
       startJob(jobFile)
       return
+    case '_CNC_SAVE_XY':
+      // the head's position becomes the X/Y work zero (G54); QUIET=1 stops here (mock: no Z window either way)
+      update('gcode_move', { homing_origin: [th.position[0], th.position[1], (status.gcode_move.homing_origin as number[])[2] ?? 0, 0] })
+      respond('// G54 XY Zero Committed')
+      return
+    case '_CNC_WARMUP': {
+      if ((status['gcode_macro SET_Z_ZERO'] as { zeroed?: string } | undefined)?.zeroed !== 'HotJoe') throw new Error('_CNC_WARMUP QUIET=1: set the Z zero for the HotJoe first (SET_Z_ZERO).')
+      const duty = Number(status['gcode_macro CNC_JOB_SETUP']?.duty ?? 0.6)
+      update('output_pin Spindle_power', { value: 1 })
+      update('output_pin SPINDLE_SPEED', { value: duty })
+      respond(`// Work zero verified - spinning up tool (mock: ${Math.round(duty * 100)}% throttle)`)
+      return
+    }
+    case '_CNC_ADJUST_SPEED': {
+      const c = status['gcode_macro CNC_JOB_SETUP'] as { duty: number }
+      const d = Math.min(1, Math.max(0.3, Number(c?.duty ?? 0.6) + Number(arg(line, 'DELTA') ?? 0.05)))
+      update('gcode_macro CNC_JOB_SETUP', { duty: Math.round(d * 100) / 100 })
+      update('output_pin SPINDLE_SPEED', { value: Math.round(d * 100) / 100 })
+      return
+    }
     case '_CNC_ABORT':
       prompt(['prompt_end'])
       outputsOff()

@@ -537,7 +537,8 @@ export const useControlStore = defineStore('control', () => {
       return false
     }
     const zeroFlag = (machine.status['gcode_macro SET_Z_ZERO'] as Record<string, unknown> | undefined)?.zeroed
-    if (!opts.inPlace && c.method.kind === 'wizard' && startToolFor(machine.mountedName, c.method.macro, zeroFlag)) {
+    const cncStart = (machine.status['gcode_macro CNC_JOB_SETUP'] as Record<string, unknown> | undefined)?.studio_start
+    if (!opts.inPlace && c.method.kind === 'wizard' && startToolFor(machine.mountedName, c.method.macro, zeroFlag, cncStart)) {
       const { router } = await import('@/router')
       await router.push({ path: '/start', query: { file: path } })
       return 'wizard'

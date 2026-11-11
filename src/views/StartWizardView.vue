@@ -1,7 +1,8 @@
 <script setup lang="ts">
 /**
- * Start a laser or drag knife job (#/start?file=…): checklist, Set Z zero, the frame check (offered), test fire or
- * test cut, then `<SETUP> FILE=… FROM=STUDIO`. Logic and every script in src/control/startWizard.ts; each script goes
+ * Start a laser, drag knife or CNC job (#/start?file=…): checklist, Set Z zero, the frame check (offered), test fire or
+ * test cut, then `<SETUP> FILE=… FROM=STUDIO`. The spindle: checklist, X/Y zero with the jog panel, Z zero, frame,
+ * the warm-up at a throttle (Stop always there), then the start, which the Rhino refuses on a stopped spindle. Logic and every script in src/control/startWizard.ts; each script goes
  * through the console check and asks first. The Rhino's own Set Z zero window opens over this page (PromptDialog).
  */
 import { computed, onMounted, ref, watch } from 'vue'
@@ -9,6 +10,8 @@ import { useRoute, useRouter } from 'vue-router'
 import RsPanel from '@/components/RsPanel.vue'
 import RsButton from '@/components/RsButton.vue'
 import MascotRow from '@/components/MascotRow.vue'
+import MotionPanel from '@/control/MotionPanel.vue'
+import '@/toolmgr/forms.css'
 import { DONE_POSE, TROUBLE_POSE, type Pose } from '@/brand/mascot'
 import { parseGcode } from '@/gcode/parse'
 import { jobCareNote } from '@/maintenance/summary'
@@ -18,14 +21,12 @@ import { useMaintenanceStore } from '@/stores/maintenance'
 import { usePrepareStore } from '@/stores/prepare'
 import { useTuningStore } from '@/stores/tuning'
 import {
-  START_TOOLS, checklist, focusSteps, frameProblem, frameScript, startScript, testQuestion, testScript, zeroScript, type Box,
+  START_TOOLS, STOP_SCRIPT, THROTTLE, XY_SCRIPT, adjustScript, checklist, clampThrottle, focusSteps, frameProblem, frameScript, startScript,
+  stepsFor, testQuestion, testScript, warmScript, zeroScript, type Box,
 } from '@/control/startWizard'
+import { throttlePct } from '@/tuning/cutTests'
 
-type Step = 'check' | 'zero' | 'frame' | 'test' | 'start'
-const STEPS: { id: Step; label: string }[] = [
-  { id: 'check', label: 'Check' }, { id: 'zero', label: 'Z zero' }, { id: 'frame', label: 'Frame' },
-  { id: 'test', label: 'Test' }, { id: 'start', label: 'Start' },
-]
+type Step = ReturnType<typeof stepsFor>[number]['id']
 
 const route = useRoute()
 const router = useRouter()
@@ -41,6 +42,15 @@ const t = computed(() => (machine.mountedName ? START_TOOLS[machine.mountedName]
 const kind = computed(() => t.value?.kind ?? 'laser')
 const zeroed = computed(() => (machine.status['gcode_macro SET_Z_ZERO'] as Record<string, unknown> | undefined)?.zeroed)
 const hasZero = computed(() => !!t.value && zeroed.value === t.value.tool)
+const STEPS = computed(() => stepsFor(kind.value))
+const cncSetup = computed(() => machine.status['gcode_macro CNC_JOB_SETUP'] as Record<string, unknown> | undefined)
+// the spindle: X/Y zero set in this wizard, the throttle to warm up at, and whether it's turning
+const xySet = ref(false)
+const duty = ref<number>(THROTTLE.default)
+const spinning = computed(() => !!machine.outputs.spindle?.turning)
+const throttleNow = computed(() => machine.outputs.spindle?.throttle ?? 0)
+watch(cncSetup, (c) => { if (typeof c?.duty === 'number' && !spinning.value) duty.value = clampThrottle(c.duty) }, { immediate: true })
+const dutyPct = computed({ get: () => throttlePct(duty.value), set: (p: number) => { duty.value = clampThrottle(p / 100) } })
 
 const step = ref<Step>('check')
 const ticks = ref<boolean[]>([])
@@ -80,26 +90,74 @@ const travel = computed<Box>(() => {
   const m = prep.machineInfo
   return { minX: m.travelMin[0], minY: m.travelMin[1], maxX: m.travelMax[0], maxY: m.travelMax[1] }
 })
-const frameWhy = computed(() => boxError.value || frameProblem(box.value, travel.value))
+// a CNC file is in work coordinates: it lands at its moves plus the X/Y zero just set
+const workOffset = computed(() => {
+  if (kind.value !== 'cnc') return { x: 0, y: 0 }
+  const o = (machine.status.gcode_move as { homing_origin?: number[] } | undefined)?.homing_origin ?? [0, 0]
+  return { x: Number(o[0]) || 0, y: Number(o[1]) || 0 }
+})
+const frameWhy = computed(() => boxError.value || frameProblem(box.value, travel.value, workOffset.value))
 
 // Anything that would make this start wrong: shown instead of the step, and the start is refused on the machine too
 const blocker = computed(() => {
   if (!file.value) return 'No file was given. Start a job from Files or Job setup.'
-  if (!t.value) return `Studio’s start wizard is for the LightSaber and the DragKnife; ${machine.mountedName ?? 'no toolhead'} is mounted. Start this job from Files.`
+  if (!t.value) return `Studio’s start wizard is for the LightSaber, the DragKnife and the HotJoe; ${machine.mountedName ?? 'no toolhead'} is mounted. Start this job from Files.`
   if (typeof zeroed.value !== 'string') return 'The Rhino’s config is older than Tool Manager 1.9.25, which this wizard needs. Start the job from Files: the Rhino’s own prompts walk you through it.'
+  if (kind.value === 'cnc' && Number(cncSetup.value?.studio_start) !== 1) return 'The Rhino’s config is older than Tool Manager 1.9.27, which this wizard needs for the spindle. Start the job from Files: the Rhino’s own prompts walk you through it.'
   if (!machine.klippyReady) return 'Klipper isn’t ready.'
   if (control.jobActive) return 'A job is running.'
   if (!startScript(t.value, file.value)) return 'Rename the file without spaces or special characters: the setup takes it as FILE=.'
   return null
 })
 
-// A swap or restart clears the zero: from a later step, go back to it
+// A swap or restart clears the zero: from a later step, go back to it (the spindle: to its X/Y zero)
 watch(hasZero, (z) => {
-  if (!z && (step.value === 'frame' || step.value === 'test' || step.value === 'start')) {
-    step.value = 'zero'
+  if (!z && (step.value === 'frame' || step.value === 'test' || step.value === 'warm' || step.value === 'start')) {
+    step.value = kind.value === 'cnc' ? 'xy' : 'zero'
     tested.value = false
+    xySet.value = false
   }
 })
+// the spindle stopped before the start: back to the warm-up
+watch(spinning, (on) => { if (!on && kind.value === 'cnc' && step.value === 'start') step.value = 'warm' })
+
+async function setXY() {
+  busy.value = true
+  try {
+    xySet.value = (await control.send(XY_SCRIPT, { label: 'Set X/Y zero', confirmTitle: 'Set the X/Y zero here?', confirmBody: 'The bit’s position now becomes the job’s X0 Y0 (G54). Nothing moves.' })) || xySet.value
+  } finally {
+    busy.value = false
+  }
+}
+async function warm() {
+  busy.value = true
+  try {
+    await control.send(warmScript(duty.value), {
+      label: 'Warm up the spindle',
+      confirmTitle: 'Start the spindle?',
+      confirmBody: `The Rhino checks the lid, lifts the bit 10 mm above the zero, switches the spindle on and ramps it to ${dutyPct.value} % throttle. Glasses and hearing protection on, hands clear.`,
+      confirmLabel: 'Start the spindle',
+    })
+  } finally {
+    busy.value = false
+  }
+}
+async function adjust(up: boolean) {
+  busy.value = true
+  try {
+    await control.send(adjustScript(up), { label: `Throttle ${up ? '+' : '−'}5 %` })
+  } finally {
+    busy.value = false
+  }
+}
+async function stopSpindle() {
+  busy.value = true
+  try {
+    await control.send(STOP_SCRIPT, { label: 'Stop the spindle', confirmTitle: 'Stop the spindle?', confirmBody: 'The spindle switches off and the bit lifts 15 mm clear. Start it again from this step.', confirmLabel: 'Stop the spindle' })
+  } finally {
+    busy.value = false
+  }
+}
 
 async function setZero() {
   busy.value = true
@@ -116,7 +174,7 @@ async function frame() {
     framed.value = await control.send(frameScript(kind.value, box.value), {
       label: 'Trace the outline',
       confirmTitle: 'Trace the job’s outline?',
-      confirmBody: `The ${t.value?.tool} moves round the outline ${5} mm above the zero, with the tool off. Watch that it stays on the material and clear of clamps.`,
+      confirmBody: `The ${t.value?.tool} moves round the outline ${5} mm above the ${kind.value === 'cnc' ? 'stock' : 'zero'}, with the ${kind.value === 'cnc' ? 'spindle' : 'tool'} off. Watch that it stays on the material and clear of clamps.`,
     }) || framed.value
   } finally {
     busy.value = false
@@ -156,7 +214,7 @@ async function start() {
     const ok = await control.send(s, {
       label: `Start ${name.value}`,
       confirmTitle: `Start ${name.value}?`,
-      confirmBody: [`Runs ${t.value.setup} FROM=STUDIO: it checks the lid and the Z zero again, then starts the file.`, note].filter(Boolean).join('\n\n'),
+      confirmBody: [`Runs ${t.value.setup} FROM=STUDIO: it checks the lid and the Z zero${kind.value === 'cnc' ? ', and that the spindle is running,' : ''} again, then starts the file.`, note].filter(Boolean).join('\n\n'),
       confirmLabel: 'Start job',
     })
     if (ok) void router.push('/control')
@@ -169,18 +227,20 @@ const pose = computed<Pose>(() => {
   if (blocker.value || (step.value === 'test' && adjusting.value)) return TROUBLE_POSE
   if (step.value === 'start') return DONE_POSE
   if (step.value === 'check') return 'carry'
+  if (step.value === 'xy') return 'wrench'
   if (step.value === 'zero') return 'calipers'
   if (step.value === 'frame') return 'meter'
+  if (step.value === 'warm') return 'spindle'
   return kind.value === 'laser' ? 'laser' : 'pipewrench'
 })
-const at = computed(() => STEPS.findIndex((s) => s.id === step.value))
+const at = computed(() => STEPS.value.findIndex((s) => s.id === step.value))
 </script>
 
 <template>
   <div class="view">
     <div class="view-head">
       <h1>Start {{ name || 'a job' }}</h1>
-      <p>{{ t ? `${t.tool}: the checks, the Z zero and a test before the job, on this page.` : 'Studio’s start wizard for laser and drag knife jobs.' }}</p>
+      <p>{{ t ? (kind === 'cnc' ? `${t.tool}: the checks, both zeros and the spindle warm-up before the job, on this page.` : `${t.tool}: the checks, the Z zero and a test before the job, on this page.`) : 'Studio’s start wizard for laser, drag knife and CNC jobs.' }}</p>
     </div>
 
     <ol class="steps" aria-label="Steps">
@@ -196,14 +256,25 @@ const at = computed(() => STEPS.findIndex((s) => s.id === step.value))
           <p>Check before you start:</p>
           <label v-for="(l, i) in lines" :key="l" class="tick"><input v-model="ticks[i]" type="checkbox" /> {{ l }}</label>
           <div class="acts">
-            <RsButton variant="primary" :disabled="!ticks.every(Boolean)" @click="step = 'zero'">All checked - set Z zero</RsButton>
+            <RsButton variant="primary" :disabled="!ticks.every(Boolean)" @click="step = kind === 'cnc' ? 'xy' : 'zero'">{{ kind === 'cnc' ? 'All checked - set X/Y zero' : 'All checked - set Z zero' }}</RsButton>
             <RsButton @click="router.back()">Cancel</RsButton>
+          </div>
+        </template>
+
+        <!-- the spindle: X/Y zero on the stock's corner -->
+        <template v-else-if="step === 'xy'">
+          <p>Jog the bit over the X/Y origin of your stock (usually its front-left corner) with the panel below, then set X/Y zero. Nothing moves when you set it.</p>
+          <p v-if="xySet" class="state ok">X/Y zero set at X {{ workOffset.x.toFixed(2) }} Y {{ workOffset.y.toFixed(2) }}.</p>
+          <div class="acts">
+            <RsButton :variant="xySet ? 'default' : 'primary'" :disabled="busy" @click="setXY">{{ xySet ? 'Set it again here' : 'Set X/Y zero here' }}</RsButton>
+            <RsButton :variant="xySet ? 'primary' : 'default'" :disabled="!xySet" @click="step = 'zero'">Next</RsButton>
           </div>
         </template>
 
         <!-- 2 Z zero -->
         <template v-else-if="step === 'zero'">
           <p v-if="kind === 'laser'">Set the Z zero at the focus point. Klipper’s Set Z zero window opens here: move the bed with its buttons, then press <b>SET</b>.</p>
+          <p v-else-if="kind === 'cnc'">Set the Z zero on the stock’s top: bring the bed up until the bit just touches the top of the stock (a sheet of paper should drag), then press <b>SET</b>.</p>
           <p v-else>Set the Z zero on the material surface: bring the bed up until the blade tip just touches the top of the material, then press <b>SET</b>. The knife’s X/Y zero (the machine origin) is set straight after.</p>
           <ol v-if="focus" class="focus">
             <li v-for="l in focus" :key="l">{{ l }}</li>
@@ -224,7 +295,7 @@ const at = computed(() => STEPS.findIndex((s) => s.id === step.value))
           <p v-if="framed" class="state ok">Traced. Trace it again, or go on.</p>
           <div class="acts">
             <RsButton :variant="framed ? 'default' : 'primary'" :disabled="busy || !!frameWhy" @click="frame">{{ framed ? 'Trace again' : 'Trace the outline' }}</RsButton>
-            <RsButton :variant="framed ? 'primary' : 'default'" @click="step = 'test'">{{ framed ? 'Next' : 'Skip' }}</RsButton>
+            <RsButton :variant="framed ? 'primary' : 'default'" @click="step = kind === 'cnc' ? 'warm' : 'test'">{{ framed ? 'Next' : 'Skip' }}</RsButton>
           </div>
         </template>
 
@@ -251,16 +322,43 @@ const at = computed(() => STEPS.findIndex((s) => s.id === step.value))
           </template>
         </template>
 
+        <!-- the spindle: warm-up at a throttle, Stop always there -->
+        <template v-else-if="step === 'warm'">
+          <template v-if="!spinning">
+            <p>Start the spindle: the Rhino checks the lid, lifts the bit 10 mm above the stock, switches the spindle on and ramps it up.</p>
+            <label class="thr">Throttle (%)<input v-model.number="dutyPct" type="number" :min="THROTTLE.min * 100" :max="100" step="5" class="tm-in" /></label>
+            <p class="muted small">As the setup counts it: 30 % is stopped, 100 % full. Your tuned throttle for this bit and material is on Tune HotJoe.</p>
+            <div class="acts">
+              <RsButton variant="primary" :disabled="busy" @click="warm">Start the spindle</RsButton>
+              <RsButton @click="step = 'frame'">Back</RsButton>
+            </div>
+          </template>
+          <template v-else>
+            <p class="state ok">Spindle running at {{ throttlePct(throttleNow) }} % throttle.</p>
+            <p>Listen: a steady sound, no rattle. Dust extraction on and eye protection on? Then start the cut.</p>
+            <div class="acts">
+              <RsButton variant="primary" @click="step = 'start'">Next</RsButton>
+              <RsButton :disabled="busy || throttleNow >= 1" @click="adjust(true)">Throttle +5 %</RsButton>
+              <RsButton :disabled="busy || throttleNow <= 0.31" @click="adjust(false)">Throttle −5 %</RsButton>
+              <RsButton variant="danger-outline" :disabled="busy" @click="stopSpindle">Stop the spindle</RsButton>
+            </div>
+          </template>
+        </template>
+
         <!-- 5 start -->
         <template v-else>
-          <p>Ready to cut <b>{{ name }}</b> with the {{ t?.tool }}. The Rhino checks the lid and the Z zero again, then starts the file{{ kind === 'laser' ? ', and powers the laser only once it has loaded' : '' }}.</p>
+          <p v-if="kind === 'cnc'">Ready to cut <b>{{ name }}</b> with the {{ t?.tool }}, spindle at {{ throttlePct(throttleNow) }} %. The Rhino checks the lid, the Z zero and that the spindle is running, then starts the file.</p>
+          <p v-else>Ready to cut <b>{{ name }}</b> with the {{ t?.tool }}. The Rhino checks the lid and the Z zero again, then starts the file{{ kind === 'laser' ? ', and powers the laser only once it has loaded' : '' }}.</p>
           <div class="acts">
-            <RsButton variant="primary" :disabled="busy || !hasZero" @click="start">Start the job</RsButton>
-            <RsButton @click="step = 'test'">Back</RsButton>
+            <RsButton variant="primary" :disabled="busy || !hasZero || (kind === 'cnc' && !spinning)" @click="start">Start the job</RsButton>
+            <RsButton @click="step = kind === 'cnc' ? 'warm' : 'test'">Back</RsButton>
+            <RsButton v-if="kind === 'cnc' && spinning" variant="danger-outline" :disabled="busy" @click="stopSpindle">Stop the spindle</RsButton>
           </div>
         </template>
       </MascotRow>
     </RsPanel>
+    <!-- the spindle's X/Y zero: Control's own jog panel, padlock and all -->
+    <MotionPanel v-if="step === 'xy' && !blocker" class="jog" />
   </div>
 </template>
 
@@ -272,6 +370,8 @@ const at = computed(() => STEPS.findIndex((s) => s.id === step.value))
 .steps .now .n { box-shadow: inset 0 0 0 2px var(--rs-ink); }
 .steps .done .n { background: var(--rs-ink); color: var(--rs-on-ink); box-shadow: none; }
 p { margin: 0 0 var(--rs-space-3); font-size: var(--rs-text-sm); color: var(--rs-text); }
+.jog { margin-top: var(--rs-gap); }
+.thr { display: flex; flex-direction: column; gap: 4px; max-width: 180px; font-size: var(--rs-text-xs); color: var(--rs-text-muted); margin-bottom: var(--rs-space-2); }
 .tick { display: flex; align-items: flex-start; gap: var(--rs-space-2); margin: 0 0 var(--rs-space-2); font-size: var(--rs-text-sm); color: var(--rs-text-strong); cursor: pointer; }
 .tick input { width: 18px; height: 18px; margin: 1px 0 0; accent-color: var(--rs-text-strong); flex: none; }
 .acts { display: flex; flex-wrap: wrap; gap: var(--rs-space-2); margin-top: var(--rs-space-4); }

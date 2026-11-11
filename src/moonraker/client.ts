@@ -175,6 +175,8 @@ export const WATCHED_OBJECTS: Record<string, string[] | null> = {
   'gcode_macro RHINO_MESH': ['match_c', 'cold_c', 'soak_min'],
   // Tool Manager 1.9.25: which tool the Z zero was set for (Studio's start wizard; cleared by a swap or restart)
   'gcode_macro SET_Z_ZERO': ['zeroed'],
+  // Tool Manager 1.9.27: the CNC setup's throttle, and whether it takes FROM=STUDIO (the spindle's start wizard)
+  'gcode_macro CNC_JOB_SETUP': ['duty', 'studio_start'],
 }
 
 /** One finished (or running) job in Moonraker's history. */

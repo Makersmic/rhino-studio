@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { check } from './commands'
-import { START_TOOLS, checklist, focusSteps, frameProblem, frameScript, startScript, startToolFor, testQuestion, testScript, zeroScript } from './startWizard'
+import { START_TOOLS, STOP_SCRIPT, XY_SCRIPT, adjustScript, checklist, clampThrottle, focusSteps, frameProblem, frameScript, startScript, startToolFor, stepsFor, testQuestion, testScript, warmScript, zeroScript } from './startWizard'
 
 const travel = { minX: 0, minY: 0, maxX: 576, maxY: 406 }
 const ctx = { jobActive: false }
@@ -81,4 +81,34 @@ describe('start wizard', () => {
     expect(focusSteps(1)![1]).toBe('Your tuned focus height is 1 mm: press Bed down 1 mm 1 time.')
     expect(focusSteps(0.4)![1]).toBe('Your tuned focus height is 0.4 mm: press Bed down 0.1 mm 4 times.')
   })
+
+  it('the spindle: only on a config that says it takes FROM=STUDIO', () => {
+    expect(startToolFor('HotJoe', 'CNC_JOB_SETUP', '', 1)).toEqual(START_TOOLS.HotJoe)
+    expect(startToolFor('HotJoe', 'CNC_JOB_SETUP', '', undefined)).toBeNull()
+    expect(startToolFor('HotJoe', 'CNC_JOB_SETUP', undefined, 1)).toBeNull()
+    expect(stepsFor('cnc').map((x) => x.id)).toEqual(['check', 'xy', 'zero', 'frame', 'warm', 'start'])
+    expect(checklist('cnc', null)).toEqual(['Stock is clamped firmly to the bed', 'Bit is seated and the collet nut is tight', 'Dust extraction is on', 'Eye and ear protection on, work area clear'])
+  })
+
+  it('the spindle’s scripts ask first, and the start is a job', () => {
+    for (const sc of [XY_SCRIPT, warmScript(0.6), adjustScript(true), adjustScript(false), STOP_SCRIPT]) expect(check(sc, ctx).needsConfirm).toBe(true)
+    expect(warmScript(0.62).split('\n')).toEqual(['SET_GCODE_VARIABLE MACRO=CNC_JOB_SETUP VARIABLE=duty VALUE=0.62', '_CNC_WARMUP QUIET=1'])
+    expect(warmScript(0.1)).toContain('VALUE=0.35')
+    expect(warmScript(3)).toContain('VALUE=1')
+    expect(clampThrottle(0.649)).toBe(0.65)
+    const st = check(startScript(START_TOOLS.HotJoe!, 'part.gcode')!, ctx)
+    expect(st.lines[0]!.line).toBe('CNC_JOB_SETUP FILE=part.gcode FROM=STUDIO')
+    expect(st.risk).toBe('job')
+  })
+
+  it('the spindle frames in work coordinates, spindle off, keeping the X/Y zero', () => {
+    const s = frameScript('cnc', { minX: 0, minY: 0, maxX: 40, maxY: 20 }).split('\n')
+    expect(s[0]).toBe('M5')
+    expect(s).not.toContain('SET_GCODE_OFFSET X=0 Y=0')
+    expect(s).toContain('G0 X40.00 Y20.00 F3000')
+    // where it lands is the work zero plus the moves
+    expect(frameProblem({ minX: 0, minY: 0, maxX: 40, maxY: 20 }, travel, { x: 550, y: 10 })).toMatch(/outside/)
+    expect(frameProblem({ minX: 0, minY: 0, maxX: 40, maxY: 20 }, travel, { x: 100, y: 10 })).toBeNull()
+  })
 })
+
