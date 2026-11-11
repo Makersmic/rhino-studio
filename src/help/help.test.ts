@@ -26,6 +26,10 @@ describe('help', () => {
     expect(helpFor('/bed')).toEqual({ chapter: 'bed' })
     expect(helpFor('/assets/toolheads/BlockOne/tune')).toEqual({ chapter: 'tuning-a-print-head' })
     expect(helpFor('/assets/toolheads/BlockOne')).toEqual({ chapter: 'assets' })
+    const proc = (n: string) => ({ LightSaber: 'laser', DragKnife: 'dragknife', BlockOne: 'print' })[n]
+    expect(helpFor('/assets/toolheads/LightSaber/tune', proc)).toEqual({ chapter: 'tuning-a-laser-or-drag-knife' })
+    expect(helpFor('/assets/toolheads/DragKnife/tune', proc)).toEqual({ chapter: 'tuning-a-laser-or-drag-knife' })
+    expect(helpFor('/assets/toolheads/BlockOne/tune', proc)).toEqual({ chapter: 'tuning-a-print-head' })
     expect(helpFor('/settingsx')).toBeNull()
     expect(helpFor('/style')).toBeNull()
   })

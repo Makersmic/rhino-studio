@@ -35,9 +35,16 @@ export const HELP_FOR: [prefix: string, target: HelpTarget][] = [
   ['/settings', { chapter: 'settings' }],
 ]
 
-/** The Help page for a Studio route; a Tune page goes to tuning. Unknown screens open the contents. */
-export function helpFor(path: string): HelpTarget | null {
-  if (/^\/assets\/toolheads\/[^/]+\/tune/.test(path)) return { chapter: 'tuning-a-print-head' }
+/**
+ * The Help page for a Studio route. A Tune page goes to tuning: the laser and knife chapter when processOf (the tool's
+ * process by name, from Job setup's tool list) says it's one, else the print head's. Unknown screens open the contents.
+ */
+export function helpFor(path: string, processOf?: (tool: string) => string | undefined): HelpTarget | null {
+  const tune = /^\/assets\/toolheads\/([^/]+)\/tune/.exec(path)
+  if (tune) {
+    const p = processOf?.(decodeURIComponent(tune[1]!))
+    return { chapter: p === 'laser' || p === 'dragknife' ? 'tuning-a-laser-or-drag-knife' : 'tuning-a-print-head' }
+  }
   let best: [string, HelpTarget] | null = null
   for (const e of HELP_FOR) {
     if ((path === e[0] || path.startsWith(e[0] + '/')) && (!best || e[0].length > best[0].length)) best = e
@@ -52,7 +59,7 @@ export function helpRoute(t: HelpTarget | null): string {
 
 /** Every chapter and section HELP_FOR points at must exist in the index. -> the ones that don't. */
 export function missingTargets(ix: HelpIndex): string[] {
-  const all: HelpTarget[] = [...HELP_FOR.map((e) => e[1]), { chapter: 'tuning-a-print-head' }]
+  const all: HelpTarget[] = [...HELP_FOR.map((e) => e[1]), { chapter: 'tuning-a-print-head' }, { chapter: 'tuning-a-laser-or-drag-knife' }]
   return all
     .filter((t) => !ix.chapters[t.chapter] || (t.section && !ix.chapters[t.chapter]!.sections.some((s) => s.id === t.section)))
     .map((t) => (t.section ? `${t.chapter}/${t.section}` : t.chapter))

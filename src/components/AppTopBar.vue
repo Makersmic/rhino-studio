@@ -10,6 +10,7 @@ import { useMachineStore } from '@/stores/machine'
 import { useControlStore } from '@/stores/control'
 import { useRoute } from 'vue-router'
 import { helpFor, helpRoute } from '@/help/help'
+import { usePrepareStore } from '@/stores/prepare'
 
 const machine = useMachineStore()
 const control = useControlStore()
@@ -17,8 +18,9 @@ const route = useRoute()
 // The Dashboard is look-only (wizard questions don't open there), so Swap isn't offered on it
 const canOfferSwap = computed(() => !route.meta.lookOnly)
 // Help for the screen you're on (Settings › Help); on Help itself it opens the contents
+const prep = usePrepareStore()
 const onHelp = computed(() => route.path.startsWith('/settings/help'))
-const help = computed(() => (onHelp.value ? '/settings/help' : helpRoute(helpFor(route.path))))
+const help = computed(() => (onHelp.value ? '/settings/help' : helpRoute(helpFor(route.path, (n) => prep.tools.find((t) => t.name === n)?.process))))
 
 const connection = computed(() => {
   switch (machine.connection) {
