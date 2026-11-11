@@ -149,10 +149,16 @@ const libs = __BUILT_WITH__
       <ZipUpdatePanel />
 
       <RsPanel title="Built with" index="03" panel-id="settings.builtwith" class="wide">
-        <p class="muted small">The libraries in this build of Rhino Studio. They change only with a new Studio release, so there's nothing to update here.</p>
+        <p class="muted small">Who and what made this build of Rhino Studio. The libraries change only with a new Studio release, so there's nothing to update here.</p>
         <table class="pk">
           <thead><tr><th>Library</th><th>Version</th><th>Licence</th><th>Used for</th></tr></thead>
           <tbody>
+            <tr class="ai">
+              <td class="pl"><span class="who"><svg class="spark" viewBox="0 0 24 24" aria-hidden="true"><path v-for="a in [0, 22.5, 45, 67.5, 90, 112.5, 135, 157.5]" :key="a" :transform="`rotate(${a} 12 12)`" :d="a % 45 ? 'M12 4.5V19.5' : 'M12 2V22'" /></svg>Claude</span></td>
+              <td class="mono">Opus 5.5</td>
+              <td class="muted">Anthropic</td>
+              <td class="muted">Wrote code, tests and docs alongside Mike Fisher, through Claude Code</td>
+            </tr>
             <tr v-for="l in libs" :key="l.name">
               <td class="pl">{{ l.name }}</td>
               <td class="mono">{{ l.version }}</td>
@@ -177,6 +183,8 @@ const libs = __BUILT_WITH__
 .pk tbody tr:last-child td { border-bottom: 0; }
 .pk .mono { font-family: var(--rs-font-code); font-size: 12px; }
 .pl { display: block; color: var(--rs-text-strong); font-weight: var(--rs-weight-medium); }
+.who { display: inline-flex; align-items: center; gap: 6px; }
+.spark { width: 16px; height: 16px; flex: none; stroke: var(--rs-claude); stroke-width: 2.4; stroke-linecap: round; fill: none; }
 .pn { display: block; font-size: 11px; color: var(--rs-text-muted); }
 .st { width: 140px; text-align: right; }
 .chip { display: inline-block; font-size: 12px; padding: 0 8px; line-height: 24px; border-radius: var(--rs-radius-sm); box-shadow: inset 0 0 0 1px var(--rs-line-strong); color: var(--rs-text); white-space: nowrap; }

@@ -71,6 +71,9 @@
   --th-custom: #c9b28a;
   --th-unknown: #8f8b82;
   --th-ink: #141516;
+
+  /* Claude's spark in Settings › Software › Built with (Mike, Nov 11): the one place it appears */
+  --rs-claude: #d97757;
 }
 
 /* Night (default): inverted e-ink. Black housing, charcoal paper, light ink. */
