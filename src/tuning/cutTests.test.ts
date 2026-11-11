@@ -157,3 +157,41 @@ describe('a wizard run with the defaults', () => {
     expect(cutFileName('laser_cut', 'LightSaber', 'MDF 3mm')).toBe('tune-laser_cut-LightSaber-MDF_3mm.gcode')
   })
 })
+
+import { applyTuned, tunedDiff, tunedFor, tunedText } from './cutTests'
+
+describe('Job setup from tuned values', () => {
+  const st = {
+    ok: true,
+    heads: { DragKnife: { knife_blade_offset: { value: 0.3, time: 5 } } },
+    materials: {
+      'LightSaber|PLYWOOD': { laser_cut_power: { value: 0.85, time: 3 }, laser_cut_speed: { value: 600, time: 3 }, laser_kerf: { value: 0.1, time: 4 }, laser_engrave_power: { value: 0.2, time: 9 } },
+      'DragKnife|VINYL': { knife_depth: { value: 0.25, time: 6 } },
+      'BlockOne|0.4|PLA': { pressure_advance: { value: 0.03, time: 1 } },
+    },
+  }
+  it('reads the cut values per material, the blade offset per knife', () => {
+    const l = tunedFor(st, 'LightSaber', 'PLYWOOD')!
+    expect(l.laser).toEqual({ power: 0.85, feed: 600, kerf: 0.1 })
+    expect(l.time).toBe(4) // the engrave save doesn't count: Job setup doesn't use it
+    expect(tunedFor(st, 'DragKnife', 'VINYL')!.knife).toEqual({ depth: 0.25, tip: 0.3 })
+    expect(tunedFor(st, 'DragKnife', 'PAPER')!.knife).toEqual({ tip: 0.3 })
+    expect(tunedFor(st, 'LightSaber', 'MDF')).toBeNull()
+    expect(tunedFor({ ...st, ok: false }, 'LightSaber', 'PLYWOOD')).toBeNull()
+  })
+  it('applies to its own process only, and lists what differs', () => {
+    const j = laserJob()
+    const t = tunedFor(st, 'LightSaber', 'PLYWOOD')!
+    expect(tunedDiff(j, t).sort()).toEqual(['feed', 'kerf', 'power'].filter((k) => (j.laser as never)[k] !== (t.laser as never)[k]).sort())
+    applyTuned(j, t)
+    expect(j.laser).toMatchObject({ power: 0.85, feed: 600, kerf: 0.1, passes: 1 })
+    expect(tunedDiff(j, t)).toEqual([])
+    const k = knifeJob(0.3)
+    applyTuned(k, t)
+    expect(k.laser.power).toBe(newJob('DragKnife', 'dragknife', []).laser.power)
+  })
+  it('says what was tuned', () => {
+    expect(tunedText('laser', tunedFor(st, 'LightSaber', 'PLYWOOD')!)).toBe('power 85 %, speed 600 mm/min, kerf 0.1 mm')
+    expect(tunedText('dragknife', tunedFor(st, 'DragKnife', 'VINYL')!)).toBe('depth 0.25 mm, blade offset 0.3 mm')
+  })
+})

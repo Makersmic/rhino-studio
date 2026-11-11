@@ -11,6 +11,7 @@
  * The slicing runs in this browser (src/slicer/), so the Pi only ever receives
  * the finished file. See src/stores/prepare.ts.
  */
+import TunedNote from '@/prepare/TunedNote.vue'
 import { useSettingsStore } from '@/stores/settings'
 import PreviewView from '@/views/PreviewView.vue'
 import StartEndLine from '@/toolmgr/StartEndLine.vue'
@@ -558,6 +559,7 @@ const engineNote = computed(() => {
             <NumField v-model="job.laser.passes" label="Passes" :min="1" :max="20" hint="The whole cut, repeated" />
             <NumField v-model="job.laser.kerf" label="Kerf" unit="mm" :min="0" :max="1" :step="0.05" hint="Beam width allowance" />
             <NumField v-if="!prep.flat" v-model="job.laser.cutHeight" label="Cut outline at" unit="mm" :min="0.01" :max="prep.part?.size.z ?? 1000" :step="0.5" hint="Height above the bed" />
+            <TunedNote />
           </div>
           <div v-if="proc === 'laser'" class="adv">
             <FoldGroup title="Advanced" note="smoothing, outer outline only">
@@ -573,6 +575,7 @@ const engineNote = computed(() => {
             <NumField v-model="job.knife.tip" label="Blade offset" unit="mm" :min="0" :max="3" :step="0.05" hint="Axis to blade tip" />
             <NumField v-model="job.knife.plunge" label="Plunge speed" unit="mm/min" :min="10" :max="1000" :step="10" />
             <NumField v-if="!prep.flat" v-model="job.knife.cutHeight" label="Cut outline at" unit="mm" :min="0.01" :max="prep.part?.size.z ?? 1000" :step="0.5" />
+            <TunedNote />
           </div>
           <div v-if="proc === 'dragknife'" class="adv">
             <FoldGroup title="Advanced" note="smoothing, outer outline only">

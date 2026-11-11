@@ -11,6 +11,7 @@
  * material, and the ramp climbs from 1 mm above that, so it can never press into the stock (focusRampSafe).
  */
 import { patternClear, type Rect } from './tuning'
+import type { KnifeSettings, LaserSettings } from '@/slicer/types'
 
 export type CutProcess = 'laser' | 'dragknife'
 export type CutTest = 'laser_focus' | 'laser_cut' | 'laser_engrave' | 'laser_passes' | 'laser_kerf' | 'knife_depth' | 'knife_offset'
@@ -486,4 +487,70 @@ export function cutChoices(test: CutTest, i: CutInputs): CutChoice[] {
 /** The file's name on the Rhino: letters, digits, - _ . only (FILE= on the setup macros) */
 export function cutFileName(test: CutTest, tool: string, material: string): string {
   return `tune-${test}-${tool}-${material}`.replace(/[^A-Za-z0-9_-]+/g, '_') + '.gcode'
+}
+
+// ---- Job setup: what a laser or knife job starts from ------------------------------------------------------------------
+
+
+export interface Tuned {
+  laser: Partial<Pick<LaserSettings, 'power' | 'feed' | 'passes' | 'kerf'>>
+  knife: Partial<Pick<KnifeSettings, 'depth' | 'tip'>>
+  /** newest save among them (unix s), for "tuned on ..." */
+  time: number
+}
+type TunedStore = { ok?: boolean; heads: Record<string, Partial<Record<string, { value: number; time: number }>>>; materials: Record<string, Partial<Record<string, { value: number; time: number }>>> }
+
+/**
+ * The tuned values for a tool and material (the material's name, as the tests save it), as Job setup fields:
+ * the laser's cut power, speed, passes and kerf; the knife's depth and blade offset. Engrave values aren't used yet:
+ * Studio's laser jobs are cuts. Null when nothing is tuned.
+ */
+export function tunedFor(st: TunedStore | null | undefined, tool: string, material: string): Tuned | null {
+  if (!st || st.ok === false) return null
+  const head = st.heads[tool] ?? {}
+  const mat = st.materials[`${tool}|${material}`] ?? {}
+  const t: Tuned = { laser: {}, knife: {}, time: 0 }
+  const take = <T extends object>(into: T, k: keyof T, v: { value: number; time: number } | undefined) => {
+    if (!v || !Number.isFinite(v.value)) return
+    ;(into as Record<keyof T, number>)[k] = v.value
+    t.time = Math.max(t.time, v.time)
+  }
+  take(t.laser, 'power', mat.laser_cut_power)
+  take(t.laser, 'feed', mat.laser_cut_speed)
+  take(t.laser, 'passes', mat.laser_passes)
+  take(t.laser, 'kerf', mat.laser_kerf)
+  take(t.knife, 'depth', mat.knife_depth)
+  take(t.knife, 'tip', head.knife_blade_offset)
+  return t.time ? t : null
+}
+
+/** The fields of a job that differ from what's tuned, for "Use tuned values" */
+export function tunedDiff(job: { process: string; laser: LaserSettings; knife: KnifeSettings }, t: Tuned | null): string[] {
+  if (!t) return []
+  const src = job.process === 'laser' ? t.laser : job.process === 'dragknife' ? t.knife : {}
+  const cur = (job.process === 'laser' ? job.laser : job.knife) as unknown as Record<string, number>
+  return Object.entries(src).filter(([k, v]) => Math.abs((cur[k] ?? NaN) - (v as number)) > 1e-9).map(([k]) => k)
+}
+
+/** Puts the tuned values into a laser or knife job (nothing for other processes) */
+export function applyTuned(job: { process: string; laser: LaserSettings; knife: KnifeSettings }, t: Tuned | null): void {
+  if (!t) return
+  if (job.process === 'laser') Object.assign(job.laser, t.laser)
+  else if (job.process === 'dragknife') Object.assign(job.knife, t.knife)
+}
+
+/** "power 85 %, speed 600 mm/min, kerf 0.1 mm" */
+export function tunedText(process: string, t: Tuned): string {
+  const parts: string[] = []
+  if (process === 'laser') {
+    const l = t.laser
+    if (l.power != null) parts.push(`power ${Math.round(l.power * 100)} %`)
+    if (l.feed != null) parts.push(`speed ${l.feed} mm/min`)
+    if (l.passes != null) parts.push(`${l.passes} pass${l.passes === 1 ? '' : 'es'}`)
+    if (l.kerf != null) parts.push(`kerf ${l.kerf} mm`)
+  } else if (process === 'dragknife') {
+    if (t.knife.depth != null) parts.push(`depth ${t.knife.depth} mm`)
+    if (t.knife.tip != null) parts.push(`blade offset ${t.knife.tip} mm`)
+  }
+  return parts.join(', ')
 }

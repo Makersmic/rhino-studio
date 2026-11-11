@@ -36,6 +36,8 @@ import { buildIni, loadSchema, valueOf, type RhinoCtx, type Schema } from '@/sli
 import { runPrusa, type SlicerState } from '@/slicer/prusa/portal'
 import { useMaintenanceStore } from './maintenance'
 import { useSliceProfilesStore } from './sliceProfiles'
+import { useTuningStore } from './tuning'
+import { applyTuned, tunedDiff, tunedFor, type Tuned } from '@/tuning/cutTests'
 import { sameIfEqual } from '@/prepare/stable'
 import { baseOf, extOf as fileExt, outFileName, safeName } from '@/prepare/jobName'
 import {
@@ -205,6 +207,36 @@ export const usePrepareStore = defineStore('prepare', () => {
     return true
   }
 
+  // ---- tuned values (laser and drag knife, Tool Manager 1.9.23): a job starts from them, after the material table and
+  // before anything typed here. A saved job for this very file keeps its own values.
+  const tuning = useTuningStore()
+  void tuning.load()
+  function tunedOf(j: PrepareJob): Tuned | null {
+    if (j.process !== 'laser' && j.process !== 'dragknife') return null
+    const name = materialsOf(j.toolhead).find((m) => m.key === j.material)?.name ?? j.material
+    return tunedFor(tuning.state, j.toolhead, name)
+  }
+  /** set when a job was set up before the tuning results arrived: they're applied when they do */
+  let tunedPending = false
+  function startFromTuned(j: PrepareJob) {
+    if (j.process !== 'laser' && j.process !== 'dragknife') return
+    if (tuning.state) applyTuned(j, tunedOf(j))
+    else tunedPending = true
+  }
+  watch(
+    () => tuning.state,
+    (st) => {
+      if (st && tunedPending && job.value) applyTuned(job.value, tunedOf(job.value))
+      if (st) tunedPending = false
+    },
+  )
+  const tuned = computed(() => (job.value ? tunedOf(job.value) : null))
+  /** fields that differ from what's tuned (empty when nothing is tuned) */
+  const tunedOff = computed(() => (job.value ? tunedDiff(job.value, tuned.value) : []))
+  function useTuned() {
+    if (job.value) applyTuned(job.value, tuned.value)
+  }
+
   function pickTool(name: string) {
     const t = tools.value.find((x) => x.name === name)
     if (!t) return
@@ -219,6 +251,9 @@ export const usePrepareStore = defineStore('prepare', () => {
       j.profileId = builtinId(t.process, engineOf(j))
       j.profileRev = null
       fromRhino(j, [...(fileName.value ? [fileName.value] : []), `tool/${t.name}`])
+      const own = !!fileName.value && profilesStore.jobs[fileName.value]?.process === t.process
+      tunedPending = false
+      if (!own) startFromTuned(j)
     }
     if (job.value) j.placement = { ...job.value.placement }
     if (t.process === 'laser' || t.process === 'dragknife') {
@@ -229,7 +264,10 @@ export const usePrepareStore = defineStore('prepare', () => {
 
   function pickMaterial(key: string) {
     const m = materials.value.list.find((x) => x.key === key)
-    if (job.value && m) applyMaterial(job.value, m)
+    if (job.value && m) {
+      applyMaterial(job.value, m)
+      startFromTuned(job.value)
+    }
   }
 
   // Start on the mounted tool, else the first one
@@ -249,8 +287,12 @@ export const usePrepareStore = defineStore('prepare', () => {
     () => profilesStore.online,
     (on) => {
       const j = job.value
-      if (on && j && !saved[j.toolhead] && isBuiltin(j.profileId) && !Object.keys(overrides.value).length) {
+      // untouched: nothing differs from the profile, or only the tuned values Studio put in
+      const tunedKeys = new Set(Object.keys(j ? ((j.process === 'laser' ? tuned.value?.laser : tuned.value?.knife) ?? {}) : {}))
+      const untouched = Object.keys(overrides.value).every((k) => tunedKeys.has(k)) && !tunedOff.value.length
+      if (on && j && !saved[j.toolhead] && isBuiltin(j.profileId) && untouched) {
         fromRhino(j, [...(fileName.value ? [fileName.value] : []), `tool/${j.toolhead}`])
+        if (!(fileName.value && profilesStore.jobs[fileName.value]?.process === j.process)) startFromTuned(j)
       }
     },
   )
@@ -954,6 +996,9 @@ export const usePrepareStore = defineStore('prepare', () => {
     fileKind,
     startWith,
     materialsOf,
+    tuned,
+    tunedOff,
+    useTuned,
     confirmProcess,
     changeProcess,
     machineInfo,
