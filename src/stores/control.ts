@@ -11,7 +11,8 @@ import { isScrewScript } from '@/bed/zscrews'
 import { defineStore } from 'pinia'
 import { computed, ref, shallowRef, watch } from 'vue'
 import { speedScript, zStepScript, zResetScript, limitsScript, isTuningScript } from '@/control/tuning'
-import { approve, check, fromPrompt, heaterScript, jogScript, type Axis, type CheckedScript, type ScriptCheck } from '@/control/commands'
+import { approve, check, fromPrompt, heaterScript, jogScript, type Axis, type CheckContext, type CheckedScript, type ScriptCheck } from '@/control/commands'
+import { timedLock } from '@/control/padlock'
 import { PromptTracker, type Prompt, type PromptButton } from '@/control/prompts'
 import { checkStart, type StartCheck } from '@/control/jobs'
 import { startToolFor } from '@/control/startWizard'
@@ -40,7 +41,6 @@ export interface ConfirmRequest {
 }
 
 const MAX_LINES = 400
-const UNLOCK_MS = 60_000
 
 export const useControlStore = defineStore('control', () => {
   const machine = useMachineStore()
@@ -118,6 +118,19 @@ export const useControlStore = defineStore('control', () => {
   const running = ref<string | null>(null)
   const jobActive = computed(() => machine.job.state === 'printing' || machine.job.state === 'paused')
   const macros = ref<Map<string, string>>(new Map())
+  /** Each macro's gcode (upper-case name), read once per Klipper start, so a user's own macro is classified by what it runs */
+  const macroText = ref<Map<string, string>>(new Map())
+  watch(() => machine.klippyReady, async (ready) => {
+    macroText.value = new Map()
+    if (!ready) return
+    try {
+      const defs = await machine.macroDefinitions()
+      macroText.value = new Map(Object.entries(defs).map(([n, d]) => [n, d.gcode]))
+    } catch {
+      /* an older Klipper or a slow start: the lists alone classify until the next start */
+    }
+  }, { immediate: true })
+  const ctx = (): CheckContext => ({ jobActive: jobActive.value, macros: new Set(macros.value.keys()), macroText: macroText.value })
 
   /** Klipper's commands with descriptions, for the console's suggestions */
   const help = ref<Map<string, string>>(new Map())
@@ -158,7 +171,7 @@ export const useControlStore = defineStore('control', () => {
       log('error', 'Klipper is not ready')
       return false
     }
-    const c: ScriptCheck = check(script, { jobActive: jobActive.value, macros: new Set(macros.value.keys()) })
+    const c: ScriptCheck = check(script, ctx())
     if (c.blocked) {
       log('error', c.blocked)
       return false
@@ -196,11 +209,9 @@ export const useControlStore = defineStore('control', () => {
     }
   }
 
-  // ---- motion lock ----------------------------------------------------------
-  const unlockedUntil = ref(0)
+  // ---- motion lock (src/control/padlock.ts: the same timed padlock as tuning, hardware and the lead screws) ----
   const now = ref(Date.now())
   setInterval(() => (now.value = Date.now()), 1000)
-  const motionUnlocked = computed(() => unlockedUntil.value > now.value)
 
   /**
    * Two-hand control (phone pendant): true only while the enable button is
@@ -211,7 +222,6 @@ export const useControlStore = defineStore('control', () => {
   function setEnable(held: boolean) {
     enableHeld.value = held && !motionBlock.value
   }
-  const unlockSecondsLeft = computed(() => Math.max(0, Math.ceil((unlockedUntil.value - now.value) / 1000)))
 
   /** Why jogging is unavailable, or null when it can be unlocked. */
   const motionBlock = computed(() => {
@@ -221,21 +231,19 @@ export const useControlStore = defineStore('control', () => {
     if (!machine.mountedVerified) return 'Confirm the mounted toolhead first: tool lengths differ'
     return null
   })
-
+  const motion = timedLock(motionBlock, now, [() => machine.mountedName])
+  const motionUnlocked = motion.unlocked
+  const unlockSecondsLeft = motion.secondsLeft
   function unlockMotion() {
-    if (motionBlock.value) return
-    unlockedUntil.value = Date.now() + UNLOCK_MS
-    now.value = Date.now()
+    motion.unlock()
   }
   function lockMotion() {
-    unlockedUntil.value = 0
+    motion.lock()
     enableHeld.value = false
   }
-  // Relock when the screen turns off or you switch apps (phone pendant)
-  if (typeof document !== 'undefined') document.addEventListener('visibilitychange', () => document.hidden && lockMotion())
-  // Relock the moment anything changes underneath
-  watch(motionBlock, (b) => b && lockMotion())
-  watch(() => machine.mountedName, lockMotion)
+  // The held enable button drops with the lock: screen off, app switch, and anything that changes underneath
+  if (typeof document !== 'undefined') document.addEventListener('visibilitychange', () => document.hidden && (enableHeld.value = false))
+  watch(motionBlock, (b) => b && (enableHeld.value = false))
 
   async function jog(axis: Axis, delta: number) {
     // Either the Control screen's unlock or the pendant's held enable button
@@ -250,7 +258,7 @@ export const useControlStore = defineStore('control', () => {
       log('error', `Jog ${axis}${delta > 0 ? '+' : ''}${delta}: ${j.error}`)
       return
     }
-    if (motionUnlocked.value) unlockedUntil.value = Date.now() + UNLOCK_MS // each jog keeps it unlocked
+    motion.touch() // each jog keeps it unlocked
     // Unlocking was the confirmation for jogs
     const c = check(j.script, { jobActive: false })
     log('sent', `Jog ${axis} ${delta > 0 ? '+' : ''}${delta} mm`)
@@ -326,28 +334,25 @@ export const useControlStore = defineStore('control', () => {
   const tuneBlocked = computed(() => (!machine.klippyReady ? 'Klipper is not ready' : machine.toolKind !== 'print' ? 'Confirm a print head first' : null))
 
   // ---- live tuning (src/control/tuning.ts): a red padlock, no per-tap asking --
-  const tuneUnlocked = ref(false)
   const tuningBlock = computed(() => {
     if (!machine.klippyReady) return 'Klipper is not ready'
     if (machine.toolKind !== 'print') return 'Confirm a print head first'
     return null
   })
-  function lockTuning() {
-    tuneUnlocked.value = false
-  }
-  function unlockTuning() {
-    if (!tuningBlock.value) tuneUnlocked.value = true
-  }
-  watch(tuningBlock, (b) => b && lockTuning())
-  watch(() => machine.mountedName, lockTuning)
+  const tune = timedLock(tuningBlock, now, [() => machine.mountedName])
+  const tuneUnlocked = tune.unlocked
+  const tuneSecondsLeft = tune.secondsLeft
+  const lockTuning = tune.lock
+  const unlockTuning = () => tune.unlock()
 
   /** Unlocked is the confirmation; only scripts the tuning builders make go this way. */
   async function sendTuning(script: string, label: string): Promise<boolean> {
     if (!tuneUnlocked.value) return log('error', `${label}: unlock tuning first`), false
     if (tuningBlock.value) return log('error', `${label}: ${tuningBlock.value}`), false
     if (!isTuningScript(script)) return log('error', `${label}: not a tuning command`), false
-    const c = check(script, { jobActive: jobActive.value, macros: new Set(macros.value.keys()) })
+    const c = check(script, ctx())
     const approved = approve(c, true)
+    tune.touch() // a use keeps it unlocked
     log('sent', label)
     try {
       await machine.runChecked(approved)
@@ -359,12 +364,12 @@ export const useControlStore = defineStore('control', () => {
   }
   // ---- Control › Hardware (src/control/hardware.ts) ----------------------------------------------------
   /** The padlock for live hardware (spindles, laser-style power, heaters). Relocks like tuning does. */
-  const hwUnlocked = ref(false)
-  const lockHardware = () => (hwUnlocked.value = false)
-  const unlockHardware = () => machine.klippyReady && (hwUnlocked.value = true)
-  watch(() => machine.klippyReady, (r) => !r && lockHardware())
-  watch(() => machine.mountedName, lockHardware)
-  watch(jobActive, (a) => a && lockHardware())
+  const hardwareLockBlock = computed(() => (!machine.klippyReady ? 'Klipper is not ready' : jobActive.value ? 'A job is running' : null))
+  const hw = timedLock(hardwareLockBlock, now, [() => machine.mountedName])
+  const hwUnlocked = hw.unlocked
+  const hwSecondsLeft = hw.secondsLeft
+  const lockHardware = hw.lock
+  const unlockHardware = () => hw.unlock()
 
   /**
    * Set one piece of hardware. The panel's own command for a known item, in range, is its own confirmation
@@ -376,7 +381,8 @@ export const useControlStore = defineStore('control', () => {
     const b = hardwareScript(item, value)
     if ('error' in b) return log('error', `${item.label}: ${b.error}`), false
     if (!isHardwareScript(b.script, items)) return log('error', `${item.label}: not a hardware command`), false
-    const c = check(b.script, { jobActive: jobActive.value, macros: new Set(macros.value.keys()) })
+    const c = check(b.script, ctx())
+    hw.touch() // a use keeps it unlocked
     log('sent', b.script)
     try {
       await machine.runChecked(approve(c, true))
@@ -393,16 +399,16 @@ export const useControlStore = defineStore('control', () => {
    * Z_TILT_ADJUST faults out). Unlocking asks once and is then the confirmation for each press; like Motion it locks
    * 60 s after the last press, on leaving the page, on a job, a swap, a tool change or Klipper not ready.
    */
-  const screwUntil = ref(0)
-  const screwUnlocked = computed(() => screwUntil.value > now.value)
-  const screwSecondsLeft = computed(() => Math.max(0, Math.ceil((screwUntil.value - now.value) / 1000)))
   const screwBlock = computed(() => {
     if (!machine.klippyReady) return 'Klipper is not ready'
     if (jobActive.value) return 'A job is running'
     if (machine.toolState.kind === 'swapping') return 'A tool swap is in progress'
     return null
   })
-  const lockScrews = () => (screwUntil.value = 0)
+  const screws = timedLock(screwBlock, now, [() => machine.mountedName])
+  const screwUnlocked = screws.unlocked
+  const screwSecondsLeft = screws.secondsLeft
+  const lockScrews = screws.lock
   async function unlockScrews(): Promise<boolean> {
     if (screwBlock.value) return false
     const ok = await confirm({
@@ -417,23 +423,18 @@ export const useControlStore = defineStore('control', () => {
       confirmLabel: 'Unlock for 60 s',
       tone: 'motion',
     })
-    if (!ok || screwBlock.value) return false
-    screwUntil.value = Date.now() + UNLOCK_MS
-    now.value = Date.now()
-    return true
+    if (!ok) return false
+    return screws.unlock()
   }
-  watch(screwBlock, (b) => b && lockScrews())
-  watch(() => machine.mountedName, lockScrews)
-  if (typeof document !== 'undefined') document.addEventListener('visibilitychange', () => document.hidden && lockScrews())
 
   /** Unlocked is the confirmation; only scripts the screw builders make, for Z motors Klipper has, go this way. */
   async function sendScrews(script: string, label: string, steppers: string[]): Promise<boolean> {
     if (!screwUnlocked.value) return log('error', `${label}: unlock the lead screws first`), false
     if (screwBlock.value) return log('error', `${label}: ${screwBlock.value}`), false
     if (!isScrewScript(script, steppers)) return log('error', `${label}: not a lead screw command`), false
-    const c = check(script, { jobActive: jobActive.value, macros: new Set(macros.value.keys()) })
+    const c = check(script, ctx())
     if (c.blocked) return log('error', c.blocked), false
-    screwUntil.value = Date.now() + UNLOCK_MS // each press keeps it unlocked
+    screws.touch() // each press keeps it unlocked
     log('sent', label)
     try {
       await machine.runChecked(approve(c, true))
@@ -594,7 +595,7 @@ export const useControlStore = defineStore('control', () => {
     // never for the console, and the usual checks still apply.
     if (machine.adapter.style === 'automatic' && !settings.confirmSwaps) {
       if (!machine.klippyReady) return log('error', 'Klipper is not ready'), false
-      const c = check(script, { jobActive: jobActive.value, macros: new Set(macros.value.keys()) })
+      const c = check(script, ctx())
       if (c.blocked) return log('error', c.blocked), false
       log('sent', `Swap to ${name}`)
       running.value = `Swap to ${name}`
@@ -709,7 +710,9 @@ export const useControlStore = defineStore('control', () => {
     pathBlocked,
     tuneBlocked,
     tuneUnlocked,
+    tuneSecondsLeft,
     hwUnlocked,
+    hwSecondsLeft,
     lockHardware,
     unlockHardware,
     sendHardware,

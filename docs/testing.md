@@ -611,3 +611,29 @@ On scrap plywood, glasses on, extraction running. A drawing with an outline and 
 - [ ] **ZS1 Zip and signature.** Settings › Software › Install from zip: drop the zip alone. *Pass if:* the drop area says
   "…is here: now its .sig" and nothing uploads; drop the `.sig`; both upload and the zip shows as checked. The `.sig` of
   another release: "doesn't belong to". *Stop if:* a zip is kept without its signature.
+
+## Next Tool Manager release (1.9.30): readouts for the Klipper extras, and the audit's should-fixes
+
+Built Nov 14 against the mock (`MOCK_HARDWARE=1`: a filament encoder and a spindle tachometer; `MOCK_EXTRAS=linked`
+for the Host page). The modules themselves are proven by the Tool Manager's FE7-FE13 and SP8-SP10 first.
+
+- [ ] **RD1 Spindle RPM in the status strip.** HotJoe mounted, warm-up at 0.6 from the start wizard. *Pass if:* the
+  Spindle cell's small line reads "N rpm · throttle" with N near the SP5 figure, and "Relay open" again when the rail
+  is off. *Stop if:* the cell shows rpm with the relay off.
+- [ ] **RD2 Dashboard rail.** During RD1, the Dashboard's bottom rail has a "Spindle … rpm" reading with the throttle
+  under it; it disappears when the rail is off.
+- [ ] **RD3 Filament chip.** BlockOne mounted, Control › Hardware: the encoder chip reads "Filament OK · N°" and the
+  angle follows the wheel by hand; during a print, "Moving · measured / commanded mm · N % slip". *Stop if:* the chip
+  says "Off (no print head)" with a print head mounted.
+- [ ] **RD4 Host › Klipper extras.** Settings › Host shows the two modules linked; `rm` one link on the host, reload:
+  the panel says "1 of 2 not linked" and Relink (with its confirm) restores it. *Stop if:* Relink reports a real file
+  in the way.
+- [ ] **S1 Your own macro asks.** Add `[gcode_macro MY_PARK] gcode: G28` to the config, restart, press its button on
+  Control. *Pass if:* the confirmation shows "its gcode runs G28: homes the machine". Remove the macro afterwards.
+- [ ] **S2 Prompt buttons.** Upload a G-code file containing `RESPOND TYPE=command MSG="action:prompt_button Go|FORCE_MOVE
+  STEPPER=stepper_z DISTANCE=50|primary"`. *Pass if:* Prepare's checks refuse the file (prompt button). In a Rhino wizard
+  prompt, each button whose command differs from its label shows the command in small type under it.
+- [ ] **S4 Heater limit from Klipper.** Control, hotend field: type 295. *Pass if:* "Enter 0 to 290°" (the config's
+  `max_temp`), and 290 is accepted. *Stop if:* 295 is sent and Klipper answers "out of range".
+- [ ] **S5 Padlocks time out.** Unlock Hardware and Flow (tuning); wait 60 s without touching them. *Pass if:* both
+  relock, their labels count down, and switching apps on a phone relocks them at once.

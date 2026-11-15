@@ -24,7 +24,7 @@ const control = useControlStore()
 // Flow and pressure advance: the tuning padlock (shared with Speed)
 const tuneOff = computed(() => !control.tuneUnlocked || !!control.tuneBlocked)
 const lockLabel = computed(() =>
-  control.tuneUnlocked ? 'Unlocked: flow and pressure advance apply at once. Tap to lock' : control.tuningBlock ? `Locked: ${control.tuningBlock}` : 'Locked. Tap to change flow or pressure advance',
+  control.tuneUnlocked ? `Unlocked · ${control.tuneSecondsLeft} s: flow and pressure advance apply at once. Tap to lock` : control.tuningBlock ? `Locked: ${control.tuningBlock}` : 'Locked. Tap to change flow or pressure advance',
 )
 const toggleLock = () => (control.tuneUnlocked ? control.lockTuning() : control.unlockTuning())
 const ex = computed(() => machine.extruder)

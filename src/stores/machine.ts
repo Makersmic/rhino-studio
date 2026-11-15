@@ -9,6 +9,7 @@
  * - Commands reach the machine only as CheckedScripts from the control store
  *   (src/stores/control.ts), never as raw strings.
  */
+import { resetHeatLimits, setHeatLimits } from '@/control/heatLimits'
 import { fanReadings } from '@/hardware/fans'
 import { defineStore } from 'pinia'
 import { computed, ref, shallowRef, triggerRef, watch } from 'vue'
@@ -222,6 +223,10 @@ export const useMachineStore = defineStore('machine', () => {
    * null = that output doesn't exist in this config.
    */
   const pin = (name: string) => num(status.value[`output_pin ${name}`]?.value)
+  const tachRpm = (st: Record<string, Record<string, unknown> | undefined>): number | null => {
+    const k = Object.keys(st).find((o) => o.startsWith('spindle_tachometer '))
+    return k ? num(st[k]?.rpm) : null
+  }
   const outputs = computed(() => {
     const rail = pin('LASER_INITIALIZE')
     const laserPwm = pin('SERVO_LASER')
@@ -237,6 +242,8 @@ export const useMachineStore = defineStore('machine', () => {
         on: relay > 0.5,
         throttle: relay > 0.5 && duty != null ? Math.max(0, Math.min(1, duty)) : 0,
         turning: relay > 0.5 && duty != null && duty > 0.31,
+        // Measured, when a [spindle_tachometer] (the Rhino's Klipper extra, Tool Manager 1.9.30) is in the config
+        rpm: tachRpm(status.value),
       },
       toolPower: tp ? { active: Number(tp.active) > 0, level: num(tp.level) ?? 0, suspended: Number(tp.suspended) > 0 } : null,
     }
@@ -298,6 +305,17 @@ export const useMachineStore = defineStore('machine', () => {
     if (!client) return Promise.resolve([])
     return client.listHistory(limit)
   }
+
+  /** Klipper's heater limits (max_temp), read once per Klipper start; Studio's ceiling applies until then (audit S4). */
+  watch(klippyReady, async (ready) => {
+    resetHeatLimits()
+    if (!ready) return
+    try {
+      setHeatLimits(await need().heaterLimits())
+    } catch {
+      /* the ceiling stays */
+    }
+  }, { immediate: true })
 
   /** Macro definitions, read once per Klipper start (they only change with the config). */
   let macroDefs: Promise<Record<string, { gcode: string; description: string }>> | null = null

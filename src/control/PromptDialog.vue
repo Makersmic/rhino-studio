@@ -34,6 +34,7 @@ const tone = (b: PromptButton) => (b.color === 'error' ? 'stop' : b.color === 'p
             @click="control.pressPromptButton(b)"
           >
             {{ b.label }}
+            <small v-if="b.command.trim().toUpperCase() !== b.label.trim().toUpperCase()" class="cmd">{{ b.command }}</small>
           </button>
         </div>
       </template>
@@ -103,4 +104,5 @@ h2 { color: inherit; font-size: var(--rs-text-lg); font-weight: var(--rs-weight-
 .btn.warn { border-width: 2px; border-color: var(--rs-ink); }
 .btn:disabled { opacity: 0.5; cursor: wait; }
 @media (max-width: 720px) { .prompt { bottom: 84px; right: 12px; } }
+.btn .cmd { display: block; font-family: var(--rs-font-code); font-size: 10px; opacity: 0.72; margin-top: 2px; max-width: 18em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 </style>

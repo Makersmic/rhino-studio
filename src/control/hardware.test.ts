@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { hardwareBlock, hardwareItems, hardwareScript, hardwareState, hardwareWatch, isHardwareScript } from './hardware'
+import { hardwareBlock, hardwareItems, hardwareScript, hardwareState, hardwareWatch, isControl, isHardwareScript } from './hardware'
 import type { SystemHardware } from '@/toolmgr/types'
 
 const role = (over: Partial<SystemHardware>): SystemHardware => ({ name: 'x', role: 'switch', pin: 'PB1', macros: [], ...over }) as SystemHardware
@@ -76,6 +76,30 @@ describe('Control › Hardware', () => {
     const w = hardwareWatch(['output_pin lamp', 'gcode_button lid', 'heater_generic chamber', 'extruder', 'webhooks'])
     expect(Object.keys(w).sort()).toEqual(['gcode_button lid', 'heater_generic chamber', 'output_pin lamp'])
     expect(w['heater_generic chamber']).toEqual(['temperature', 'target', 'power'])
+  })
+
+  it("the Rhino's Klipper extras: the encoder is a sensor with travel, the tachometer a reading, neither a control", () => {
+    const items = hardwareItems([], [
+      { name: 'filament_enc', device: 'encoder', label: 'Filament encoder', pins: { pin: 'PB1' }, settings: { wheel_circumference: 31.4 }, expose: ['dashboard'] },
+      { name: 'spindle_rpm', device: 'tachometer', label: 'Spindle tachometer', pins: { pin: 'PC5' }, settings: { pulses_per_rev: 7 }, expose: ['control'] },
+    ])
+    expect(items.map((i) => [i.name, i.kind, i.object, isControl(i)])).toEqual([
+      ['spindle_rpm', 'rpm', 'spindle_tachometer spindle_rpm', false],
+      ['filament_enc', 'input', 'filament_angle_sensor filament_enc', false],
+    ])
+    const enc = items[1]!
+    const tach = items[0]!
+    expect(hardwareState(enc, { 'filament_angle_sensor filament_enc': { enabled: true, filament_detected: true, angle: 212.4, measured_mm: 0, commanded_mm: 0, slip_pct: 0, printing: false } }).text).toBe('Filament OK · 212°')
+    expect(hardwareState(enc, { 'filament_angle_sensor filament_enc': { enabled: true, filament_detected: true, angle: 1, measured_mm: 12.3, commanded_mm: 12.6, slip_pct: 2.4, printing: true } }).text).toBe('Moving · 12.3 / 12.6 mm · 2 % slip')
+    const jam = hardwareState(enc, { 'filament_angle_sensor filament_enc': { enabled: true, filament_detected: false, angle: 1, measured_mm: 12.3, commanded_mm: 20, slip_pct: 38, printing: true } })
+    expect(jam.alert).toBe(true)
+    expect(jam.text).toMatch(/^Not moving/)
+    expect(hardwareState(enc, { 'filament_angle_sensor filament_enc': { enabled: false } }).text).toBe('Off (no print head)')
+    expect(hardwareState(tach, { 'spindle_tachometer spindle_rpm': { rpm: 14980 } })).toEqual({ value: 14980, text: '14980 rpm' })
+    expect(hardwareWatch(['spindle_tachometer spindle_rpm', 'filament_angle_sensor filament_enc'])).toEqual({
+      'spindle_tachometer spindle_rpm': ['rpm'],
+      'filament_angle_sensor filament_enc': ['enabled', 'filament_detected', 'angle', 'measured_mm', 'commanded_mm', 'slip_pct', 'printing'],
+    })
   })
 })
 

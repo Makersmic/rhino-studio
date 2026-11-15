@@ -6,7 +6,7 @@
  * Backups (Tool Manager 1.7): Back up now and restore, src/system/BackupPanel.vue.
  */
 import './settings.css'
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import RsPanel from '@/components/RsPanel.vue'
 import RsButton from '@/components/RsButton.vue'
 import BackupPanel from '@/system/BackupPanel.vue'
@@ -14,9 +14,46 @@ import HostnamePanel from '@/system/HostnamePanel.vue'
 import { useMachineStore } from '@/stores/machine'
 import { useControlStore } from '@/stores/control'
 import { POWER_ACTIONS, powerBlock, type PowerAction } from '@/system/power'
+import { useMaintenanceStore } from '@/stores/maintenance'
+import { extrasSummary, type HostExtras } from '@/system/klipperExtras'
 
 const machine = useMachineStore()
 const control = useControlStore()
+const care = useMaintenanceStore()
+// The Rhino's Klipper extras (Tool Manager 1.9.30): read on open; Relink is a Portal write
+const extras = ref<HostExtras | null>(null)
+const extrasMsg = ref<string | null>(null)
+const relinking = ref(false)
+const summary = computed(() => extrasSummary(extras.value))
+async function readExtras() {
+  const c = care.portal()
+  if (!c) return
+  try {
+    extras.value = await c.hostExtras()
+  } catch {
+    extras.value = null // an older Tool Manager without extras
+  }
+}
+async function relink() {
+  const ok = await control.confirm({
+    title: 'Link the Klipper extras?',
+    body: `Makes a link in ${extras.value?.klipper_dir ?? '~/klipper'}/klippy/extras for each module. Nothing else changes; Klipper uses them at its next restart.`,
+    confirmLabel: 'Link',
+    tone: 'normal',
+  })
+  if (!ok) return
+  relinking.value = true
+  extrasMsg.value = null
+  try {
+    extras.value = await care.portal()!.hostExtrasRelink()
+    extrasMsg.value = 'Linked. Restart Klipper when you add a section that needs them.'
+  } catch (e) {
+    extrasMsg.value = `Not linked: ${(e as Error).message}`
+  } finally {
+    relinking.value = false
+  }
+}
+onMounted(() => void readExtras())
 const block = computed(() => powerBlock({ online: machine.online, jobState: machine.job.state ?? '' }))
 const running = ref<string | null>(null)
 const msg = ref<{ text: string; bad: boolean } | null>(null)
@@ -69,6 +106,20 @@ async function run(a: PowerAction) {
             >{{ running === a.id ? 'Working…' : a.button }}</RsButton>
           </li>
         </ul>
+      </RsPanel>
+      <RsPanel v-if="extras" title="Klipper extras" index="04" panel-id="settings.host.extras">
+        <p class="muted small lead">The Rhino's own Klipper modules (filament encoder, spindle tachometer), linked into Klipper by the installer.</p>
+        <p class="small" :class="{ bad: summary.tone === 'warn', muted: summary.tone === 'muted' }">{{ summary.text }}</p>
+        <ul class="acts">
+          <li v-for="e in extras.extras" :key="e.name">
+            <span class="txt">
+              <strong>{{ e.name }}</strong>
+              <span class="muted small">{{ e.linked ? 'Linked' : e.in_the_way ? 'A real file is in the way' : 'Not linked' }}</span>
+            </span>
+          </li>
+        </ul>
+        <p v-if="extrasMsg" class="msg small" role="status">{{ extrasMsg }}</p>
+        <RsButton size="sm" :disabled="relinking || !extras.found || extras.all_linked" :title="!extras.found ? summary.text : ''" @click="relink">{{ relinking ? 'Working…' : extras.all_linked ? 'All linked' : 'Relink' }}</RsButton>
       </RsPanel>
       <HostnamePanel />
       <BackupPanel />

@@ -137,6 +137,9 @@ const rail = computed<RailItem[]>(() => {
     const stalled = stalledFans.value.some((x) => x.id === f.id)
     items.push({ id: f.id, label: f.label, value: `${rpmText(f.rpm)} rpm`, sub: stalled ? 'Not turning' : `${Math.round(f.speed * 100)} %`, alert: stalled, to: '/assets/hardware' })
   }
+  // the spindle's measured speed (a [spindle_tachometer], Tool Manager 1.9.30), while its relay is on
+  const sp = machine.outputs.spindle
+  if (sp && sp.on && sp.rpm != null) items.push({ id: 'spindle_rpm', label: 'Spindle', value: `${Math.round(sp.rpm)} rpm`, sub: `${Math.round(sp.throttle * 100)} % throttle`, to: '/control' })
   const c = care.counts
   if (!jobActive.value) items.push({
     id: 'care',

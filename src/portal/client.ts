@@ -56,6 +56,7 @@
  * there, and read it again if the Portal was restarted.
  */
 import type { HostStats } from '@/system/hostHealth'
+import type { HostExtras } from '@/system/klipperExtras'
 import type { JobsWeeks, MaintHistory, MaintOverview, TaskLibrary, MaintLists, TaskDef, BookDef, StatusEdit } from '@/maintenance/types'
 import type { NetState, WifiNetwork } from '@/system/network'
 import type { EngineAuto, SliceJobState, SlicerState } from '@/slicer/prusa/portal'
@@ -149,6 +150,8 @@ export const PORTAL_MACROS = ['macro-create', 'macro-save', 'macro-delete', 'mac
 /** Print head tuning results (Tool Manager 1.9.16): kept on the Rhino; Studio applies them in prepared files. */
 export const PORTAL_TUNING = ['tuning-result', 'tuning-clear'] as const
 export const PORTAL_NETWORK = ['net-hostname', 'net-ipv4', 'net-wifi', 'net-powersave', 'net-keep', 'net-undo'] as const
+/** Settings › Host: remake the links of the Rhino's Klipper extras into klippy/extras (Tool Manager 1.9.30) */
+export const PORTAL_HOST = ['host-extras-relink'] as const
 
 export type WriteKind =
   | (typeof PORTAL_WRITES)[number]
@@ -171,6 +174,7 @@ export type WriteKind =
   | (typeof PORTAL_PROFILES)[number]
   | (typeof PORTAL_MACROS)[number]
   | (typeof PORTAL_TUNING)[number]
+  | (typeof PORTAL_HOST)[number]
 
 /** The one request each write kind may make. */
 export const WRITE_ROUTES: Record<WriteKind, { method: 'POST' | 'DELETE'; path: RegExp }> = {
@@ -242,6 +246,7 @@ export const WRITE_ROUTES: Record<WriteKind, { method: 'POST' | 'DELETE'; path: 
   'trust-add': { method: 'POST', path: /^\/api\/moonraker-trust$/ },
   'trust-remove': { method: 'DELETE', path: /^\/api\/moonraker-trust$/ },
   'backup-now': { method: 'POST', path: /^\/api\/backup$/ },
+  'host-extras-relink': { method: 'POST', path: /^\/api\/host\/extras\/relink$/ },
   'backup-upload': { method: 'POST', path: /^\/api\/backup\/upload$/ },
   'restore-plan': { method: 'POST', path: /^\/api\/restore\/plan$/ },
   restore: { method: 'POST', path: /^\/api\/restore$/ },
@@ -906,6 +911,16 @@ export class PortalClient {
   /** Settings › Host health: sensors, cores, memory, disks and processes of the host (Tool Manager 1.9.19). Read only. */
   async hostStats(): Promise<HostStats> {
     return this.getJson<HostStats>('/api/host/stats')
+  }
+
+  /** The Klipper extras this Tool Manager ships, and whether each is linked into Klipper (read only). */
+  async hostExtras(): Promise<HostExtras> {
+    return this.getJson<HostExtras>('/api/host/extras')
+  }
+
+  /** Make or mend those links. Klipper picks them up at its next restart. */
+  async hostExtrasRelink(): Promise<HostExtras> {
+    return this.write('host-extras-relink', 'POST', '/api/host/extras/relink', {}) as Promise<HostExtras>
   }
 
   // ---- internals -------------------------------------------------------

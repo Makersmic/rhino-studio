@@ -10,6 +10,8 @@
  * isn't homed (unless an earlier step homes it), a move past the machine's travel, a hotend target without a confirmed
  * print head, an unknown Klipper macro, and the never-from-a-button commands the Portal refuses too.
  */
+import { HEAT_LIMITS } from './heatLimits'
+import { NEVER_FROM_BUTTON } from './commands'
 
 export type MacroStep =
   | { kind: 'home'; axes: 'all' | 'xy' | 'z'; onlyIfNeeded: boolean }
@@ -41,10 +43,8 @@ export interface UserMacro extends MacroDraft {
 
 export const MAX_STEPS = 30
 /** Never from a macro button, whatever the step: the same list the Portal refuses (rhino/user_macros.py NEVER) */
-export const NEVER = ['M112', 'SAVE_CONFIG', 'FIRMWARE_RESTART', 'RESTART', 'SET_KINEMATIC_POSITION', 'FORCE_MOVE', 'SET_STEPPER_ENABLE'] as const
+export const NEVER = NEVER_FROM_BUTTON
 const NEVER_RE = new RegExp(`(?<![A-Za-z0-9_])(${NEVER.join('|')})(?![A-Za-z0-9_])`, 'i')
-const HOTEND_MAX = 300
-const BED_MAX = 130
 
 /** What a step is called in the list, and a short line of its values for under it */
 export const STEP_TITLES: Record<StepKind, string> = {
@@ -133,7 +133,7 @@ export function stepProblem(s: MacroStep): string | null {
       return num(s.speed, 1, 500) ? null : 'Speed from 1 to 500 mm/s'
     }
     case 'temp':
-      return num(s.target, 0, s.heater === 'hotend' ? HOTEND_MAX : BED_MAX) ? null : `0 to ${s.heater === 'hotend' ? HOTEND_MAX : BED_MAX}°`
+      return num(s.target, 0, s.heater === 'hotend' ? HEAT_LIMITS.hotend : HEAT_LIMITS.bed) ? null : `0 to ${s.heater === 'hotend' ? HEAT_LIMITS.hotend : HEAT_LIMITS.bed}°`
     case 'heatMaterial':
       return /^[A-Za-z0-9_.-]{1,40}$/.test(s.material) ? null : 'Pick a material'
     case 'fan':
@@ -255,8 +255,8 @@ export function buildMacro(m: MacroDraft, ctx: RunContext): BuildResult {
         const mat = ctx.materials.find((x) => x.key === s.material) ?? ctx.materials.find((x) => x.name === s.material)
         if (!mat) return { error: `${at}: ${s.material} isn't in ${ctx.tool}'s material table` }
         if (mat.hotend == null || mat.bed == null) return { error: `${at}: ${s.material} has no temperatures in the table` }
-        const h = Math.round(Math.min(mat.hotend, HOTEND_MAX))
-        const b = Math.round(Math.min(mat.bed, BED_MAX))
+        const h = Math.round(Math.min(mat.hotend, HEAT_LIMITS.hotend))
+        const b = Math.round(Math.min(mat.bed, HEAT_LIMITS.bed))
         // the bed first: it's slowest, and heating both at once is what the console would do anyway
         out.push(`M140 S${b}`, `M104 S${h}`)
         if (s.wait) out.push(`M190 S${b}`, `M109 S${h}`)

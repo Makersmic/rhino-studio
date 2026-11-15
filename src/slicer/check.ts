@@ -22,6 +22,7 @@
  * or a spindle M3 in a CNC file is a note, and Studio can't know a CNC file's
  * stock, so only its size and depth are checked.
  */
+import { HEAT_LIMITS } from '@/control/heatLimits'
 import type { MachineInfo, PartInfo, PrepareJob } from './types'
 import { cncStock } from './kiriSettings'
 
@@ -52,6 +53,8 @@ const FORBIDDEN: Array<[RegExp, string]> = [
   [/^(SET_GCODE_OFFSET|G10|G5[5-9]|SET_Z_ZERO)\b/, 'changes the work zero'],
   [/^(SDCARD_PRINT_FILE|LASER_JOB_SETUP|CNC_JOB_SETUP|DRAGKNIFE_JOB_SETUP|TOOL_JOB_SETUP|_START_JOB_FILE)\b/, 'starts another job'],
   [/^(ACTIVATE_LASER|SET_LASER_POWER|SET_PIN|SET_TOOL_POWER|Spindle_ACTIVATE)\b/i, 'switches a tool on directly'],
+  // A file may not write a prompt: its buttons would run with the wizards' trust (audit S2)
+  [/^RESPOND\b.*ACTION:PROMPT/, 'writes a prompt button; only a macro may'],
 ]
 
 interface Pos {
@@ -65,8 +68,8 @@ const word = (l: string, w: string) => {
   return m ? +m[1]! : null
 }
 
-/** Klipper's heater limits in Studio (the same as the Control screen's) */
-export const HEAT_MAX = { hotend: 300, bed: 130 }
+/** Klipper's heater limits in Studio (the same record the Control screen uses: src/control/heatLimits.ts) */
+export const HEAT_MAX = HEAT_LIMITS
 
 export function checkFile(text: string, job: PrepareJob, part: PartInfo | null, m: MachineInfo, opts: { upload?: boolean } = {}): { checks: Check[]; stats: FileStats } {
   const upload = !!opts.upload

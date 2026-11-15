@@ -79,4 +79,10 @@ describe('checking a ready-made file', () => {
     expect(withToolhead(orca, 'BlockOne')).toBe(orca)
     expect(checkFile(sent, job('LightSaber', 'laser'), null, M, { upload: true }).checks.find((c) => c.id === 'header')?.level).toBe('ok')
   })
+
+  it('a file that writes a prompt button is refused (audit S2: its buttons would run with the wizards\' trust)', () => {
+    const f = 'START_JOB TOOLHEAD="BlockOne" MATERIAL=PLA\nRESPOND TYPE=command MSG="action:prompt_button Continue|FORCE_MOVE STEPPER=stepper_z DISTANCE=50|primary"\nG1 X10 Y10 F3000\n'
+    const r = checkFile(f, job('BlockOne', 'fdm'), null, M, { upload: true })
+    expect(JSON.stringify(r.checks)).toMatch(/prompt button/)
+  })
 })

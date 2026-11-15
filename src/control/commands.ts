@@ -1,3 +1,4 @@
+import { HEAT_LIMITS } from './heatLimits'
 /**
  * Every G-code Studio sends goes through here first.
  *
@@ -48,6 +49,8 @@ export interface CheckContext {
   jobActive: boolean
   /** Macros Klipper has (upper case), to tell macros from unknown words */
   macros?: ReadonlySet<string>
+  /** Each macro's gcode (upper-case name), so a user's own macro is classified by what it runs (audit S1) */
+  macroText?: ReadonlyMap<string, string>
 }
 
 const CONFIRM: ReadonlySet<Risk> = new Set(['motion', 'power', 'tool-state', 'restart', 'job', 'internal'])
@@ -215,6 +218,22 @@ function classify(command: string, line: string): LineCheck {
   return r('none', '')
 }
 
+/**
+ * A macro the lists don't know is classified by the worst thing its own gcode runs (one level deep). Jinja is read
+ * as plain text, so a command inside an {% if %} counts too: a false positive only adds a dialog.
+ */
+function macroRisk(l: LineCheck, gcode: string): LineCheck {
+  let worst = l
+  for (const raw of gcode.split(/\r?\n/)) {
+    const t = raw.replace(/;.*$/, '').trim()
+    if (!t || t.startsWith('{%') || t.startsWith('{#')) continue
+    const c = checkLine(t)
+    if (c.risk === 'none' || c.risk === 'heat' || c.risk === 'internal' || c.risk === 'stop') continue
+    if (ORDER.indexOf(c.risk) > ORDER.indexOf(worst.risk)) worst = { ...l, risk: c.risk, reason: `its gcode runs ${c.command}: ${c.reason}` }
+  }
+  return worst
+}
+
 /** Read a script and say what it would do. Comments and blank lines are ignored. */
 export function check(script: string, ctx: CheckContext): ScriptCheck {
   const lines = script
@@ -222,6 +241,7 @@ export function check(script: string, ctx: CheckContext): ScriptCheck {
     .map((l) => l.replace(/;.*$/, '').trim())
     .filter(Boolean)
     .map(checkLine)
+    .map((l) => (l.risk === 'none' && ctx.macroText?.has(l.command) ? macroRisk(l, ctx.macroText.get(l.command)!) : l))
 
   let risk: Risk = 'none'
   for (const l of lines) if (ORDER.indexOf(l.risk) > ORDER.indexOf(risk)) risk = l.risk
@@ -260,9 +280,15 @@ export function approve(c: ScriptCheck, confirmed: boolean): CheckedScript {
  * "action:prompt_end", used by some Rhino macros) is a prompt instruction, not
  * G-code: send it back as RESPOND so Klipper, Mainsail and Studio all close it.
  */
+/** Never from a prompt button, whatever wrote the prompt: a job file can write one too (audit S2). The Portal's macro editor refuses the same list. */
+export const NEVER_FROM_BUTTON = ['M112', 'SAVE_CONFIG', 'FIRMWARE_RESTART', 'RESTART', 'SET_KINEMATIC_POSITION', 'FORCE_MOVE', 'SET_STEPPER_ENABLE'] as const
+const NEVER_BUTTON_RE = new RegExp(`(?<![A-Za-z0-9_])(${NEVER_FROM_BUTTON.join('|')})(?![A-Za-z0-9_])`, 'i')
+
 export function fromPrompt(command: string): CheckedScript {
   const c = command.trim()
   if (!c || c.length > 300 || /[\r\n]/.test(c)) throw new Error('That button has no valid command')
+  const never = NEVER_BUTTON_RE.exec(c)
+  if (never) throw new Error(`That button would run ${never[1]!.toUpperCase()}, which a prompt button may never do`)
   if (/^action:/i.test(c)) return `RESPOND TYPE=command MSG="${c.replace(/"/g, "'")}"` as CheckedScript
   return c as CheckedScript
 }
@@ -304,7 +330,7 @@ export function jogScript(axis: Axis, delta: number, ctx: JogContext): { script:
 }
 
 export function heaterScript(heater: 'extruder' | 'heater_bed', target: number): { script: string } | { error: string } {
-  const max = heater === 'extruder' ? 300 : 130
+  const max = heater === 'extruder' ? HEAT_LIMITS.hotend : HEAT_LIMITS.bed   // Klipper's max_temp, under Studio's ceiling
   if (!Number.isFinite(target) || target < 0 || target > max) return { error: `Enter 0 to ${max}°` }
   return { script: `SET_HEATER_TEMPERATURE HEATER=${heater} TARGET=${Math.round(target)}` }
 }

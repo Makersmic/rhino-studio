@@ -72,7 +72,7 @@ function commitField(i: HwItem) {
 const top = (i: HwItem) => (scaled(i) ? 100 : i.max)
 const unit = (i: HwItem) => (scaled(i) ? '%' : '°')
 const fill = (i: HwItem) => `${Math.round((shown(i) / (top(i) || 1)) * 100)}%`
-const lockLabel = computed(() => (control.hwUnlocked ? 'Lock the live hardware' : 'Unlock the live hardware (spindle, heater, laser-style power)'))
+const lockLabel = computed(() => (control.hwUnlocked ? `Unlocked · ${control.hwSecondsLeft} s · lock the live hardware` : 'Unlock the live hardware for 60 s (spindle, heater, laser-style power)'))
 const toggleLock = () => (control.hwUnlocked ? control.lockHardware() : control.unlockHardware())
 </script>
 

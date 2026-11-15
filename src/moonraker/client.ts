@@ -358,6 +358,18 @@ export class MoonrakerClient {
   }
 
   /**
+   * Klipper's max_temp for the hotend and the bed (configfile.settings), what Studio's heater fields and file checks
+   * are limited to (src/control/heatLimits.ts). A read, through printer.objects.query.
+   */
+  async heaterLimits(): Promise<{ hotend?: number; bed?: number }> {
+    const r = (await this.call('printer.objects.query', { objects: { configfile: ['settings'] } })) as
+      { status?: { configfile?: { settings?: Record<string, Record<string, unknown>> } } }
+    const st = r?.status?.configfile?.settings ?? {}
+    const n = (v: unknown) => (Number.isFinite(Number(v)) && Number(v) > 0 ? Number(v) : undefined)
+    return { hotend: n(st.extruder?.max_temp), bed: n(st.heater_bed?.max_temp) }
+  }
+
+  /**
    * [z_tilt] and every [stepper_z*] section as configured (configfile.settings): where Bed › Configuration draws the
    * lead screws. A read, through printer.objects.query.
    */

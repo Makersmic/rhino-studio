@@ -130,12 +130,14 @@ The built `dist/` folder is plain static files and works from any folder.
 
 ## Run it on the Rhino
 
-From Rhino Tool Manager 1.5.1, the release zip carries a build of Studio and the installer serves it with the
-nginx that already serves Mainsail, on a port of its own: **`http://<pi>:5001`**, from any PC, phone or tablet on
-the network, with nothing to install. Mainsail's site isn't touched. The Pi's nginx forwards Moonraker, the
-cameras and `/portal` the same way the dev server does, so Studio works exactly as it does from a PC. Updating the
-Tool Manager (its zip, through `rhino.sh`) updates Studio; Settings › Software shows the version. The zip is made
-with `sh dev/make_zip.sh ../rhino-studio` in the Tool Manager repo. Running it from a PC (above) still works.
+Studio ships inside each Tool Manager release zip (`rhino-config-<version>.zip`): the release workflow builds it from
+this repo's `main`. The Tool Manager's installer serves it with the host's nginx on the **bare address**
+(`http://rhino.local`, since Tool Manager 1.9.19), by name at `http://rhinostudio.local`, and on port 5001; Mainsail
+moves to port 8090 as a spare. nginx forwards Moonraker, the cameras and `/portal` the same way the dev server does, so
+Studio works exactly as it does from a PC, from any phone, tablet or PC on the network with nothing to install.
+Updating the Tool Manager updates Studio: Studio › Settings › Software checks GitHub and installs the signed zip;
+Settings › Software shows both versions. The host is a Dell OptiPlex 7050 on Debian 12 (a Pi works too). Running
+Studio from a PC against the machine (above) still works.
 
 ## Folder map
 

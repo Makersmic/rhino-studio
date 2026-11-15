@@ -19,7 +19,7 @@
 import type { Status } from '@/moonraker/client'
 import type { SystemHardware } from '@/toolmgr/types'
 
-export type HwKind = 'fan' | 'level' | 'switch' | 'servo' | 'heater' | 'light' | 'auto' | 'input' | 'temp'
+export type HwKind = 'fan' | 'level' | 'switch' | 'servo' | 'heater' | 'light' | 'auto' | 'input' | 'temp' | 'rpm'
 
 export interface HwItem {
   name: string
@@ -96,6 +96,9 @@ function fromDevice(d: WizardDevice): HwItem | null {
     case 'interlock': case 'flame': case 'pressure': case 'vfd_fault': return { ...base, kind: 'input', object: `gcode_button ${d.name}`, max: 1 }
     case 'runout': return { ...base, kind: 'input', object: `filament_switch_sensor ${d.name}`, max: 1 }
     case 'jam': return { ...base, kind: 'input', object: `filament_motion_sensor ${d.name}`, max: 1 }
+    // The Rhino's own Klipper extras (Tool Manager 1.9.30, docs/proposal-filament-encoder.md)
+    case 'encoder': return { ...base, kind: 'input', object: `filament_angle_sensor ${d.name}`, max: 1 }
+    case 'tachometer': return { ...base, kind: 'rpm', object: `spindle_tachometer ${d.name}`, max: 1 }
     case 'temp_sensor': return { ...base, kind: 'temp', object: `temperature_sensor ${d.name}`, max: 1 }
   }
   return null
@@ -112,14 +115,14 @@ export function hardwareItems(roles: SystemHardware[], devices: WizardDevice[]):
     // a device shows when it's controllable and exposed to Control, or when it's something to watch
     const i = fromDevice(d)
     if (!i || TOOL_OUTPUTS.has(i.name.toLowerCase())) continue
-    const readOnly = i.kind === 'auto' || i.kind === 'input' || i.kind === 'temp'
+    const readOnly = i.kind === 'auto' || i.kind === 'input' || i.kind === 'temp' || i.kind === 'rpm'
     if (readOnly || (d.expose ?? []).includes('control')) out.push(i)
   }
-  const order: HwKind[] = ['fan', 'light', 'switch', 'level', 'servo', 'heater', 'auto', 'temp', 'input']
+  const order: HwKind[] = ['fan', 'light', 'switch', 'level', 'servo', 'heater', 'auto', 'rpm', 'temp', 'input']
   return out.sort((a, b) => order.indexOf(a.kind) - order.indexOf(b.kind) || a.name.localeCompare(b.name))
 }
 
-export const isControl = (i: HwItem) => i.kind !== 'auto' && i.kind !== 'input' && i.kind !== 'temp'
+export const isControl = (i: HwItem) => i.kind !== 'auto' && i.kind !== 'input' && i.kind !== 'temp' && i.kind !== 'rpm'
 
 const num = (v: number) => String(Math.round(v * 10000) / 10000)
 
@@ -232,7 +235,16 @@ export function hardwareState(item: HwItem, status: Status): HwState {
       const enabled = o?.enabled as boolean | undefined
       const present = o?.filament_detected as boolean | undefined
       if (enabled === false) return { value: null, text: 'Off (no print head)' }
-      return { value: present ? 1 : 0, text: present == null ? '—' : present ? 'Filament OK' : 'No filament', alert: present === false }
+      const word = present == null ? '—' : present ? (o?.printing ? 'Moving' : 'Filament OK') : o?.measured_mm != null ? 'Not moving' : 'No filament'
+      // The filament encoder adds travel: measured against commanded while printing, the wheel's angle otherwise
+      const extra = o?.measured_mm == null ? ''
+        : o.printing ? ` · ${n('measured_mm')?.toFixed(1) ?? '—'} / ${n('commanded_mm')?.toFixed(1) ?? '—'} mm · ${n('slip_pct')?.toFixed(0) ?? '—'} % slip`
+        : ` · ${n('angle')?.toFixed(0) ?? '—'}°`
+      return { value: present ? 1 : 0, text: word + extra, alert: present === false }
+    }
+    case 'rpm': {
+      const v = n('rpm')
+      return { value: v, text: v == null ? '—' : `${Math.round(v)} rpm` }
     }
   }
   return { value: null, text: '—' }
@@ -240,11 +252,13 @@ export function hardwareState(item: HwItem, status: Status): HwState {
 
 /** Klipper objects to subscribe to for this panel (only ones Klipper has are subscribed). */
 export const HARDWARE_TYPES = ['output_pin', 'pwm_tool', 'heater_generic', 'gcode_button', 'led', 'neopixel', 'dotstar',
-  'temperature_sensor', 'filament_switch_sensor', 'filament_motion_sensor'] as const
+  'temperature_sensor', 'filament_switch_sensor', 'filament_motion_sensor', 'filament_angle_sensor', 'spindle_tachometer'] as const
 const FIELDS: Record<string, string[]> = {
   output_pin: ['value'], pwm_tool: ['value'], heater_generic: ['temperature', 'target', 'power'], gcode_button: ['state'],
   led: ['color_data'], neopixel: ['color_data'], dotstar: ['color_data'], temperature_sensor: ['temperature'],
   filament_switch_sensor: ['enabled', 'filament_detected'], filament_motion_sensor: ['enabled', 'filament_detected'],
+  filament_angle_sensor: ['enabled', 'filament_detected', 'angle', 'measured_mm', 'commanded_mm', 'slip_pct', 'printing'],
+  spindle_tachometer: ['rpm'],
 }
 export function hardwareWatch(objects: readonly string[]): Record<string, string[]> {
   const out: Record<string, string[]> = {}

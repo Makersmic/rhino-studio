@@ -124,6 +124,9 @@ const status: Record<string, Record<string, unknown>> = {
         'output_pin case_light': { value: 1 },
         'heater_generic chamber': { temperature: 38.4, target: 0, power: 0 },
         'gcode_button lid': { state: 'RELEASED' },
+        // Tool Manager 1.9.30: the Rhino's Klipper extras (a filament encoder on the BlockOne, the spindle's tachometer)
+        'filament_angle_sensor filament_enc': { enabled: true, filament_detected: true, angle: 212.4, measured_mm: 0, commanded_mm: 0, slip_pct: 0, wheel_circumference: 31.4, printing: false },
+        'spindle_tachometer spindle_rpm': { rpm: 0, edges_per_second: 0, pulses_per_rev: 7 },
       }
     : {}),
   'output_pin LASER_INITIALIZE': { value: 0 },
@@ -1134,6 +1137,43 @@ function mockCores() {
   const c = [w(8, 6), w(5, 4), w(14, 10), HOT ? w(93, 4) : w(22, 8)]
   return { cpu: c.reduce((a, b) => a + b, 0) / 4, cpu0: c[0], cpu1: c[1], cpu2: c[2], cpu3: c[3] }
 }
+const hostExtras = {
+  ok: true, klipper_dir: '/home/pi/klipper', found: process.env.MOCK_EXTRAS !== 'noklipper', all_linked: process.env.MOCK_EXTRAS === 'linked',
+  extras: [
+    { name: 'filament_angle_sensor', file: 'filament_angle_sensor.py', linked: process.env.MOCK_EXTRAS === 'linked', in_the_way: false },
+    { name: 'spindle_tachometer', file: 'spindle_tachometer.py', linked: process.env.MOCK_EXTRAS === 'linked', in_the_way: false },
+  ],
+}
+// Wizard devices behind the MOCK_HARDWARE objects (what the Portal's GET /api/hardware/devices answers)
+const wizardDevices = process.env.MOCK_HARDWARE
+  ? [
+      { name: 'lid', device: 'interlock', label: 'Door or lid interlock', purpose: 'Lid', pins: { pin: 'PG11' }, settings: {}, expose: ['dashboard'] },
+      { name: 'filament_enc', device: 'encoder', label: 'Filament encoder (AS5600, travel and slip)', purpose: 'Filament encoder', pins: { pin: 'PB1' },
+        settings: { wheel_circumference: 31.4, detection_length: 7, extruder: 'extruder', invert: false }, expose: ['dashboard'], scope: 'tools', scope_values: ['BlockOne'], scope_slots: [1] },
+      { name: 'spindle_rpm', device: 'tachometer', label: 'Spindle tachometer (pulses)', purpose: 'Spindle RPM', pins: { pin: 'PC5' },
+        settings: { pulses_per_rev: 7, poll_interval: 0.0001 }, expose: ['control'], scope: 'tools', scope_values: ['HotJoe'], scope_slots: [4] },
+    ]
+  : []
+// The tachometer follows the throttle (1000 KV on 24 V, loaded); the encoder's travel follows a running print
+setInterval(() => {
+  if (status['spindle_tachometer spindle_rpm']) {
+    const relay = Number(status['output_pin Spindle_power']?.value ?? 0) > 0.5
+    const duty = Number(status['output_pin SPINDLE_SPEED']?.value ?? 0.3)
+    const rpm = relay && duty > 0.31 ? Math.round(((duty - 0.3) / 0.7) * 21000 + 1800 + (Math.random() - 0.5) * 120) : 0
+    update('spindle_tachometer spindle_rpm', { rpm, edges_per_second: Math.round((rpm / 30) * 7) })
+  }
+  const enc = status['filament_angle_sensor filament_enc']
+  if (enc) {
+    const printing = status.print_stats?.state === 'printing'
+    if (printing) {
+      const commanded = Number(enc.commanded_mm) + 0.42
+      const measured = Number(enc.measured_mm) + 0.41
+      update('filament_angle_sensor filament_enc', { printing: true, commanded_mm: Math.round(commanded * 100) / 100, measured_mm: Math.round(measured * 100) / 100,
+        slip_pct: Math.round((1 - measured / commanded) * 1000) / 10, angle: (Number(enc.angle) + 4.8) % 360, filament_detected: true })
+    } else if (enc.printing) update('filament_angle_sensor filament_enc', { printing: false })
+  }
+}, 500)
+
 function hostStats() {
   const t = (c: number) => Math.round((c + Math.random()) * 10) / 10
   const proc = (name: string, pid: number, cpu: number, rss: number, core: number, allowed = '0-3', nice = 0) => ({ name, pids: [pid], cpu, rss, core, allowed, nice, threads: 4 })
@@ -1837,6 +1877,15 @@ async function portal(req: IncomingMessage, res: import('node:http').ServerRespo
   if (req.method === 'GET' && url === '/api/maint/history') return json(res, 200, maintHistory), true
   if (req.method === 'GET' && url === '/api/dash/jobs') return json(res, 200, jobsPerWeek()), true
   if (req.method === 'GET' && url === '/api/host/stats') return json(res, 200, hostStats()), true
+  // Tool Manager 1.9.30: the Klipper extras' links (Settings › Host) and the wizard devices (Control › Hardware)
+  if (req.method === 'GET' && url === '/api/host/extras') return json(res, 200, hostExtras), true
+  if (req.method === 'POST' && url === '/api/host/extras/relink') {
+    if (!hostExtras.found) return json(res, 400, { ok: false, error: `Klipper's extras folder isn't at ${hostExtras.klipper_dir}/klippy/extras.` }), true
+    for (const e of hostExtras.extras) e.linked = true
+    hostExtras.all_linked = true
+    return json(res, 200, hostExtras), true
+  }
+  if (req.method === 'GET' && url === '/api/hardware/devices') return json(res, 200, { ok: true, devices: wizardDevices }), true
   // Tool library, read-only, from the Portal's demo (scripts/fixtures/portal-*.json). Changes need the real
   // Portal: python3 dev/demo_server.py in Toolhead_Manager, then PORTAL=http://127.0.0.1:5055 npm run dev
   // Settings / Network (Portal 1.4.8)

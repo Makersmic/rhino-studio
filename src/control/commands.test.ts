@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { approve, check, commandOf, fromPrompt, heaterScript, jogScript, safeFileParam } from './commands'
+import { HEAT_LIMITS, resetHeatLimits, setHeatLimits } from './heatLimits'
 
 const idle = { jobActive: false }
 
@@ -191,5 +192,56 @@ describe('tool changes on other kinds of machine', () => {
   it('confirms the Rhino job-file lines when typed by hand', () => {
     expect(check('CNC_BIT_CHANGE BIT=2', ctx)).toMatchObject({ risk: 'motion', needsConfirm: true })
     expect(check('REQUIRE_TOOLHEAD TOOLHEAD=LightSaber', ctx).needsConfirm).toBe(true)
+  })
+})
+
+describe("a user's own macro is classified by what it runs (audit S1)", () => {
+  const macroText = new Map([
+    ['MY_PARK', 'G28\nG1 Z200 F600'],
+    ['WARM', 'M104 S240\nM140 S60'],
+    ['MAYBE', '{% if printer.toolhead.homed_axes != "xyz" %}\n  G28 ; only when needed\n{% endif %}\nM117 ok'],
+    ['REFLASH', 'SAVE_CONFIG'],
+  ])
+  const macros = new Set(macroText.keys())
+  it('a macro that homes asks like G28 does, and says why', () => {
+    const c = check('MY_PARK', { jobActive: false, macros, macroText })
+    expect(c.risk).toBe('motion')
+    expect(c.needsConfirm).toBe(true)
+    expect(c.lines[0]!.reason).toMatch(/its gcode runs G28: homes/)
+  })
+  it('a macro that only heats stays a plain button; one with a restart asks', () => {
+    expect(check('WARM', { jobActive: false, macros, macroText }).needsConfirm).toBe(false)
+    expect(check('REFLASH', { jobActive: false, macros, macroText }).risk).toBe('restart')
+  })
+  it('a command inside Jinja counts (a false positive only adds a dialog)', () => {
+    expect(check('MAYBE', { jobActive: false, macros, macroText }).risk).toBe('motion')
+  })
+  it('without the texts, the lists alone decide, as before', () => {
+    expect(check('MY_PARK', { jobActive: false, macros }).risk).toBe('none')
+  })
+})
+
+describe('prompt buttons never run the never-list (audit S2)', () => {
+  it('refuses FORCE_MOVE, M112 and a restart, and says which', () => {
+    expect(() => fromPrompt('FORCE_MOVE STEPPER=stepper_z DISTANCE=50 VELOCITY=5')).toThrow(/would run FORCE_MOVE/)
+    expect(() => fromPrompt('M112')).toThrow(/M112/)
+    expect(() => fromPrompt('firmware_restart')).toThrow(/FIRMWARE_RESTART/)
+  })
+  it("the Rhino's own buttons still work: a macro whose name contains the word is not the word", () => {
+    expect(fromPrompt('RESTART_FOR_TOOLS')).toBe('RESTART_FOR_TOOLS')
+    expect(fromPrompt('_ESC_HIGH_THROTTLE')).toBe('_ESC_HIGH_THROTTLE')
+  })
+})
+
+describe("heater fields follow Klipper's max_temp, under Studio's ceiling (audit S4)", () => {
+  it('290 from the config refuses 295; a silly 350 is clamped to 300; reset puts the ceiling back', () => {
+    setHeatLimits({ hotend: 290, bed: 110 })
+    expect(heaterScript('extruder', 295)).toEqual({ error: 'Enter 0 to 290°' })
+    expect(heaterScript('extruder', 290)).toEqual({ script: 'SET_HEATER_TEMPERATURE HEATER=extruder TARGET=290' })
+    expect(heaterScript('heater_bed', 111)).toEqual({ error: 'Enter 0 to 110°' })
+    setHeatLimits({ hotend: 350, bed: null })
+    expect(HEAT_LIMITS).toEqual({ hotend: 300, bed: 130 })
+    resetHeatLimits()
+    expect(heaterScript('extruder', 300)).toHaveProperty('script')
   })
 })
