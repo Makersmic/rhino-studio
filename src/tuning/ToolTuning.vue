@@ -1,5 +1,6 @@
 <script setup lang="ts">
 /** The tool page's Tuning panel: which wizards have been run for this tool (per material where it counts), and Tune. */
+import LiveStrip from '@/control/LiveStrip.vue'
 import { computed, onMounted } from 'vue'
 import { useToolMgrStore } from '@/stores/toolmgr'
 import RsButton from '@/components/RsButton.vue'
@@ -38,6 +39,7 @@ const seen = computed(() => {
 
 <template>
   <div class="tt">
+    <LiveStrip />
     <p v-if="!tuning.supported" class="muted">Tuning needs Tool Manager 1.9.16 on the Rhino.</p>
     <template v-else-if="cut && proc === 'cnc'">
       <p v-if="!bitNames.length" class="muted">No bits yet: add them in Assets › Parts › Bits, then tune each one.</p>

@@ -660,3 +660,19 @@ until BT0 passes: the C920's microphone rolls off at low notes and the Opus stre
 - [ ] **BT3 It stops listening.** After BT0, press **Stop** (or leave the page). *Pass if:* within 30 seconds
   `pgrep ffmpeg` on the Rhino prints nothing. *Stop if:* ffmpeg is still running: the microphone service is
   not stopping when nobody listens; note how long it ran.
+
+## Next release: Care guides and the "What's happening" strip (Studio only; the guides send nothing to the machine)
+
+- [ ] **CG1 Guide me.** Care › Tasks, press **Guide me** on the "Clean the collet and collet nut" task (CNC tool in the list). With the spindle
+  relay on, then off. *Pass if:* Start is disabled and says the spindle relay reads on while it is on, and enabled once it is off;
+  every step must be ticked in order; the last step goes to a log; **Log the work** puts a "Guided: all N steps ticked" entry in the Work log
+  and moves the due date. *Stop if:* Start is enabled while the spindle relay reads on.
+- [ ] **CG2 Gates keep watching.** Start "Check the hotend screws, heater and thermistor wiring" with the hotend cold, then heat the hotend
+  to 60° from Control while you are on step 1. *Pass if:* the step shows "Holding. The hotend is 60°. Let it cool first." and **Done, next** is
+  disabled until it cools. *Stop if:* you can tick on while it is hot.
+- [ ] **CG3 The electronics bay wait.** Start "Clean dust from the electronics bay and fans" and tick step 1. *Pass if:* a two-minute countdown
+  runs, **Done, next** and **Back** stay off until zero. *Stop if:* you can skip the wait.
+- [ ] **CG4 What's happening.** Open any BlockOne tuning test (Assets › BlockOne › Tune › First-layer squish), start the test job, and watch the strip
+  at the top of the page. *Pass if:* it says "Heating the hotend: N° of M°", then "Running <file> · N %", with the last console lines under it, and the
+  line "You can leave this page" while the job runs; leaving the page and coming back shows the same job still running. *Stop if:* the strip
+  disagrees with the Dashboard (heating said while Control shows the hotend at temperature, or the percentage differs by more than a few points).

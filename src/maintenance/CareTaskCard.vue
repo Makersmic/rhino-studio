@@ -34,6 +34,9 @@ const showPriority = computed(() => props.task.priority === 'high' || props.task
     </p>
 
     <footer v-if="!compact" class="actions">
+      <RouterLink :to="`/care/guide/${encodeURIComponent(task.id)}`" custom v-slot="{ navigate }">
+        <RsButton variant="primary" :disabled="busy" @click="navigate">Guide me</RsButton>
+      </RouterLink>
       <RsButton :disabled="busy" @click="$emit('log', task)">Log work</RsButton>
       <RsButton v-if="att === 'overdue' || att === 'due_soon'" variant="quiet" :disabled="busy" @click="$emit('snooze', task)">Snooze 7 days</RsButton>
       <RsButton v-if="statusable" variant="quiet" :disabled="busy" @click="$emit('status', task)">{{ task.status?.hold ? 'Change status' : 'Set status' }}</RsButton>

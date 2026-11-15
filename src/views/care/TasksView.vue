@@ -147,6 +147,7 @@ const newTask = () => router.push({ path: '/care/tasks/new', query: forAsset.val
             </span>
             <span class="last">{{ t.last?.at ? fmtDay(t.last.at) : 'Never' }}</span>
             <span class="acts">
+              <RsButton v-if="t.status && !t.archived" size="sm" @click="router.push(`/care/guide/${encodeURIComponent(t.id)}`)">Guide me</RsButton>
               <RsButton v-if="t.status && !t.archived" size="sm" @click="logging = t">Log work</RsButton>
               <RsButton v-if="t.status && !t.archived" size="sm" variant="quiet" @click="statusFor = t">{{ t.status.hold ? 'Change status' : 'Set status' }}</RsButton>
               <RsButton v-if="t.archived" size="sm" variant="quiet" @click="open(t)">Open</RsButton>
