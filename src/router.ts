@@ -89,6 +89,7 @@ export const router = createRouter({
         { path: 'library/:id', component: () => import('./views/care/TaskEditView.vue'), meta: { title: 'Library task', mode: 'template' } },
         { path: 'log', component: () => import('./views/care/WorkLogView.vue'), meta: { title: 'Work log' } },
         { path: 'meters', component: () => import('./views/care/MetersView.vue'), meta: { title: 'Usage meters' } },
+        { path: 'belts/listen', component: () => import('./views/care/ListenView.vue'), meta: { title: 'Microphone test' } },
         { path: 'setup/statuses', component: () => import('./views/care/StatusCodesView.vue'), meta: { title: 'Status codes' } },
         { path: 'setup/lists', component: () => import('./views/care/CareListsView.vue'), meta: { title: 'Areas, kinds and priorities' } },
       ],

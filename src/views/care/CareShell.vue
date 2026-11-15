@@ -21,6 +21,7 @@ const groups = computed<SectionGroup[]>(() => {
         { to: '/care/library', label: 'Task Library', count: care.library?.books.length ?? '', match: /^\/care\/library\// },
         { to: '/care/log', label: 'Work log' },
         { to: '/care/meters', label: 'Usage meters' },
+        { to: '/care/belts/listen', label: 'Microphone test' },
       ],
     },
     {

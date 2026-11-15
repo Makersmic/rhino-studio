@@ -637,3 +637,26 @@ for the Host page). The modules themselves are proven by the Tool Manager's FE7-
   `max_temp`), and 290 is accepted. *Stop if:* 295 is sent and Klipper answers "out of range".
 - [ ] **S5 Padlocks time out.** Unlock Hardware and Flow (tuning); wait 60 s without touching them. *Pass if:* both
   relock, their labels count down, and switching apps on a phone relocks them at once.
+
+## Next release: the belt guide, batch A (Care › Microphone test; looks and listens only, sends nothing to the machine)
+
+Needs the camera sound set up (Settings › Cameras › Sound, Tool Manager 1.9.21 or later). The page listens through the same
+WebRTC stream as the Dashboard's sound. No browser microphone permission and no HTTPS are needed, but nothing is proven
+until BT0 passes: the C920's microphone rolls off at low notes and the Opus stream is lossy.
+- [ ] **BT0 Tone test.** Care › Microphone test › Listen to the camera microphone. On a phone play a steady tone near the
+  camera: 100 Hz, then 150 Hz, then 200 Hz (a tone generator app or web page). *Pass if:* **Hearing** shows each tone
+  within 1 Hz, the marker on the spectrogram sits on it, and the level line says "Level is fine". *Stop if:* it shows
+  nothing, or a different note (twice or half): write down what you played and what it read, and don't go on to the
+  belt guide. The typed-Hz route stays available.
+- [ ] **BT1 Fans and the room.** Part fan and hotend cold (so its fan is off), motors off, driver fans off if you can. Press
+  **Learn the room (5 s)** and stay still. Then switch the part fan on and learn again. *Pass if:* the quiet room reads
+  "quiet" (or names the one fan you left running), the fan-on room says "A steady tone at N Hz and its multiples", and
+  after learning the fan no longer shows on the spectrogram. *Stop if:* a fan you switched off is still named: say which.
+- [ ] **BT2 One belt.** Fans as in BT1, room learned, motors off, gantry at the middle. Flick one belt's long span with a
+  plastic tool three times, about 1 cm from the camera's microphone side if you can. *Pass if:* each flick shows up as a
+  "Last pluck" within about a second, and three flicks agree within 1 %. Write down the note of each belt (it tells us
+  where a 15 mm 2GT belt sits). *Stop if:* the belt rings but no pluck appears, or the readings wander by more than 3 %:
+  tell me the Hz you saw, the distance and which fans were on.
+- [ ] **BT3 It stops listening.** After BT0, press **Stop** (or leave the page). *Pass if:* within 30 seconds
+  `pgrep ffmpeg` on the Rhino prints nothing. *Stop if:* ffmpeg is still running: the microphone service is
+  not stopping when nobody listens; note how long it ran.
