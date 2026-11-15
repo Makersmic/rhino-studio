@@ -1,9 +1,10 @@
 <script setup lang="ts">
 /**
  * Care › Guide me (Mike, Nov 15): walks one Care task step by step. Gates first (what Klipper must say before you
- * start), then each step ticked in order, a wait where the task needs one, then the Work log entry. Gates are
- * re-checked all the way through: if a job starts or the hotend heats, it holds until that is cleared. It sends
- * nothing to the machine: the steps are things you do by hand. The logic is in src/care/guide.ts (tested).
+ * start), then each step in order: a tick, a pick (what happened), or a Do (a command Studio builds itself and sends
+ * through the same check and confirm as the console). A wait where the task needs one, then the Work log entry.
+ * Gates are re-checked all the way through: if a job starts or the hotend heats, it holds until that is cleared.
+ * The logic is in src/care/ (tested); this page only drives it and draws.
  */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
@@ -12,7 +13,10 @@ import RsPanel from '@/components/RsPanel.vue'
 import MascotRow from '@/components/MascotRow.vue'
 import LiveStrip from '@/control/LiveStrip.vue'
 import { DONE_POSE } from '@/brand/mascot'
-import { GENERIC, checkGates, guideFor, logNote, stepsOf, waitAfter, type GateFacts } from '@/care/guide'
+import { DOS, GENERIC, checkGates, guideSteps, logNote, waitAfter, type Answers, type DoId, type GateFacts } from '@/care/guide'
+import { findGuide } from '@/care/guides'
+import { levelFacts, passLines } from '@/care/level'
+import { lastTiltRun } from '@/bed/zscrews'
 import { today } from '@/maintenance/edit'
 import { useControlStore } from '@/stores/control'
 import { useMachineStore } from '@/stores/machine'
@@ -25,10 +29,10 @@ const control = useControlStore()
 
 const id = computed(() => String(route.params.id ?? ''))
 const task = computed(() => care.overview?.tasks.find((t) => t.id === id.value) ?? null)
-const def = computed(() => guideFor(task.value?.link?.template))
+const def = computed(() => findGuide(task.value?.link?.template))
 const look = computed(() => def.value ?? { ...GENERIC, template: '' })
-const steps = computed(() => stepsOf(task.value?.steps, def.value))
 
+const tiltRun = computed(() => lastTiltRun(control.lines))
 const facts = computed<GateFacts>(() => ({
   klippyReady: machine.klippyReady,
   jobActive: control.jobActive,
@@ -37,17 +41,31 @@ const facts = computed<GateFacts>(() => ({
   laserArmed: machine.outputs.laser ? machine.outputs.laser.armed : null,
   toolPowerActive: machine.outputs.toolPower ? machine.outputs.toolPower.active : null,
   mountedType: machine.toolState.kind === 'mounted' ? (machine.toolState.type ?? null) : null,
+  homedXyz: ['x', 'y', 'z'].every((a) => machine.position.homed.includes(a)),
+  heatersOn: (machine.hotend.target ?? 0) > 0 || (machine.bed.target ?? 0) > 0,
+  toolMismatch: machine.toolState.kind === 'mismatch',
+  ...levelFacts(tiltRun.value),
 }))
+const homedNow = computed(() => ['x', 'y', 'z'].every((a) => machine.position.homed.includes(a)))
+const tiltLines = computed(() => passLines(tiltRun.value))
 const gates = computed(() => checkGates(look.value.gates, facts.value))
 const failing = computed(() => gates.value.filter((g) => !g.ok))
 
 type Phase = 'before' | 'steps' | 'log' | 'done'
 const phase = ref<Phase>('before')
 const at = ref(0)
+const answers = ref<Answers>({})
+const steps = computed(() => guideSteps(def.value, task.value?.steps, answers.value, facts.value))
+const cur = computed(() => steps.value[at.value] ?? null)
 const waitLeft = ref(0)
 const waitLabel = ref('')
 const notes = ref('')
 const busy = ref(false)
+const doing = ref(false)
+/** the command steps actually run in this guide: a gate that was already true can't stand in for doing it */
+const ran = ref<Set<DoId>>(new Set())
+/** the ones pressed at all, even if Klipper refused: a failure message belongs after a try, a hint before it */
+const tried = ref<Set<DoId>>(new Set())
 const error = ref<string | null>(null)
 let timer: ReturnType<typeof setInterval> | undefined
 
@@ -59,12 +77,18 @@ onBeforeUnmount(() => clearInterval(timer))
 watch(id, () => {
   phase.value = 'before'
   at.value = 0
+  answers.value = {}
+  ran.value = new Set()
+  tried.value = new Set()
   waitLeft.value = 0
   clearInterval(timer)
 })
 
 function begin() {
   at.value = 0
+  answers.value = def.value?.start?.({ klippyReady: machine.klippyReady, message: machine.klippyMessage, homed: homedNow.value }) ?? {}
+  ran.value = new Set()
+  tried.value = new Set()
   phase.value = 'steps'
 }
 function startWait(w: { seconds: number; label: string }) {
@@ -94,14 +118,41 @@ function back() {
   else phase.value = 'before'
 }
 const mmss = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
-const canNext = computed(() => failing.value.length === 0 && waitLeft.value === 0)
+
+/** what must hold before you can go on from this step (the guide's own gates, then the step's) */
+const needing = computed(() => checkGates(cur.value?.need ?? [], facts.value).filter((g) => !g.ok))
+/** what must hold before a Do button is offered */
+const beforeDo = computed(() => checkGates(cur.value?.before ?? [], facts.value).filter((g) => !g.ok))
+const picked = computed(() => (cur.value?.kind === 'pick' && cur.value.key ? !!answers.value[cur.value.key] : true))
+const didIt = computed(() => cur.value?.kind !== 'do' || !cur.value.do || ran.value.has(cur.value.do))
+const canNext = computed(() => failing.value.length === 0 && needing.value.length === 0 && waitLeft.value === 0 && picked.value && didIt.value)
+
+async function runDo(d: DoId) {
+  const c = DOS[d]
+  doing.value = true
+  tried.value = new Set([...tried.value, d])
+  // the same as Bed › Configuration: pressing Level relocks the lead-screw padlock first
+  if (d === 'level') control.lockScrews()
+  try {
+    const sent = await control.send(c.script, { label: c.logLabel ?? c.label, confirmTitle: c.title, confirmBody: c.body, confirmLabel: c.confirmLabel })
+    if (sent) ran.value = new Set([...ran.value, d])
+  } finally {
+    doing.value = false
+  }
+}
+
+const klippyWords = computed(() => {
+  const m = machine.klippyMessage
+  return `${machine.klippy}${m ? `: ${m.trim().slice(0, 300)}` : ''}`
+})
 
 async function finish() {
   if (!task.value) return
   busy.value = true
   error.value = null
   try {
-    await care.logWork(task.value.id, { action: 'done', date: today(), notes: logNote(steps.value.length, notes.value) })
+    const note = def.value?.note ? def.value.note(answers.value, notes.value, facts.value) : logNote(steps.value.length, notes.value)
+    await care.logWork(task.value.id, { action: 'done', date: today(), notes: note })
     phase.value = 'done'
   } catch (e) {
     error.value = (e as Error).message
@@ -136,15 +187,44 @@ async function finish() {
                 <span>{{ g.label }}<template v-if="!g.ok"><br /><small>{{ g.why }}</small></template></span>
               </li>
             </ul>
+            <p v-else-if="def?.build" class="small">Klipper says <b>{{ machine.klippy }}</b>. This guide works through what happened, restarts only if you confirm, and checks the machine moves freely.</p>
             <p v-else class="small">Nothing for the machine to check first. {{ steps.length }} step{{ steps.length === 1 ? '' : 's' }} follow.</p>
             <div class="row"><RsButton variant="primary" :disabled="failing.length > 0" @click="begin">Start</RsButton></div>
           </template>
 
           <!-- steps -->
-          <template v-else-if="phase === 'steps'">
+          <template v-else-if="phase === 'steps' && cur">
             <div class="bar" role="progressbar" :aria-valuenow="at + 1" :aria-valuemax="steps.length"><i :style="{ width: ((at + 1) / steps.length) * 100 + '%' }" /></div>
-            <p class="step">{{ steps[at] }}</p>
+            <p class="step">{{ cur.text }}</p>
+
+            <p v-if="cur.show === 'klippy'" class="klippy" role="status"><b>Klipper says:</b> {{ klippyWords }}</p>
+
+            <ul v-if="cur.show === 'tilt' && tiltLines.length" class="passes" aria-label="Each levelling pass">
+              <li v-for="l in tiltLines" :key="l">{{ l }}</li>
+            </ul>
+
+            <p v-if="cur.links?.length" class="links">
+              <RouterLink v-for="l in cur.links" :key="l.to" :to="l.to">{{ l.label }}</RouterLink>
+            </p>
+
+            <fieldset v-if="cur.kind === 'pick' && cur.key && cur.options" class="pick">
+              <legend class="small">Pick one</legend>
+              <label v-for="o in cur.options" :key="o.id" class="opt">
+                <input v-model="answers[cur.key]" type="radio" :name="cur.key" :value="o.id" /> <span>{{ o.label }}</span>
+              </label>
+            </fieldset>
+
+            <template v-if="cur.kind === 'do' && cur.do">
+              <p v-if="beforeDo.length" class="warn" role="note"><b>Not yet.</b> {{ beforeDo[0]!.why }}</p>
+              <div class="row">
+                <RsButton :disabled="beforeDo.length > 0 || doing" @click="runDo(cur.do)">{{ DOS[cur.do].label }}</RsButton>
+                <span v-if="!beforeDo.length && needing.length && !tried.has(cur.do)" class="small">{{ needing[0]!.why }}</span>
+              </div>
+              <p v-if="!beforeDo.length && needing.length && tried.has(cur.do)" class="warn" role="alert"><b>Holding.</b> {{ needing[0]!.why }}</p>
+            </template>
+
             <p v-if="failing.length" class="warn" role="alert"><b>Holding.</b> {{ failing[0]!.why }}</p>
+            <p v-else-if="needing.length && cur.kind !== 'do'" class="warn" role="note"><b>Holding.</b> {{ needing[0]!.why }}</p>
             <p v-if="waitLeft > 0" class="wait" role="timer">{{ waitLabel }}: <b class="mono">{{ mmss(waitLeft) }}</b> left. Don’t go on until it reaches zero.</p>
             <div class="row">
               <RsButton variant="quiet" :disabled="waitLeft > 0" @click="back">Back</RsButton>
@@ -155,8 +235,8 @@ async function finish() {
           <!-- log -->
           <template v-else-if="phase === 'log'">
             <h2 class="h">Log it</h2>
-            <p class="small">All {{ steps.length }} step{{ steps.length === 1 ? '' : 's' }} ticked. Anything you found or replaced?</p>
-            <label class="field"><span class="small">Notes</span><textarea v-model="notes" rows="3" maxlength="900" placeholder="What you found or replaced (optional)" /></label>
+            <p class="small">All {{ steps.length }} step{{ steps.length === 1 ? '' : 's' }} done. Anything you found or replaced?</p>
+            <label class="field"><span class="small">Notes</span><textarea v-model="notes" rows="3" maxlength="700" placeholder="What you found or replaced (optional)" /></label>
             <p v-if="error" class="warn" role="alert">{{ error }}</p>
             <div class="row">
               <RsButton variant="quiet" @click="phase = 'steps'">Back</RsButton>
@@ -178,11 +258,19 @@ async function finish() {
 
 <style scoped>
 .guide { max-width: 880px; }
+/* the phone's bottom bar is fixed: leave room so the last buttons can scroll clear of it */
+@media (max-width: 720px) { .guide { padding-bottom: 96px; } }
 .back { display: inline-block; margin-bottom: var(--rs-space-2); font-size: var(--rs-text-sm); color: var(--rs-text-muted); text-decoration: none; }
 .muted { color: var(--rs-text-muted); }
 .h { margin: 0; font-family: var(--rs-font-display-ui, var(--rs-font-ui)); font-size: 1.15rem; }
 .small { margin: 0; font-size: var(--rs-text-sm); color: var(--rs-text-muted); }
 .warn { margin: 0; padding: 6px 10px; border-left: 3px solid var(--rs-line-strong); background: var(--rs-surface-2); font-size: var(--rs-text-sm); }
+.klippy { margin: 0; padding: 8px 10px; border: 1px solid var(--rs-line-strong); border-radius: 6px; font: var(--rs-text-xs) / 1.5 var(--rs-font-code); overflow-wrap: anywhere; white-space: pre-wrap; }
+.passes { list-style: none; margin: 0; padding: 8px 10px; border: 1px solid var(--rs-line-strong); border-radius: 6px; display: grid; gap: 2px; font: var(--rs-text-xs) / 1.5 var(--rs-font-code); }
+.links { margin: 0; font-size: var(--rs-text-sm); display: flex; gap: var(--rs-space-3); flex-wrap: wrap; }
+.links a { color: var(--rs-text-strong); }
+.pick { border: 0; padding: 0; margin: 0; display: grid; gap: 6px; }
+.opt { display: flex; gap: 8px; align-items: flex-start; font-size: var(--rs-text-sm); cursor: pointer; }
 .gates { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
 .gates li { display: flex; gap: 10px; align-items: flex-start; font-size: var(--rs-text-sm); }
 .gates .mark { width: 18px; flex: none; font-weight: 700; }

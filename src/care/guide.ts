@@ -6,7 +6,7 @@
  */
 import type { Pose } from '@/brand/mascot'
 
-export type GateId = 'ready' | 'noJob' | 'hotendCold' | 'spindleOff' | 'laserOff' | 'toolPowerOff' | 'printHead'
+export type GateId = 'ready' | 'noJob' | 'hotendCold' | 'spindleOff' | 'laserOff' | 'toolPowerOff' | 'printHead' | 'homed' | 'heatersOff' | 'toolAgrees' | 'levelOk'
 
 /** What the gates need to know; a null means "this machine has no such thing", which passes */
 export interface GateFacts {
@@ -18,6 +18,18 @@ export interface GateFacts {
   toolPowerActive: boolean | null
   /** the verified mounted tool's type, or null when none is confirmed */
   mountedType: string | null
+  /** X, Y and Z are all homed */
+  homedXyz: boolean
+  /** a heater (hotend or bed) has a target above zero */
+  heatersOn: boolean
+  /** the tool sensor disagrees with the selected tool (the toolchanger's own stop) */
+  toolMismatch: boolean
+  /** the newest Z_TILT_ADJUST run in the console (src/bed/zscrews.ts lastTiltRun), or null if none */
+  levelOutcome: 'done' | 'failed' | 'running' | null
+  levelRange: number | null
+  levelTolerance: number | null
+  levelPasses: number
+  levelError: string | null
 }
 
 export interface GateResult {
@@ -43,6 +55,19 @@ const GATES: Record<GateId, (f: GateFacts) => { label: string; ok: boolean; why:
   laserOff: (f) => ({ label: 'The laser power rail is off', ok: f.laserArmed !== true, why: 'The laser rail reads armed. Switch it off first (Control).' }),
   toolPowerOff: (f) => ({ label: 'The tool’s power is off', ok: f.toolPowerActive !== true, why: 'The tool’s power is on. Switch it off first (Control).' }),
   printHead: (f) => ({ label: 'A print head is mounted and confirmed', ok: f.mountedType === 'DEPOSITION', why: 'Mount and confirm a print head first.' }),
+  homed: (f) => ({ label: 'X, Y and Z are homed', ok: f.homedXyz, why: 'The axes aren’t homed yet.' }),
+  heatersOff: (f) => ({ label: 'No heater is on', ok: !f.heatersOn, why: 'A heater is on. Switch it off from Control first.' }),
+  levelOk: (f) => ({
+    label: 'The gantry is level',
+    ok: f.levelOutcome === 'done',
+    why:
+      f.levelOutcome === 'failed'
+        ? `Levelling failed${f.levelError ? `: ${f.levelError}` : ''}. Bring the bed close to level by eye (Bed › Configuration moves one screw at a time), home, and try again. If it keeps failing, the Z drive needs a look.`
+        : f.levelOutcome === 'running'
+          ? 'Levelling is still running.'
+          : 'Level the gantry first.',
+  }),
+  toolAgrees: (f) => ({ label: 'The tool sensor agrees with the selected tool', ok: !f.toolMismatch, why: 'The tool sensor disagrees with the selected tool. That is a stop: sort it out in Control first.' }),
 }
 
 export function checkGates(ids: readonly GateId[], f: GateFacts): GateResult[] {
@@ -58,6 +83,74 @@ export interface GuideDef {
   steps?: string[]
   /** after this step (0-based) wait this long before the next, with a countdown */
   wait?: { afterStep: number; seconds: number; label: string }
+  /** a wizard builds its own steps from the answers so far and the machine's state */
+  build?: (answers: Answers, f: GateFacts) => GuideStep[]
+  /** answers worked out when the guide starts (what Klipper said, whether it was down) */
+  start?: (ctx: { klippyReady: boolean; message: string | null; homed: boolean }) => Answers
+  /** the Work log note, instead of the plain one */
+  note?: (answers: Answers, extra: string, f: GateFacts) => string
+}
+
+export type Answers = Record<string, string>
+
+/** What a Do step may run. Studio builds the command itself; no task text ever becomes a command. */
+export type DoId = 'restart' | 'home' | 'level'
+export interface DoDef {
+  label: string
+  /** what the console shows for it, when that must carry the command's name (the level parser starts a run at "Z_TILT_ADJUST") */
+  logLabel?: string
+  script: string
+  title: string
+  body: string
+  confirmLabel: string
+}
+export const DOS: Record<DoId, DoDef> = {
+  restart: {
+    label: 'Restart Klipper',
+    script: 'FIRMWARE_RESTART',
+    title: 'Restart Klipper?',
+    body: 'This restarts Klipper and the boards. Heaters stay off. Check nothing is in the way first.',
+    confirmLabel: 'Restart',
+  },
+  home: {
+    label: 'Home all axes',
+    script: 'G28',
+    title: 'Home all axes?',
+    body: 'The machine will move to its limit switches. Check the bed and gantry are clear, and keep a hand near Stop.',
+    confirmLabel: 'Home',
+  },
+  level: {
+    label: 'Level the gantry',
+    logLabel: 'Z_TILT_ADJUST (level the gantry)',
+    script: 'Z_TILT_ADJUST',
+    title: 'Level the gantry?',
+    body: 'Probes the points and moves each Z motor until they agree. Check the bed is clear, and keep a hand near Stop.',
+    confirmLabel: 'Level',
+  },
+}
+
+export interface GuideStep {
+  kind: 'tick' | 'do' | 'pick'
+  text: string
+  /** do: which command the button runs */
+  do?: DoId
+  /** do: what must hold before the button is offered */
+  before?: GateId[]
+  /** what must hold before you can go on */
+  need?: GateId[]
+  /** pick: the answer's name, and its choices */
+  key?: string
+  options?: { id: string; label: string }[]
+  /** show Klipper's state and message under the text */
+  show?: 'klippy' | 'tilt'
+  /** links shown under the text (a later check you may want to open) */
+  links?: { label: string; to: string }[]
+}
+
+/** The steps for a guide: a wizard's own, else the task's text as ticks */
+export function guideSteps(def: GuideDef | null, taskSteps: readonly string[] | undefined, answers: Answers, f: GateFacts): GuideStep[] {
+  if (def?.build) return def.build(answers, f)
+  return stepsOf(taskSteps, def).map((text) => ({ kind: 'tick' as const, text }))
 }
 
 const base: GateId[] = ['noJob']

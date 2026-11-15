@@ -676,3 +676,41 @@ until BT0 passes: the C920's microphone rolls off at low notes and the Opus stre
   at the top of the page. *Pass if:* it says "Heating the hotend: N° of M°", then "Running <file> · N %", with the last console lines under it, and the
   line "You can leave this page" while the job runs; leaving the page and coming back shows the same job still running. *Stop if:* the strip
   disagrees with the Dashboard (heating said while Control shows the hotend at temperature, or the percentage differs by more than a few points).
+
+## Next release: the emergency stop wizard (Care › Tasks › "Inspect the machine after an emergency stop or shutdown" › Guide me)
+
+Do these with the machine idle, no job, hands clear, a hand near Stop. The wizard restarts Klipper and homes only after its own confirm.
+- [ ] **ES1 What happened.** Press **Stop** in Studio's top bar (M112), then open the task's Guide me. *Pass if:* "Klipper says: shutdown:
+  Shutdown due to M112 command" shows, and "The emergency stop was pressed" is already picked. *Stop if:* the message is missing while
+  Klipper is shut down.
+- [ ] **ES2 The restart asks.** Go on to the restart step. *Pass if:* **Done, next** is off until Klipper says Ready; **Restart Klipper** asks
+  "Restart Klipper?" and lists FIRMWARE_RESTART; after you confirm and it comes back, the step lets you go on. *Stop if:* it restarts
+  without asking.
+- [ ] **ES3 Homing is gated and must be run.** On the homing step, turn a heater on first (hotend 60° from Control). *Pass if:* **Home all
+  axes** says "A heater is on" and stays off; with every heater off it asks "Home all axes?" with G28, and **Done, next** stays off until you
+  have run it and X, Y and Z read homed. *Stop if:* you can go on without homing, or it homes with a heater on.
+- [ ] **ES4 The log.** Finish the wizard. *Pass if:* the Work log entry reads like "After a stop. The emergency stop was pressed. Klipper said:
+  “Shutdown due to M112 command”. Restarted Klipper, homed all axes and moved each axis freely.", and the task's due date moves. *Stop if:*
+  the cause or Klipper's message is missing.
+- [ ] **ES5 The tool sensor stop.** With the tool sensor disagreeing with the selected tool (the toolchanger's own stop), try the homing step.
+  *Pass if:* **Home all axes** says the tool sensor disagrees and stays off. *Stop if:* it homes anyway.
+
+## Next release: the level wizard (Care › Tasks › "Level the gantry (Z_TILT_ADJUST) and check the first layer" › Guide me)
+
+Hand near Stop; nothing on the bed. The wizard runs Z_TILT_ADJUST only after its own confirm.
+- [ ] **LV1 Gate.** With a laser or CNC tool mounted, open the guide. *Pass if:* Start is off and says to mount and confirm a print head;
+  with BlockOne mounted and confirmed it is on. *Stop if:* Start is on with a non-print head mounted.
+- [ ] **LV2 Level.** Start, then **Level the gantry**. *Pass if:* it asks "Level the gantry?" with Z_TILT_ADJUST; the list under the step shows each
+  pass ("Pass 1: range 0.412 mm" and so on) matching the console; **Done, next** stays off until a pass is within tolerance, then
+  goes on. *Stop if:* Done, next is on before Klipper finished within tolerance.
+- [ ] **LV3 A failed level.** Use Bed › Configuration to throw the bed far off level until Z-tilt faults (or wait for a real fault), then run
+  the wizard's level. *Pass if:* it shows "Stopped: <Klipper's message>" and "Holding. Levelling failed: …" with the advice to bring the
+  bed close to level by eye, and Done, next stays off; after you fix it and press **Level the gantry** again it passes. *Stop if:* a
+  failed run lets you go on.
+- [ ] **LV4 Not homed.** Start with the axes unhomed (after a restart). *Pass if:* the first step is **Home all axes** (it asks, with G28) and
+  the level step only comes after X, Y and Z read homed; with the axes already homed there is no homing step. *Stop if:* it levels
+  without homing.
+- [ ] **LV5 The log.** Finish. *Pass if:* the Work log reads like "Levelled the gantry: 2 passes, final range 0.021 mm, tolerance 0.050
+  mm.", and the task's due date moves. *Stop if:* the range is missing or differs from the last pass in the console.
+- [ ] **LV6 Phone.** On a phone, scroll to the bottom of any guide. *Pass if:* the last buttons (Start, Done, next) can be scrolled clear of the
+  bottom bar and tapped. *Stop if:* a button stays hidden behind the bar.

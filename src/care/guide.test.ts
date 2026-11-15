@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { GUIDES, checkGates, guideFor, logNote, stepsOf, waitAfter, type GateFacts } from './guide'
 
-const ok: GateFacts = { klippyReady: true, jobActive: false, hotendTemp: 24, spindleOn: false, laserArmed: false, toolPowerActive: false, mountedType: 'DEPOSITION' }
+const ok: GateFacts = { klippyReady: true, jobActive: false, hotendTemp: 24, spindleOn: false, laserArmed: false, toolPowerActive: false, mountedType: 'DEPOSITION', homedXyz: true, heatersOn: false, toolMismatch: false, levelOutcome: null, levelRange: null, levelTolerance: null, levelPasses: 0, levelError: null }
 const blocked = (g: ReturnType<typeof checkGates>) => g.filter((x) => !x.ok).map((x) => x.id)
 
 describe('gates', () => {
@@ -20,6 +20,12 @@ describe('gates', () => {
   })
   it('a machine without that output passes (null means none in this config)', () => {
     expect(blocked(checkGates(['spindleOff', 'laserOff', 'toolPowerOff', 'hotendCold'], { ...ok, spindleOn: null, laserArmed: null, toolPowerActive: null, hotendTemp: null }))).toEqual([])
+  })
+  it('homed, heaters and the tool sensor', () => {
+    expect(blocked(checkGates(['homed'], { ...ok, homedXyz: false }))).toEqual(['homed'])
+    expect(blocked(checkGates(['heatersOff'], { ...ok, heatersOn: true }))).toEqual(['heatersOff'])
+    expect(blocked(checkGates(['toolAgrees'], { ...ok, toolMismatch: true }))).toEqual(['toolAgrees'])
+    expect(blocked(checkGates(['homed', 'heatersOff', 'toolAgrees'], ok))).toEqual([])
   })
   it('say why in words', () => {
     expect(checkGates(['hotendCold'], { ...ok, hotendTemp: 183.4 })[0]!.why).toMatch(/183°/)
