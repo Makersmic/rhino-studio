@@ -30,6 +30,16 @@ export function passLines(run: TiltRun | null): string[] {
   return out
 }
 
+/** The levelling step itself, shared with the Z drive wizard (a belt or screw job ends with a level) */
+export const LEVEL_STEP: GuideStep = {
+  kind: 'do',
+  do: 'level',
+  text: 'Level the gantry. It probes the points and adjusts each Z motor until they agree within Klipper’s tolerance. Keep a hand near Stop.',
+  before: ['ready', 'noJob', 'printHead', 'homed'],
+  need: ['levelOk'],
+  show: 'tilt',
+}
+
 /**
  * The steps. Homing is only a step when the axes weren't homed at the start (`wasHomed`), so the list doesn't change
  * when Klipper reports them homed.
@@ -44,14 +54,7 @@ export function levelSteps(a: Answers, _f: GateFacts): GuideStep[] {
       before: ['ready', 'noJob', 'heatersOff', 'toolAgrees'],
       need: ['homed'],
     })
-  out.push({
-    kind: 'do',
-    do: 'level',
-    text: 'Level the gantry. It probes the points and adjusts each Z motor until they agree within Klipper’s tolerance. Keep a hand near Stop.',
-    before: ['ready', 'noJob', 'printHead', 'homed'],
-    need: ['levelOk'],
-    show: 'tilt',
-  })
+  out.push(LEVEL_STEP)
   out.push({
     kind: 'tick',
     text: 'Check a real first layer. Print the First-layer squish test (Assets › BlockOne › Tune), or make a bed mesh and look at the shape. Skip it if you checked one recently.',

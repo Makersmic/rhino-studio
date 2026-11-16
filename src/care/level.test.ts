@@ -4,7 +4,7 @@ import { checkGates, DOS, type GateFacts } from './guide'
 import { findGuide } from './guides'
 import { levelFacts, levelSteps, passLines } from './level'
 
-const base: GateFacts = { klippyReady: true, jobActive: false, hotendTemp: 24, spindleOn: false, laserArmed: false, toolPowerActive: false, mountedType: 'DEPOSITION', homedXyz: true, heatersOn: false, toolMismatch: false, levelOutcome: null, levelRange: null, levelTolerance: null, levelPasses: 0, levelError: null }
+const base: GateFacts = { klippyReady: true, jobActive: false, hotendTemp: 24, hotendTarget: null, spindleOn: false, spindleThrottle: null, spindleRpm: null, laserArmed: false, toolPowerActive: false, mountedType: 'DEPOSITION', homedXyz: true, heatersOn: false, toolMismatch: false, levelOutcome: null, levelRange: null, levelTolerance: null, levelPasses: 0, levelError: null }
 const sent = { kind: 'sent', text: 'Z_TILT_ADJUST (level the gantry)' }
 const resp = (text: string) => ({ kind: 'response', text })
 const err = (text: string) => ({ kind: 'error', text })

@@ -714,3 +714,49 @@ Hand near Stop; nothing on the bed. The wizard runs Z_TILT_ADJUST only after its
   mm.", and the task's due date moves. *Stop if:* the range is missing or differs from the last pass in the console.
 - [ ] **LV6 Phone.** On a phone, scroll to the bottom of any guide. *Pass if:* the last buttons (Start, Done, next) can be scrolled clear of the
   bottom bar and tapped. *Stop if:* a button stays hidden behind the bar.
+
+## Next release: the Z drive service wizards (Care › Tasks › "Clean and lubricate the Z leadscrews" and "Check the Z belt drive (2:1 reduction)" › Guide me)
+
+Hand near Stop; nothing on the bed. The wizards send only G28 and Z_TILT_ADJUST, each after its own confirm. They never move Z themselves:
+the reach and the full-travel run are done by you in Control › Motion.
+- [ ] **ZD1 Leadscrews, the order.** Start the lubricate guide. *Pass if:* it goes reach the screws, clean, grease, Home all axes (asks, G28),
+  run Z through its travel in Control, the backlash question, then the level reminder; **Done, next** on the home step stays off until you
+  have run it, even if the axes already read homed. *Stop if:* you can go past the home step without running it.
+- [ ] **ZD2 Heaters.** With the hotend at 60° from Control, reach the home step. *Pass if:* **Home all axes** says a heater is on and stays off.
+  *Stop if:* it homes with a heater on.
+- [ ] **ZD3 Belt, the hand-turn.** Start the belt guide with a print head mounted (it needs one). At the hand-turn step use Bed › Configuration
+  to release all three screws. *Pass if:* all three turn together by hand, the link opens Bed › Configuration, and Hold works. *Stop if:* a
+  screw doesn't move with the others (a slipping pulley or a worn belt): note which, and record "worn" or "replaced".
+- [ ] **ZD4 Belt, re-home then level.** After the release. *Pass if:* the next step is Home all axes (Z reads un-homed), it asks, and the
+  level step only comes after X, Y and Z read homed; the level asks (Z_TILT_ADJUST), lists each pass, and Done goes on only when Klipper
+  finished within tolerance. *Stop if:* it levels without homing.
+- [ ] **ZD5 The log.** Finish each. *Pass if:* the Work log reads like "Z leadscrews cleaned and lubricated. Nut backlash: slight. Re-homed and ran
+  Z through its travel." and "Z belt drive checked: replaced the belt. All three screws turned together by hand. Levelled: 2 passes, final range
+  0.021 mm.", and each task's due date moves. *Stop if:* the finding or the range is missing.
+- [ ] **ZD6 Belt needs a print head.** With a laser or CNC tool mounted, open the belt guide. *Pass if:* Start says to mount and confirm a print
+  head; the lubricate guide still starts. *Stop if:* the belt guide starts without a print head.
+
+## Next release: the nozzle, spindle run-in, spindle runout and umbilical wizards, and guide progress (Care › Tasks › Guide me)
+
+Guide progress is kept in memory for the session (not saved anywhere): leaving a guide to use Control and coming back returns you to the same step.
+- [ ] **GP1 Progress survives a trip.** In any guide, go to the second step, open Control, then come back to the same guide. *Pass if:* you are on the
+  same step with the same answers, and **Start over** clears it. A countdown that was running carries on. *Stop if:* you land back on the start.
+- [ ] **NZ1 Gate and heat.** Replace the nozzle, BlockOne mounted. Pick a temperature and press **Heat the hotend**. *Pass if:* the strip says "Heating the
+  hotend: N° of 210°", the step says "Holding. Heating…", **Done, next** stays off until the hotend is within 3° of target, then a two-minute soak
+  runs before the next step. *Stop if:* you can go on while it is still heating.
+- [ ] **NZ2 Heat off.** At the heater-off step. *Pass if:* **Switch the heater off** switches the hotend off, and the step goes on only once no heater
+  has a target. *Stop if:* heat is left on after the guide is finished.
+- [ ] **NZ3 The log.** *Pass if:* the Work log reads like "Replaced the nozzle: fitted 0.6 mm, hot-tightened at 210°. Z offset redone."
+- [ ] **SR1 Run-in never starts the spindle.** Spindle run-in, HotJoe mounted, spindle off. *Pass if:* the guide shows each console line to type
+  (Spindle_ACTIVATE, SET_PIN … 0.5, 0.65, 0.8, 1.0, Spindle_DEACTIVATE), nothing in the guide sends one, and each of your commands asks before it
+  runs. *Stop if:* the guide starts the spindle by itself.
+- [ ] **SR2 Run-in steps.** Type Spindle_ACTIVATE in Control › console, come back. *Pass if:* you are on the same step and **Done, next** is now on; each
+  speed step shows the live relay, throttle and RPM (with a tachometer), waits one minute (also when you leave and return), and records the RPM.
+  *Stop if:* the guide lets you skip a one-minute wait, or holds you forever after you arm the spindle.
+- [ ] **SR3 Run-in end.** *Pass if:* the last step goes on only when the spindle relay reads off, and "rough, rising or too hot" tells you to press Stop.
+  *Stop if:* it lets you finish with the spindle on.
+- [ ] **SR4 Runout.** Spindle off, a test rod and a dial indicator. *Pass if:* it will not start with the spindle on; it takes four readings, works out
+  the total (the spread), and the Work log shows the four readings and the total. *Stop if:* it starts with the spindle relay on.
+- [ ] **UF1 Flex test.** Umbilical task, a tool mounted. *Pass if:* **Start watching** runs for a minute; flexing a cable with a known bad conductor
+  (or unplugging the tool for a moment) shows "1 drop-out (first at N s…)"; a steady cable shows "No drop-outs." *Stop if:* a real drop-out is not
+  counted, or a steady cable is reported as bad.

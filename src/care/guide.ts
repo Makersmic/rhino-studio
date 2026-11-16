@@ -6,14 +6,19 @@
  */
 import type { Pose } from '@/brand/mascot'
 
-export type GateId = 'ready' | 'noJob' | 'hotendCold' | 'spindleOff' | 'laserOff' | 'toolPowerOff' | 'printHead' | 'homed' | 'heatersOff' | 'toolAgrees' | 'levelOk'
+export type GateId = 'ready' | 'noJob' | 'hotendCold' | 'spindleOff' | 'laserOff' | 'toolPowerOff' | 'printHead' | 'homed' | 'heatersOff' | 'toolAgrees' | 'levelOk' | 'hotendAtTarget' | 'spindleOn' | 'hasTemp'
 
 /** What the gates need to know; a null means "this machine has no such thing", which passes */
 export interface GateFacts {
   klippyReady: boolean
   jobActive: boolean
   hotendTemp: number | null
+  /** the hotend's target, 0 or null when off */
+  hotendTarget: number | null
   spindleOn: boolean | null
+  /** the spindle's throttle 0-1 and measured RPM (tachometer), when there is a spindle */
+  spindleThrottle: number | null
+  spindleRpm: number | null
   laserArmed: boolean | null
   toolPowerActive: boolean | null
   /** the verified mounted tool's type, or null when none is confirmed */
@@ -67,6 +72,13 @@ const GATES: Record<GateId, (f: GateFacts) => { label: string; ok: boolean; why:
           ? 'Levelling is still running.'
           : 'Level the gantry first.',
   }),
+  hotendAtTarget: (f) => ({
+    label: 'The hotend is at its target',
+    ok: (f.hotendTarget ?? 0) > 0 && f.hotendTemp != null && f.hotendTemp >= (f.hotendTarget ?? 0) - 3,
+    why: (f.hotendTarget ?? 0) > 0 ? `Heating: ${Math.round(f.hotendTemp ?? 0)}° of ${Math.round(f.hotendTarget ?? 0)}°. Wait for it.` : 'The hotend isn’t heating yet: press the heat button.',
+  }),
+  spindleOn: (f) => ({ label: 'The spindle relay is on', ok: f.spindleOn === true, why: 'The spindle relay reads off. Type the command shown in the console (it asks first).' }),
+  hasTemp: (f) => ({ label: 'The tool’s thermistor is being read', ok: f.hotendTemp != null, why: 'No temperature reading from the tool. Mount and confirm a tool first.' }),
   toolAgrees: (f) => ({ label: 'The tool sensor agrees with the selected tool', ok: !f.toolMismatch, why: 'The tool sensor disagrees with the selected tool. That is a stop: sort it out in Control first.' }),
 }
 
@@ -77,7 +89,10 @@ export function checkGates(ids: readonly GateId[], f: GateFacts): GateResult[] {
 export interface GuideDef {
   /** the Task Library id this guide belongs to (task.link.template) */
   template: string
+  /** must hold on the first screen and all the way through */
   gates: GateId[]
+  /** must hold to start only (the run-in starts with the spindle off, then turns it on) */
+  startGates?: GateId[]
   pose: Pose
   /** used when the library task has no steps of its own */
   steps?: string[]
@@ -94,11 +109,13 @@ export interface GuideDef {
 export type Answers = Record<string, string>
 
 /** What a Do step may run. Studio builds the command itself; no task text ever becomes a command. */
-export type DoId = 'restart' | 'home' | 'level'
+export type DoId = 'restart' | 'home' | 'level' | 'heat' | 'heatOff'
 export interface DoDef {
   label: string
   /** what the console shows for it, when that must carry the command's name (the level parser starts a run at "Z_TILT_ADJUST") */
   logLabel?: string
+  /** a heater command: run through the same path as Control's temperature fields (control.setHeater), not as a script */
+  heater?: boolean
   script: string
   title: string
   body: string
@@ -119,6 +136,8 @@ export const DOS: Record<DoId, DoDef> = {
     body: 'The machine will move to its limit switches. Check the bed and gantry are clear, and keep a hand near Stop.',
     confirmLabel: 'Home',
   },
+  heat: { label: 'Heat the hotend', script: '', title: '', body: '', confirmLabel: '', heater: true },
+  heatOff: { label: 'Switch the heater off', script: '', title: '', body: '', confirmLabel: '', heater: true },
   level: {
     label: 'Level the gantry',
     logLabel: 'Z_TILT_ADJUST (level the gantry)',
@@ -130,8 +149,10 @@ export const DOS: Record<DoId, DoDef> = {
 }
 
 export interface GuideStep {
-  kind: 'tick' | 'do' | 'pick'
+  kind: 'tick' | 'do' | 'pick' | 'number' | 'watch'
   text: string
+  /** names this step when the same command appears twice (so "already ran" is per step, not per command) */
+  id?: string
   /** do: which command the button runs */
   do?: DoId
   /** do: what must hold before the button is offered */
@@ -141,8 +162,20 @@ export interface GuideStep {
   /** pick: the answer's name, and its choices */
   key?: string
   options?: { id: string; label: string }[]
-  /** show Klipper's state and message under the text */
-  show?: 'klippy' | 'tilt'
+  /** show Klipper's state and message under the text, the levelling passes, or the spindle's live throttle and RPM */
+  show?: 'klippy' | 'tilt' | 'spindle'
+  /** a console line to type yourself (shown in mono; typed commands go through the console's own check and confirm) */
+  command?: string
+  /** wait this long (with a countdown) after you finish this step */
+  wait?: { seconds: number; label: string }
+  /** on going on, remember the spindle's measured RPM under this answer name */
+  capture?: { key: string; from: 'rpm' }
+  /** number: the answer's name, unit and allowed range */
+  unit?: string
+  min?: number
+  max?: number
+  /** watch: how long to watch for, in seconds */
+  seconds?: number
   /** links shown under the text (a later check you may want to open) */
   links?: { label: string; to: string }[]
 }
@@ -200,4 +233,9 @@ export function waitAfter(def: GuideDef | null, step: number): { seconds: number
 export function logNote(total: number, extra: string): string {
   const base = `Guided: all ${total} step${total === 1 ? '' : 's'} ticked.`
   return extra.trim() ? `${base} ${extra.trim()}` : base
+}
+
+/** The name a Do step is remembered by: its own id, else its command */
+export function stepKey(s: GuideStep): string {
+  return s.id ?? s.do ?? ''
 }

@@ -1412,6 +1412,20 @@ function jobsPerWeek() {
   }
   return { ok: true, weeks, available: true }
 }
+// the spindle run-in task isn't in the saved overview: copy the runout task as it, so its Care guide can be tried (Nov 15)
+{
+  const base = maint.tasks.find((t: { link?: { template?: string } }) => t.link?.template === 'tool:runout')
+  if (base && !maint.tasks.some((t: { link?: { template?: string } }) => t.link?.template === 'tool:spindle_runin')) {
+    maint.tasks.push({
+      ...JSON.parse(JSON.stringify(base)),
+      id: 'trunin0001',
+      title: 'Run the spindle in (new spindle, or after a long idle)',
+      link: { ...base.link, template: 'tool:spindle_runin' },
+      steps: ['Take the bit out', 'Console: Spindle_ACTIVATE'],
+      minutes: 10,
+    })
+  }
+}
 maint.now = Date.now() / 1000
 const lens = maint.tasks.find((t: { title: string }) => t.title.startsWith('Clean the laser lens'))
 if (lens) {

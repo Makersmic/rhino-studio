@@ -3,7 +3,7 @@ import { CAUSES, estopNote, estopSteps, suggestCause } from './estop'
 import { DOS, type GateFacts } from './guide'
 import { findGuide } from './guides'
 
-const f: GateFacts = { klippyReady: true, jobActive: false, hotendTemp: 24, spindleOn: false, laserArmed: false, toolPowerActive: false, mountedType: 'DEPOSITION', homedXyz: false, heatersOn: false, toolMismatch: false, levelOutcome: null, levelRange: null, levelTolerance: null, levelPasses: 0, levelError: null }
+const f: GateFacts = { klippyReady: true, jobActive: false, hotendTemp: 24, hotendTarget: null, spindleOn: false, spindleThrottle: null, spindleRpm: null, laserArmed: false, toolPowerActive: false, mountedType: 'DEPOSITION', homedXyz: false, heatersOn: false, toolMismatch: false, levelOutcome: null, levelRange: null, levelTolerance: null, levelPasses: 0, levelError: null }
 
 describe('what Klipper said', () => {
   it('reads the usual messages', () => {
@@ -59,7 +59,9 @@ describe('the steps', () => {
   it('the commands are Studio’s own and fixed', () => {
     expect(DOS.restart.script).toBe('FIRMWARE_RESTART')
     expect(DOS.home.script).toBe('G28')
-    expect(Object.keys(DOS).sort()).toEqual(['home', 'level', 'restart'])
+    expect(Object.keys(DOS).sort()).toEqual(['heat', 'heatOff', 'home', 'level', 'restart'])
+    // the heater steps run through control.setHeater, never as a script
+    expect([DOS.heat.script, DOS.heatOff.script]).toEqual(['', ''])
   })
 })
 
