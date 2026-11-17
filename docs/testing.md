@@ -760,3 +760,28 @@ Guide progress is kept in memory for the session (not saved anywhere): leaving a
 - [ ] **UF1 Flex test.** Umbilical task, a tool mounted. *Pass if:* **Start watching** runs for a minute; flexing a cable with a known bad conductor
   (or unplugging the tool for a moment) shows "1 drop-out (first at N s…)"; a steady cable shows "No drop-outs." *Stop if:* a real drop-out is not
   counted, or a steady cable is reported as bad.
+
+## Next release: SwitchFly lanes (Assets › Toolheads › SwitchFly › Tune › Lanes)
+
+Needs Tool Manager 1.9.35 (the `SWITCHFLY_*` macros). SwitchFly mounted and confirmed, servo wired to contact 16, UBEC fed from contacts 11/12 with a
+common ground, filament out of the hotend for SF1-SF4. Do SF1 on a current-limited supply the first time.
+
+- [ ] **SF1 Power and gating.** Open the Lanes panel. *Pass if:* with the padlock closed only **Turn power off** can act; unlocking enables **Turn power on**;
+  the angle and **Switch to lane** controls stay greyed until the power is on, then wake up; **Turn power off** greys them again. *Stop if:* an angle
+  control works with the power off, or the UBEC is on while the panel says off.
+- [ ] **SF2 Try an angle.** Power on, type 90 in Lane 1, press **Try**. *Pass if:* the servo moves to its middle, the arm on the dial points straight up, and
+  Save is still greyed (nothing saved). Typing 200 greys **Try**. *Stop if:* the servo moves past what the selector can take, buzzes against a stop,
+  or the UBEC or servo gets hot.
+- [ ] **SF3 Set each lane.** Find the angle where the selector sits right on lane 1, **Save**; the same for lane 2. Press **Switch to lane 2**, then
+  **Switch to lane 1**. *Pass if:* the selector lands on each lane both ways, three times in a row, and the saved angles are still there after a Klipper
+  restart (the field shows them). *Stop if:* it lands in a different place each time.
+- [ ] **SF4 A real lane change uses the saved angles.** Hotend hot, Z homed, run `SWITCH_T1 MATERIAL=PLA` then `SWITCH_T0 MATERIAL=PLA`. *Pass if:* the servo
+  powers itself on if it was off and lands on the saved angles. *Stop if:* it goes to 0 or 180 instead of the saved angles.
+- [ ] **SF5 Retract per lane.** Save a lane 1 retract of 20 mm. With lane 1 in use, hot, run `SWITCH_T1 MATERIAL=PLA`. *Pass if:* the console shows the
+  extruder pulling back 20 mm before the servo moves (a material's own value is used when a lane's retract is 0). *Stop if:* the filament is pulled the
+  wrong way or by a different distance.
+- [ ] **SF6 The power goes at the end.** Power on, start a short job (or press **Cancel** in one). *Pass if:* the end of the job or the cancel turns the UBEC
+  off (the panel says off) and the next job start or lane change powers it again and the servo goes to the recorded lane. Then power on and swap to
+  another tool. *Pass if:* the UBEC is off after the swap. *Stop if:* the UBEC stays on after a cancel, an end or a swap.
+- [ ] **SF7 Other tools.** With BlockOne or HotJoe mounted, open SwitchFly's Tune page. *Pass if:* the Lanes panel says to mount SwitchFly and nothing in it
+  works; HotJoe's spindle relay behaves as before. *Stop if:* the panel can switch PA1 with another tool mounted.

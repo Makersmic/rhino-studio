@@ -718,12 +718,49 @@ function runLine(raw: string) {
       update('extruder', { ...(a != null ? { pressure_advance: Number(a) } : {}), ...(t != null ? { smooth_time: Number(t) } : {}) })
       return
     }
+    // SwitchFly lanes (Tool Manager 1.9.35): the servo's UBEC is PA1 (Spindle_power); SWITCHFLY_* macros
+    case 'SWITCHFLY_SERVO_POWER': {
+      const on = arg(line, 'ON')
+      if (on === '0') { update('output_pin Spindle_power', { value: 0 }); respond('// SwitchFly servo power off'); return }
+      if (on !== '1') throw new Error('SWITCHFLY_SERVO_POWER: give ON=1 (power on) or ON=0 (power off).')
+      if (swap.current_tool !== 2) throw new Error('SWITCHFLY_SERVO_POWER: SwitchFly is not the mounted tool.')
+      update('output_pin Spindle_power', { value: 1 })
+      respond('// SwitchFly servo power on')
+      return
+    }
+    case 'SWITCHFLY_SERVO_TEST': {
+      const a = Number(arg(line, 'ANGLE') ?? -1)
+      if (swap.current_tool !== 2) throw new Error('SWITCHFLY_SERVO_TEST: SwitchFly is not the mounted tool.')
+      if (Number(status['output_pin Spindle_power']?.value) < 0.5) throw new Error('SWITCHFLY_SERVO_TEST: turn the servo power on first (SWITCHFLY_SERVO_POWER ON=1).')
+      if (!(a >= 0 && a <= 180)) throw new Error('SWITCHFLY_SERVO_TEST: ANGLE must be 0 to 180.')
+      update('output_pin SERVO_LASER', { value: (0.0005 + (0.002 * a) / 180) / 0.02 })
+      return
+    }
+    case 'SWITCHFLY_SET_LANE': {
+      const lane = Number(arg(line, 'PATH') ?? -1)
+      const a = arg(line, 'ANGLE')
+      const r = arg(line, 'RETRACT')
+      if (swap.current_tool !== 2) throw new Error('SWITCHFLY_SET_LANE: SwitchFly is not the mounted tool.')
+      if (lane !== 0 && lane !== 1) throw new Error('SWITCHFLY_SET_LANE: PATH must be 0 (lane 1) or 1 (lane 2).')
+      if (a == null && r == null) throw new Error('SWITCHFLY_SET_LANE: give ANGLE= and/or RETRACT=.')
+      if (a != null && !(Number(a) >= 0 && Number(a) <= 180)) throw new Error('SWITCHFLY_SET_LANE: ANGLE must be 0 to 180.')
+      if (r != null && !(Number(r) >= 0 && Number(r) <= 100)) throw new Error('SWITCHFLY_SET_LANE: RETRACT must be 0 to 100 mm.')
+      const sv = status.save_variables.variables as Record<string, unknown>
+      update('save_variables', { variables: { ...sv, ...(a != null ? { [`switchfly_angle_t${lane}`]: Number(a) } : {}), ...(r != null ? { [`switchfly_retract_t${lane}`]: Number(r) } : {}) } })
+      respond(`// SwitchFly lane ${lane + 1} saved`)
+      return
+    }
     case 'SWITCH_T0':
     case 'SWITCH_T1': {
       const p = cmd === 'SWITCH_T1' ? 1 : 0
       if (status.print_stats.state === 'printing') throw new Error('SWITCH_T: not during a job in this mock')
       const sv = status.save_variables.variables as Record<string, unknown>
       update('save_variables', { variables: { ...sv, set_material_toolhead: 'SwitchFly', set_material_extruder_index: p } })
+      if (swap.current_tool === 2) {
+        update('output_pin Spindle_power', { value: 1 })
+        const ang = Number(sv[`switchfly_angle_t${p}`] ?? (p ? 180 : 0))
+        update('output_pin SERVO_LASER', { value: (0.0005 + (0.002 * ang) / 180) / 0.02 })
+      }
       update('extruder', { target: p ? 240 : 215 })
       respond(`// Switched to path ${p + 1} (T${p}): ${p ? sv.switchfly_material_t1 : sv.switchfly_material_t0}`)
       return

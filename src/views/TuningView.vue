@@ -13,6 +13,7 @@ import FirstLayerWizard from '@/tuning/FirstLayerWizard.vue'
 import PressureAdvanceWizard from '@/tuning/PressureAdvanceWizard.vue'
 import ExtrusionWizard from '@/tuning/ExtrusionWizard.vue'
 import CutTuning from '@/tuning/CutTuning.vue'
+import SwitchflyLanes from '@/tuning/SwitchflyLanes.vue'
 import MascotRow from '@/components/MascotRow.vue'
 import { TUNING_POSE } from '@/brand/mascot'
 import { WIZARDS, lastRun, unstored, type TuningTest } from '@/tuning/tuning'
@@ -66,6 +67,8 @@ const date = (t: number) => new Date(t * 1000).toLocaleDateString(undefined, { d
 
     <CutTuning v-if="cut" :tool="tool" :process="cut" />
     <template v-else>
+
+    <SwitchflyLanes v-if="tool === 'SwitchFly'" />
 
     <RsPanel title="Material" panel-id="tune.material">
       <label class="fld">

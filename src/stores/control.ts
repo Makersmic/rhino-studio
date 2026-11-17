@@ -8,6 +8,7 @@
  */
 import { hardwareBlock, hardwareScript, isHardwareScript, type HwItem } from '@/control/hardware'
 import { isScrewScript } from '@/bed/zscrews'
+import { isLanesScript, lanesBlock, needsLock } from '@/control/lanes'
 import { defineStore } from 'pinia'
 import { computed, ref, shallowRef, watch } from 'vue'
 import { speedScript, zStepScript, zResetScript, limitsScript, isTuningScript } from '@/control/tuning'
@@ -393,6 +394,36 @@ export const useControlStore = defineStore('control', () => {
     }
   }
 
+  // ---- SwitchFly lanes (src/control/lanes.ts): servo power, try an angle, save a lane -------------------------
+  /** Why the lanes panel can't be used, or null. */
+  const lanesLockBlock = computed(() => lanesBlock({ ready: machine.klippyReady, toolName: machine.mountedName, jobActive: jobActive.value }))
+  const lanes = timedLock(lanesLockBlock, now, [() => machine.mountedName])
+  const lanesUnlocked = lanes.unlocked
+  const lanesSecondsLeft = lanes.secondsLeft
+  const lockLanes = lanes.lock
+  const unlockLanes = () => lanes.unlock()
+
+  /**
+   * The four lanes commands only (isLanesScript), with SwitchFly mounted and no job. Cutting the servo's power needs
+   * no padlock (it only ever removes power); everything else needs the panel unlocked, which is the confirmation.
+   */
+  async function sendLanes(script: string, label: string): Promise<boolean> {
+    if (!isLanesScript(script)) return log('error', `${label}: not a lanes command`), false
+    if (lanesLockBlock.value) return log('error', `${label}: ${lanesLockBlock.value}`), false
+    if (needsLock(script) && !lanesUnlocked.value) return log('error', `${label}: unlock the lanes panel first`), false
+    const c = check(script, ctx())
+    const approved = approve(c, true)
+    lanes.touch()
+    log('sent', script)
+    try {
+      await machine.runChecked(approved)
+      return true
+    } catch (e) {
+      log('error', `${label}: ${(e as Error).message}`)
+      return false
+    }
+  }
+
   // ---- Bed › Configuration: one lead screw at a time (src/bed/zscrews.ts) -------------------------------------
   /**
    * The padlock for moving Z motors on their own, outside Klipper's limits (Mike, Nov 8 2026: recovery when
@@ -716,6 +747,12 @@ export const useControlStore = defineStore('control', () => {
     lockHardware,
     unlockHardware,
     sendHardware,
+    lanesLockBlock,
+    lanesUnlocked,
+    lanesSecondsLeft,
+    lockLanes,
+    unlockLanes,
+    sendLanes,
     screwUnlocked,
     screwSecondsLeft,
     screwBlock,
