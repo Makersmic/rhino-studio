@@ -390,8 +390,8 @@ export const usePrepareStore = defineStore('prepare', () => {
         placement: { ...j.placement },
       }
       profilesStore.saveJobSoon(`tool/${j.toolhead}`, s)
-      // support marks belong to this file's parts, so they're saved with the file, never as the tool's default
-      if (raw.value && fileName.value) profilesStore.saveJobSoon(fileName.value, supportMarks.value && j.process === 'fdm' ? { ...s, supportMarks: clone(supportMarks.value) } : s)
+      // support marks are not saved: they belong to the model on screen and start empty with the next one
+      if (raw.value && fileName.value) profilesStore.saveJobSoon(fileName.value, s)
     },
     { deep: true },
   )
@@ -590,6 +590,12 @@ export const usePrepareStore = defineStore('prepare', () => {
   function removePart(id: number) {
     const left = partsList.value.filter((p) => p.id !== id)
     if (!left.length) return clearPart()
+    // its marks go with it (they'd otherwise stay in the count and in the saved job)
+    const gone = partsList.value.find((p) => p.id === id)?.name
+    if (gone && supportMarks.value) {
+      supportMarks.value.marks = supportMarks.value.marks.filter((m) => m.part !== gone)
+      selectedMark.value = null
+    }
     if (id === selectedId.value) selectPart(left[0]!.id)
     partsList.value = left
     if (fileName.value && !left.some((p) => p.name === fileName.value)) fileName.value = left[0]!.name
@@ -705,9 +711,9 @@ export const usePrepareStore = defineStore('prepare', () => {
       if (verts.length < 9) throw new Error('No triangles in this file.')
       const id = nextPartId++
       partsList.value = [{ id, name: file.name, raw: verts, flat: FLAT_TYPES.has(ext), placement: { x: 0, y: 0, rotate: 0, scale: 1 } }]
-      // marks saved with this file's job come back with it
-      const savedMarks = profilesStore.jobs[file.name]?.supportMarks
-      supportMarks.value = savedMarks ? clone(savedMarks) : null
+      // a new model starts with no marks (Mike, Nov 21): they're not kept per file name, so none of the last model's come back
+      supportMarks.value = null
+      selectedMark.value = null
       selectedId.value = id
       uploaded.value = null
       fileName.value = file.name
@@ -819,11 +825,11 @@ export const usePrepareStore = defineStore('prepare', () => {
   // Anything changes: the prepared file no longer matches the screen. Selecting another part changes nothing that's cut.
   const whatIsCut = () => {
     const places = parts.value.map((p) => [p.id, p.placement])
-    return JSON.stringify([places, job.value ? { ...job.value, placement: null } : null])
+    return JSON.stringify([places, job.value ? { ...job.value, placement: null } : null, supportMarks.value])
   }
   let lastCut = ''
   watch(
-    [job, raw, partsList],
+    [job, raw, partsList, supportMarks],
     () => {
       const now = whatIsCut()
       if (now === lastCut) return
@@ -965,6 +971,19 @@ export const usePrepareStore = defineStore('prepare', () => {
         j.fdm.speed = Number(valueOf('perimeter_speed', sch, ctx).value) || j.fdm.speed
         const file = rhinoFile(out.gcode, j, p, m, STUDIO_VERSION, 'PrusaSlicer')
         const { checks, stats } = checkFile(file.text, j, p, m)
+        // what the Rhino says it received, against what was sent: if these differ the wrong part got there; if they match
+        // and the file is still wrong, PrusaSlicer read the wrong thing (Mike, Nov 21: a first model kept coming back)
+        const rc = out.received
+        if (rc) {
+          const same = rc.triangles === out.sent.triangles && rc.bytes === out.sent.bytes && rc.crc === out.sent.crc
+          const how = rc.as === '3mf' ? `as a 3MF with ${rc.enforce} support spot${rc.enforce === 1 ? '' : 's'}${rc.block ? ` and ${rc.block} block${rc.block === 1 ? '' : 's'}` : ''}` : 'as a plain STL'
+          checks.push({
+            id: 'sent',
+            level: same ? 'ok' : 'warn',
+            label: same ? `The Rhino received this part: ${out.sent.triangles.toLocaleString()} triangles, ${how} (ID ${out.sent.crc})` : 'The Rhino received a different part from the one sent',
+            detail: same ? undefined : `Studio sent ${out.sent.triangles.toLocaleString()} triangles (ID ${out.sent.crc}) and the Rhino reports ${rc.triangles.toLocaleString()} (ID ${rc.crc}). Prepare again; if it happens again, tell the maintainer.`,
+          })
+        }
         modelResult.value = { file, checks, stats, kiri: `PrusaSlicer ${st.engine.installed}${out.cached ? ' (from the cache)' : ''}`, kiriSeconds: out.seconds, kiriFilament: out.filamentMm }
         return
       }

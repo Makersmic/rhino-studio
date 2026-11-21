@@ -9,7 +9,7 @@
  */
 import type { PortalClient } from '@/portal/client'
 import type { Phase } from '../engine'
-import { prusaStats, toStl } from './config'
+import { crc32Hex, prusaStats, toStl } from './config'
 /** PrusaSlicer keeps itself up to date while it's used (Tool Manager 1.5.8) */
 export interface EngineAuto {
   on: boolean
@@ -62,8 +62,17 @@ export interface SliceJobState {
   seconds: number
   /** served from the cache: same part and settings as an earlier slice */
   cached?: boolean
+  /** what the Portal received of the part: checked against what Studio sent (older Portals leave it out) */
+  model?: { triangles: number; bytes: number; crc: string; as: 'stl' | '3mf'; enforce: number; block: number } | null
 }
 
+
+/** What Studio sent as the part */
+export interface SentFacts {
+  triangles: number
+  bytes: number
+  crc: string
+}
 
 /**
  * Slice on the Rhino and wait for the G-code. `stillWanted` is asked between
@@ -79,9 +88,11 @@ export async function runPrusa(
   stillWanted: () => boolean,
   timeoutMs = 20 * 60_000,
   supports: { enforce: number[][]; block: number[][] } | null = null,
-): Promise<{ gcode: string; seconds: number | null; filamentMm: number | null; cached: boolean }> {
+): Promise<{ gcode: string; seconds: number | null; filamentMm: number | null; cached: boolean; sent: SentFacts; received: SliceJobState['model'] }> {
   onPhase('Sending to the Rhino')
-  const { id } = await portal.slice(toStl(vertices), ini, name, center, supports)
+  const blob = toStl(vertices)
+  const sent: SentFacts = { triangles: Math.floor(vertices.length / 9), bytes: blob.size, crc: crc32Hex(new Uint8Array(await blob.arrayBuffer())) }
+  const { id } = await portal.slice(blob, ini, name, center, supports)
   const started = Date.now()
   let wait = 300
   for (;;) {
@@ -98,7 +109,7 @@ export async function runPrusa(
       onPhase('Fetching the file')
       const gcode = await portal.sliceGcode(id)
       if (!gcode.trim()) throw new Error('PrusaSlicer made an empty file.')
-      return { gcode, ...prusaStats(gcode), cached: !!s.cached }
+      return { gcode, ...prusaStats(gcode), cached: !!s.cached, sent, received: s.model ?? null }
     }
     if (s.state === 'failed') throw new Error(s.error ?? 'PrusaSlicer stopped with an error')
     if (s.state === 'cancelled') throw new Error('The slice was cancelled on the Rhino')

@@ -102,6 +102,8 @@ export function checkFile(text: string, job: PrepareJob, part: PartInfo | null, 
   let startJob: string | null = null
   let lastCommand = ''
   let endPrint = false
+  // where the printing itself went (extruding moves only), to check the file is the part on screen
+  const work = { x0: Infinity, x1: -Infinity, y0: Infinity, y1: -Infinity, z1: -Infinity }
   let spindleOn = 0
   const heatHigh: string[] = []
   const hitKeepOut = new Set<string>()
@@ -163,6 +165,13 @@ export function checkFile(text: string, job: PrepareJob, part: PartInfo | null, 
       const e = word(l, 'E')
       const working = cmd !== 'G0' && (job.process === 'fdm' ? (e ?? 0) > 0 : job.process === 'laser' ? laserOn : true)
       if (e && e > 0) stats.filament += e
+      if (working && started && job.process === 'fdm' && next.x !== null && next.y !== null) {
+        work.x0 = Math.min(work.x0, next.x)
+        work.x1 = Math.max(work.x1, next.x)
+        work.y0 = Math.min(work.y0, next.y)
+        work.y1 = Math.max(work.y1, next.y)
+        if (next.z !== null) work.z1 = Math.max(work.z1, next.z)
+      }
       // Printing or cutting over a keep-out area (checked every 1 mm along the move)
       if (working && started && job.process !== 'cnc' && m.keepOut.length && pos.x !== null && pos.y !== null && next.x !== null && next.y !== null) {
         const steps = Math.max(1, Math.ceil(Math.hypot(next.x - pos.x, next.y - pos.y)))
@@ -204,6 +213,25 @@ export function checkFile(text: string, job: PrepareJob, part: PartInfo | null, 
     else add('heat', heat.length === 0, 'Temperatures come from the material table (START_JOB)', `The file heats on its own: ${heat.slice(0, 2).join(', ')}`)
   } else {
     add('heat', heat.length === 0, 'No heaters in the file', `The file heats: ${heat.slice(0, 2).join(', ')}`)
+  }
+
+  // Is this file the part on screen? Printing reaches the part's top and covers its footprint (supports, brim and a raft
+  // only add to it). A file from a different model, or an old one, usually fails this. A note, never a block.
+  if (!upload && job.process === 'fdm' && part && Number.isFinite(work.z1) && stats.filament > 0) {
+    const sx = part.size.x
+    const sy = part.size.y
+    const px = job.placement.x
+    const py = job.placement.y
+    const tol = 3
+    const covers = work.x0 <= px - sx / 2 + tol && work.x1 >= px + sx / 2 - tol && work.y0 <= py - sy / 2 + tol && work.y1 >= py + sy / 2 - tol
+    const topOk = work.z1 >= part.size.z - 1 && work.z1 <= part.size.z + 8
+    add(
+      'matches',
+      covers && topOk,
+      'The file is the part on screen',
+      `The part is ${fmt(sx)} x ${fmt(sy)} x ${fmt(part.size.z)} mm, but the file prints X ${fmt(work.x0)} to ${fmt(work.x1)}, Y ${fmt(work.y0)} to ${fmt(work.y1)}, up to Z ${fmt(work.z1)}. It may be a different model's slice: Prepare again, and tell the maintainer if it keeps happening.`,
+      true,
+    )
   }
 
   if (has && job.process !== 'cnc') {

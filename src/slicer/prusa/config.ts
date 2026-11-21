@@ -321,3 +321,20 @@ export function prusaStats(g: string): { seconds: number | null; filamentMm: num
   const f = /^; filament used \[mm\] = ([\d.]+)/m.exec(g)?.[1]
   return { seconds, filamentMm: f ? +f : null }
 }
+
+const CRC_TABLE = (() => {
+  const t = new Uint32Array(256)
+  for (let n = 0; n < 256; n++) {
+    let c = n
+    for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1
+    t[n] = c >>> 0
+  }
+  return t
+})()
+
+/** CRC-32 of some bytes, as 8 hex digits: the same sum the Portal makes (Python's zlib.crc32) of what it received */
+export function crc32Hex(bytes: Uint8Array): string {
+  let c = 0xffffffff
+  for (let i = 0; i < bytes.length; i++) c = CRC_TABLE[(c ^ bytes[i]!) & 0xff]! ^ (c >>> 8)
+  return ((c ^ 0xffffffff) >>> 0).toString(16).padStart(8, '0')
+}
