@@ -785,3 +785,13 @@ common ground, filament out of the hotend for SF1-SF4. Do SF1 on a current-limit
   another tool. *Pass if:* the UBEC is off after the swap. *Stop if:* the UBEC stays on after a cancel, an end or a swap.
 - [ ] **SF7 Other tools.** With BlockOne or HotJoe mounted, open SwitchFly's Tune page. *Pass if:* the Lanes panel says to mount SwitchFly and nothing in it
   works; HotJoe's spindle relay behaves as before. *Stop if:* the panel can switch PA1 with another tool mounted.
+
+## Job setup: the model full width, the panels floating (0.32.0)
+
+Nothing moves; no machine needed beyond Studio itself (the mock is enough).
+
+1. Job setup, load a model, confirm a process. **Pass:** the model view runs the full width of the page; Process (3D printing, laser...) and Settings sit on top of its right side, under the Angle / Top / Fit part buttons, which stay clickable.
+2. Click the chevron before "Settings", then before the process title. **Pass:** each folds to its header and the model is clear; the chevron points the other way; reload the page: they stay folded.
+3. Drag the part and turn the view with the mouse in the gaps around the panels. **Pass:** both still work. A long Settings list scrolls inside its own panel, not the page.
+4. Make the window narrower than about 1100 px, or open it on a phone. **Pass:** the panels stack under the model as before, nothing runs off the screen.
+5. **Stop if** a panel covers the Angle / Top / Fit part buttons, hides Prepare with no way to scroll to it, or the model can no longer be dragged.

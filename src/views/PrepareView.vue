@@ -484,7 +484,7 @@ const engineNote = computed(() => {
 
       <div class="side">
         <!-- process and material -->
-        <RsPanel v-if="prep.tool" panel-id="prepare.tool" :title="processWord[prep.tool.process]" :status="prep.tool.name === machine.mountedName ? 'Mounted' : machine.online ? `${machine.mountedName ?? 'No tool'} mounted` : undefined">
+        <RsPanel v-if="prep.tool" panel-id="prepare.tool" collapsible :title="processWord[prep.tool.process]" :status="prep.tool.name === machine.mountedName ? 'Mounted' : machine.online ? `${machine.mountedName ?? 'No tool'} mounted` : undefined">
           <template #actions>
             <RsButton size="sm" variant="quiet" @click="prep.changeProcess()">Change</RsButton>
           </template>
@@ -511,7 +511,7 @@ const engineNote = computed(() => {
         </RsPanel>
 
         <!-- settings -->
-        <RsPanel v-if="job && !up" panel-id="prepare.settings" title="Settings" :status="proc ? processWord[proc] : undefined">
+        <RsPanel v-if="job && !up" panel-id="prepare.settings" collapsible title="Settings" :status="proc ? processWord[proc] : undefined">
           <ProfileBar />
           <!-- FDM: which engine slices -->
           <div v-if="proc === 'fdm'" class="engine">
@@ -694,8 +694,18 @@ const engineNote = computed(() => {
 .eng-seg small { font-size: 11px; font-weight: 400; }
 .eng-seg input:checked + span { background: var(--rs-ink); color: var(--rs-on-ink); }
 .eng-seg input:focus-visible + span { box-shadow: var(--rs-focus); }
-.layout { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(320px, 1fr); gap: var(--rs-gap); align-items: start; }
-.side { display: flex; flex-direction: column; gap: var(--rs-gap); min-width: 0; }
+/* The model workspace takes the whole width; Process and Settings float over its right edge (Mike, Nov 21), and fold away to leave it clear */
+.layout { position: relative; }
+.layout :deep(.bedpanel .stage) { height: min(74vh, 820px); }
+.side {
+  /* below the panel header and the viewer's own Angle / Top / Fit part buttons, which stay reachable */
+  position: absolute; top: calc(48px + var(--rs-space-3) + 52px); right: calc(var(--rs-space-5) + var(--rs-space-2)); z-index: 5;
+  display: flex; flex-direction: column; gap: var(--rs-gap); width: min(400px, 42%); min-width: 0;
+  max-height: calc(100% - 48px - var(--rs-space-3) - 52px - var(--rs-gap)); overflow-y: auto; overscroll-behavior: contain;
+  /* the panels are the only things that catch the mouse, so the model stays draggable between and around them */
+  pointer-events: none;
+}
+.side > * { pointer-events: auto; box-shadow: var(--rs-float-shadow); flex: none; }
 .jobfile { max-width: 860px; }
 .prep-go { display: flex; align-items: center; flex-wrap: wrap; gap: var(--rs-space-3); margin-top: var(--rs-space-4); padding-top: var(--rs-space-4); border-top: 1px dotted var(--rs-line-strong); }
 .fname { display: flex; flex-direction: column; gap: 4px; max-width: 520px; margin-top: var(--rs-space-4); }
@@ -704,7 +714,8 @@ const engineNote = computed(() => {
 .fname-box:focus-within { border-color: var(--rs-text-strong); box-shadow: var(--rs-focus); }
 .fname-box input { flex: 1; min-width: 0; height: 100%; padding: 0 0 0 10px; border: 0; background: transparent; color: inherit; font-family: var(--rs-font-code); font-size: var(--rs-text-sm); outline: none; }
 .fname-box .ext { padding: 0 10px 0 2px; font-family: var(--rs-font-code); font-size: var(--rs-text-sm); color: var(--rs-field-muted); }
-@media (max-width: 1100px) { .layout { grid-template-columns: minmax(0, 1fr); } }
+/* a narrow screen has no room to float: the panels stack under the model again */
+@media (max-width: 1100px) { .side { position: static; width: auto; max-height: none; overflow: visible; margin-top: var(--rs-gap); pointer-events: auto; } .layout :deep(.bedpanel .stage) { height: min(62vh, 640px); } }
 
 .drop.dragging { outline: 2px dashed var(--rs-ink); outline-offset: -6px; }
 

@@ -99,6 +99,7 @@ h2 { font-size: var(--rs-text-md); font-weight: var(--rs-weight-medium); color: 
 .body { padding: var(--rs-space-3) var(--rs-space-5) var(--rs-space-5); flex: 1; min-width: 0; }
 .flush .body { padding: 0; }
 .fold { display: inline-flex; align-items: center; gap: 8px; margin-left: -6px; padding: 4px 6px; border: 0; border-radius: var(--rs-radius-sm); background: none; color: var(--rs-text-strong); font: inherit; cursor: pointer; }
+.fold h2 { white-space: nowrap; }
 .fold svg { color: var(--rs-text-muted); transition: transform 0.15s ease; }
 .folded .fold svg { transform: rotate(-90deg); }
 .fold:hover { background: var(--rs-surface-2); }
