@@ -13,6 +13,7 @@ import './styles/base.css'
 import App from './App.vue'
 import { router } from './router'
 import { brand, faviconDataUrl } from './brand/brand'
+import { useLaneColoursStore } from './stores/laneColours'
 
 // Favicon and title come from brand.ts so renaming is a one-file change
 const icon = document.createElement('link')
@@ -22,4 +23,7 @@ icon.href = faviconDataUrl()
 document.head.appendChild(icon)
 document.title = brand.name
 
-createApp(App).use(createPinia()).use(router).mount('#app')
+const pinia = createPinia()
+const app = createApp(App).use(pinia).use(router)
+useLaneColoursStore(pinia).apply() // lane colours picked in the style guide, before anything draws
+app.mount('#app')

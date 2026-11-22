@@ -555,9 +555,14 @@ export const usePrepareStore = defineStore('prepare', () => {
     return freeSpot(TOWER, { x: m.workArea.x - TOWER.x / 2 - 5, y: TOWER.y / 2 + 5 }, takenAreas(), m.workArea)
   })
   /** the tower's reserved area for the bed drawings (null when there is none) */
+  let lastTower: { x0: number; y0: number; x1: number; y1: number; label: string } | null = null
   const towerArea = computed(() => {
     const s = towerSpot.value
-    return s?.free ? { ...rectOf(s.x, s.y, TOWER), label: 'Purge tower' } : null
+    if (!s?.free) return (lastTower = null)
+    const r = { ...rectOf(s.x, s.y, TOWER), label: 'Purge tower' }
+    // the same object while it hasn't moved: the 3D view takes a new bed for a reason to re-frame its camera (Mike, Nov 22: it reset while turning)
+    if (lastTower && lastTower.x0 === r.x0 && lastTower.y0 === r.y0 && lastTower.x1 === r.x1 && lastTower.y1 === r.y1) return lastTower
+    return (lastTower = r)
   })
   /**
    * The job's lanes as the slicers take them, or null when it uses one lane only (then it slices exactly as a one-lane job does).

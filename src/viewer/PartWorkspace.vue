@@ -316,9 +316,11 @@ watch(() => props.marks, (m) => scene?.setMarks(m ?? []), { deep: true })
 watch(() => [props.marking, props.erasing], ([m, er]) => { if (!m && !er) scene?.setBrush(null, 0) })
 watch(() => props.overhang, (a) => scene?.setOverhang(a ?? null))
 watch(() => props.contact, applyColours)
-watch(() => props.bed, (b) => {
+watch(() => props.bed, (b, old) => {
   scene?.setBed(b)
-  look(angle.value)
+  // only a bigger or smaller bed is a reason to re-frame the camera: a keep-clear area or the purge tower appearing or moving must not
+  // undo the view the user has turned (Mike, Nov 22: it reset every half second while he rotated)
+  if (!old || b.x !== old.x || b.y !== old.y) look(angle.value)
 })
 </script>
 

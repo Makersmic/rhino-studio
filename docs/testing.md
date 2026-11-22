@@ -844,3 +844,9 @@ Nothing moves; the mock (`MOCK_SCENARIO=switchfly`) is enough except where it sa
 5. Preview of a two-lane file. **Pass:** each lane's moves are in that lane's colour (lane 1 ink, lane 2 blue...), with a key under the view; Lighter drawing keeps the colours; a one-lane file looks as before.
 6. Drop two or more model files together. **Pass:** the Parts list says "in an assembly"; they sit relative to each other as in their files (two files made to fit, such as a body and its inlay, line up); moving one part moves all (Centre X, dragging, arrow keys); Turn, Tilt, Scale, Lay flat are greyed with a note; "Break the assembly apart" (note or part menu) lets each go its own way, where they are. A file added later is its own part.
 7. **Stop if** moving one part of an assembly leaves another behind, the tower area overlaps a part, lane 2's option changes lane 1's value, or a one-lane job shows any lane colours or notes.
+
+## Turning the model, the style guide's lane colours (0.35.1)
+
+1. Job setup, SwitchFly, two parts, put one in lane 2 (the purge tower area appears). Turn the 3D view by dragging empty space, then leave the mouse alone for 3 seconds. **Pass:** the view stays where you turned it (before 0.35.1 it snapped back about twice a second). Also move a part with the tower area showing: the view must not re-frame. **Stop if** the view moves by itself.
+2. Style guide, Filament lanes: click a lane's colour square. **Pass:** the browser's colour picker opens; the lane's key, the part chips, the lane tabs and the Preview take the new colour at once (Preview after reopening it) and keep it after a reload; "Back to the look's colours" restores the defaults. The colours are per browser.
+3. Style guide: the Light grey swatch and an empty lane key are flat grey with readable text (no dots).

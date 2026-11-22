@@ -114,4 +114,14 @@ describe('lanes on a two-path tool', () => {
     p.setLaneSetting(1, 'extrusion_multiplier', null)
     expect(p.job!.lanes!.settings).toBeUndefined()
   })
+  it('keeps the purge tower area the same object while it has not moved, so the 3D view does not re-frame its camera', async () => {
+    const p = await start()
+    p.setPartLane(p.parts[1]!.id, 1)
+    const a = p.towerArea
+    expect(a).not.toBeNull()
+    p.job!.placement.x += 1 // a part moves a little: the tower stays where it was
+    expect(p.towerArea).toBe(a)
+    p.setPurge('machine')
+    expect(p.towerArea).toBeNull()
+  })
 })

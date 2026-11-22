@@ -89,7 +89,7 @@ const isUsed = (i: number) => !!props.used?.includes(i)
 /* pressed in: the selected lane */
 .key.on { transform: translateY(2px); box-shadow: inset 0 0 0 2px var(--rs-text-strong); background: var(--rs-surface-2); }
 .key:focus-visible { outline: none; box-shadow: var(--rs-focus); z-index: 2; }
-.key.empty { background-image: radial-gradient(var(--rs-line-strong) 0.8px, transparent 1px); background-size: 6px 6px; }
+.key.empty { background: var(--rs-surface-2); }
 .band { align-self: stretch; height: 18px; margin: 0 0 4px; background-color: var(--tone); }
 /* a pattern per lane, so the tone is never the only clue */
 .p2 .band { background-image: repeating-linear-gradient(135deg, rgb(255 255 255 / 0.45) 0 2px, transparent 2px 6px); }
@@ -101,7 +101,6 @@ const isUsed = (i: number) => !!props.used?.includes(i)
 .p8 .band { background-image: radial-gradient(circle at 50% 50%, transparent 1.5px, rgb(255 255 255 / 0.5) 1.7px 2.6px, transparent 2.8px); background-size: 7px 7px; }
 .key.empty .band { background-color: transparent; background-image: none; border-bottom: 1px dotted var(--rs-line-strong); }
 .mat { max-width: 100%; padding: 0 3px; overflow: hidden; font-size: 11px; font-weight: var(--rs-weight-medium); text-overflow: ellipsis; white-space: nowrap; color: var(--rs-text-muted); }
-.key.empty .mat { background: var(--rs-surface); border-radius: 3px; }
 .key.on .mat { color: var(--rs-text-strong); }
 .num { font-size: 1.5rem; line-height: 1; }
 .marks { display: flex; gap: 4px; height: 6px; }

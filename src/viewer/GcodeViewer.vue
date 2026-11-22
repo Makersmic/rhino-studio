@@ -10,6 +10,7 @@ import type { ParsedGcode } from '@/gcode/parse'
 import { BUDGET_NORMAL, BUDGET_REDUCED, buildDraw, fileMoveAt, previewNotes, visibleRange, type DrawData } from './draw'
 import type { BedShape, GcodeScene, ViewAngle } from './scene'
 import { colourOf, featureColours, loadReduced, saveReduced, watchTheme } from './theme'
+import { LANE_COLOURS_EVENT } from '@/prepare/laneColours'
 
 /** plateBelow: the build plate as Job setup draws it (white, see-through from below by this %), so both views match */
 const props = defineProps<{ parsed: ParsedGcode; bed: BedShape; plateBelow?: number }>()
@@ -93,6 +94,7 @@ onMounted(async () => {
     })
     observer.observe(box.value)
     stopTheme = watchTheme(onThemeChange)
+    window.addEventListener(LANE_COLOURS_EVENT, onThemeChange)
     document.addEventListener('visibilitychange', onVisible)
   } catch (e) {
     failure.value = `This browser couldn't start the 3D drawing (${(e as Error).message}). The file itself is fine.`
@@ -102,6 +104,7 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   observer?.disconnect()
   stopTheme?.()
+  window.removeEventListener(LANE_COLOURS_EVENT, onThemeChange)
   document.removeEventListener('visibilitychange', onVisible)
   scene?.dispose()
   scene = null

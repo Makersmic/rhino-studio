@@ -16,6 +16,9 @@ import ToolTile from '@/toolheads/ToolTile.vue'
 import Icon from '@/icons/Icon.vue'
 import LaneKeys from '@/prepare/LaneKeys.vue'
 import { cleanLinks, resizeLanes, type LaneInfo } from '@/prepare/laneKeys'
+import { hexOf } from '@/prepare/laneColours'
+import { colourOf } from '@/viewer/theme'
+import { useLaneColoursStore } from '@/stores/laneColours'
 import CareBar from '@/maintenance/CareBar.vue'
 import { NAV_ICONS, type NavIconId } from '@/icons/nav'
 import { BUILT_IN_TOOLHEADS, UNKNOWN_LOOK, lookFor, type ToolheadLook } from '@/toolheads/registry'
@@ -24,6 +27,19 @@ import { useThemeStore } from '@/stores/theme'
 
 const customLook = { ...lookFor('HotWire', 'CNC'), summary: 'Stand-in for any user-added tool' }
 // Filament lane keys sample: two lanes (SwitchFly) or up to eight (an external switcher)
+const laneColours = useLaneColoursStore()
+/** each lane's colour as it is now (picked, or the look's own), for the colour pickers */
+const laneHex = (i: number) => laneColours.colours[i] ?? hexOf(colourOf(getComputedStyle(document.documentElement).getPropertyValue(`--rs-lane-${i + 1}`).trim() || '#808080'))
+const laneNow = ref<string[]>([])
+const readLaneColours = () => (laneNow.value = Array.from({ length: 8 }, (_, i) => laneHex(i)))
+function pickLane(i: number, e: Event) {
+  laneColours.set(i, (e.target as HTMLInputElement).value)
+  readLaneColours()
+}
+function resetLanes() {
+  laneColours.reset()
+  readLaneColours()
+}
 const laneCount = ref(4)
 const laneSeed: LaneInfo[] = [
   { material: 'PLA_0_4_T0', runoutSensor: true }, { material: 'PLA_0_4_T1', runoutSensor: false }, { material: 'PETG_0_4_T0', runoutSensor: true },
@@ -56,9 +72,15 @@ function readValues() {
   const all = [...frame, ...signal].map((s) => s.v).concat(allTools.map((t) => t.accentVar))
   values.value = Object.fromEntries(all.map((v) => [v, cs.getPropertyValue(v).trim()]))
 }
-onMounted(readValues)
+onMounted(() => {
+  readValues()
+  readLaneColours()
+})
 const theme = useThemeStore()
-watch(() => theme.pref, () => requestAnimationFrame(readValues))
+watch(() => theme.pref, () => requestAnimationFrame(() => {
+  readValues()
+  readLaneColours()
+}))
 
 // Accent preview is local to this page. It never touches the mounted-tool state.
 const previewTool = ref<ToolheadLook>(BUILT_IN_TOOLHEADS[0]!)
@@ -85,8 +107,8 @@ const isUnknown = (t: ToolheadLook) => t.icon === 'unknown'
         <span class="sw-hex">Text, lines, and inverted when live or selected.</span>
       </div>
       <div class="swatch dither">
-        <span class="sw-name">Dither</span>
-        <span class="sw-hex">E-ink shading: progress and care. Dead keys are solid grey. No extra colours.</span>
+        <span class="sw-name">Light grey</span>
+        <span class="sw-hex">Shading and fills: care and progress, empty lane keys, dead keys. One flat grey, no pattern, no extra colours.</span>
       </div>
       <div class="swatch signal">
         <span class="sw-name">Signal</span>
@@ -133,11 +155,21 @@ const isUnknown = (t: ToolheadLook) => t.icon === 'unknown'
 
     <SectionRule label="Filament lanes" />
     <RsPanel title="Lane keys">
-      <p class="muted lead">One white key per lane; the pressed one is the lane you are working on. A black key between two lanes switches on "carry on with the next lane when this one runs out": it needs the same filament in both and a runout sensor on the left lane, and says why when it can't. Dotted means nothing chosen yet; the dot shows a fitted sensor; each lane has a tone and its own pattern.</p>
+      <p class="muted lead">One white key per lane; the pressed one is the lane you are working on. A black key between two lanes switches on "carry on with the next lane when this one runs out": it needs the same filament in both and a runout sensor on the left lane, and says why when it can't. Light grey means nothing chosen yet; the dot shows a fitted sensor; each lane has a tone and its own pattern.</p>
       <div class="lane-count" role="radiogroup" aria-label="Number of lanes">
         <button v-for="n in [2, 4, 8]" :key="n" type="button" role="radio" class="pick" :aria-checked="laneCount === n" @click="laneCount = n">{{ n }} lanes</button>
       </div>
       <LaneKeys v-model="laneSel" v-model:follow="laneLinks" :lanes="laneList" :used="[0, 1]" links />
+      <div class="lane-picks" role="group" aria-label="Lane colours">
+        <span class="lab">Lane colours: click one to pick it</span>
+        <label v-for="(c, i) in laneNow" :key="i" class="lane-pick" :title="`Lane ${i + 1}: ${c}. Click to pick a colour.`">
+          <input type="color" :value="c" :aria-label="`Lane ${i + 1} colour`" @input="pickLane(i, $event)" />
+          <span class="chip" :style="{ background: c }" aria-hidden="true" />
+          <span class="no">{{ i + 1 }}</span>
+        </label>
+        <RsButton size="sm" variant="quiet" :disabled="!laneColours.colours.some(Boolean)" @click="resetLanes">Back to the look's colours</RsButton>
+      </div>
+      <p class="muted note">Kept in this browser. They colour the keys, the part chips, the lane tabs and the Preview.</p>
     </RsPanel>
 
     <SectionRule label="Toolhead emblems" />
@@ -300,8 +332,7 @@ const isUnknown = (t: ToolheadLook) => t.icon === 'unknown'
 .paper { background: var(--rs-surface); color: var(--rs-text-strong); }
 .ink { background: var(--rs-ink); color: var(--rs-on-ink); border-color: var(--rs-ink); }
 .ink .rs-num { color: var(--rs-on-ink); }
-.dither { background: var(--rs-dither), var(--rs-surface); color: var(--rs-text-strong); }
-.dither .sw-name, .dither .sw-hex { background: var(--rs-surface); align-self: flex-start; padding: 2px 6px; border-radius: 4px; }
+.dither { background: var(--rs-surface-2); color: var(--rs-text-strong); }
 .dither .sw-hex { margin-top: auto; }
 .signal { background: var(--rs-danger); color: var(--rs-on-danger); border-color: var(--rs-danger); }
 .signal .sw-hex { margin-top: auto; }
@@ -358,5 +389,13 @@ const isUnknown = (t: ToolheadLook) => t.icon === 'unknown'
 .carestates { display: grid; gap: var(--rs-space-5); grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
 .carestate { display: flex; flex-direction: column; gap: var(--rs-space-2); font-size: var(--rs-text-sm); color: var(--rs-text-strong); }
 .rules { margin: 0; padding-left: 1.4em; display: flex; flex-direction: column; gap: var(--rs-space-2); max-width: 80ch; }
+.lane-picks { display: flex; flex-wrap: wrap; align-items: center; gap: var(--rs-space-2); margin-top: var(--rs-space-4); }
+.lane-picks .lab { font-size: var(--rs-text-xs); color: var(--rs-text-muted); margin-right: var(--rs-space-2); }
+.lane-pick { position: relative; display: inline-flex; align-items: center; gap: 6px; padding: 3px 8px 3px 3px; border: 1px solid var(--rs-line-strong); border-radius: var(--rs-radius-md); cursor: pointer; }
+.lane-pick:hover { background: var(--rs-surface-2); }
+.lane-pick:focus-within { box-shadow: var(--rs-focus); }
+.lane-pick input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+.lane-pick .chip { width: 26px; height: 26px; border-radius: 5px; box-shadow: inset 0 0 0 1px var(--rs-line-strong); }
+.lane-pick .no { font-size: var(--rs-text-sm); font-weight: var(--rs-weight-medium); color: var(--rs-text-strong); }
 .lane-count { display: flex; gap: 6px; margin-bottom: var(--rs-space-4); }
 </style>
