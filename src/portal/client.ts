@@ -107,10 +107,17 @@ export interface ThemeImages {
   max_bytes?: number
 }
 
+export interface ThemeFonts {
+  fonts: Array<{ name: string; label: string; size: number; added: number }>
+  max?: number
+  max_bytes?: number
+}
+
 export const PORTAL_WRITES = ['done', 'snooze'] as const
 export const PORTAL_TOOL_CHECKS = ['tool-check', 'preview-control', 'preview-macro'] as const
 export const PORTAL_TOOL_WRITES = ['tool-add', 'tool-edit', 'tool-rename', 'tool-delete', 'photo-add', 'photo-delete'] as const
 export const PORTAL_THEME_IMAGES = ['theme-image-add', 'theme-image-delete'] as const
+export const PORTAL_THEME_FONTS = ['theme-font-add', 'theme-font-delete'] as const
 export const PORTAL_RESTART = ['restart', 'restart-auto'] as const
 export const PORTAL_CARE_WRITES = [
   'task-create', 'task-update', 'task-delete', 'task-status', 'task-to-library', 'meter-set', 'care-settings',
@@ -159,6 +166,7 @@ export type WriteKind =
   | (typeof PORTAL_TOOL_CHECKS)[number]
   | (typeof PORTAL_TOOL_WRITES)[number]
   | (typeof PORTAL_THEME_IMAGES)[number]
+  | (typeof PORTAL_THEME_FONTS)[number]
   | (typeof PORTAL_RESTART)[number]
   | (typeof PORTAL_CARE_WRITES)[number]
   | (typeof PORTAL_CARE_SETUP)[number]
@@ -190,6 +198,8 @@ export const WRITE_ROUTES: Record<WriteKind, { method: 'POST' | 'DELETE'; path: 
   'photo-add': { method: 'POST', path: /^\/api\/tools\/[^/]+\/photos$/ },
   'photo-delete': { method: 'DELETE', path: /^\/api\/tools\/[^/]+\/photos\/[^/]+$/ },
   'theme-image-add': { method: 'POST', path: /^\/api\/theme-images$/ },
+  'theme-font-add': { method: 'POST', path: /^\/api\/theme-fonts$/ },
+  'theme-font-delete': { method: 'DELETE', path: /^\/api\/theme-fonts\/[0-9a-f]{16}\.(woff2|woff|ttf|otf)$/ },
   'theme-image-delete': { method: 'DELETE', path: /^\/api\/theme-images\/[0-9a-f]{16}\.(png|jpe?g|gif|webp)$/ },
   restart: { method: 'POST', path: /^\/api\/restart$/ },
   'restart-auto': { method: 'POST', path: /^\/api\/restart\/auto$/ },
@@ -269,7 +279,7 @@ export const WRITE_ROUTES: Record<WriteKind, { method: 'POST' | 'DELETE'; path: 
 }
 
 const ALLOWED = new Set<string>([
-  ...PORTAL_WRITES, ...PORTAL_TOOL_CHECKS, ...PORTAL_TOOL_WRITES, ...PORTAL_THEME_IMAGES, ...PORTAL_RESTART,
+  ...PORTAL_WRITES, ...PORTAL_TOOL_CHECKS, ...PORTAL_TOOL_WRITES, ...PORTAL_THEME_IMAGES, ...PORTAL_THEME_FONTS, ...PORTAL_RESTART,
   ...PORTAL_CARE_WRITES, ...PORTAL_CARE_SETUP, ...PORTAL_TOOL_SETUP, ...PORTAL_HARDWARE, ...PORTAL_HW_WIZARD, ...PORTAL_HOOKS, ...PORTAL_LABELS, ...PORTAL_NETWORK, ...PORTAL_SLICER, ...PORTAL_UPDATE, ...PORTAL_TRUST,
   ...PORTAL_BACKUP, ...PORTAL_PROFILES, ...PORTAL_MACROS, ...PORTAL_TUNING,
 ])
@@ -451,6 +461,26 @@ export class PortalClient {
 
   async deleteThemeImage(name: string): Promise<ThemeImages> {
     return this.write('theme-image-delete', 'DELETE', `/api/theme-images/${enc(name)}`)
+  }
+
+  // ---- fonts for themes (Tool Manager 1.9.43)
+
+  /** The fonts on the Rhino. An older Portal has none of this, and says so with a 404. */
+  async themeFonts(): Promise<ThemeFonts> {
+    const res = await fetch(`${this.baseUrl}/api/theme-fonts`)
+    if (res.status === 404) throw new Error('This Rhino needs a Tool Manager update before it can keep fonts.')
+    if (!res.ok) throw new Error(`Portal error (HTTP ${res.status})`)
+    return (await res.json()) as ThemeFonts
+  }
+
+  async addThemeFont(file: Blob, filename: string): Promise<ThemeFonts & { name: string }> {
+    const fd = new FormData()
+    fd.append('font', file, filename)
+    return this.write('theme-font-add', 'POST', '/api/theme-fonts', fd)
+  }
+
+  async deleteThemeFont(name: string): Promise<ThemeFonts> {
+    return this.write('theme-font-delete', 'DELETE', `/api/theme-fonts/${enc(name)}`)
   }
 
   async addPhoto(name: string, file: Blob, filename = 'photo.jpg'): Promise<WriteResult> {

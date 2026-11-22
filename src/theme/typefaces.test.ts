@@ -1,7 +1,8 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { cleanTheme, shellVars } from './panelColors'
-import { TYPEFACES, typefaceOf } from './typefaces'
+import { TYPEFACES, typefaceOf, uploadedFile, uploadedFamily } from './typefaces'
+import { fontsUsed } from './uploadedFonts'
 
 const css = readFileSync(new URL('../styles/fonts.css', import.meta.url), 'utf8')
 const base = readFileSync(new URL('../styles/base.css', import.meta.url), 'utf8')
@@ -40,5 +41,19 @@ describe('typefaces', () => {
     expect(Object.keys(shellVars({ faceBody: 'inter' }))).not.toContain('--rs-font-code')
     const estop = readFileSync(new URL('../components/EStopButton.vue', import.meta.url), 'utf8')
     expect(estop).toContain('font-family: var(--rs-font-fixed)')
+  })
+
+  it('takes an uploaded font by the Portal\'s file name only', () => {
+    const f = 'a1b2c3d4e5f60718.woff2'
+    expect(uploadedFile(`up:${f}`)).toBe(f)
+    expect(uploadedFamily(f)).toBe('rs-up-a1b2c3d4e5f60718')
+    expect(typefaceOf(`up:${f}`, 'body')?.stack).toContain("'rs-up-a1b2c3d4e5f60718'")
+    expect(typefaceOf(`up:${f}`, 'title')?.stack).toContain('Archivo Variable')
+    for (const bad of ['up:../x.woff2', 'up:a1b2c3d4e5f60718.svg', "up:a1b2c3d4e5f60718.woff2'); x", 'up:ABC', 'a1b2c3d4e5f60718.woff2', 'up:']) {
+      expect(typefaceOf(bad, 'body'), bad).toBeNull()
+    }
+    expect(cleanTheme({ s: { day: { faceBody: `up:${f}`, faceTitle: 'up:nope' } } }).s?.day).toEqual({ faceBody: `up:${f}` })
+    expect(fontsUsed({ faceTitle: `up:${f}`, faceBody: `up:${f}`, faceSub: 'inter' })).toEqual([f])
+    expect(fontsUsed(undefined)).toEqual([])
   })
 })

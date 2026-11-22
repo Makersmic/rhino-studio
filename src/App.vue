@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, watchEffect } from 'vue'
 import { pageImageStyle } from '@/theme/panelColors'
+import { ensureFonts, fontsUsed } from '@/theme/uploadedFonts'
 import { useRoute } from 'vue-router'
 import AppTopBar from '@/components/AppTopBar.vue'
 import AppRail from '@/components/AppRail.vue'
@@ -53,6 +54,8 @@ const maintenance = useMaintenanceStore()
 const pagePicture = computed(() =>
   route.meta.bare ? {} : pageImageStyle(themes.pageColours, (path) => maintenance.portal()?.media(path) ?? null),
 )
+// Fonts the theme uses that were uploaded: load them from the Rhino (Archivo shows until they arrive)
+watchEffect(() => ensureFonts(fontsUsed(themes.pageColours), (path) => maintenance.portal()?.media(path) ?? null))
 watchEffect(() => {
   document.documentElement.toggleAttribute('data-page-picture', !!pagePicture.value.backgroundImage)
 })

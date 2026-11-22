@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
-  PORTAL_BACKUP, PORTAL_PROFILES, PORTAL_MACROS, PORTAL_TUNING, PORTAL_HOST, PORTAL_THEME_IMAGES, PORTAL_CARE_SETUP, PORTAL_CARE_WRITES, PORTAL_HARDWARE, PORTAL_HOOKS, PORTAL_HW_WIZARD, PORTAL_LABELS, PORTAL_NETWORK, PORTAL_SLICER, PORTAL_UPDATE, PORTAL_TRUST, PORTAL_RESTART, PORTAL_TOOL_CHECKS, PORTAL_TOOL_SETUP, PORTAL_TOOL_WRITES, PORTAL_WRITES, PortalClient, WRITE_ROUTES,
+  PORTAL_BACKUP, PORTAL_PROFILES, PORTAL_MACROS, PORTAL_TUNING, PORTAL_HOST, PORTAL_THEME_IMAGES, PORTAL_THEME_FONTS, PORTAL_CARE_SETUP, PORTAL_CARE_WRITES, PORTAL_HARDWARE, PORTAL_HOOKS, PORTAL_HW_WIZARD, PORTAL_LABELS, PORTAL_NETWORK, PORTAL_SLICER, PORTAL_UPDATE, PORTAL_TRUST, PORTAL_RESTART, PORTAL_TOOL_CHECKS, PORTAL_TOOL_SETUP, PORTAL_TOOL_WRITES, PORTAL_WRITES, PortalClient, WRITE_ROUTES,
 } from './client'
 import type { TaskDef } from '@/maintenance/types'
 
@@ -96,11 +96,14 @@ describe('PortalClient', () => {
 
   it('every write kind has exactly one route, and the lists cover them all', () => {
     const kinds = [
-      ...PORTAL_WRITES, ...PORTAL_TOOL_CHECKS, ...PORTAL_TOOL_WRITES, ...PORTAL_THEME_IMAGES, ...PORTAL_RESTART,
+      ...PORTAL_WRITES, ...PORTAL_TOOL_CHECKS, ...PORTAL_TOOL_WRITES, ...PORTAL_THEME_IMAGES, ...PORTAL_THEME_FONTS, ...PORTAL_RESTART,
       ...PORTAL_CARE_WRITES, ...PORTAL_CARE_SETUP, ...PORTAL_TOOL_SETUP, ...PORTAL_HARDWARE, ...PORTAL_HOOKS, ...PORTAL_HW_WIZARD, ...PORTAL_LABELS, ...PORTAL_NETWORK, ...PORTAL_SLICER, ...PORTAL_UPDATE, ...PORTAL_TRUST,
       ...PORTAL_BACKUP, ...PORTAL_PROFILES, ...PORTAL_MACROS, ...PORTAL_TUNING, ...PORTAL_HOST,
     ]
     expect(new Set(kinds).size).toBe(kinds.length)
+    expect(WRITE_ROUTES['theme-font-add']).toEqual({ method: 'POST', path: /^\/api\/theme-fonts$/ })
+    expect(WRITE_ROUTES['theme-font-delete']!.path.test('/api/theme-fonts/a1b2c3d4e5f60718.woff2')).toBe(true)
+    for (const bad of ['/api/theme-fonts/../x', '/api/theme-fonts/a1b2c3d4e5f60718.svg', '/api/theme-fonts/a%2Fb.ttf']) expect(WRITE_ROUTES['theme-font-delete']!.path.test(bad), bad).toBe(false)
     expect(Object.keys(WRITE_ROUTES).sort()).toEqual([...kinds].sort())
   })
 

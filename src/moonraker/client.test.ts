@@ -5,6 +5,11 @@ import { approve, check } from '@/control/commands'
 /** A stand-in for the browser WebSocket that answers like Moonraker. */
 class FakeSocket {
   static last: FakeSocket | null = null
+  static count = 0
+  /** open, then drop at once: a server that accepts connections and hangs up */
+  static dropOnOpen = false
+  /** a connection that looks open but never answers */
+  mute = false
   readyState = 0
   sent: { method: string; params?: Record<string, unknown> }[] = []
   onopen: (() => void) | null = null
@@ -13,14 +18,17 @@ class FakeSocket {
   onerror: (() => void) | null = null
   constructor(public url: string) {
     FakeSocket.last = this
+    FakeSocket.count++
     queueMicrotask(() => {
       this.readyState = 1
       this.onopen?.()
+      if (FakeSocket.dropOnOpen) this.close()
     })
   }
   send(raw: string) {
     const msg = JSON.parse(raw)
     this.sent.push({ method: msg.method, params: msg.params })
+    if (this.mute) return
     const result =
       msg.method === 'server.info' ? { klippy_state: 'ready' }
       : msg.method === 'printer.objects.list' ? { objects: ['webhooks', 'extruder', 'gcode_macro SWAP_TOOL', 'gcode_macro VARIABLES'] }
@@ -55,7 +63,12 @@ function make() {
   return { c, events }
 }
 
-afterEach(() => vi.useRealTimers())
+afterEach(() => {
+  vi.useRealTimers()
+  vi.unstubAllGlobals()
+  FakeSocket.count = 0
+  FakeSocket.dropOnOpen = false
+})
 
 describe('MoonrakerClient', () => {
   it('connects, subscribes only to objects Klipper has, and reports ready', async () => {
@@ -130,6 +143,7 @@ describe('MoonrakerClient', () => {
   })
 
   it('sends the emergency stop over the websocket', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, status: 200 })))
     const { c } = make()
     c.connect()
     for (let i = 0; i < 10; i++) await flush()
@@ -350,5 +364,170 @@ describe('uploadFile', () => {
   it('a refused upload says why, from Moonraker’s message', async () => {
     fakeXhr(500, JSON.stringify({ error: { message: 'Unable to save file' } }))
     await expect(new MoonrakerClient('http://rhino.test', {}).uploadFile(new File(['x'], 'a.gcode'))).rejects.toThrow('Upload failed: HTTP 500 (Unable to save file)')
+  })
+})
+
+/** Fake timers, a connected client, and a way to move time */
+async function connected() {
+  vi.useFakeTimers()
+  const { c, events } = make()
+  c.connect()
+  await vi.advanceTimersByTimeAsync(50)
+  return { c, events, ws: FakeSocket.last! }
+}
+const advance = (ms: number) => vi.advanceTimersByTimeAsync(ms)
+
+describe('emergency stop on a bad connection', () => {
+  it('goes out over HTTP at once when the websocket looks open but is silent', async () => {
+    const fetchMock = vi.fn(async () => ({ ok: true, status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+    const { c, ws } = await connected()
+    ws.mute = true
+    await expect(c.emergencyStop()).resolves.toBeUndefined()
+    expect(fetchMock).toHaveBeenCalledWith('http://rhino.test/printer/emergency_stop', expect.objectContaining({ method: 'POST' }))
+  })
+
+  it('counts the websocket when HTTP hangs or is refused', async () => {
+    vi.stubGlobal('fetch', vi.fn(() => new Promise(() => {})))
+    const a = await connected()
+    await expect(a.c.emergencyStop()).resolves.toBeUndefined()
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, status: 500 })))
+    await expect(a.c.emergencyStop()).resolves.toBeUndefined()
+  })
+
+  it('says plainly when neither route was accepted', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('boom') }))
+    const { c, ws } = await connected()
+    ws.mute = true
+    const done = expect(c.emergencyStop()).rejects.toThrow(/NOT confirmed.*boom.*emergency_stop timed out/s)
+    await advance(4100)
+    await done
+  })
+
+  it('gives up on a hung HTTP route after 4 seconds', async () => {
+    vi.stubGlobal('fetch', vi.fn((_url: string, init: RequestInit) => new Promise((_, reject) => init.signal?.addEventListener('abort', () => reject(new Error('aborted'))))))
+    const { c, ws } = await connected()
+    ws.mute = true
+    const done = expect(c.emergencyStop()).rejects.toThrow(/no answer over HTTP in 4 s/)
+    await advance(4100)
+    await done
+  })
+})
+
+describe('a connection that goes quiet', () => {
+  it('is dropped and reconnected when Moonraker stops answering', async () => {
+    const { events, ws } = await connected()
+    ws.mute = true
+    await advance(10_000 + 5_000 + 500)
+    expect(events.states.at(-1)).toBe('error')
+    await advance(1_500)
+    expect(FakeSocket.last).not.toBe(ws)
+    expect(FakeSocket.count).toBe(2)
+  })
+
+  it('is left alone while Moonraker keeps talking', async () => {
+    const { events, ws } = await connected()
+    ws.mute = true // never answers a request, but the status updates keep coming
+    for (let i = 0; i < 15; i++) {
+      await advance(4_000)
+      ws.push('notify_proc_stat_update', [{}])
+    }
+    expect(events.states).not.toContain('error')
+    expect(FakeSocket.count).toBe(1)
+    expect(ws.sent.filter((m) => m.method === 'server.info')).toHaveLength(1)
+  })
+
+  it('is left alone when it is idle but answers a check', async () => {
+    const { events, ws } = await connected()
+    await advance(60_000)
+    expect(events.states).not.toContain('error')
+    expect(FakeSocket.count).toBe(1)
+    expect(ws.sent.filter((m) => m.method === 'server.info').length).toBeGreaterThan(1)
+  })
+
+  it('is checked at once when the page comes back or the network returns', async () => {
+    // Vitest runs without a browser, so give the client a page and a window that can be told things
+    const win = new EventTarget()
+    const doc = Object.assign(new EventTarget(), { hidden: false })
+    vi.stubGlobal('window', win)
+    vi.stubGlobal('document', doc)
+    for (const [target, event] of [[doc, 'visibilitychange'], [win, 'online']] as const) {
+      const { events, ws } = await connected()
+      ws.mute = true
+      vi.setSystemTime(Date.now() + 120_000) // the phone slept
+      target.dispatchEvent(new Event(event))
+      await advance(5_100) // the next timer tick would not have dropped it yet
+      expect(events.states.at(-1), event).toBe('error')
+    }
+  })
+})
+
+describe('reconnect back-off', () => {
+  it('stays slowed down for a server that accepts and hangs up', async () => {
+    vi.useFakeTimers()
+    FakeSocket.dropOnOpen = true
+    const { c } = make()
+    c.setReconnectDelays([1000, 2000, 4000])
+    c.connect()
+    await advance(10)
+    expect(FakeSocket.count).toBe(1)
+    await advance(1090) // t = 1.1 s: after the 1 s wait
+    expect(FakeSocket.count).toBe(2)
+    await advance(1800) // t = 2.9 s: the next wait is 2 s, so not yet
+    expect(FakeSocket.count).toBe(2)
+    await advance(200)
+    expect(FakeSocket.count).toBe(3)
+    await advance(3800) // t = 6.9 s: the next wait is 4 s
+    expect(FakeSocket.count).toBe(3)
+    await advance(200)
+    expect(FakeSocket.count).toBe(4)
+  })
+
+  it('starts again from the shortest wait once Moonraker answers', async () => {
+    vi.useFakeTimers()
+    FakeSocket.dropOnOpen = true
+    const { c } = make()
+    c.setReconnectDelays([1000, 2000, 4000])
+    c.connect()
+    await advance(1100)
+    FakeSocket.dropOnOpen = false
+    await advance(2000) // t = 3.1 s: the third socket opens normally and is answered
+    expect(FakeSocket.count).toBe(3)
+    FakeSocket.last!.close()
+    await advance(1100) // 1 s, not the 4 s a stale counter would give
+    expect(FakeSocket.count).toBe(4)
+  })
+})
+
+describe('a request that gets no answer', () => {
+  it('an action says it may still have run; a read does not', async () => {
+    const { c, ws } = await connected()
+    ws.mute = true
+    const act = expect(c.startPrint('a.gcode')).rejects.toThrow(/timed out: it may still have run. Check the machine/)
+    const read = expect(c.listFiles()).rejects.toThrow(/^server\.files\.list timed out$/)
+    await advance(10_100)
+    await act
+    await read
+  })
+
+  it('an action cut off by a closed connection says so too', async () => {
+    const { c, ws } = await connected()
+    ws.mute = true
+    const act = expect(c.startPrint('a.gcode')).rejects.toThrow(/Connection closed: that command may still have run/)
+    ws.close()
+    await act
+  })
+})
+
+describe('looking at Klipper', () => {
+  it('runs one check at a time and folds requests that arrive meanwhile into one more', async () => {
+    const { ws } = await connected()
+    const subscribes = () => ws.sent.filter((m) => m.method === 'printer.objects.subscribe').length
+    expect(subscribes()).toBe(1)
+    ws.push('notify_klippy_ready')
+    ws.push('notify_klippy_ready')
+    ws.push('notify_klippy_ready')
+    await advance(50)
+    expect(subscribes()).toBe(3) // the first, plus one more for the two that arrived during it
   })
 })

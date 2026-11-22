@@ -251,7 +251,16 @@ interface Pending {
   resolve: (v: unknown) => void
   reject: (e: Error) => void
   timer: ReturnType<typeof setTimeout>
+  /** The request changes something (an action, a setting): if no answer comes, it may still have been done */
+  changes: boolean
 }
+
+/** A connection that has said nothing for this long gets checked; no answer to the check drops it and reconnects */
+const QUIET_MS = 10_000
+const CHECK_MS = 2_500
+const PROBE_MS = 5_000
+/** Emergency stop gives each route this long before it counts as failed */
+const STOP_MS = 4_000
 
 type WsCtor = new (url: string) => WebSocket
 
@@ -277,6 +286,12 @@ export class MoonrakerClient {
   private WS: WsCtor
   private version: string
   private delays = [1000, 2000, 4000, 8000, 10000]
+  private lastHeard = 0
+  private watchTimer: ReturnType<typeof setInterval> | null = null
+  private probing = false
+  /** One look at Klipper's state at a time; a request that arrives meanwhile earns one more look afterwards */
+  private checking: Promise<void> | null = null
+  private recheck = false
 
   constructor(baseUrl: string, handlers: ClientHandlers, opts: { WebSocketImpl?: WsCtor; version?: string; trust?: () => Promise<Trust> } = {}) {
     this.trust = opts.trust ?? null
@@ -315,13 +330,19 @@ export class MoonrakerClient {
   connect(): void {
     this.wanted = true
     this.retry = 0
+    // A phone waking up or the network coming back: look at the connection now, not at the next tick
+    if (typeof document !== 'undefined') document.addEventListener('visibilitychange', this.wake)
+    if (typeof window !== 'undefined') window.addEventListener('online', this.wake)
     this.open()
   }
 
   disconnect(): void {
     this.wanted = false
     this.attempt++
+    if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', this.wake)
+    if (typeof window !== 'undefined') window.removeEventListener('online', this.wake)
     this.clearTimers()
+    this.stopWatch()
     this.ws?.close()
     this.ws = null
     this.failPending('Disconnected')
@@ -510,16 +531,32 @@ export class MoonrakerClient {
   }
 
   /**
-   * Emergency stop (Klipper M112). Over the websocket if it's open, otherwise
-   * over HTTP, so it still works while the socket is reconnecting.
+   * Emergency stop (Klipper M112). Sent over the websocket AND over HTTP at the same time: a websocket that looks open
+   * can be dead (Wi-Fi dropped, host rebooted), and waiting for it before trying HTTP would cost seconds. The first
+   * route to be accepted counts; M112 twice does no harm. If neither is accepted it says so plainly.
    */
   async emergencyStop(): Promise<void> {
-    if (this.ws?.readyState === 1) {
-      await this.send(EMERGENCY_STOP, undefined, 4000)
-      return
+    const routes: Promise<unknown>[] = [this.stopOverHttp()]
+    if (this.ws?.readyState === 1) routes.push(this.send(EMERGENCY_STOP, undefined, STOP_MS))
+    try {
+      await Promise.any(routes)
+    } catch (e) {
+      const why = ((e as AggregateError).errors ?? [e]).map((x) => (x as Error).message).join('; ')
+      throw new Error(`Emergency stop was NOT confirmed (${why}). Use the machine's own stop or power switch if it is in danger.`)
     }
-    const res = await fetch(`${this.baseUrl}/printer/emergency_stop`, { method: 'POST' })
-    if (!res.ok) throw new Error(`Emergency stop failed: HTTP ${res.status}`)
+  }
+
+  private async stopOverHttp(): Promise<void> {
+    const ctl = new AbortController()
+    const timer = setTimeout(() => ctl.abort(), STOP_MS)
+    try {
+      const res = await fetch(`${this.baseUrl}/printer/emergency_stop`, { method: 'POST', signal: ctl.signal })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    } catch (e) {
+      throw new Error(ctl.signal.aborted ? `no answer over HTTP in ${STOP_MS / 1000} s` : `HTTP: ${(e as Error).message}`)
+    } finally {
+      clearTimeout(timer)
+    }
   }
 
   async listWebcams(): Promise<unknown[]> {
@@ -575,7 +612,7 @@ export class MoonrakerClient {
   /** Run an update-manager method. Updates can take many minutes. */
   update(method: string, params?: Record<string, unknown>): Promise<unknown> {
     if (!UPDATE_METHODS.has(method)) return Promise.reject(new Error(`Blocked: "${method}" is not an allowed update call`))
-    return this.send(method, params, method === 'machine.update.refresh' ? 120_000 : 1_800_000)
+    return this.send(method, params, method === 'machine.update.refresh' ? 120_000 : 1_800_000, true)
   }
   /** Reconnect waits (ms), first to last; the last repeats. */
   setReconnectDelays(delays: number[]) {
@@ -648,18 +685,18 @@ export class MoonrakerClient {
 
   private act(method: string, params?: Record<string, unknown>, timeoutMs = 10000): Promise<unknown> {
     if (!ACTION_METHODS.has(method)) return Promise.reject(new Error(`Blocked: "${method}" is not an allowed action`))
-    return this.send(method, params, timeoutMs)
+    return this.send(method, params, timeoutMs, true)
   }
 
   private configure(method: string, params: Record<string, unknown>): Promise<unknown> {
     if (!CAMERA_METHODS.has(method)) return Promise.reject(new Error(`Blocked: "${method}" is not an allowed camera change`))
-    return this.send(method, params)
+    return this.send(method, params, 10000, true)
   }
 
   private studioSetting(method: string, params: Record<string, unknown>): Promise<unknown> {
     if (!SETTINGS_METHODS.has(method)) return Promise.reject(new Error(`Blocked: "${method}" is not an allowed settings call`))
     if (params.namespace !== STUDIO_NAMESPACE) return Promise.reject(new Error(`Blocked: settings stay in the "${STUDIO_NAMESPACE}" namespace`))
-    return this.send(method, params)
+    return this.send(method, params, 10000, !method.endsWith('.get_item'))
   }
 
   /** The only path for normal requests: refuses anything outside the read-only list. */
@@ -670,7 +707,7 @@ export class MoonrakerClient {
     return this.send(method, params)
   }
 
-  private send(method: string, params?: Record<string, unknown>, timeoutMs = 10000): Promise<unknown> {
+  private send(method: string, params?: Record<string, unknown>, timeoutMs = 10000, changes = false): Promise<unknown> {
     const ws = this.ws
     if (!ws || ws.readyState !== 1) return Promise.reject(new Error('Not connected'))
     const id = this.nextId++
@@ -679,9 +716,9 @@ export class MoonrakerClient {
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(id)
-        reject(new Error(`${method} timed out`))
+        reject(new Error(changes ? `${method} timed out: it may still have run. Check the machine before sending it again.` : `${method} timed out`))
       }, timeoutMs)
-      this.pending.set(id, { resolve, reject, timer })
+      this.pending.set(id, { resolve, reject, timer, changes })
       ws.send(JSON.stringify(msg))
     })
   }
@@ -717,28 +754,74 @@ export class MoonrakerClient {
     }
     this.ws = ws
     ws.onopen = () => {
-      this.retry = 0
+      // The back-off only resets once Moonraker answers (checkKlippy): a server that accepts and drops stays slowed down
+      this.startWatch()
       void this.handshake()
     }
     ws.onmessage = (ev) => this.onMessage(String(ev.data))
-    ws.onclose = () => {
-      if (this.ws !== ws) return
-      this.ws = null
-      this.failPending('Connection closed')
-      this.handlers.onStatus?.({}, true)
-      this.handlers.onKlippy?.('unknown')
-      this.handlers.onWebcams?.([])
-      if (this.untrusted) {
-        this.handlers.onState?.('error', 'Unauthorized')
-      } else if (this.wanted) {
-        this.handlers.onState?.('error', `Can't reach Moonraker at ${this.wsUrl}`)
-        this.scheduleReconnect()
-      } else {
-        this.handlers.onState?.('offline')
-      }
-    }
+    ws.onclose = () => this.socketLost(ws)
     ws.onerror = () => {
       /* onclose follows and handles it */
+    }
+  }
+
+  /** The socket is gone, closed by the other side or dropped by the watchdog: clear everything, then reconnect if wanted */
+  private socketLost(ws: WebSocket, detail?: string) {
+    if (this.ws !== ws) return
+    this.ws = null
+    this.stopWatch()
+    this.failPending('Connection closed')
+    this.handlers.onStatus?.({}, true)
+    this.handlers.onKlippy?.('unknown')
+    this.handlers.onWebcams?.([])
+    if (this.untrusted) {
+      this.handlers.onState?.('error', 'Unauthorized')
+    } else if (this.wanted) {
+      this.handlers.onState?.('error', detail ?? `Can't reach Moonraker at ${this.wsUrl}`)
+      this.scheduleReconnect()
+    } else {
+      this.handlers.onState?.('offline')
+    }
+  }
+
+  /** Give up on a socket that has stopped answering. A dead connection can take minutes to report closing, so don't wait for it. */
+  private dropSocket(ws: WebSocket, detail: string) {
+    ws.onmessage = ws.onclose = ws.onerror = null
+    try {
+      ws.close()
+    } catch {
+      /* already gone */
+    }
+    this.socketLost(ws, detail)
+  }
+
+  private wake = () => {
+    if (typeof document === 'undefined' || !document.hidden) void this.checkAlive()
+  }
+
+  private startWatch() {
+    this.stopWatch()
+    this.lastHeard = Date.now()
+    this.watchTimer = setInterval(() => void this.checkAlive(), CHECK_MS)
+  }
+
+  private stopWatch() {
+    if (this.watchTimer) clearInterval(this.watchTimer)
+    this.watchTimer = null
+    this.probing = false
+  }
+
+  /** Moonraker talks every second or so (status, process stats). After a quiet spell, ask it something; no answer means the link is dead. */
+  private async checkAlive() {
+    const ws = this.ws
+    if (!ws || ws.readyState !== 1 || this.probing || Date.now() - this.lastHeard < QUIET_MS) return
+    this.probing = true
+    try {
+      await this.send('server.info', undefined, PROBE_MS)
+    } catch {
+      if (this.ws === ws) this.dropSocket(ws, `No answer from Moonraker at ${this.wsUrl}; reconnecting`)
+    } finally {
+      if (this.ws === ws) this.probing = false
     }
   }
 
@@ -767,10 +850,26 @@ export class MoonrakerClient {
     await this.checkKlippy()
   }
 
-  private async checkKlippy() {
+  private checkKlippy(): Promise<void> {
+    if (this.checking) {
+      this.recheck = true
+      return this.checking
+    }
+    this.checking = this.lookAtKlippy().finally(() => {
+      this.checking = null
+      if (this.recheck) {
+        this.recheck = false
+        if (this.ws?.readyState === 1) void this.checkKlippy()
+      }
+    })
+    return this.checking
+  }
+
+  private async lookAtKlippy() {
     if (this.pollTimer) clearTimeout(this.pollTimer)
     try {
       const info = (await this.call('server.info')) as { klippy_state?: string; klippy_connected?: boolean }
+      this.retry = 0 // Moonraker answered: the link works, so the next drop starts the back-off again
       const state = (info.klippy_state ?? 'unknown') as KlippyState
       if (state === 'ready') {
         await this.subscribe()
@@ -810,6 +909,7 @@ export class MoonrakerClient {
   }
 
   private onMessage(raw: string) {
+    this.lastHeard = Date.now()
     let msg: { id?: number; result?: unknown; error?: { message?: string }; method?: string; params?: unknown[] }
     try {
       msg = JSON.parse(raw)
@@ -882,7 +982,7 @@ export class MoonrakerClient {
   private failPending(reason: string) {
     for (const p of this.pending.values()) {
       clearTimeout(p.timer)
-      p.reject(new Error(reason))
+      p.reject(new Error(p.changes ? `${reason}: that command may still have run. Check the machine before sending it again.` : reason))
     }
     this.pending.clear()
   }

@@ -18,7 +18,7 @@ const THEMES = DATA as unknown as Record<string, { night: Look; day: Look }>
 export const HERO_PANELS = ['control.status', 'dash.status', 'prepare.tool', 'mesh.reading', 'tool.about', 'edit.tool', 'preview.file', 'settings.about', 'wizard.step', 'hwwizard.step', 'hwwizard.done']
 /** A second colour, so a screen has some rhythm */
 const ALT_PANELS = ['control.console', 'control.macros.system', 'control.macros.tool', 'control.flow', 'control.speed', 'care.worklog', 'dash.glance', 'dash.next', 'dash.jobs', 'dash.jobsweek',
-  'edit.macros', 'edit.controls', 'edit.contacts', 'files.config', 'files.logs', 'hooks.scope', 'mesh.make', 'prepare.settings', 'prepare.file', 'settings.appearance', 'settings.cameras',
+  'edit.macros', 'edit.controls', 'edit.contacts', 'files.config', 'files.logs', 'hooks.scope', 'mesh.make', 'prepare.settings', 'prepare.file', 'settings.appearance', 'settings.appearance.share', 'settings.text', 'settings.text.faces', 'settings.text.fonts', 'settings.background', 'settings.screen', 'settings.screen.cameras', 'settings.cameras',
   'settings.builtwith', 'settings.host.services', 'settings.host.backups', 'settings.logs', 'settings.netpi', 'settings.profiles', 'settings.tools', 'settings.trust.add', 'tool.macros', 'tool.connector']
 /** The rest, and any panel not named here, take the main colours from the page's own (SHELL_ID) */
 const MAIN_PANELS = ['care.meters', 'control.camera', 'control.hardware', 'control.motion', 'dash.assets', 'dash.hours', 'dash.workweek', 'edit.limits', 'edit.materials', 'edit.photos',

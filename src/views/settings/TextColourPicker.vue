@@ -7,8 +7,6 @@ import { computed } from 'vue'
 import { usePanelThemeStore } from '@/stores/panelTheme'
 import { DEFAULTS, worstContrast } from '@/theme/panelColors'
 
-defineProps<{ /** a theme is being previewed: choosing now would land on the wrong one */ locked: boolean }>()
-
 const themes = usePanelThemeStore()
 const font = computed(() => themes.pageColours?.font ?? null)
 const modeWord = computed(() => (themes.mode === 'day' ? 'day' : 'night'))
@@ -18,12 +16,11 @@ const SWATCHES = ['#ffffff', '#f4efe2', '#ffe9a8', '#ffd0a6', '#ffc2dc', '#c8e6f
 </script>
 
 <template>
-  <h3 class="sub-h">Text colour</h3>
   <div class="row">
-    <button type="button" class="def" :class="{ on: !font }" :aria-pressed="!font" :disabled="locked" @click="themes.setFont(null)">Theme's own</button>
-    <button v-for="c in SWATCHES" :key="c" type="button" class="sw" :class="{ on: font === c }" :style="{ background: c }" :aria-label="`Text colour ${c}`" :aria-pressed="font === c" :title="c" :disabled="locked" @click="themes.setFont(c)" />
+    <button type="button" class="def" :class="{ on: !font }" :aria-pressed="!font" @click="themes.setFont(null)">Theme's own</button>
+    <button v-for="c in SWATCHES" :key="c" type="button" class="sw" :class="{ on: font === c }" :style="{ background: c }" :aria-label="`Text colour ${c}`" :aria-pressed="font === c" :title="c" @click="themes.setFont(c)" />
     <label class="custom">
-      <input type="color" aria-label="Any text colour" :value="font ?? DEFAULTS[themes.mode].text" :disabled="locked" @input="themes.setFont(value($event), false)" @change="themes.setFont(value($event))" />
+      <input type="color" aria-label="Any text colour" :value="font ?? DEFAULTS[themes.mode].text" @input="themes.setFont(value($event), false)" @change="themes.setFont(value($event))" />
       <span>Custom</span>
     </label>
   </div>
@@ -41,7 +38,6 @@ const SWATCHES = ['#ffffff', '#f4efe2', '#ffe9a8', '#ffd0a6', '#ffc2dc', '#c8e6f
 .sw { width: 32px; height: 32px; padding: 0; border: 1px solid var(--rs-line-strong); border-radius: 50%; cursor: pointer; }
 .sw.on { outline: 3px solid var(--rs-ink); outline-offset: 2px; }
 .sw:focus-visible, .def:focus-visible { outline: 3px solid var(--rs-focus-ring); outline-offset: 2px; }
-.sw:disabled, .def:disabled { cursor: not-allowed; opacity: 0.5; }
 .custom input { width: 22px; height: 22px; padding: 0; background: none; border: 0; cursor: pointer; }
 .small { font-size: var(--rs-text-xs); }
 </style>

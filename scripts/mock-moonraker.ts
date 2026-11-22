@@ -1688,6 +1688,44 @@ async function themeImageRoutes(req: IncomingMessage, res: import('node:http').S
   return json(res, 200, { ok: true, name, images: themePictureList() }), true
 }
 
+// Fonts for themes (Tool Manager 1.9.43): in memory, like the pictures
+const themeFonts = new Map<string, { data: Buffer; type: string; label: string; added: number }>()
+const themeFontList = () => [...themeFonts].map(([name, f]) => ({ name, label: f.label, size: f.data.length, added: f.added }))
+const FONT_SIG: Record<string, [string, string]> = { woff2: ['wOF2', 'font/woff2'], woff: ['wOFF', 'font/woff'], ttf: ['\x00\x01\x00\x00', 'font/ttf'], otf: ['OTTO', 'font/otf'] }
+async function themeFontRoutes(req: IncomingMessage, res: import('node:http').ServerResponse, url: string): Promise<boolean> {
+  const file = /^\/theme-font\/([0-9a-f]{16}\.(?:woff2|woff|ttf|otf))$/.exec(url)
+  if (file && req.method === 'GET') {
+    const f = themeFonts.get(file[1]!)
+    if (!f) return json(res, 404, { ok: false, error: 'No such font' }), true
+    res.writeHead(200, { 'Content-Type': f.type, 'Content-Length': f.data.length, 'X-Content-Type-Options': 'nosniff' })
+    res.end(f.data)
+    return true
+  }
+  if (url === '/api/theme-fonts' && req.method === 'GET') return json(res, 200, { ok: true, fonts: themeFontList(), max: 12, max_bytes: 2097152 }), true
+  const del = /^\/api\/theme-fonts\/([0-9a-f]{16}\.(?:woff2|woff|ttf|otf))$/.exec(url)
+  if (del && req.method === 'DELETE') {
+    themeFonts.delete(del[1]!)
+    return json(res, 200, { ok: true, fonts: themeFontList() }), true
+  }
+  if (url !== '/api/theme-fonts' || req.method !== 'POST') return false
+  const chunks: Buffer[] = []
+  for await (const c of req) chunks.push(c as Buffer)
+  const body = Buffer.concat(chunks)
+  const start = body.indexOf('\r\n\r\n') + 4
+  const end = body.lastIndexOf('\r\n--')
+  const data = body.subarray(start, end)
+  const upName = /filename="([^"]*)"/.exec(body.subarray(0, start).toString('latin1'))?.[1] ?? ''
+  const ext = /\.(woff2|woff|ttf|otf)$/i.exec(upName)?.[1]?.toLowerCase()
+  if (!ext) return json(res, 400, { ok: false, error: 'Fonts must be WOFF2, WOFF, TTF or OTF files' }), true
+  if (themeFonts.size >= 12) return json(res, 400, { ok: false, error: 'There are already 12 fonts on the Rhino. Delete one first.' }), true
+  if (data.length > 2097152) return json(res, 400, { ok: false, error: 'That font is larger than 2 MB' }), true
+  if (data.subarray(0, 4).toString('latin1') !== FONT_SIG[ext]![0]) return json(res, 400, { ok: false, error: `That file is not really a ${ext.toUpperCase()} font` }), true
+  const name = randomBytes(8).toString('hex') + '.' + ext
+  const label = upName.replace(/\.[^.]+$/, '').replace(/[^A-Za-z0-9 ._-]+/g, ' ').trim().slice(0, 40) || 'Uploaded font'
+  themeFonts.set(name, { data, type: FONT_SIG[ext]![1], label, added: Math.floor(Date.now() / 1000) })
+  return json(res, 200, { ok: true, name, fonts: themeFontList() }), true
+}
+
 // Settings > Trusted addresses (Tool Manager 1.5.4): an in-memory trusted_clients
 const trusted = ['127.0.0.0/8', '192.168.86.0/24']
 async function trustRoutes(req: IncomingMessage, res: import('node:http').ServerResponse, url: string): Promise<boolean> {
@@ -2130,6 +2168,7 @@ const server = createServer(async (req, res) => {
   if (!url.startsWith("/webcam")) console.log(`HTTP ${req.method} ${url}${req.headers.range ? ` (${req.headers.range})` : ''}`)
   if (untrusted(req, res, url)) return
   if (await themeImageRoutes(req, res, url)) return
+  if (await themeFontRoutes(req, res, url)) return
   if (await trustRoutes(req, res, url)) return
   if (await portal(req, res, url)) return
   // the Rhino's nginx with no microphone service behind /mic (go2rtc not installed)

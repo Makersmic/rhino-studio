@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
  * Settings, with its own menu like Care:
- *   Appearance
+ *   Appearance  Theme, Text, Background, This screen
  *   Machine   Connection, Trusted addresses, Tool changing, Cameras, Slice profiles
  *   System    Software (with the number of updates ready), Network, Host, Logs
  *   Help (the manual), About
@@ -18,7 +18,16 @@ const updates = useUpdatesStore()
 const net = useNetworkStore()
 
 const groups = computed<SectionGroup[]>(() => [
-  { id: 'main', items: [{ to: '/settings', label: 'Appearance' }] },
+  {
+    id: 'appearance',
+    label: 'Appearance',
+    items: [
+      { to: '/settings', label: 'Theme' },
+      { to: '/settings/text', label: 'Text' },
+      { to: '/settings/background', label: 'Background' },
+      { to: '/settings/screen', label: 'This screen' },
+    ],
+  },
   {
     id: 'machine',
     label: 'Machine',

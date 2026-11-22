@@ -35,8 +35,28 @@ export const TYPEFACES: Typeface[] = [
   { id: 'righteous', label: 'Righteous: groovy deco', stack: sans('Righteous'), titleOnly: true },
 ]
 
-/** The typeface for this id at this level, or null: unknown ids, and poster faces as regular text, are ignored */
+/**
+ * A font the person uploaded (Settings > Appearance > Text). The Rhino's Portal keeps the file under a name it chose itself,
+ * and a theme refers to it as "up:<that name>". Nothing else reaches a CSS font-family or a font URL.
+ */
+export const UPLOADED_FONT = /^up:([0-9a-f]{16})\.(woff2|woff|ttf|otf)$/
+export const FONT_FILE = /^[0-9a-f]{16}\.(woff2|woff|ttf|otf)$/
+export const FONT_TYPES = ['.woff2', '.woff', '.ttf', '.otf']
+export const MAX_FONT_BYTES = 2 * 1024 * 1024
+
+/** The CSS family name Studio gives an uploaded font */
+export const uploadedFamily = (file: string) => `rs-up-${file.split('.')[0]}`
+export const uploadedId = (file: string) => `up:${file}`
+/** The Portal file behind a theme's font choice, or null when the choice is not an uploaded font */
+export const uploadedFile = (id: unknown): string | null => (typeof id === 'string' ? (UPLOADED_FONT.exec(id) ? id.slice(3) : null) : null)
+
+/**
+ * The typeface for this id at this level, or null: unknown ids, and poster faces as regular text, are ignored.
+ * An uploaded font works at any level; Archivo catches any letter it doesn't hold, and stands in if the file is gone.
+ */
 export function typefaceOf(id: unknown, level: 'title' | 'body'): Typeface | null {
+  const up = uploadedFile(id)
+  if (up) return { id: id as string, label: 'Uploaded font', stack: sans(uploadedFamily(up)) }
   const t = TYPEFACES.find((f) => f.id === id)
   return t && (level === 'title' || !t.titleOnly) ? t : null
 }

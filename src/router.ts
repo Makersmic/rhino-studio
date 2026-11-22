@@ -102,7 +102,10 @@ export const router = createRouter({
       component: () => import('./views/settings/SettingsShell.vue'),
       meta: { nav: '/settings' },
       children: [
-        { path: '', component: () => import('./views/settings/AppearanceView.vue'), meta: { title: 'Settings', heading: 'Appearance', lead: 'Day or night for this screen, and the colour theme every screen shares.' } },
+        { path: '', component: () => import('./views/settings/ThemeView.vue'), meta: { title: 'Settings', heading: 'Appearance: theme', lead: 'Day or night for this screen, and the colour theme every screen shares.' } },
+        { path: 'text', component: () => import('./views/settings/TextView.vue'), meta: { title: 'Text', heading: 'Appearance: text', lead: 'The text colour and typefaces for the theme in use, and the fonts you add.' } },
+        { path: 'background', component: () => import('./views/settings/BackgroundView.vue'), meta: { title: 'Background', heading: 'Appearance: background', lead: 'The picture behind the page, for the theme in use.' } },
+        { path: 'screen', component: () => import('./views/settings/ScreenView.vue'), meta: { title: 'This screen', heading: 'Appearance: this screen', lead: 'How this browser shows the 3D view and the cameras.' } },
         { path: 'connection', component: () => import('./views/settings/ConnectionView.vue'), meta: { title: 'Connection', lead: 'Where this screen finds Moonraker and the Rhino Portal.' } },
         { path: 'trust', component: () => import('./views/settings/TrustView.vue'), meta: { title: 'Trusted addresses', lead: 'Which screens Moonraker lets in (trusted_clients), the same list Mainsail uses.' } },
         { path: 'tools', component: () => import('./views/settings/ToolChangingView.vue'), meta: { title: 'Tool changing', lead: 'How this machine changes tools, and how Studio reads which one is mounted.' } },

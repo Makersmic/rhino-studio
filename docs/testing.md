@@ -850,3 +850,30 @@ Nothing moves; the mock (`MOCK_SCENARIO=switchfly`) is enough except where it sa
 1. Job setup, SwitchFly, two parts, put one in lane 2 (the purge tower area appears). Turn the 3D view by dragging empty space, then leave the mouse alone for 3 seconds. **Pass:** the view stays where you turned it (before 0.35.1 it snapped back about twice a second). Also move a part with the tower area showing: the view must not re-frame. **Stop if** the view moves by itself.
 2. Style guide, Filament lanes: click a lane's colour square. **Pass:** the browser's colour picker opens; the lane's key, the part chips, the lane tabs and the Preview take the new colour at once (Preview after reopening it) and keep it after a reload; "Back to the look's colours" restores the defaults. The colours are per browser.
 3. Style guide: the Light grey swatch and an empty lane key are flat grey with readable text (no dots).
+
+## Settings > Appearance: four pages and your own fonts (Studio 0.36.0, Tool Manager 1.9.43)
+
+Needs the Tool Manager update (the Portal keeps the fonts). Use a font file you own; a WOFF2 is smallest.
+
+1. Settings. **Pass:** the menu has an Appearance group with Theme, Text, Background and This screen; each page opens, has a line saying where its settings are kept, and `#/settings` opens Theme.
+2. Theme: pick a built-in theme, then leave for Text without pressing Apply. **Pass:** the preview is dropped and the theme in use is unchanged.
+3. This screen: change the camera zoom and the plate see-through. **Pass:** they still take effect on Control and in Job setup, and stay after a reload in the same browser.
+4. Text, Your fonts, Add font. **Pass:** the font is listed with a sample line in its own face; it is also in all three typeface lists under "Your fonts".
+5. Choose it for Regular text. **Pass:** the interface changes at once; reload, and on a second screen (phone): the same font shows. Big numbers, positions, the console and Stop keep their own fonts.
+6. Add a renamed text file as `.woff2`. **Pass:** refused with a message; nothing is listed.
+7. Delete the font while it is in use. **Pass:** it asks first and says text goes back to Archivo; the interface falls back to Archivo and the list shows "Deleted font (showing Archivo)".
+8. Make a backup in Settings > Host, add a font, restore the backup. **Pass:** the font is still there (the Rhino's backup holds `images/_theme/fonts/`).
+9. **Stop if** a font appears on one screen but not another, any file other than a real font is accepted, or a font changes a layout so a button is cut off (note which font and page).
+
+## Connection to Moonraker: dead links and Emergency Stop (Studio 0.36.0)
+
+Use a laptop or phone on Wi-Fi with Studio open. Keep heaters off and nothing moving for 5 and 6 (the Stop test puts Klipper in shutdown; a FIRMWARE_RESTART brings it back).
+
+1. Klipper ready, Studio open on the kiosk or a laptop. Leave it 5 minutes untouched. **Pass:** it stays Connected the whole time; no flicker, no reconnect.
+2. Switch the laptop's Wi-Fi off. **Pass:** within 20 seconds the top bar shows the machine as unreachable and the readings clear. Switch Wi-Fi on: Studio reconnects by itself within about 15 seconds and the readings return without a reload.
+3. Phone: open Studio, lock the phone for 2 minutes, unlock. **Pass:** within about 10 seconds it shows the true state (connected with live readings, or reconnecting); never old temperatures marked Connected.
+4. Settings > Host, restart Klipper. **Pass:** Studio shows Klipper starting, then ready, readings return, and the Console's history isn't doubled.
+5. Press Stop with the network fine. **Pass:** Klipper shows shutdown within a second, as before. Run FIRMWARE_RESTART afterwards.
+6. Laptop on Wi-Fi, machine idle: switch Wi-Fi off, and press Stop straight away. **Pass:** within about 5 seconds the Stop button says the stop was NOT confirmed and names both routes. Wi-Fi back on: Stop works as in 5.
+7. **Stop if** "Connected" stays lit with frozen readings for more than 30 seconds, Stop says it was sent when Klipper did not shut down, or Studio reconnects in a loop while the machine is fine.
+

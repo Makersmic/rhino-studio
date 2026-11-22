@@ -11,8 +11,6 @@ import { DIM_DEFAULT, DIM_MAX, DIM_MIN, SEE_MAX, type ImageFit } from '@/theme/p
 import { PICTURE_TYPES, preparePicture } from '@/theme/pageImage'
 import type { ThemeImages } from '@/portal/client'
 
-const props = defineProps<{ /** a theme is being previewed: choosing now would land on the wrong one */ locked: boolean }>()
-
 const themes = usePanelThemeStore()
 const maintenance = useMaintenanceStore()
 const portal = computed(() => maintenance.portal())
@@ -91,15 +89,13 @@ const value = (e: Event) => Number((e.target as HTMLInputElement).value)
 </script>
 
 <template>
-  <h3 class="sub-h">Background picture</h3>
-  <p v-if="locked" class="muted small">Apply or revert the theme above first, so the picture goes on the right one.</p>
-  <div class="pics" :class="{ off: locked || busy }">
-    <button type="button" class="pic none" :class="{ on: !current }" :aria-pressed="!current" :disabled="locked || busy" @click="pick(null)">None</button>
+  <div class="pics" :class="{ off: busy }">
+    <button type="button" class="pic none" :class="{ on: !current }" :aria-pressed="!current" :disabled="busy" @click="pick(null)">None</button>
     <div v-for="i in list" :key="i.name" class="cell">
-      <button type="button" class="pic" :class="{ on: current === i.name }" :aria-pressed="current === i.name" :aria-label="`Use picture added ${new Date(i.added * 1000).toLocaleDateString()}`" :disabled="locked || busy" :style="{ backgroundImage: `url(&quot;${thumb(i.name)}&quot;)` }" @click="pick(i.name)" />
+      <button type="button" class="pic" :class="{ on: current === i.name }" :aria-pressed="current === i.name" :aria-label="`Use picture added ${new Date(i.added * 1000).toLocaleDateString()}`" :disabled="busy" :style="{ backgroundImage: `url(&quot;${thumb(i.name)}&quot;)` }" @click="pick(i.name)" />
       <button type="button" class="del" aria-label="Delete this picture" :disabled="busy" @click="remove(i.name)">×</button>
     </div>
-    <RsButton :disabled="locked || busy || full || !portal" @click="input?.click()">{{ busy ? 'Working…' : 'Add picture…' }}</RsButton>
+    <RsButton :disabled="busy || full || !portal" @click="input?.click()">{{ busy ? 'Working…' : 'Add picture…' }}</RsButton>
     <input ref="input" type="file" :accept="PICTURE_TYPES.join(',')" class="visually-hidden" aria-label="Choose a background picture" @change="add" />
   </div>
   <p v-if="full" class="muted small">That's the {{ max }} the Rhino keeps. Delete one to add another.</p>
@@ -107,17 +103,17 @@ const value = (e: Event) => Number((e.target as HTMLInputElement).value)
   <template v-if="current">
     <label class="slide">
       <span>How it fits</span>
-      <select :value="fit" :disabled="locked" @change="themes.setBackground({ imageFit: ($event.target as HTMLSelectElement).value as ImageFit })">
+      <select :value="fit" @change="themes.setBackground({ imageFit: ($event.target as HTMLSelectElement).value as ImageFit })">
         <option v-for="f in FITS" :key="f.value" :value="f.value">{{ f.label }}</option>
       </select>
     </label>
     <label class="slide">
       <span>Dim the picture <em>{{ dim }} %</em></span>
-      <input type="range" :min="DIM_MIN" :max="DIM_MAX" step="5" :value="dim" :disabled="locked" @input="themes.setBackground({ imageDim: value($event) }, false)" @change="themes.setBackground({ imageDim: value($event) })" />
+      <input type="range" :min="DIM_MIN" :max="DIM_MAX" step="5" :value="dim" @input="themes.setBackground({ imageDim: value($event) }, false)" @change="themes.setBackground({ imageDim: value($event) })" />
     </label>
     <label class="slide">
       <span>Show it through the panels <em>{{ see }} %</em></span>
-      <input type="range" min="0" :max="SEE_MAX" step="5" :value="see" :disabled="locked" @input="themes.setBackground({ panelSee: value($event) }, false)" @change="themes.setBackground({ panelSee: value($event) })" />
+      <input type="range" min="0" :max="SEE_MAX" step="5" :value="see" @input="themes.setBackground({ panelSee: value($event) }, false)" @change="themes.setBackground({ panelSee: value($event) })" />
     </label>
   </template>
   <p class="muted small">The picture stays behind the panels. The top bar, Stop, alerts and an unlocked panel stay solid. It's saved with the theme in use, for day and night.</p>
