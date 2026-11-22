@@ -105,7 +105,7 @@ const jobLabel: Record<string, string> = { standby: 'Idle', printing: 'Running',
         :editable="true"
         off-only
       />
-      <OutputCell v-else-if="r === 'fan'" label="Part fan" :percent="pct(out.fan)" sub="Cooling" />
+      <OutputCell v-else-if="r === 'fan'" label="Part fan" :percent="pct(out.fan)" sub="Cooling · click to set" :editable="printHead && machine.klippyReady" @set="control.setPartFan" />
       <OutputCell
         v-else-if="r === 'laser' && out.laser"
         label="Laser"

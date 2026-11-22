@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { approve, check, commandOf, fromPrompt, heaterScript, jogScript, safeFileParam } from './commands'
+import { approve, check, commandOf, fanScript, fromPrompt, heaterScript, jogScript, safeFileParam } from './commands'
 import { HEAT_LIMITS, resetHeatLimits, setHeatLimits } from './heatLimits'
 
 const idle = { jobActive: false }
@@ -243,5 +243,21 @@ describe("heater fields follow Klipper's max_temp, under Studio's ceiling (audit
     expect(HEAT_LIMITS).toEqual({ hotend: 300, bed: 130 })
     resetHeatLimits()
     expect(heaterScript('extruder', 300)).toHaveProperty('script')
+  })
+})
+
+describe('fanScript', () => {
+  it('turns a percentage into M106 (0 to 255) or M107, and refuses anything else', () => {
+    expect(fanScript(0)).toEqual({ script: 'M107' })
+    expect(fanScript(50)).toEqual({ script: 'M106 S128' })
+    expect(fanScript(100)).toEqual({ script: 'M106 S255' })
+    expect(fanScript(0.4)).toEqual({ script: 'M107' })
+    for (const bad of [-1, 101, NaN, Infinity]) expect(fanScript(bad)).toHaveProperty('error')
+  })
+  it('needs no confirmation, like the heat commands', () => {
+    for (const p of [0, 40, 100]) {
+      const r = fanScript(p)
+      expect(check((r as { script: string }).script, { jobActive: false, macroText: new Map() } as never).needsConfirm).toBe(false)
+    }
   })
 })

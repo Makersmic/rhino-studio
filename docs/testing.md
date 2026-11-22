@@ -806,3 +806,14 @@ Nothing moves; the mock plus Portal profiles is enough, but do it once with the 
 4. Change a number, a drop-down and a tick box. **Pass:** each shows a red border; set it back to the profile's value and the border goes. Changing the Supports drop-down turns it red too. Pick another profile or press Reset: all borders clear.
 5. With changes made, press Prepare (or the Preview step). **Pass:** a dialog asks to Save to profile (only when a saved profile is in use), Save as new profile…, or Continue without saving; × or Esc stays in Setup. Each choice then opens Preview. A saved profile shows in the Profile list and the borders clear. After "Continue without saving", going back and pressing Prepare does not ask again until you change something else.
 6. **Stop if** the dialog doesn't appear with changes, appears with none, loses the changes on any choice, or a PrusaSlicer slice no longer honours the Supports drop-down.
+
+## Control: part fan speed (0.34.0)
+
+Needs the machine with a print head (BlockOne) mounted and confirmed; the fan spins, nothing moves.
+
+1. Control, status strip, Part fan. Click the reading, type 50, Enter. **Pass:** the reading goes to about 50 % within a second or two and the fan turns at about half speed; no confirmation box appears.
+2. Click it, type 100, Enter; then 0. **Pass:** full speed, then off.
+3. Type 150, or letters, then Enter. **Pass:** it says "Enter 0 to 100 %" and sends nothing. Esc or clicking away leaves the fan as it was.
+4. Mount a laser or spindle. **Pass:** the Part fan reading is not shown (or not editable).
+5. During a print, set the fan from Control. **Pass:** the fan changes; the next layer change in the file may set it again (the slicer's cooling rules still apply).
+6. **Stop if** the fan runs when 0 is set, a value out of range is sent, or the fan reading and the real fan disagree by more than about 10 %.

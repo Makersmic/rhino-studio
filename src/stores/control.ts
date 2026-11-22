@@ -12,7 +12,7 @@ import { isLanesScript, lanesBlock, needsLock } from '@/control/lanes'
 import { defineStore } from 'pinia'
 import { computed, ref, shallowRef, watch } from 'vue'
 import { speedScript, zStepScript, zResetScript, limitsScript, isTuningScript } from '@/control/tuning'
-import { approve, check, fromPrompt, heaterScript, jogScript, type Axis, type CheckContext, type CheckedScript, type ScriptCheck } from '@/control/commands'
+import { approve, check, fanScript, fromPrompt, heaterScript, jogScript, type Axis, type CheckContext, type CheckedScript, type ScriptCheck } from '@/control/commands'
 import { timedLock } from '@/control/padlock'
 import { PromptTracker, type Prompt, type PromptButton } from '@/control/prompts'
 import { checkStart, type StartCheck } from '@/control/jobs'
@@ -318,6 +318,19 @@ export const useControlStore = defineStore('control', () => {
     await send(h.script, { label: `${heater === 'extruder' ? 'Hotend' : 'Bed'} ${target > 0 ? `to ${target}°` : 'off'}` })
   }
 
+  /** The part cooling fan, 0 to 100 %. Print head only: other tools have no part fan to drive. */
+  async function setPartFan(percent: number) {
+    if (machine.toolKind !== 'print') {
+      log('error', 'Part fan not set: it belongs to a confirmed print head.')
+      return
+    }
+    const f = fanScript(percent)
+    if ('error' in f) {
+      log('error', f.error)
+      return
+    }
+    await send(f.script, { label: `Part fan ${Math.round(percent) > 0 ? `to ${Math.round(percent)} %` : 'off'}` })
+  }
 
   // ---- extruder block (src/control/extruder.ts) -----------------------------
   const feedCtx = computed(() => ({
@@ -736,6 +749,7 @@ export const useControlStore = defineStore('control', () => {
     home,
     motorsOff,
     setHeater,
+    setPartFan,
     hotendSettable,
     feedBlocked,
     pathBlocked,

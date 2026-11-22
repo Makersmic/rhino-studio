@@ -335,6 +335,16 @@ export function heaterScript(heater: 'extruder' | 'heater_bed', target: number):
   return { script: `SET_HEATER_TEMPERATURE HEATER=${heater} TARGET=${Math.round(target)}` }
 }
 
+/**
+ * The part cooling fan, as a percentage (Mike, Nov 21). M107 for off, else M106 with Klipper's 0 to 255. Both are plain
+ * commands to `check` (no confirmation), like the heat commands; the Rhino's [fan] keeps its own cycle time and limits.
+ */
+export function fanScript(percent: number): { script: string } | { error: string } {
+  if (!Number.isFinite(percent) || percent < 0 || percent > 100) return { error: 'Enter 0 to 100 %' }
+  const p = Math.round(percent)
+  return { script: p === 0 ? 'M107' : `M106 S${Math.round((p / 100) * 255)}` }
+}
+
 /** Names safe to pass as FILE= to the Rhino job wizards (no quoting in Klipper params). */
 export function safeFileParam(path: string): boolean {
   return /^[A-Za-z0-9._/-]{1,200}$/.test(path) && !path.includes('..')
