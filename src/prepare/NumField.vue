@@ -8,8 +8,8 @@ import { ref, watch, useId } from 'vue'
 import { useChanged } from './changed'
 
 const props = withDefaults(
-  defineProps<{ label: string; unit?: string; min?: number; max?: number; step?: number; hint?: string; percent?: boolean; setting?: string }>(),
-  { unit: undefined, min: -Infinity, max: Infinity, step: 1, hint: undefined, percent: false, setting: undefined },
+  defineProps<{ label: string; unit?: string; min?: number; max?: number; step?: number; hint?: string; percent?: boolean; setting?: string; disabled?: boolean }>(),
+  { unit: undefined, min: -Infinity, max: Infinity, step: 1, hint: undefined, percent: false, setting: undefined, disabled: false },
 )
 const model = defineModel<number>({ required: true })
 const id = useId()
@@ -34,7 +34,7 @@ function input(e: Event) {
   <div class="field" :class="{ bad, chg: changed(setting) }">
     <label :for="id">{{ label }}</label>
     <span class="box">
-      <input :id="id" type="number" inputmode="decimal" :step="percent ? step * 100 : step" :value="text" :aria-invalid="bad" :aria-describedby="hint ? `${id}-h` : undefined" @input="input" @blur="bad && (text = show(model), bad = false)" />
+      <input :id="id" type="number" inputmode="decimal" :step="percent ? step * 100 : step" :value="text" :aria-invalid="bad" :disabled="disabled" :aria-describedby="hint ? `${id}-h` : undefined" @input="input" @blur="bad && (text = show(model), bad = false)" />
       <span v-if="unit" class="unit">{{ unit }}</span>
     </span>
     <span v-if="hint" :id="`${id}-h`" class="hint">{{ hint }}</span>
@@ -51,5 +51,6 @@ input:focus { outline: none; }
 .unit { font-size: var(--rs-text-xs); color: var(--rs-field-muted); }
 .hint { font-size: 11px; color: var(--rs-text-muted); }
 .bad .box { border-color: var(--rs-danger); }
+input:disabled { color: var(--rs-text-muted); cursor: not-allowed; }
 .chg:not(.bad) .box { border-color: var(--rs-changed); box-shadow: inset 0 0 0 1px var(--rs-changed); }
 </style>

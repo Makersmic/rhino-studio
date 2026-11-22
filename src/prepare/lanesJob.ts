@@ -11,7 +11,7 @@
  */
 import type { Material } from '@/slicer/profiles'
 import type { JobLanes } from '@/slicer/types'
-import { MAX_LANES } from './laneKeys'
+import { MAX_LANES, laneName } from './laneKeys'
 
 export type { JobLanes }
 
@@ -34,6 +34,18 @@ export function materialsOfLane<M extends Pick<Material, 'path'>>(materials: rea
 
 const inRange = (v: unknown, count: number): v is number => typeof v === 'number' && Number.isInteger(v) && v >= 0 && v < count
 
+/** The per-lane filament options, kept only for lanes that exist (not lane 1) and for plain `key = value` text without a line break */
+function cleanSettings(raw: unknown, count: number): { settings?: Record<string, string>[] } {
+  if (!Array.isArray(raw)) return {}
+  const out = Array.from({ length: count }, (_, i) => {
+    const o: Record<string, string> = {}
+    const src = i > 0 && raw[i] && typeof raw[i] === 'object' ? (raw[i] as Record<string, unknown>) : {}
+    for (const [k, v] of Object.entries(src)) if (/^\w{1,64}$/.test(k) && typeof v === 'string' && !/[\r\n]/.test(v)) o[k] = v
+    return o
+  })
+  return out.some((o) => Object.keys(o).length) ? { settings: out } : {}
+}
+
 /** A job's lanes made valid: a material the tool has for each lane (the first if it was missing), supports and interface on lanes that exist */
 export function normalizeLanes(raw: unknown, materials: readonly Material[], count: number): JobLanes | undefined {
   if (count < 2) return undefined
@@ -47,6 +59,7 @@ export function normalizeLanes(raw: unknown, materials: readonly Material[], cou
     supportLane: inRange(r.supportLane, count) ? r.supportLane : null,
     interfaceLane: inRange(r.interfaceLane, count) ? r.interfaceLane : null,
     ...(r.purge === 'machine' || r.purge === 'tower' ? { purge: r.purge } : {}),
+    ...cleanSettings(r.settings, count),
   }
 }
 
@@ -62,6 +75,71 @@ export interface LaneUse {
   lanes: JobLanes | undefined
   /** supports placed by hand are in use */
   hasMarks?: boolean
+  /** each lane's nozzle and bed temperature from its material (null: unknown) */
+  temps?: { extruder: number | null; bed: number | null }[]
+  /** each part's height (mm), and the layer height, for the change estimate */
+  partHeights?: number[]
+  layerHeight?: number
+}
+
+/** Lane changes above which a job is flagged: each costs time, a purge and wear on the lane mechanism */
+export const CHANGES_MANY = 40
+export const CHANGES_LOTS = 150
+/** extra changes for the interface layers alone on another lane (test slice, Nov 22: 5 on a 26 mm part) */
+const INTERFACE_CHANGES = 5
+
+/**
+ * About how many lane changes a job will have, before slicing. From the Nov 22 test slices a change happens about once per layer in which
+ * more than one lane prints (two small parts of different heights: 42 changes over the 40 layers they share; supports from the other lane
+ * under a 26 mm part: 133). Supports are assumed to run the part's full height, so this is an upper estimate; the exact count comes
+ * with the sliced file.
+ */
+export function estimateChanges(u: LaneUse): number | null {
+  if (u.count < 2 || !u.partHeights?.length || !u.layerHeight || u.layerHeight <= 0) return null
+  const layers = u.partHeights.map((h) => Math.max(1, Math.round(h / u.layerHeight!)))
+  const tallest = Math.max(...layers)
+  const s = supportLanes(u)
+  const supports = u.supportsOn && u.lanes ? s : null
+  // lanes present on each layer: the parts' lanes while they're tall enough, and the support lane across the whole height
+  let changes = 0
+  for (let layer = 1; layer <= tallest; layer++) {
+    const present = new Set<number>()
+    u.partLanes.forEach((lane, i) => {
+      if ((layers[i] ?? 0) >= layer) present.add(lane)
+    })
+    if (supports && u.lanes?.supportLane != null) present.add(supports.support)
+    changes += Math.max(0, present.size - 1)
+  }
+  if (supports && u.lanes?.interfaceLane != null && u.lanes.supportLane == null && u.partLanes.some((l) => l !== supports.interface)) changes += INTERFACE_CHANGES
+  return changes
+}
+
+/** The budget as words: how many, and whether that is a lot (null when there is nothing to say) */
+export function changeBudget(u: LaneUse): { changes: number; level: 'ok' | 'many' | 'lots'; text: string } | null {
+  const n = estimateChanges(u)
+  if (n === null || lanesUsed(u).length < 2) return null
+  const level = n > CHANGES_LOTS ? 'lots' : n > CHANGES_MANY ? 'many' : 'ok'
+  const text =
+    level === 'ok' ? `About ${n} lane change${n === 1 ? '' : 's'}.`
+    : level === 'many' ? `About ${n} lane changes: each one is a purge and some time. Fewer parts sharing layers, or only the interface layers on the other lane, bring it down.`
+    : `About ${n} lane changes: that is a lot of purging, time and wear on the lane mechanism. Put the supports on the part's own lane (interface layers only on the other), or print the parts in separate jobs.`
+  return { changes: n, level, text }
+}
+
+/** Notes about the lanes' temperatures: the nozzle can't cool quickly, and the bed keeps the start lane's temperature */
+export function temperatureNotes(u: LaneUse): string[] {
+  if (!u.temps || lanesUsed(u).length < 2) return []
+  const used = lanesUsed(u).filter((i) => u.temps![i])
+  const notes: string[] = []
+  const ex = used.map((i) => ({ lane: i, t: u.temps![i]!.extruder })).filter((x): x is { lane: number; t: number } => x.t != null)
+  if (ex.length > 1) {
+    const hi = ex.reduce((a, b) => (b.t > a.t ? b : a))
+    const lo = ex.reduce((a, b) => (b.t < a.t ? b : a))
+    if (hi.t - lo.t >= 15) notes.push(`${laneName(lo.lane)} prints at ${lo.t}° and ${laneName(hi.lane)} at ${hi.t}°: changing to the hotter lane waits for the nozzle to heat, and to the cooler one waits for it to cool, which is slow. Expect a pause at each change.`)
+  }
+  const bed = used.map((i) => u.temps![i]!.bed).filter((t): t is number => t != null)
+  if (bed.length > 1 && Math.max(...bed) - Math.min(...bed) >= 5) notes.push(`The lanes want different bed temperatures (${Math.min(...bed)}° and ${Math.max(...bed)}°): the bed stays at the starting lane's temperature for the whole job.`)
+  return notes
 }
 
 /** What each engine can do with lanes */
@@ -114,5 +192,6 @@ export function laneNotices(u: LaneUse): { blocks: string[]; notes: string[] } {
   // test slices: all supports from the other lane = about 133 lane changes on a 26 mm part; the interface layers alone = 5
   if (u.supportsOn && u.lanes?.supportLane != null && u.lanes.supportLane !== (u.partLanes[0] ?? 0))
     notes.push(`Supports from another lane change lane on every layer that has support: that is a lot of changes${eng.interfaceLane ? '. Leave Supports on the part’s lane and put only the interface layers on the other lane to keep them few' : ''}.`)
+  notes.push(...temperatureNotes(u))
   return { blocks, notes }
 }

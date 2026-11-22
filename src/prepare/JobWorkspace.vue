@@ -30,6 +30,8 @@ const props = defineProps<{
   selectedId?: number
   /** how many filament lanes the tool has (a lane chip shows on each part when more than one) */
   lanes?: number
+  /** the purge tower's reserved area on the bed, drawn like a keep-clear area */
+  tower?: { x0: number; y0: number; x1: number; y1: number; label: string } | null
   result: { min: [number, number, number]; max: [number, number, number] } | null
   /** a ready-made file's text and flat toolpath */
   fileText?: string | null
@@ -99,7 +101,7 @@ const bed = computed(() => {
     return { x: s.x, y: s.y, keepOut: [] }
   }
   const p = m.prime && props.job.process === 'fdm' ? { x0: Math.max(0, m.prime.x - 2), y0: m.prime.y, x1: m.prime.x + 2, y1: m.prime.y + m.prime.length } : null
-  return { x: m.workArea.x, y: m.workArea.y, keepOut: m.keepOut, prime: p }
+  return { x: m.workArea.x, y: m.workArea.y, keepOut: props.tower ? [...m.keepOut, props.tower] : m.keepOut, prime: p }
 })
 const allParts = computed(() => props.parts ?? [])
 const models = computed(() =>
@@ -233,6 +235,7 @@ const label = computed(() => (props.part ? `${props.part.name} on the bed in 3D$
       :result="result"
       :paths="paths"
       :parts="allParts"
+      :tower="tower ?? null"
       :selected-id="selectedId ?? 0"
       @select="emit('select', $event)"
       @menu="(id, x, y) => emit('menu', id, x, y, null)"

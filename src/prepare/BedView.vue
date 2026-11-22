@@ -29,6 +29,8 @@ const props = defineProps<{
   /** every part in the job; `part` above is the selected one */
   parts?: PartView[]
   selectedId?: number
+  /** the purge tower's reserved area, drawn like a keep-clear area */
+  tower?: { x0: number; y0: number; x1: number; y1: number; label: string } | null
 }>()
 const emit = defineEmits<{ select: [id: number]; menu: [id: number, x: number, y: number] }>()
 
@@ -79,7 +81,7 @@ const prime = computed(() => {
 })
 
 /** Leadscrew and other no-go areas (bed processes only; a CNC job is drawn on its stock) */
-const keepOut = computed(() => (isCnc.value ? [] : props.machine.keepOut.map((k) => ({ ...k, x: k.x0, y: fy(k.y1), w: k.x1 - k.x0, h: k.y1 - k.y0 }))))
+const keepOut = computed(() => (isCnc.value ? [] : [...props.machine.keepOut, ...(props.tower ? [props.tower] : [])].map((k) => ({ ...k, x: k.x0, y: fy(k.y1), w: k.x1 - k.x0, h: k.y1 - k.y0 }))))
 
 const fileBox = computed(() => {
   const r = props.result

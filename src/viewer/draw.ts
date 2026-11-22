@@ -22,6 +22,8 @@ export interface DrawData {
   shades: Uint8Array
   /** 255 where the move is support, else 0; one per vertex like shades (Preview colours supports apart, Mike Nov 7) */
   support: Uint8Array
+  /** the filament lane of each move times 32 (0 to 224), one per vertex; only for a file with more than one lane */
+  lane?: Uint8Array
   /** Direction of each drawn move as x y z in -127..127, per vertex: how a thread catches the light */
   tangents: Int8Array
   /** Thread width of each drawn move in hundredths of a mm; 0 = as thin as the screen can draw */
@@ -101,16 +103,19 @@ export function buildDraw(p: ParsedGcode, budget: number): DrawData {
   if (p.power) for (let i = 0; i < p.moveCount; i++) if (p.power[i]! > maxPower) maxPower = p.power[i]!
   const shade = (i: number) => shadeOf(p, p.kinds[i]!, p.power ? p.power[i]! : 0, maxPower)
   const sup = (i: number) => (p.features && p.features[i] === FEATURE_SUPPORT ? 255 : 0)
+  const lane = (i: number) => (p.lanes ? p.lanes[i]! & 7 : 0)
   const { widths: moveWidths, assumed: widthAssumed } = widthsOf(p)
 
   if (p.moveCount <= budget) {
     const shades = new Uint8Array(p.moveCount * 2)
     const support = new Uint8Array(p.moveCount * 2)
+    const laneOut = p.lanes ? new Uint8Array(p.moveCount * 2) : undefined
     for (let i = 0; i < p.moveCount; i++) {
       shades[i * 2] = shades[i * 2 + 1] = shade(i)
       support[i * 2] = support[i * 2 + 1] = sup(i)
+      if (laneOut) laneOut[i * 2] = laneOut[i * 2 + 1] = lane(i) * 32
     }
-    return { segments: p.segments, shades, support, tangents: tangentsOf(p.segments, p.moveCount), widths: moveWidths, widthAssumed, layerStarts: p.layerStarts, layerZ: p.layerZ, sourceMove: null, drawnMoves: p.moveCount, fileMoves: p.moveCount, bounds: p.bounds }
+    return { segments: p.segments, shades, support, ...(laneOut ? { lane: laneOut } : {}), tangents: tangentsOf(p.segments, p.moveCount), widths: moveWidths, widthAssumed, layerStarts: p.layerStarts, layerZ: p.layerZ, sourceMove: null, drawnMoves: p.moveCount, fileMoves: p.moveCount, bounds: p.bounds }
   }
 
   const src = p.segments
@@ -121,7 +126,7 @@ export function buildDraw(p: ParsedGcode, budget: number): DrawData {
     let prev = -1
     let layer = 0
     for (let i = 0; i < p.moveCount; i++) {
-      const s = shade(i) * 2 + (sup(i) ? 1 : 0)
+      const s = (shade(i) * 2 + (sup(i) ? 1 : 0)) * 8 + lane(i)
       const newLayer = layer < p.layerStarts.length && p.layerStarts[layer] === i
       if (newLayer) layer++
       const joined = i > 0 && !newLayer && s === prev && left > 0 && src[i * 6] === src[i * 6 - 3] && src[i * 6 + 1] === src[i * 6 - 2] && src[i * 6 + 2] === src[i * 6 - 1]
@@ -137,6 +142,7 @@ export function buildDraw(p: ParsedGcode, budget: number): DrawData {
     const segments = new Float32Array(drawn * 6)
     const shades = new Uint8Array(drawn * 2)
     const support = new Uint8Array(drawn * 2)
+    const laneOut = p.lanes ? new Uint8Array(drawn * 2) : undefined
     const sourceMove = new Uint32Array(drawn)
     const widths = new Uint8Array(drawn)
     const layerStarts = new Uint32Array(p.layerStarts.length)
@@ -145,7 +151,7 @@ export function buildDraw(p: ParsedGcode, budget: number): DrawData {
     prev = -1
     layer = 0
     for (let i = 0; i < p.moveCount; i++) {
-      const s = shade(i) * 2 + (sup(i) ? 1 : 0)
+      const s = (shade(i) * 2 + (sup(i) ? 1 : 0)) * 8 + lane(i)
       const newLayer = layer < p.layerStarts.length && p.layerStarts[layer] === i
       const joined = i > 0 && !newLayer && s === prev && left > 0 && src[i * 6] === src[i * 6 - 3] && src[i * 6 + 1] === src[i * 6 - 2] && src[i * 6 + 2] === src[i * 6 - 1]
       if (joined) left--
@@ -154,8 +160,9 @@ export function buildDraw(p: ParsedGcode, budget: number): DrawData {
         segments[n * 6] = src[i * 6]!
         segments[n * 6 + 1] = src[i * 6 + 1]!
         segments[n * 6 + 2] = src[i * 6 + 2]!
-        shades[n * 2] = shades[n * 2 + 1] = s >> 1
-        support[n * 2] = support[n * 2 + 1] = s & 1 ? 255 : 0
+        shades[n * 2] = shades[n * 2 + 1] = s >> 4
+        support[n * 2] = support[n * 2 + 1] = (s >> 3) & 1 ? 255 : 0
+        if (laneOut) laneOut[n * 2] = laneOut[n * 2 + 1] = (s & 7) * 32
         sourceMove[n] = i
         widths[n] = moveWidths[i]!
         left = run - 1
@@ -166,7 +173,7 @@ export function buildDraw(p: ParsedGcode, budget: number): DrawData {
       segments[n * 6 + 5] = src[i * 6 + 5]!
       prev = s
     }
-    return { segments, shades, support, tangents: tangentsOf(segments, drawn), widths, widthAssumed, layerStarts, layerZ: p.layerZ, sourceMove, drawnMoves: drawn, fileMoves: p.moveCount, bounds: p.bounds }
+    return { segments, shades, support, ...(laneOut ? { lane: laneOut } : {}), tangents: tangentsOf(segments, drawn), widths, widthAssumed, layerStarts, layerZ: p.layerZ, sourceMove, drawnMoves: drawn, fileMoves: p.moveCount, bounds: p.bounds }
   }
 }
 

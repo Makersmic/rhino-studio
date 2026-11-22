@@ -21,7 +21,7 @@ function openMenu(id: number, e: MouseEvent) {
         <button type="button" class="row" :aria-pressed="p.id === selectedId" @click="emit('select', p.id)" @contextmenu.prevent="emit('select', p.id); emit('menu', p.id, $event.clientX, $event.clientY)">
           <span class="name" :title="p.name">{{ p.name }}</span>
           <span class="facts">{{ fmt(p.info.size.x) }} × {{ fmt(p.info.size.y) }} × {{ fmt(p.info.size.z) }} mm</span>
-          <span class="facts">X {{ fmt(p.x) }} · Y {{ fmt(p.y) }}</span>
+          <span class="facts">X {{ fmt(p.x) }} · Y {{ fmt(p.y) }}<template v-if="p.group != null"> · in an assembly</template></span>
         </button>
 <button v-if="multi()" type="button" class="lane" :class="`p${((p.lane ?? 0) % 8) + 1}`" :style="{ '--tone': `var(--rs-lane-${((p.lane ?? 0) % 8) + 1})` }" :title="`${p.name} prints in lane ${(p.lane ?? 0) + 1}. Click for the next lane.`" :aria-label="`${p.name}: lane ${(p.lane ?? 0) + 1}. Next lane`" @click="emit('lane', p.id, ((p.lane ?? 0) + 1) % (lanes ?? 1))"><i aria-hidden="true" />{{ (p.lane ?? 0) + 1 }}</button>
         <button type="button" class="more" :aria-label="`Actions for ${p.name}`" @click="openMenu(p.id, $event)">⋯</button>

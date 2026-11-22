@@ -428,3 +428,21 @@ describe('look-only', () => {
     }
   })
 })
+
+describe('filament lanes in a file', () => {
+  const two = ['G90', 'M83', ';LAYER_CHANGE', ';Z:0.2', 'G1 Z0.2 F600', 'G1 X10 Y10 F9000', 'G1 X20 Y10 E0.5 F1800', 'SWITCH_LANE LANE=1', 'G1 X30 Y10 E0.5', 'G1 X40 Y10 E0.5', 'SWITCH_LANE LANE=0', 'G1 X50 Y10 E0.5'].join('\n')
+  it('tags each move with the lane it is printed in', () => {
+    const p = parseGcode(two)
+    // the moves drawn: the one extruding in lane 1, two in lane 2, one back in lane 1
+    expect([...p.lanes!]).toEqual([0, 1, 1, 0])
+  })
+  it('has no lanes for a file that stays in lane 1, or never changes', () => {
+    expect(parseGcode(two.replace(/LANE=1/, 'LANE=0')).lanes).toBeUndefined()
+    expect(parseGcode('G1 X1 Y1 E1\nG1 X2 Y1 E1\n').lanes).toBeUndefined()
+  })
+  it('does not count the lane command as a skipped or unknown line', () => {
+    const a = parseGcode(two)
+    const b = parseGcode(two.replace(/SWITCH_LANE LANE=\d\n/g, ''))
+    expect(a.stats.skipped).toBe(b.stats.skipped)
+  })
+})

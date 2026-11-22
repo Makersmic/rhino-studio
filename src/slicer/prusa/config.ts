@@ -77,6 +77,8 @@ export interface RhinoCtx {
   hasArcs: boolean
   /** several lanes in use: see LaneRun */
   lanes?: LaneRun
+  /** the lane whose filament options are being shown (from 1, i.e. not lane 1); lane 1's are the job's own */
+  viewLane?: number
 }
 
 /** A job that prints with several filament lanes (single-extruder multi-material in PrusaSlicer): what the Rhino sets then */
@@ -280,6 +282,8 @@ export function valueOf(key: string, s: Schema, c: RhinoCtx): { value: string; f
   if (ll !== undefined) return { value: ll, from: 'rhino' }
   const lock = LOCKS[key]
   if (lock) return { value: lock.value(c), from: 'rhino' }
+  const laneMine = c.viewLane ? c.job.lanes?.settings?.[c.viewLane]?.[key] : undefined
+  if (laneMine !== undefined) return { value: laneMine, from: 'yours' }
   const mine = c.job.prusa?.[key]
   if (mine !== undefined) return { value: mine, from: 'yours' }
   const base = rhinoBase(c)[key]
@@ -346,9 +350,21 @@ export function buildIni(s: Schema, c: RhinoCtx, known?: ReadonlySet<string>): s
     if (!s.options[k] && !LOCKS[k] && lane?.[k] === undefined) continue
     const { value } = valueOf(k, s, c)
     if (/[\r\n]/.test(value)) continue // never multi-line: nothing can sneak G-code in
-    lines.push(`${k} = ${value}`)
+    lines.push(`${k} = ${perLane(k, value, s, c)}`)
   }
   return lines.join('\n') + '\n'
+}
+
+/**
+ * A filament option changed for another lane becomes a list: lane 1's value, then each lane's own or, where it has none, lane 1's
+ * (the order PrusaSlicer reads them, one entry per extruder). Only options PrusaSlicer keeps per filament are lists.
+ */
+function perLane(key: string, value: string, s: Schema, c: RhinoCtx): string {
+  const n = c.lanes?.count ?? 0
+  const sets = c.job.lanes?.settings
+  const type = s.options[key]?.type
+  if (!n || !sets || !type || !type.endsWith('s') || !sets.some((o, i) => i > 0 && o?.[key] !== undefined)) return value
+  return Array.from({ length: n }, (_, i) => (i > 0 ? sets[i]?.[key] ?? value : value)).join(type === 'strings' ? ';' : ',')
 }
 
 /** Options the user changed that no longer apply (unknown to the engine, or locked now). */

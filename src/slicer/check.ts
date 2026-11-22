@@ -22,6 +22,7 @@
  * or a spindle M3 in a CNC file is a note, and Studio can't know a CNC file's
  * stock, so only its size and depth are checked.
  */
+import { CHANGES_LOTS, CHANGES_MANY } from '@/prepare/lanesJob'
 import { HEAT_LIMITS } from '@/control/heatLimits'
 import type { MachineInfo, PartInfo, PrepareJob } from './types'
 import { cncStock } from './kiriSettings'
@@ -82,6 +83,8 @@ export function checkFile(text: string, job: PrepareJob, part: PartInfo | null, 
   const laneChanges = raw.filter((l) => /^SWITCH_LANE\b/.test(l)).length
   if (laneChanges) {
     const lanes = [...new Set(raw.map((l) => /^SWITCH_LANE LANE=(\d+)/.exec(l)?.[1]).filter((v): v is string => !!v))].map((v) => Number(v) + 1).sort()
+    if (laneChanges > CHANGES_LOTS) checks.push({ id: 'lane-budget', level: 'warn', label: `${laneChanges} lane changes`, detail: 'That is a lot of purging, time and wear on the lane mechanism. Supports on the part’s own lane (interface layers only on the other), or separate jobs, bring it down.' })
+    else if (laneChanges > CHANGES_MANY) checks.push({ id: 'lane-budget', level: 'warn', label: `${laneChanges} lane changes`, detail: 'Each one is a purge and some time. Fewer parts sharing layers, or only the interface layers on the other lane, bring it down.' })
     add('lanes', !!opts.laneMacro, `Selects a filament lane ${laneChanges} time${laneChanges === 1 ? '' : 's'} (lanes ${lanes.join(' and ')})`,
       'This machine has no SWITCH_LANE macro yet, so Klipper would skip each lane change with an "unknown command" and carry on, printing with the wrong filament. Slicing and previewing work; sending waits for the machine’s lane-change macros.')
   }

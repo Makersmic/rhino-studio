@@ -57,6 +57,8 @@ export interface ParsedGcode {
   widths: Uint8Array
   /** FEATURE_ code of each move: outer wall, inner wall, fill, support (FEATURE_UNKNOWN when the file doesn't say) */
   features: Uint8Array
+  /** The filament lane (0 = lane 1) each move is printed in, from SWITCH_LANE LANE=n lines; only when the file uses more than lane 1 */
+  lanes?: Uint8Array
   /** Nozzle size in mm, if the file says, as a fallback for the line width */
   nozzle: number | null
   /** First move of each layer, and its height */
@@ -128,6 +130,7 @@ const START_JOB = [...'START_JOB'].map((c) => c.charCodeAt(0))
 const FILAMENT_TYPE = [...'filament_type'].map((c) => c.charCodeAt(0))
 const TYPE_COLON = [...'TYPE:'].map((c) => c.charCodeAt(0))
 const FEATURE_WORD = [...'feature '].map((c) => c.charCodeAt(0))
+const SWITCH_LANE = [...'SWITCH_LANE'].map((c) => c.charCodeAt(0))
 const NOZZLE_DIAMETER = [...'nozzle_diameter'].map((c) => c.charCodeAt(0))
 
 export class GcodeParser {
@@ -137,6 +140,9 @@ export class GcodeParser {
   private offs = new Uint32Array(this.cap)
   private wids = new Uint8Array(this.cap)
   private feats = new Uint8Array(this.cap)
+  private lanes = new Uint8Array(this.cap)
+  private lane = 0
+  private laneMax = 0
   private feature = FEATURE_UNKNOWN
   private width = 0
   private nozzle: number | null = null
@@ -257,6 +263,7 @@ export class GcodeParser {
       power: this.pow ? this.pow.slice(0, n) : null,
       widths: this.wids.slice(0, n),
       features: this.feats.slice(0, n),
+      ...(this.laneMax > 0 ? { lanes: this.lanes.slice(0, n) } : {}),
       nozzle: this.nozzle,
       layerStarts,
       layerZ,
@@ -289,6 +296,15 @@ export class GcodeParser {
     if (this.material === null && startsWith(b, i, end, START_JOB)) {
       const m = /\bMATERIAL=(\S+)/i.exec(new TextDecoder().decode(b.subarray(i, end)))
       if (m) this.material = m[1]!
+    }
+    // a lane change (two filaments in one job): the moves after it are in that lane
+    if (startsWith(b, i, end, SWITCH_LANE)) {
+      const m = /\bLANE=(\d+)/i.exec(new TextDecoder().decode(b.subarray(i, end)))
+      if (m) {
+        this.lane = Math.min(7, +m[1]!)
+        if (this.lane > this.laneMax) this.laneMax = this.lane
+      }
+      return
     }
     if ((letter !== 103 && letter !== 109) || !isDigit(b[i + 1])) {
       this.skipped++
@@ -564,6 +580,7 @@ export class GcodeParser {
       this.wids[n] = this.width
       this.feats[n] = this.feature
     }
+    this.lanes[n] = this.lane
     if (this.pow) this.pow[n] = this.toolPower
 
     this.boxAny.add(x0, y0, z0)
@@ -625,6 +642,9 @@ export class GcodeParser {
     const feats = new Uint8Array(this.cap)
     feats.set(this.feats)
     this.feats = feats
+    const lanes = new Uint8Array(this.cap)
+    lanes.set(this.lanes)
+    this.lanes = lanes
     if (this.pow) {
       const pow = new Float32Array(this.cap)
       pow.set(this.pow)

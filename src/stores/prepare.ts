@@ -28,7 +28,7 @@ import { laserLoops as loopsOf, type Loop } from '@/slicer/laserOps'
 import { checkFile, blocking, type Check, type FileStats } from '@/slicer/check'
 import { FLAT_TYPES, combine, extOf, merge, partInfo, transform } from '@/slicer/model'
 import { planDrop, skippedMessage } from '@/prepare/dropPlan'
-import { TOWER, laneCount, laneNotices, lanesUsed, normalizeLanes, purgeMode, supportLanes, type LaneUse } from '@/prepare/lanesJob'
+import { TOWER, changeBudget, laneCount, laneNotices, lanesUsed, normalizeLanes, purgeMode, supportLanes, type LaneUse } from '@/prepare/lanesJob'
 import { MARK_SIZES, MAX_MARKS, markAt, marksForEngine, marksForPrusa, marksOnBed, type MarkPart, type SupportMarks } from '@/prepare/supportMarks'
 import { PART_GAP, freeSpot, rectOf } from '@/viewer/placement'
 import type { KiriLanes } from '@/slicer/kiriSettings'
@@ -96,6 +96,9 @@ interface JobPart {
   flat: boolean
   /** the filament lane it prints in (0 = lane 1) */
   lane?: number
+  /** the assembly it belongs to (parts that keep their places relative to each other), and where it sits in it */
+  group?: number
+  off?: { x: number; y: number }
   /** where it was when it was last selected (job.placement is the selected part's) */
   placement: Placement
   shape?: PartShape
@@ -479,11 +482,20 @@ export const usePrepareStore = defineStore('prepare', () => {
   const laneUse = computed<LaneUse | null>(() => {
     const j = job.value
     if (!j || j.process !== 'fdm' || laneTotal.value < 2) return null
-    return { engine: j.engine === 'kiri' ? 'kiri' : 'prusa', count: laneTotal.value, partLanes: partsList.value.map((p) => p.lane ?? 0), supportsOn: supportMode.value !== 'off', lanes: j.lanes, hasMarks: !!supportMarks.value?.marks.length }
+    return { engine: j.engine === 'kiri' ? 'kiri' : 'prusa', count: laneTotal.value, partLanes: partsList.value.map((p) => p.lane ?? 0), supportsOn: supportMode.value !== 'off', lanes: j.lanes, hasMarks: !!supportMarks.value?.marks.length,
+      temps: Array.from({ length: laneTotal.value }, (_, i) => {
+        const m = materials.value.list.find((x) => x.key === j.lanes?.materials[i])
+        return { extruder: m?.extruderTemp ?? null, bed: m?.bedTemp ?? null }
+      }),
+      partHeights: parts.value.map((p) => p.info.size.z),
+      layerHeight: j.fdm.layerHeight,
+    }
   })
   const laneNotes = computed(() => (laneUse.value ? laneNotices(laneUse.value) : { blocks: [] as string[], notes: [] as string[] }))
   /** why Prepare is held back (empty when the lanes are in order) */
   const laneBlock = computed(() => laneNotes.value.blocks)
+  /** about how many lane changes this job will have (before slicing), and whether that's a lot */
+  const laneBudget = computed(() => (laneUse.value ? changeBudget(laneUse.value) : null))
   const lanesUsedNow = computed(() => (laneUse.value ? lanesUsed(laneUse.value) : [0]))
   /** the job's own material follows the first part's lane, so a one-lane job on lane 2 behaves as it always did */
   function syncPrimaryLane() {
@@ -512,6 +524,16 @@ export const usePrepareStore = defineStore('prepare', () => {
     const j = job.value
     if (j?.lanes && (lane === null || (lane >= 0 && lane < laneTotal.value))) j.lanes = { ...j.lanes, supportLane: lane }
   }
+  /** A filament option for a lane other than lane 1 (null puts it back to lane 1's). Lane 1's own are the job's `prusa`. */
+  function setLaneSetting(lane: number, key: string, value: string | null) {
+    const j = job.value
+    if (!j?.lanes || lane < 1 || lane >= laneTotal.value || !/^\w{1,64}$/.test(key)) return
+    const sets = Array.from({ length: laneTotal.value }, (_, i) => ({ ...(j.lanes!.settings?.[i] ?? {}) }))
+    if (value === null) delete sets[lane]![key]
+    else sets[lane]![key] = value
+    const { settings: _drop, ...rest } = j.lanes
+    j.lanes = sets.some((o) => Object.keys(o).length) ? { ...rest, settings: sets } : rest
+  }
   function setPurge(mode: 'tower' | 'machine') {
     const j = job.value
     if (j?.lanes) j.lanes = { ...j.lanes, purge: mode }
@@ -523,6 +545,21 @@ export const usePrepareStore = defineStore('prepare', () => {
   }
 
   /**
+   * Where PrusaSlicer's purge tower goes: the bed's front-right if clear, else the first free spot (centre of its reserved area). It follows
+   * the parts as they move, so the bed can show it. Kiri:Moto places its own tower, so none is drawn for it.
+   */
+  const towerSpot = computed(() => {
+    const u = laneUse.value
+    if (!u || !job.value?.lanes || u.engine !== 'prusa' || lanesUsed(u).length < 2 || purgeMode(u).mode !== 'tower') return null
+    const m = machineInfo.value
+    return freeSpot(TOWER, { x: m.workArea.x - TOWER.x / 2 - 5, y: TOWER.y / 2 + 5 }, takenAreas(), m.workArea)
+  })
+  /** the tower's reserved area for the bed drawings (null when there is none) */
+  const towerArea = computed(() => {
+    const s = towerSpot.value
+    return s?.free ? { ...rectOf(s.x, s.y, TOWER), label: 'Purge tower' } : null
+  })
+  /**
    * The job's lanes as the slicers take them, or null when it uses one lane only (then it slices exactly as a one-lane job does).
    * With the tower, it goes where there is room on the bed, clear of the parts; no room is an error rather than a tower over a part.
    */
@@ -531,11 +568,10 @@ export const usePrepareStore = defineStore('prepare', () => {
     if (!u || !j.lanes || lanesUsed(u).length < 2) return null
     const { mode } = purgeMode(u)
     const s = supportLanes(u)
-    const m = machineInfo.value
     let tower = { x: 0, y: 0 }
     if (mode === 'tower' && u.engine === 'prusa') {
-      const spot = freeSpot(TOWER, { x: m.workArea.x - TOWER.x / 2 - 5, y: TOWER.y / 2 + 5 }, takenAreas(), m.workArea)
-      if (!spot.free) throw new Error('There is no room on the bed for the wipe tower. Move or remove a part, or choose “The machine purges” for lane changes.')
+      const spot = towerSpot.value
+      if (!spot?.free) throw new Error('There is no room on the bed for the wipe tower. Move or remove a part, or choose “The machine purges” for lane changes.')
       tower = { x: spot.x - TOWER.x / 2, y: spot.y - TOWER.y / 2 }
     }
     const l = j.lanes
@@ -612,14 +648,75 @@ export const usePrepareStore = defineStore('prepare', () => {
     selectedMark.value = null
   }
 
+  // ---- assemblies: parts that keep their places relative to each other (Mike, Nov 22: several files dropped together are one assembly)
+  let nextGroup = 1
+  /** A part of an assembly where it is now: the selected part's place (if it is in the same assembly) and the part's offset from it */
+  function groupPlacement(p: JobPart, sel: Placement): Placement {
+    const s = selected.value
+    if (p.group == null || !p.off || !s || s.group !== p.group || !s.off) return p.placement
+    return { ...p.placement, x: sel.x - s.off.x + p.off.x, y: sel.y - s.off.y + p.off.y }
+  }
+  /** Put every part of the selected one's assembly where it is now into its own stored place (before the selection moves on) */
+  function settleGroup() {
+    const j = job.value
+    const s = selected.value
+    if (!j || !s) return
+    s.placement = { ...j.placement }
+    if (s.group == null) return
+    for (const p of partsList.value) if (p.group === s.group && p !== s) p.placement = groupPlacement(p, j.placement)
+  }
+  /** The parts of the selected part's assembly (including it), or none */
+  const groupMates = computed(() => (selected.value?.group != null ? partsList.value.filter((p) => p.group === selected.value!.group) : []))
+  const selectedInGroup = computed(() => groupMates.value.length > 1)
+  /** Every part in one assembly: kept where they sit relative to each other in the files, around the bed's middle. Each part still sits on the bed. */
+  function assemble() {
+    const list = partsList.value
+    const m = machineInfo.value
+    if (list.length < 2) return
+    const boxes = list.map((p) => {
+      let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity
+      for (let i = 0; i < p.raw.length; i += 3) {
+        const x = p.raw[i]!, y = p.raw[i + 1]!
+        if (x < x0) x0 = x
+        if (x > x1) x1 = x
+        if (y < y0) y0 = y
+        if (y > y1) y1 = y
+      }
+      return { x0, x1, y0, y1, cx: (x0 + x1) / 2, cy: (y0 + y1) / 2 }
+    })
+    const ux = (Math.min(...boxes.map((b) => b.x0)) + Math.max(...boxes.map((b) => b.x1))) / 2
+    const uy = (Math.min(...boxes.map((b) => b.y0)) + Math.max(...boxes.map((b) => b.y1))) / 2
+    const g = nextGroup++
+    list.forEach((p, i) => {
+      const b = boxes[i]!
+      p.group = g
+      p.off = { x: b.cx - ux, y: b.cy - uy }
+      p.placement = { ...p.placement, x: m.workArea.x / 2 + p.off.x, y: m.workArea.y / 2 + p.off.y }
+    })
+    partsList.value = [...list]
+    const sel = selected.value
+    if (job.value && sel) job.value.placement = { ...sel.placement }
+  }
+  /** Let the parts of the selected part's assembly go their own ways */
+  function breakApart() {
+    settleGroup()
+    const g = selected.value?.group
+    if (g == null) return
+    for (const p of partsList.value) if (p.group === g) {
+      delete p.group
+      delete p.off
+    }
+    partsList.value = [...partsList.value]
+  }
+
   /** Every part where it is now */
   const parts = computed<PartView[]>(() => {
     const j = job.value
     if (!j) return []
     return partsList.value.map((p) => {
-      const placement = p.id === selectedId.value ? j.placement : p.placement
+      const placement = p.id === selectedId.value ? j.placement : groupPlacement(p, j.placement)
       const s = shapeOf(p, placement)
-      return { id: p.id, name: p.name, vertices: s.vertices, info: s.info, x: placement.x, y: placement.y, placement: { ...placement }, lane: p.lane ?? 0 }
+      return { id: p.id, name: p.name, vertices: s.vertices, info: s.info, x: placement.x, y: placement.y, placement: { ...placement }, lane: p.lane ?? 0, ...(p.group != null ? { group: p.group } : {}) }
     })
   })
   /** CNC mills one part in its stock, and a ready-made file already says where everything goes */
@@ -629,7 +726,7 @@ export const usePrepareStore = defineStore('prepare', () => {
     const j = job.value
     const next = partsList.value.find((p) => p.id === id)
     if (!j || !next || id === selectedId.value) return
-    if (selected.value) selected.value.placement = { ...j.placement }
+    settleGroup()
     j.placement = { ...next.placement }
     selectedId.value = id
   }
@@ -655,7 +752,7 @@ export const usePrepareStore = defineStore('prepare', () => {
   function addPart(p: JobPart) {
     const j = job.value
     p.lane ??= partsList.value[0]?.lane ?? 0
-    if (selected.value && j) selected.value.placement = { ...j.placement }
+    settleGroup()
     partsList.value = [...partsList.value, p]
     if (j) j.placement = { ...p.placement }
     selectedId.value = p.id
@@ -707,6 +804,14 @@ export const usePrepareStore = defineStore('prepare', () => {
       selectedMark.value = null
     }
     if (id === selectedId.value) selectPart(left[0]!.id)
+    else settleGroup()
+    // an assembly of one part is just a part
+    for (const g of new Set(left.map((p) => p.group))) {
+      if (g != null && left.filter((p) => p.group === g).length < 2) for (const p of left) if (p.group === g) {
+        delete p.group
+        delete p.off
+      }
+    }
     partsList.value = left
     if (fileName.value && !left.some((p) => p.name === fileName.value)) fileName.value = left[0]!.name
   }
@@ -770,6 +875,8 @@ export const usePrepareStore = defineStore('prepare', () => {
     try {
       for (const i of plan.load.slice(1)) await addOne(files[i]!)
       // the first part is the one shown and set up first
+      // several files dropped together are one assembly: they keep their places relative to each other (Mike, Nov 22)
+      if (job.value?.process !== 'cnc') assemble()
       selectPart(partsList.value[0]!.id)
       if (job.value?.process === 'cnc') confirmed.value = false
     } catch (e) {
@@ -1202,16 +1309,22 @@ export const usePrepareStore = defineStore('prepare', () => {
     supportMarks,
     supportMode,
     setSupportMode,
+    selectedInGroup,
+    breakApart,
     laneTotal,
     selectedLane,
     laneNotes,
     laneBlock,
+    laneBudget,
+    towerSpot,
+    towerArea,
     lanesUsedNow,
     setLaneMaterial,
     setPartLane,
     setSupportLane,
     setInterfaceLane,
     setPurge,
+    setLaneSetting,
     purgeNow,
     canMark,
     markKind,

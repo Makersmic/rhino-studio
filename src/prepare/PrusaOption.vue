@@ -20,7 +20,7 @@ const changedKeys = inject(CHANGED_KEYS, null)
 const d = computed(() => props.schema.options[props.k]!)
 const cur = computed(() => valueOf(props.k, props.schema, props.ctx))
 const label = computed(() => d.value.full_label ?? d.value.label ?? props.k)
-const isChanged = computed(() => (changedKeys ? changedKeys.value.has(props.k) : cur.value.from === 'yours'))
+const isChanged = computed(() => (props.ctx.viewLane ? cur.value.from === 'yours' : changedKeys ? changedKeys.value.has(props.k) : cur.value.from === 'yours'))
 const locked = computed(() => cur.value.from === 'rhino')
 const lockReason = computed(() => (locked.value ? LOCKS[props.k]?.reason ?? (laneLocks(props.ctx)?.[props.k] !== undefined ? LANE_REASON : '') : ''))
 const kind = computed(() => {

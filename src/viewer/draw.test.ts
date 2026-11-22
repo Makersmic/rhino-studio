@@ -223,3 +223,29 @@ describe('support flags (Preview colours supports apart)', () => {
     expect(sup).toContain(0)
   })
 })
+
+describe('filament lanes in the drawing', () => {
+  const body = (n: number, lane: (i: number) => number) => {
+    const out = ['G90', 'M83', ';LAYER_CHANGE', ';Z:0.2', 'G1 Z0.2 F600', 'G1 X0 Y0 F9000']
+    let cur = -1
+    for (let i = 0; i < n; i++) {
+      if (lane(i) !== cur) out.push(`SWITCH_LANE LANE=${(cur = lane(i))}`)
+      out.push(`G1 X${i + 1} Y0 E0.1 F1800`)
+    }
+    return out.join('\n')
+  }
+  it('gives every move its lane times 32, and nothing for a one-lane file', () => {
+    const d = buildDraw(parseGcode(body(6, (i) => (i < 3 ? 0 : 1))), 1_000_000)
+    expect(d.lane).toBeDefined()
+    const per = [...d.lane!].filter((_, k) => k % 2 === 0)
+    expect(per).toEqual([0, 0, 0, 32, 32, 32])
+    expect(buildDraw(parseGcode('G1 X1 Y1 E1\nG1 X2 Y1 E1\n'), 1_000_000).lane).toBeUndefined()
+  })
+  it('never joins moves in different lanes when it thins a big file', () => {
+    const d = buildDraw(parseGcode(body(400, (i) => Math.floor(i / 100) % 2)), 40)
+    const lanes = new Set([...d.lane!])
+    expect(lanes).toEqual(new Set([0, 32]))
+    // each drawn run is wholly in one lane: its two ends agree
+    for (let i = 0; i < d.drawnMoves; i++) expect(d.lane![i * 2]).toBe(d.lane![i * 2 + 1])
+  })
+})

@@ -85,14 +85,15 @@ const partMenuItems = computed<MenuItem[]>(() => {
   const p = prep.parts.find((x) => x.id === m?.id)
   if (!m || !p) return []
   const items: MenuItem[] = [
+    ...(p.group != null ? [{ label: 'Break the assembly apart', run: () => (prep.selectPart(p.id), prep.breakApart()) }] : []),
     { label: 'Duplicate', run: () => prep.duplicatePart(p.id), block: prep.canAddParts ? null : 'A CNC job holds one part' },
   ]
-  if (!p.info.flat) {
+  if (!p.info.flat && p.group == null) {
     if (m.normal) items.push({ label: 'Lay this face flat', run: () => layFlat(m.normal!) })
     else if (is3d.value) items.push({ label: 'Lay flat…', run: () => (prep.selectPart(p.id), (picking.value = true)) })
   }
   if (proc.value !== 'cnc') items.push({ label: 'Centre', run: () => (prep.selectPart(p.id), prep.centre()) })
-  items.push({ label: 'Reset way up', run: () => prep.resetWayUp(p.id) })
+  if (p.group == null) items.push({ label: 'Reset way up', run: () => prep.resetWayUp(p.id) })
   if (prep.laneTotal > 1 && job.value?.process === 'fdm') {
     const kiri = job.value.engine === 'kiri'
     for (let i = 0; i < prep.laneTotal; i++)
@@ -110,6 +111,7 @@ const job = computed(() => prep.job)
 const proc = computed(() => prep.job?.process ?? null)
 // on a tool with several lanes, the material shown is the selected lane's
 const laneKeys = computed(() => (prep.job?.lanes ? prep.job.lanes.materials.map((m) => ({ material: m, runoutSensor: false })) : []))
+const prusaLaneTabs = computed(() => (prep.job?.lanes && prep.laneTotal > 1 && prep.job.engine === 'prusa' ? prep.job.lanes.materials.map((m, i) => ({ label: `Lane ${i + 1}`, sub: m ? (prep.materials.list.find((x) => x.key === m)?.name ?? m) : 'Empty' })) : []))
 const laneMaterials = computed(() => prep.materials.list.filter((m) => m.path === prep.selectedLane))
 const mat = computed(() => prep.materials.list.find((m) => m.key === (prep.job?.lanes ? prep.job.lanes.materials[prep.selectedLane] : prep.job?.material)) ?? null)
 const accepts = [...MODEL_TYPES, ...GCODE_TYPES].map((t) => `.${t}`).join(',')
@@ -285,11 +287,16 @@ const tiltY = tiltField('tiltY')
 
 
 // ---- PrusaSlicer options: keep only what differs from the Rhino profile -------------
-function setPrusa(key: string, value: string | null) {
+function setPrusa(key: string, value: string | null, lane = 0) {
   const j = prep.job
   const sch = prep.schema
   const ctx = prep.rhinoCtx
   if (!j || !sch || !ctx) return
+  if (lane > 0) {
+    // another lane's filament option: kept only when it differs from lane 1's
+    prep.setLaneSetting(lane, key, value === null || value === valueOf(key, sch, ctx).value ? null : value)
+    return
+  }
   const next = { ...(j.prusa ?? {}) }
   delete next[key]
   if (value !== null) {
@@ -299,7 +306,9 @@ function setPrusa(key: string, value: string | null) {
   j.prusa = next
 }
 function resetPrusa() {
-  if (prep.job) prep.job.prusa = {}
+  if (!prep.job) return
+  prep.job.prusa = {}
+  for (let i = 1; i < prep.laneTotal; i++) for (const k of Object.keys(prep.job.lanes?.settings?.[i] ?? {})) prep.setLaneSetting(i, k, null)
 }
 const engineNote = computed(() => {
   const st = prep.slicer
@@ -477,6 +486,7 @@ const engineNote = computed(() => {
             :parts="prep.parts"
             :selected-id="prep.selectedId"
             :lanes="job.process === 'fdm' ? prep.laneTotal : 1"
+            :tower="prep.towerArea"
             :result="prep.result?.file.bounds ?? null"
             :marks="prep.marksShown"
             :marking="marking === 'mark' || marking === 'block'"
@@ -500,22 +510,23 @@ const engineNote = computed(() => {
               <NumField v-model="job.placement.x" label="Centre X" unit="mm" :min="0" :max="prep.machineInfo.workArea.x" :step="1" />
               <NumField v-model="job.placement.y" label="Centre Y" unit="mm" :min="0" :max="prep.machineInfo.workArea.y" :step="1" />
             </template>
-            <NumField v-model="job.placement.rotate" label="Turn" unit="°" :min="0" :max="359.999" :step="1" />
+            <NumField v-model="job.placement.rotate" label="Turn" unit="°" :min="0" :max="359.999" :step="1" :disabled="prep.selectedInGroup" />
             <template v-if="!prep.part.flat">
-              <NumField v-model="tiltX" label="Tilt X" unit="°" :min="-180" :max="180" :step="1" />
-              <NumField v-model="tiltY" label="Tilt Y" unit="°" :min="-180" :max="180" :step="1" />
+              <NumField v-model="tiltX" label="Tilt X" unit="°" :min="-180" :max="180" :step="1" :disabled="prep.selectedInGroup" />
+              <NumField v-model="tiltY" label="Tilt Y" unit="°" :min="-180" :max="180" :step="1" :disabled="prep.selectedInGroup" />
             </template>
-            <NumField v-model="job.placement.scale" label="Scale" unit="%" :min="0.01" :max="10" :step="0.01" percent />
+            <NumField v-model="job.placement.scale" label="Scale" unit="%" :min="0.01" :max="10" :step="0.01" percent :disabled="prep.selectedInGroup" />
             <div class="placebtns">
-              <RsButton size="sm" variant="quiet" @click="turn('z')">Turn 90°</RsButton>
+              <RsButton size="sm" variant="quiet" :disabled="prep.selectedInGroup" @click="turn('z')">Turn 90°</RsButton>
               <template v-if="!prep.part.flat">
-                <RsButton size="sm" variant="quiet" @click="turn('x')">Turn on X</RsButton>
-                <RsButton size="sm" variant="quiet" @click="turn('y')">Turn on Y</RsButton>
-                <RsButton v-if="is3d" size="sm" variant="quiet" :aria-pressed="picking" @click="picking = !picking">{{ picking ? 'Cancel lay flat' : 'Lay flat' }}</RsButton>
+                <RsButton size="sm" variant="quiet" :disabled="prep.selectedInGroup" @click="turn('x')">Turn on X</RsButton>
+                <RsButton size="sm" variant="quiet" :disabled="prep.selectedInGroup" @click="turn('y')">Turn on Y</RsButton>
+                <RsButton v-if="is3d" size="sm" variant="quiet" :disabled="prep.selectedInGroup" :aria-pressed="picking" @click="picking = !picking">{{ picking ? 'Cancel lay flat' : 'Lay flat' }}</RsButton>
               </template>
               <RsButton v-if="proc !== 'cnc'" size="sm" variant="quiet" @click="prep.centre()">Centre</RsButton>
             </div>
           </div>
+          <p v-if="prep.selectedInGroup" class="muted small" role="status">These parts are an assembly: they keep their places relative to each other and move together. Turning, tilting and scaling are for one part on its own. <button type="button" class="link" @click="prep.breakApart()">Break the assembly apart</button></p>
           <p class="muted small">{{ prep.part.triangles.toLocaleString() }} triangles<template v-if="proc !== 'cnc'"> · arrow keys move the {{ prep.parts.length > 1 ? 'selected part' : 'part' }} (Shift = 10 mm)</template> · right-click or long-press a part for more</p>
           <p v-if="prep.loadError" class="error" role="alert">{{ prep.loadError }}</p>
           <p v-if="prep.loadSkipped" class="notice small" role="status">{{ prep.loadSkipped }}</p>
@@ -549,6 +560,8 @@ const engineNote = computed(() => {
                   <option value="tower">A tower on the bed</option>
                   <option value="machine">The machine purges</option>
                 </select>
+                <p v-if="prep.towerSpot && !prep.towerSpot.free" class="notice small" role="status">There is no room on the bed for the purge tower. Move or remove a part, or choose “The machine purges”.</p>
+                <p v-if="prep.laneBudget" class="small" :class="prep.laneBudget.level === 'ok' ? 'muted' : 'notice'" role="status">{{ prep.laneBudget.text }}</p>
                 <p class="muted small">{{ prep.purgeNow.forced ? 'PrusaSlicer can’t build its tower when the supports or their interface come from another lane, so the machine purges at each change.' : prep.purgeNow.mode === 'tower' ? 'The slicer builds a purge tower on the bed beside the parts, clear of them.' : 'The machine purges after each change, as its lane-change macro does.' }}</p>
               </template>
             </template>
@@ -579,7 +592,7 @@ const engineNote = computed(() => {
             <p v-if="job.engine === 'prusa'" class="muted small">{{ engineNote }}<template v-if="prep.slicer && !prep.slicer.engine.installed"> <RouterLink to="/settings/software">Open Software</RouterLink></template></p>
           </div>
           <template v-if="proc === 'fdm' && job.engine === 'prusa'">
-            <PrusaPanel v-if="prep.schema && prep.rhinoCtx" :schema="prep.schema" :ctx="prep.rhinoCtx" @set="setPrusa" @reset-all="resetPrusa">
+            <PrusaPanel v-if="prep.schema && prep.rhinoCtx" :schema="prep.schema" :ctx="prep.rhinoCtx" :lane-tabs="prusaLaneTabs" :lane="prep.selectedLane" @lane="prep.selectedLane = $event" @set="setPrusa" @reset-all="resetPrusa">
               <template #support><SupportControls v-model:marking="marking" :is3d="is3d" /></template>
             </PrusaPanel>
             <p v-else-if="prep.schemaError" class="error">{{ prep.schemaError }}</p>
@@ -745,6 +758,7 @@ const engineNote = computed(() => {
 </template>
 
 <style scoped>
+.link { padding: 0; border: 0; background: none; color: var(--rs-text-strong); font: inherit; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
 .engine { display: flex; flex-direction: column; gap: 6px; margin-bottom: var(--rs-space-3); }
 .eng-seg { display: flex; margin: 0; padding: 0; border: 1px solid var(--rs-line-strong); border-radius: var(--rs-radius-md); overflow: hidden; }
 .eng-seg label { flex: 1; }

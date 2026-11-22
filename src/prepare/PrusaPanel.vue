@@ -12,8 +12,8 @@ import { computed, ref, watch } from 'vue'
 import PrusaOption from './PrusaOption.vue'
 import { LOCKS, MODE_RANK, shownGroup, shownOption, shownPage, staleChanges, type Mode, type RhinoCtx, type Schema } from '@/slicer/prusa/config'
 
-const props = defineProps<{ schema: Schema; ctx: RhinoCtx }>()
-const emit = defineEmits<{ (e: 'set', key: string, value: string | null): void; (e: 'resetAll'): void }>()
+const props = defineProps<{ schema: Schema; ctx: RhinoCtx; laneTabs?: { label: string; sub: string }[]; lane?: number }>()
+const emit = defineEmits<{ (e: 'set', key: string, value: string | null, lane?: number): void; (e: 'resetAll'): void; (e: 'lane', lane: number): void }>()
 
 function load<T>(k: string, d: T): T {
   try {
@@ -64,7 +64,21 @@ const tabs = computed(() =>
 )
 const tab = computed(() => tabs.value.find((t) => t.id === tabId.value) ?? tabs.value[0]!)
 const page = computed(() => tab.value.pages.find((p) => p.label === pageByTab.value[tab.value.id]) ?? tab.value.pages[0])
-const changed = computed(() => Object.keys(props.ctx.job.prusa ?? {}).filter((k) => props.schema.options[k] && !LOCKS[k] && shownOption(k)))
+/**
+ * Lanes (Mike, Nov 22): on a job with several lanes the Filament tab has a tab per lane, each with the same options. The other settings
+ * are shared, as they are in the slicers. A lane other than the first keeps only what it changes from lane 1.
+ */
+const filamentKeys = computed(() => new Set(props.schema.tabs.filter((t) => t.id === 'filament').flatMap((t) => t.pages.flatMap((p) => p.groups.flatMap((g) => g.options)))))
+const lanes = computed(() => props.laneTabs ?? [])
+/** the lane shown on the Filament tab (0 = lane 1, whose options are the job's own) */
+const viewLane = computed(() => (lanes.value.length > 1 ? Math.min(props.lane ?? 0, lanes.value.length - 1) : 0))
+const ctxFor = (k: string): RhinoCtx => (viewLane.value > 0 && filamentKeys.value.has(k) ? { ...props.ctx, viewLane: viewLane.value } : props.ctx)
+const laneFor = (k: string) => (viewLane.value > 0 && filamentKeys.value.has(k) ? viewLane.value : 0)
+const changed = computed(() => {
+  const own = Object.keys(props.ctx.job.prusa ?? {}).filter((k) => props.schema.options[k] && !LOCKS[k] && shownOption(k))
+  if (viewLane.value === 0) return own
+  return [...own.filter((k) => !filamentKeys.value.has(k)), ...Object.keys(props.ctx.job.lanes?.settings?.[viewLane.value] ?? {})]
+})
 const changedOn = (keys: string[]) => keys.filter((k) => changed.value.includes(k)).length
 const pageChanged = (p: { groups: { options: string[] }[] }) => changedOn(p.groups.flatMap((g) => g.options))
 const stale = computed(() => staleChanges(props.schema, props.ctx.job))
@@ -121,10 +135,14 @@ const MODES: { value: Mode; label: string }[] = [
 
     <!-- search results -->
     <template v-if="hits">
+      <div v-if="lanes.length > 1" class="lanetabs" role="tablist" aria-label="Filament lane">
+        <button v-for="(l, i) in lanes" :key="i" type="button" role="tab" :aria-selected="viewLane === i" :class="[{ on: viewLane === i }, `p${(i % 8) + 1}`]" :style="{ '--tone': `var(--rs-lane-${(i % 8) + 1})` }" @click="emit('lane', i)"><i aria-hidden="true" />{{ l.label }} <small>{{ l.sub }}</small></button>
+      </div>
+      <p v-if="lanes.length > 1" class="note">Filament options below are for lane {{ viewLane + 1 }}; the others are shared.</p>
       <p v-if="!hits.length" class="note">Nothing matches “{{ query }}”.</p>
       <div v-for="h in hits" :key="h.key" class="hit">
         <span class="path">{{ h.path }}</span>
-        <PrusaOption :k="h.key" :schema="schema" :ctx="ctx" show-key @set="(k, v) => emit('set', k, v)" />
+        <PrusaOption :k="h.key" :schema="schema" :ctx="ctxFor(h.key)" show-key @set="(k, v) => emit('set', k, v, laneFor(k))" />
       </div>
     </template>
 
@@ -134,6 +152,10 @@ const MODES: { value: Mode; label: string }[] = [
           {{ t.label.replace(' Settings', '') }}
         </button>
       </div>
+      <div v-if="tab.id === 'filament' && lanes.length > 1" class="lanetabs" role="tablist" aria-label="Filament lane">
+        <button v-for="(l, i) in lanes" :key="i" type="button" role="tab" :aria-selected="viewLane === i" :class="[{ on: viewLane === i }, `p${(i % 8) + 1}`]" :style="{ '--tone': `var(--rs-lane-${(i % 8) + 1})` }" @click="emit('lane', i)"><i aria-hidden="true" />{{ l.label }} <small>{{ l.sub }}</small></button>
+      </div>
+      <p v-if="tab.id === 'filament' && lanes.length > 1 && viewLane > 0" class="note">Lane {{ viewLane + 1 }} starts as lane 1; only what you change here is different.</p>
       <div class="pages" role="tablist" :aria-label="`${tab.label} pages`">
         <button
           v-for="p in tab.pages"
@@ -156,7 +178,7 @@ const MODES: { value: Mode; label: string }[] = [
           <span v-if="changedOn(g.options)" class="dot" :title="`${changedOn(g.options)} changed`">{{ changedOn(g.options) }}</span>
         </summary>
         <div class="opts">
-          <PrusaOption v-for="k in g.options" :key="k" :k="k" :schema="schema" :ctx="ctx" @set="(key, v) => emit('set', key, v)" />
+          <PrusaOption v-for="k in g.options" :key="k" :k="k" :schema="schema" :ctx="ctxFor(k)" @set="(key, v) => emit('set', key, v, laneFor(key))" />
         </div>
       </details>
       <p v-if="!tab.pages.length" class="note">Nothing on this tab in {{ mode }} mode.</p>
@@ -179,6 +201,13 @@ const MODES: { value: Mode; label: string }[] = [
 .tabs { display: flex; border-bottom: 1px solid var(--rs-line); margin-top: var(--rs-space-2); }
 .tabs button { flex: 1; height: 34px; border: 0; border-bottom: 2px solid transparent; background: none; color: var(--rs-text-muted); font: inherit; font-size: var(--rs-text-sm); font-weight: var(--rs-weight-medium); cursor: pointer; }
 .tabs button.on { color: var(--rs-text-strong); border-bottom-color: var(--rs-ink); }
+.lanetabs { display: flex; gap: 4px; padding-top: var(--rs-space-2); }
+.lanetabs button { flex: 1; display: grid; grid-template-columns: auto 1fr; align-items: center; justify-items: start; column-gap: 8px; min-height: 44px; padding: 4px 10px; border: 1px solid var(--rs-line-strong); border-radius: var(--rs-radius-md); background: transparent; color: var(--rs-text-strong); font: inherit; font-size: var(--rs-text-sm); font-weight: var(--rs-weight-medium); text-align: left; cursor: pointer; }
+.lanetabs button small { grid-column: 2; font-size: 11px; font-weight: var(--rs-weight-body); color: var(--rs-text-muted); }
+.lanetabs button i { grid-row: span 2; width: 14px; height: 30px; border-radius: 3px; background: var(--tone); box-shadow: inset 0 0 0 1px var(--rs-line-strong); }
+.lanetabs button.on { background: var(--rs-ink); border-color: var(--rs-ink); color: var(--rs-on-ink); }
+.lanetabs button.on small { color: var(--rs-on-ink); opacity: 0.8; }
+.lanetabs button:focus-visible { outline: none; box-shadow: var(--rs-focus); }
 .pages { display: flex; flex-wrap: wrap; gap: 4px; padding: var(--rs-space-2) 0; }
 .pages button {
   display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border-radius: var(--rs-radius-sm);

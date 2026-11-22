@@ -36,6 +36,14 @@ const zLabel = computed(() => {
   return z === undefined ? '' : `${z.toFixed(2)} mm`
 })
 const layerWord = computed(() => (props.parsed.layerSource === 'depth' ? 'Depth' : 'Layer'))
+/** The filament lanes a two-lane file prints with (empty for a one-lane file), for the colours and the key */
+const lanesInFile = computed(() => {
+  const l = props.parsed.lanes
+  if (!l) return [] as number[]
+  const seen = new Set<number>()
+  for (let i = 0; i < l.length && seen.size < 8; i++) seen.add(l[i]!)
+  return [...seen].sort((a, b) => a - b)
+})
 /** Where the last drawn move ends, for the readout */
 const head = computed(() => {
   const i = range.value.end - 1
@@ -56,6 +64,7 @@ function applyColours() {
   const tok = (name: string, fallback: string) => colourOf(st.getPropertyValue(name).trim() || fallback)
   const f = featureColours(tok('--rs-viewer-model', st.color), tok('--rs-viewer-support', st.color), paper)
   scene.setFeatureColours(f.model, f.support)
+  scene.setLaneColours(lanesInFile.value.length > 1 ? Array.from({ length: 8 }, (_, i) => tok(`--rs-lane-${i + 1}`, st.color)) : null)
   if (props.plateBelow !== undefined) {
     scene.setPlateBelow(props.plateBelow / 100)
     scene.setPlate({ plate: tok('--rs-viewer-plate', '#ffffff'), line: tok('--rs-viewer-plate-line', '#7d8389') })
@@ -135,6 +144,10 @@ const fmt = (v: number) => v.toFixed(2)
       </div>
     </div>
 
+    <ul v-if="lanesInFile.length > 1" class="lanekey" aria-label="Filament lanes in this file">
+      <li v-for="l in lanesInFile" :key="l"><i :style="{ background: `var(--rs-lane-${(l % 8) + 1})` }" aria-hidden="true" />Lane {{ l + 1 }}</li>
+    </ul>
+
     <div class="controls">
       <label v-if="layerCount > 1" class="slide">
         <span class="lab">{{ layerWord }} {{ layer + 1 }} of {{ layerCount }} <span class="mono">Z {{ zLabel }}</span></span>
@@ -159,6 +172,9 @@ const fmt = (v: number) => v.toFixed(2)
 
 <style scoped>
 .viewer { display: flex; flex-direction: column; gap: var(--rs-space-3); }
+.lanekey { display: flex; flex-wrap: wrap; gap: var(--rs-space-3); margin: 0; padding: 0; list-style: none; font-size: var(--rs-text-xs); color: var(--rs-text-strong); }
+.lanekey li { display: inline-flex; align-items: center; gap: 6px; }
+.lanekey i { width: 14px; height: 14px; border-radius: 3px; box-shadow: inset 0 0 0 1px var(--rs-line-strong); }
 .stage { position: relative; height: min(62vh, 640px); min-height: 280px; overflow: hidden; color: var(--rs-text-strong); background: var(--rs-surface); border: 1px solid var(--rs-line); border-radius: 10px; }
 canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; }
 canvas:active { cursor: grabbing; }

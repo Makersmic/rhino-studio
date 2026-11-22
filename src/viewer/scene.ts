@@ -77,7 +77,9 @@ const LINE_VERTEX = /* glsl */ `
   attribute vec3 tangent;
   #ifdef FEATURES
   attribute float support;
+  attribute float lane;
   varying float vSupport;
+  varying float vLane;
   #endif
   uniform int uDimBefore;
   uniform vec2 uHeight;
@@ -90,6 +92,7 @@ const LINE_VERTEX = /* glsl */ `
     vShade = shade;
     #ifdef FEATURES
     vSupport = support;
+    vLane = lane;
     #endif
     vTangent = tangent;
     vWorld = (modelMatrix * vec4(position, 1.0)).xyz;
@@ -113,7 +116,9 @@ const STRIP_VERTEX = /* glsl */ `
   attribute float iWidth;
   #ifdef FEATURES
   attribute float iSupport;
+  attribute float iLane;
   varying float vSupport;
+  varying float vLane;
   #endif
   uniform int uDimBefore;
   uniform vec2 uHeight;
@@ -132,6 +137,7 @@ const STRIP_VERTEX = /* glsl */ `
     vShade = iShade;
     #ifdef FEATURES
     vSupport = iSupport;
+    vLane = iLane;
     #endif
     if (iShade < 0.002 && uTravel < 0.0) {
       // Hidden travel: skip it here, cheaper than discarding its pixels
@@ -181,7 +187,10 @@ const FRAGMENT = /* glsl */ `
   #ifdef FEATURES
   uniform vec3 uModel;
   uniform vec3 uSupportColour;
+  uniform vec3 uLaneColours[8];
+  uniform float uLaneOn;
   varying float vSupport;
+  varying float vLane;
   #endif
   uniform vec3 uInk;
   uniform vec3 uPaper;
@@ -225,6 +234,17 @@ const FRAGMENT = /* glsl */ `
     #ifdef FEATURES
     // the model in the theme's own colour, supports in its second one (Mike, Nov 7)
     vec3 ink = mix(uModel, uSupportColour, step(0.5, vSupport));
+    // a file in several filament lanes: each lane in its own colour (the lane is a multiple of 32 in the attribute)
+    float li = floor(vLane * 255.0 / 32.0 + 0.5);
+    vec3 lc = uLaneColours[0];
+    lc = mix(lc, uLaneColours[1], step(0.5, li));
+    lc = mix(lc, uLaneColours[2], step(1.5, li));
+    lc = mix(lc, uLaneColours[3], step(2.5, li));
+    lc = mix(lc, uLaneColours[4], step(3.5, li));
+    lc = mix(lc, uLaneColours[5], step(4.5, li));
+    lc = mix(lc, uLaneColours[6], step(5.5, li));
+    lc = mix(lc, uLaneColours[7], step(6.5, li));
+    ink = mix(ink, lc, uLaneOn);
     #else
     vec3 ink = uInk;
     #endif
@@ -240,6 +260,8 @@ function material(strip: boolean, features = false): ShaderMaterial {
     uniforms: {
       uModel: { value: new Vector3(1, 1, 1) },
       uSupportColour: { value: new Vector3(0.5, 0.5, 0.5) },
+      uLaneColours: { value: Array.from({ length: 8 }, () => new Vector3(1, 1, 1)) },
+      uLaneOn: { value: 0 },
       uInk: { value: new Vector3(1, 1, 1) },
       uPaper: { value: new Vector3(0, 0, 0) },
       uTravel: { value: -1 },
@@ -618,6 +640,7 @@ export class GcodeScene {
       g.setAttribute('iEnd', new InterleavedBufferAttribute(ends, 3, 3))
       g.setAttribute('iShade', new InterleavedBufferAttribute(new InstancedInterleavedBuffer(d.shades, 2, 1), 1, 0, true))
       g.setAttribute('iSupport', new InterleavedBufferAttribute(new InstancedInterleavedBuffer(d.support ?? new Uint8Array(d.drawnMoves * 2), 2, 1), 1, 0, true))
+      g.setAttribute('iLane', new InterleavedBufferAttribute(new InstancedInterleavedBuffer(d.lane ?? new Uint8Array(d.drawnMoves * 2), 2, 1), 1, 0, true))
       g.setAttribute('iTangent', new InterleavedBufferAttribute(new InstancedInterleavedBuffer(d.tangents, 6, 1), 3, 0, true))
       // 255 = 1 after normalising, so the shader's 2.55 turns it back into millimetres
       g.setAttribute('iWidth', new InstancedBufferAttribute(d.widths, 1, true))
@@ -628,6 +651,7 @@ export class GcodeScene {
       g.setAttribute('position', new BufferAttribute(d.segments, 3))
       g.setAttribute('shade', new BufferAttribute(d.shades, 1, true))
       g.setAttribute('support', new BufferAttribute(d.support ?? new Uint8Array(d.drawnMoves * 2), 1, true))
+      g.setAttribute('lane', new BufferAttribute(d.lane ?? new Uint8Array(d.drawnMoves * 2), 1, true))
       g.setAttribute('tangent', new BufferAttribute(d.tangents, 3, true))
       this.path = new LineSegments(g, m)
     }
@@ -879,6 +903,19 @@ export class GcodeScene {
     this.draw()
   }
   private featureColours = false
+
+  /** A file in several filament lanes: each lane's colour (up to 8), or null to go back to the model and support colours */
+  setLaneColours(colours: Rgb[] | null): void {
+    for (const m of [this.lineMaterial, this.stripMaterial]) {
+      const list = m.uniforms.uLaneColours!.value as Vector3[]
+      for (let i = 0; i < 8; i++) {
+        const c = colours?.[i] ?? colours?.[colours.length - 1]
+        if (c) list[i]!.set(c.r, c.g, c.b)
+      }
+      m.uniforms.uLaneOn!.value = colours ? 1 : 0
+    }
+    this.draw()
+  }
 
   setColours(c: ViewerColours): void {
     for (const m of [this.bedMaterial, this.lineMaterial, this.stripMaterial, this.meshMaterial, this.wireMaterial, this.outlineMat]) {

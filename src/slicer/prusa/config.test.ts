@@ -148,4 +148,18 @@ describe('a job in several lanes (Nov 22 test slices)', () => {
     expect(invalid('support_material_extruder', '1', sch, ctx('tower'))).toBe('Set by the Rhino')
     expect(invalid('support_material_extruder', '1', sch, one)).not.toBe('Set by the Rhino')
   })
+  it('lets a lane after the first change a filament option: a list of one value per lane, the first lane’s where it has none', () => {
+    const c = ctx('tower')
+    c.job.lanes = { materials: ['PLA_0_4_T0', 'PETG_0_4_T1'], supportLane: null, interfaceLane: null, settings: [{}, { extrusion_multiplier: '0.95' }] }
+    expect(ini(c)).toMatch(/^extrusion_multiplier = [\d.]+,0\.95$/m)
+    expect(ini(c)).toMatch(/^filament_diameter = /m)
+    expect(valueOf('extrusion_multiplier', sch, { ...c, viewLane: 1 })).toEqual({ value: '0.95', from: 'yours' })
+    expect(valueOf('extrusion_multiplier', sch, c).from).not.toBe('yours')
+    // the job's own change to lane 1 is the base of the other lanes
+    c.job.prusa = { extrusion_multiplier: '1.02' }
+    expect(ini(c)).toMatch(/^extrusion_multiplier = 1\.02,0\.95$/m)
+    // an option that isn't kept per filament isn't a list, whatever is in the lane settings
+    c.job.lanes.settings = [{}, { perimeters: '5' }]
+    expect(ini(c)).toMatch(/^perimeters = \d+$/m)
+  })
 })

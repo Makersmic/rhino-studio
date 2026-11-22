@@ -208,6 +208,8 @@ export interface JobLanes {
   interfaceLane: number | null
   /** how a lane change is purged: PrusaSlicer's or Kiri's tower on the bed, or the machine itself (default: the tower) */
   purge?: 'tower' | 'machine'
+  /** PrusaSlicer filament options changed for a lane other than lane 1 (index = lane; lane 1's are the job's own `prusa`) */
+  settings?: Record<string, string>[]
 }
 
 export interface PrepareJob {
@@ -283,6 +285,8 @@ export interface PartView {
   placement: Placement
   /** the filament lane it prints in (0 = lane 1); only meaningful on a multi-lane tool */
   lane?: number
+  /** the assembly it belongs to: parts of one move and stay together */
+  group?: number
 }
 
 export interface PartInfo {
