@@ -3,7 +3,7 @@
  * Living style guide. Everything on this page is drawn from the real tokens
  * and components, so it can't drift from the app.
  */
-import { onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import RsPanel from '@/components/RsPanel.vue'
 import RsButton from '@/components/RsButton.vue'
 import StatusChip from '@/components/StatusChip.vue'
@@ -14,6 +14,8 @@ import RhinoPreview from '@/viewer/RhinoPreview.vue'
 import ToolheadBadge from '@/toolheads/ToolheadBadge.vue'
 import ToolTile from '@/toolheads/ToolTile.vue'
 import Icon from '@/icons/Icon.vue'
+import LaneKeys from '@/prepare/LaneKeys.vue'
+import { cleanLinks, resizeLanes, type LaneInfo } from '@/prepare/laneKeys'
 import CareBar from '@/maintenance/CareBar.vue'
 import { NAV_ICONS, type NavIconId } from '@/icons/nav'
 import { BUILT_IN_TOOLHEADS, UNKNOWN_LOOK, lookFor, type ToolheadLook } from '@/toolheads/registry'
@@ -21,6 +23,17 @@ import { brand } from '@/brand/brand'
 import { useThemeStore } from '@/stores/theme'
 
 const customLook = { ...lookFor('HotWire', 'CNC'), summary: 'Stand-in for any user-added tool' }
+// Filament lane keys sample: two lanes (SwitchFly) or up to eight (an external switcher)
+const laneCount = ref(4)
+const laneSeed: LaneInfo[] = [
+  { material: 'PLA_0_4_T0', runoutSensor: true }, { material: 'PLA_0_4_T1', runoutSensor: false }, { material: 'PETG_0_4_T0', runoutSensor: true },
+  { material: 'PETG_0_4_T1', runoutSensor: false }, { material: null, runoutSensor: false }, { material: 'TPU_0_4_T0', runoutSensor: true },
+  { material: 'ABS_0_4_T0', runoutSensor: true }, { material: 'ABS_0_4_T1', runoutSensor: false },
+]
+const laneList = computed(() => resizeLanes(laneSeed, laneCount.value))
+const laneSel = ref(0)
+const laneFollow = ref<boolean[]>([true, false, false])
+const laneLinks = computed({ get: () => cleanLinks(laneList.value, laneFollow.value), set: (v: boolean[]) => (laneFollow.value = v) })
 const allTools: ToolheadLook[] = [...BUILT_IN_TOOLHEADS, customLook, UNKNOWN_LOOK]
 const navIds = Object.keys(NAV_ICONS) as NavIconId[]
 
@@ -116,6 +129,15 @@ const isUnknown = (t: ToolheadLook) => t.icon === 'unknown'
           <RsButton>Preview</RsButton>
         </div>
       </div>
+    </RsPanel>
+
+    <SectionRule label="Filament lanes" />
+    <RsPanel title="Lane keys">
+      <p class="muted lead">One white key per lane; the pressed one is the lane you are working on. A black key between two lanes switches on "carry on with the next lane when this one runs out": it needs the same filament in both and a runout sensor on the left lane, and says why when it can't. Dotted means nothing chosen yet; the dot shows a fitted sensor; each lane has a tone and its own pattern.</p>
+      <div class="lane-count" role="radiogroup" aria-label="Number of lanes">
+        <button v-for="n in [2, 4, 8]" :key="n" type="button" role="radio" class="pick" :aria-checked="laneCount === n" @click="laneCount = n">{{ n }} lanes</button>
+      </div>
+      <LaneKeys v-model="laneSel" v-model:follow="laneLinks" :lanes="laneList" :used="[0, 1]" links />
     </RsPanel>
 
     <SectionRule label="Toolhead emblems" />
@@ -336,4 +358,5 @@ const isUnknown = (t: ToolheadLook) => t.icon === 'unknown'
 .carestates { display: grid; gap: var(--rs-space-5); grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
 .carestate { display: flex; flex-direction: column; gap: var(--rs-space-2); font-size: var(--rs-text-sm); color: var(--rs-text-strong); }
 .rules { margin: 0; padding-left: 1.4em; display: flex; flex-direction: column; gap: var(--rs-space-2); max-width: 80ch; }
+.lane-count { display: flex; gap: 6px; margin-bottom: var(--rs-space-4); }
 </style>

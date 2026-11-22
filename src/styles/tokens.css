@@ -255,3 +255,19 @@
 
 /* A setting changed from its profile (Mike, Nov 21): a red border. Follows the danger red, so themes keep it readable. */
 :root { --rs-changed: var(--rs-danger); }
+
+/* Filament lanes (the piano keys): eight tones, never red, each also given its own pattern in LaneKeys so colour is never the only signal */
+:root {
+  --rs-lane-1: var(--rs-ink);
+  --rs-lane-2: #3b6fb6;
+  --rs-lane-3: #b8862b;
+  --rs-lane-4: #3f8a5a;
+  --rs-lane-5: #7a5bb0;
+  --rs-lane-6: #2a8c8c;
+  --rs-lane-7: #6b7785;
+  --rs-lane-8: #7d8a2e;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) { --rs-lane-2: #7aa6e0; --rs-lane-3: #e0b457; --rs-lane-4: #6fc08a; --rs-lane-5: #a98be0; --rs-lane-6: #5fc4c4; --rs-lane-7: #a3afbd; --rs-lane-8: #b8c75a; }
+}
+:root[data-theme='dark'] { --rs-lane-2: #7aa6e0; --rs-lane-3: #e0b457; --rs-lane-4: #6fc08a; --rs-lane-5: #a98be0; --rs-lane-6: #5fc4c4; --rs-lane-7: #a3afbd; --rs-lane-8: #b8c75a; }
