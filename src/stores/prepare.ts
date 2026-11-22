@@ -28,6 +28,7 @@ import { laserLoops as loopsOf, type Loop } from '@/slicer/laserOps'
 import { checkFile, blocking, type Check, type FileStats } from '@/slicer/check'
 import { FLAT_TYPES, combine, extOf, merge, partInfo, transform } from '@/slicer/model'
 import { planDrop, skippedMessage } from '@/prepare/dropPlan'
+import { laneCount, laneNotices, lanesUsed, normalizeLanes, type LaneUse } from '@/prepare/lanesJob'
 import { MARK_SIZES, MAX_MARKS, markAt, marksForEngine, marksForPrusa, marksOnBed, type MarkPart, type SupportMarks } from '@/prepare/supportMarks'
 import { PART_GAP, freeSpot, rectOf } from '@/viewer/placement'
 import { DEFAULT_MACHINE, type MachineInfo, type PartInfo, type PartView, type Placement, type PrepareJob, type Process } from '@/slicer/types'
@@ -91,6 +92,8 @@ interface JobPart {
   /** the triangles as loaded */
   raw: Float32Array
   flat: boolean
+  /** the filament lane it prints in (0 = lane 1) */
+  lane?: number
   /** where it was when it was last selected (job.placement is the selected part's) */
   placement: Placement
   shape?: PartShape
@@ -202,6 +205,7 @@ export const usePrepareStore = defineStore('prepare', () => {
     if (j.process === 'fdm') j.engine = s.engine
     if (s.material && materialsOf(j.toolhead).some((m) => m.key === s.material)) j.material = s.material
     const known = s.profileId && (isBuiltin(s.profileId) || profilesStore.byId(s.profileId))
+    if (s.lanes) j.lanes = { ...s.lanes }
     j.profileId = known ? s.profileId : builtinId(j.process, engineOf(j))
     j.profileRev = known ? s.profileRev : null
     setJobSettings(j, { ...baseSettings(j), ...s.overrides })
@@ -388,6 +392,7 @@ export const usePrepareStore = defineStore('prepare', () => {
         material: j.material || null,
         overrides: overrides.value,
         placement: { ...j.placement },
+        ...(j.lanes ? { lanes: { ...j.lanes, materials: [...j.lanes.materials] } } : {}),
       }
       profilesStore.saveJobSoon(`tool/${j.toolhead}`, s)
       // support marks are not saved: they belong to the model on screen and start empty with the next one
@@ -447,6 +452,69 @@ export const usePrepareStore = defineStore('prepare', () => {
     // turning marks off keeps nothing hidden: they go, rather than coming back later by surprise
     supportMarks.value = mode === 'marked' ? (supportMarks.value ?? { marks: [] }) : null
   }
+  // ---- filament lanes (prepare/lanesJob.ts): a tool with several paths (SwitchFly) has a lane per path
+  const laneTotal = computed(() => (job.value?.process === 'fdm' ? laneCount(materials.value.list) : 1))
+  /** the lane whose material is shown and picked (a key in the lane keys) */
+  const selectedLane = ref(0)
+  watch(
+    () => [job.value, materials.value.list] as const,
+    ([j, list]) => {
+      if (!j || j.process !== 'fdm') return
+      const n = laneTotal.value
+      // a job that already has a material on one path starts with it in that lane
+      const seed = !j.lanes && j.material ? (list.find((m) => m.key === j.material)?.path ?? null) : null
+      const base = j.lanes ?? (seed != null ? { materials: Array.from({ length: n }, (_, i) => (i === seed ? j.material : null)), supportLane: null, interfaceLane: null } : undefined)
+      const next = normalizeLanes(base, list, n)
+      if (JSON.stringify(next) !== JSON.stringify(j.lanes)) j.lanes = next
+      if (selectedLane.value >= n) selectedLane.value = 0
+      if (partsList.value.some((p) => (p.lane ?? 0) >= n)) {
+        for (const p of partsList.value) if ((p.lane ?? 0) >= n) p.lane = 0
+        partsList.value = [...partsList.value]
+      }
+    },
+    { immediate: true },
+  )
+  const laneUse = computed<LaneUse | null>(() => {
+    const j = job.value
+    if (!j || j.process !== 'fdm' || laneTotal.value < 2) return null
+    return { engine: j.engine === 'kiri' ? 'kiri' : 'prusa', count: laneTotal.value, partLanes: partsList.value.map((p) => p.lane ?? 0), supportsOn: supportMode.value !== 'off', lanes: j.lanes }
+  })
+  const laneNotes = computed(() => (laneUse.value ? laneNotices(laneUse.value) : { blocks: [] as string[], notes: [] as string[] }))
+  /** why Prepare is held back (empty when the lanes are in order) */
+  const laneBlock = computed(() => laneNotes.value.blocks)
+  const lanesUsedNow = computed(() => (laneUse.value ? lanesUsed(laneUse.value) : [0]))
+  /** the job's own material follows the first part's lane, so a one-lane job on lane 2 behaves as it always did */
+  function syncPrimaryLane() {
+    const j = job.value
+    const key = j?.lanes?.materials[partsList.value[0]?.lane ?? 0]
+    if (j && key && key !== j.material) pickMaterial(key)
+  }
+  function setLaneMaterial(lane: number, key: string) {
+    const j = job.value
+    if (!j?.lanes || lane < 0 || lane >= laneTotal.value) return
+    if (!materialsOfLaneKeys(lane).includes(key)) return
+    j.lanes = { ...j.lanes, materials: j.lanes.materials.map((m, i) => (i === lane ? key : m)) }
+    syncPrimaryLane()
+  }
+  const materialsOfLaneKeys = (lane: number) => materials.value.list.filter((m) => (laneTotal.value > 1 ? m.path === lane : true)).map((m) => m.key)
+  /** Put a part in a lane. Kiri:Moto prints the whole job from one lane, so there it moves every part. */
+  function setPartLane(id: number, lane: number) {
+    const j = job.value
+    if (!j || lane < 0 || lane >= laneTotal.value) return
+    const all = j.engine === 'kiri'
+    for (const p of partsList.value) if (all || p.id === id) p.lane = lane
+    partsList.value = [...partsList.value]
+    syncPrimaryLane()
+  }
+  function setSupportLane(lane: number | null) {
+    const j = job.value
+    if (j?.lanes && (lane === null || (lane >= 0 && lane < laneTotal.value))) j.lanes = { ...j.lanes, supportLane: lane }
+  }
+  function setInterfaceLane(lane: number | null) {
+    const j = job.value
+    if (j?.lanes && (lane === null || (lane >= 0 && lane < laneTotal.value))) j.lanes = { ...j.lanes, interfaceLane: lane }
+  }
+
   /** what a click places while marking: support, or (PrusaSlicer) a block */
   const markKind = ref<'mark' | 'block'>('mark')
   /** The mark picked to resize or remove (its place in supportMarks.marks), or null (Mike, Nov 7) */
@@ -510,7 +578,7 @@ export const usePrepareStore = defineStore('prepare', () => {
     return partsList.value.map((p) => {
       const placement = p.id === selectedId.value ? j.placement : p.placement
       const s = shapeOf(p, placement)
-      return { id: p.id, name: p.name, vertices: s.vertices, info: s.info, x: placement.x, y: placement.y, placement: { ...placement } }
+      return { id: p.id, name: p.name, vertices: s.vertices, info: s.info, x: placement.x, y: placement.y, placement: { ...placement }, lane: p.lane ?? 0 }
     })
   })
   /** CNC mills one part in its stock, and a ready-made file already says where everything goes */
@@ -545,6 +613,7 @@ export const usePrepareStore = defineStore('prepare', () => {
 
   function addPart(p: JobPart) {
     const j = job.value
+    p.lane ??= partsList.value[0]?.lane ?? 0
     if (selected.value && j) selected.value.placement = { ...j.placement }
     partsList.value = [...partsList.value, p]
     if (j) j.placement = { ...p.placement }
@@ -935,6 +1004,10 @@ export const usePrepareStore = defineStore('prepare', () => {
 
   async function prepare() {
     if (!job.value || !vertices.value || !part.value) return
+    if (laneBlock.value.length) {
+      prepError.value = laneBlock.value[0]!
+      return
+    }
     const id = ++runId
     const m = machineInfo.value
     prepError.value = null
@@ -1086,6 +1159,15 @@ export const usePrepareStore = defineStore('prepare', () => {
     supportMarks,
     supportMode,
     setSupportMode,
+    laneTotal,
+    selectedLane,
+    laneNotes,
+    laneBlock,
+    lanesUsedNow,
+    setLaneMaterial,
+    setPartLane,
+    setSupportLane,
+    setInterfaceLane,
     canMark,
     markKind,
     markSize,

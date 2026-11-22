@@ -2,8 +2,9 @@
 /** The parts in a job: pick one to work on it, or open its menu from its ⋯ button. */
 import type { PartView } from '@/slicer/types'
 
-defineProps<{ parts: PartView[]; selectedId: number }>()
-const emit = defineEmits<{ select: [id: number]; menu: [id: number, x: number, y: number] }>()
+const props = defineProps<{ parts: PartView[]; selectedId: number; lanes?: number }>()
+const emit = defineEmits<{ select: [id: number]; menu: [id: number, x: number, y: number]; lane: [id: number, lane: number] }>()
+const multi = () => (props.lanes ?? 1) > 1
 
 const fmt = (v: number) => String(Math.round(v * 10) / 10)
 function openMenu(id: number, e: MouseEvent) {
@@ -22,6 +23,7 @@ function openMenu(id: number, e: MouseEvent) {
           <span class="facts">{{ fmt(p.info.size.x) }} × {{ fmt(p.info.size.y) }} × {{ fmt(p.info.size.z) }} mm</span>
           <span class="facts">X {{ fmt(p.x) }} · Y {{ fmt(p.y) }}</span>
         </button>
+<button v-if="multi()" type="button" class="lane" :class="`p${((p.lane ?? 0) % 8) + 1}`" :style="{ '--tone': `var(--rs-lane-${((p.lane ?? 0) % 8) + 1})` }" :title="`${p.name} prints in lane ${(p.lane ?? 0) + 1}. Click for the next lane.`" :aria-label="`${p.name}: lane ${(p.lane ?? 0) + 1}. Next lane`" @click="emit('lane', p.id, ((p.lane ?? 0) + 1) % (lanes ?? 1))"><i aria-hidden="true" />{{ (p.lane ?? 0) + 1 }}</button>
         <button type="button" class="more" :aria-label="`Actions for ${p.name}`" @click="openMenu(p.id, $event)">⋯</button>
       </li>
     </ul>
@@ -39,6 +41,10 @@ li.on { border-color: var(--rs-text-strong); box-shadow: inset 0 0 0 1px var(--r
 .name { overflow: hidden; font-size: var(--rs-text-sm); font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .facts { font-size: var(--rs-text-xs); color: var(--rs-text-muted); }
 .more { flex: none; width: 44px; min-height: 44px; font: inherit; font-size: var(--rs-text-lg, 1.1rem); color: var(--rs-text-strong); background: none; border: 0; border-radius: 0 8px 8px 0; cursor: pointer; }
+.lane { flex: none; display: grid; grid-template-columns: auto auto; align-items: center; gap: 5px; padding: 0 8px; font: inherit; font-size: var(--rs-text-xs); font-weight: 600; color: var(--rs-text-strong); background: none; border: 0; border-left: 1px solid var(--rs-line); cursor: pointer; }
+.lane i { width: 12px; height: 12px; border-radius: 3px; background: var(--tone); box-shadow: inset 0 0 0 1px var(--rs-line-strong); }
+.lane:hover { background: var(--rs-surface-2); }
+.lane:focus-visible { outline: 2px solid var(--rs-text-strong); outline-offset: -2px; }
 .row:hover, .more:hover { background: var(--rs-surface-2); }
 .row:focus-visible, .more:focus-visible { outline: 2px solid var(--rs-text-strong); outline-offset: -2px; }
 </style>

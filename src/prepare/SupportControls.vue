@@ -18,6 +18,13 @@ const prep = usePrepareStore()
 const changed = inject(SUPPORT_CHANGED, null)
 
 const engine = computed(() => prep.job?.engine)
+// lanes: who prints the supports and their interface layers (more than one lane only)
+const lanes = computed(() => (prep.job?.lanes && prep.laneTotal > 1 ? Array.from({ length: prep.laneTotal }, (_, i) => i) : []))
+const laneVal = (v: number | null | undefined) => (v == null ? '' : String(v))
+const laneOf = (e: Event): number | null => {
+  const v = (e.target as HTMLSelectElement).value
+  return v === '' ? null : Number(v)
+}
 const selReach = computed({ get: () => prep.selectedMarkReach ?? MARK_SIZES.start, set: (v: number) => prep.setSelectedReach(v) })
 const message = computed(() => marksNote(prep.supportMarks, prep.supportMode))
 const marks = computed(() => prep.supportMarks?.marks.length ?? 0)
@@ -42,6 +49,22 @@ function toggle(k: 'mark' | 'block' | 'erase') {
         <RsButton v-if="marks" size="sm" :variant="marking === 'erase' ? 'primary' : undefined" :aria-pressed="marking === 'erase'" @click="toggle('erase')">{{ marking === 'erase' ? 'Done erasing' : 'Erase marks' }}</RsButton>
         <RsButton v-if="SHOW_BLOCKS && engine === 'prusa'" size="sm" :variant="marking === 'block' ? 'primary' : undefined" :aria-pressed="marking === 'block'" @click="toggle('block')">{{ marking === 'block' ? 'Done blocking' : 'Block supports' }}</RsButton>
       </div>
+    </div>
+    <div v-if="lanes.length && prep.supportMode !== 'off'" class="row" role="group" aria-label="Which lane prints the supports">
+      <label class="field">
+        <span>Support filament</span>
+        <select :value="laneVal(prep.job?.lanes?.supportLane)" @change="prep.setSupportLane(laneOf($event))">
+          <option value="">Same as the part</option>
+          <option v-for="l in lanes" :key="l" :value="l">Lane {{ l + 1 }}</option>
+        </select>
+      </label>
+      <label v-if="engine === 'prusa'" class="field">
+        <span>Interface filament</span>
+        <select :value="laneVal(prep.job?.lanes?.interfaceLane)" @change="prep.setInterfaceLane(laneOf($event))">
+          <option value="">Same as the supports</option>
+          <option v-for="l in lanes" :key="l" :value="l">Lane {{ l + 1 }}</option>
+        </select>
+      </label>
     </div>
     <p v-if="prep.canMark && !props.is3d" class="note">Marks are placed on the 3D view: turn off Lighter drawing under the bed.</p>
     <template v-if="prep.canMark">

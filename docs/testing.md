@@ -817,3 +817,14 @@ Needs the machine with a print head (BlockOne) mounted and confirmed; the fan sp
 4. Mount a laser or spindle. **Pass:** the Part fan reading is not shown (or not editable).
 5. During a print, set the fan from Control. **Pass:** the fan changes; the next layer change in the file may set it again (the slicer's cooling rules still apply).
 6. **Stop if** the fan runs when 0 is set, a value out of range is sent, or the fan reading and the real fan disagree by more than about 10 %.
+
+## Job setup: filament lanes on SwitchFly (building: not in a release yet)
+
+Nothing moves; the mock's `MOCK_SCENARIO=switchfly` is enough. **A job that uses both lanes is not sliced yet** (the slice is built in a later step); this checks the screens and the rules.
+
+1. Job setup, load a model, pick 3D printing on SwitchFly. **Pass:** two piano keys (1, 2) sit in the Process panel above "Lane N filament"; pressing a key shows that lane's materials only (path 1 or path 2). Other tools show the old Material drop-down.
+2. Parts list: **Pass:** each part has a lane chip (colour square and number); clicking it moves that part to the next lane, and the part's menu has "Print in lane N". With Kiri:Moto selected, moving one part moves them all.
+3. Supports on (Support material page): **Pass:** "Support filament" (and, in PrusaSlicer, "Interface filament") appear, each "Same as the part" or a lane. Supports from the other lane show the note about many lane changes and, in PrusaSlicer, to use only the interface layers instead.
+4. Put parts in both lanes, or supports or interface on the other lane. **Pass:** Prepare is disabled with the reason ("can't be sliced yet"); Kiri:Moto with parts in two lanes says it prints the whole job from one lane. Put everything in lane 2: Prepare works and the job uses lane 2's filament.
+5. Wide window, two or more parts: **Pass:** the Parts list's lane and ⋯ buttons are not covered by the floating Settings panel.
+6. **Stop if** a one-lane job slices with the wrong lane's filament, or a two-lane job slices as if it were one lane.

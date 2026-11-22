@@ -53,6 +53,8 @@ export interface SavedJob {
   /** only the settings that differ from the profile */
   overrides: AnySettings
   placement: { x: number; y: number; rotate: number; scale: number; tiltX?: number; tiltY?: number }
+  /** a multi-lane tool's material per lane and the support lanes */
+  lanes?: { materials: (string | null)[]; supportLane: number | null; interfaceLane: number | null }
   /** old saved jobs may carry marks; Studio no longer saves or restores them (Nov 21), they start empty with each model */
   supportMarks?: { marks: Array<{ part: string; x: number; y: number; z: number; r: number }> }
   saved?: number

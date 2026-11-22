@@ -198,6 +198,16 @@ export interface Placement {
   scale: number
 }
 
+/** The lanes of a multi-lane tool in a job (prepare/lanesJob.ts holds the rules) */
+export interface JobLanes {
+  /** material key per lane (null: nothing chosen yet) */
+  materials: (string | null)[]
+  /** lane that prints the supports, or null = the part's own lane */
+  supportLane: number | null
+  /** lane that prints the support interface layers, or null = same as the supports (PrusaSlicer only) */
+  interfaceLane: number | null
+}
+
 export interface PrepareJob {
   schema: 1
   toolhead: string
@@ -212,6 +222,8 @@ export interface PrepareJob {
   engine?: 'prusa' | 'kiri'
   /** PrusaSlicer options the user changed (INI values, single extruder) */
   prusa?: Record<string, string>
+  /** only on a tool with several lanes (SwitchFly): the material per lane and who prints the supports */
+  lanes?: JobLanes
   fdm: FdmSettings
   laser: LaserSettings
   knife: KnifeSettings
@@ -267,6 +279,8 @@ export interface PartView {
   x: number
   y: number
   placement: Placement
+  /** the filament lane it prints in (0 = lane 1); only meaningful on a multi-lane tool */
+  lane?: number
 }
 
 export interface PartInfo {

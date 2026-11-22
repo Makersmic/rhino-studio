@@ -33,6 +33,7 @@ import SupportControls from '@/prepare/SupportControls.vue'
 import PrusaPanel from '@/prepare/PrusaPanel.vue'
 import ProfileBar from '@/prepare/ProfileBar.vue'
 import SaveChangesDialog from '@/prepare/SaveChangesDialog.vue'
+import LaneKeys from '@/prepare/LaneKeys.vue'
 import { CHANGED_KEYS, SUPPORT_CHANGED, SUPPORT_KEYS } from '@/prepare/changed'
 import { useSliceProfilesStore } from '@/stores/sliceProfiles'
 import { rhinoBase, firstOf, valueOf } from '@/slicer/prusa/config'
@@ -92,6 +93,11 @@ const partMenuItems = computed<MenuItem[]>(() => {
   }
   if (proc.value !== 'cnc') items.push({ label: 'Centre', run: () => (prep.selectPart(p.id), prep.centre()) })
   items.push({ label: 'Reset way up', run: () => prep.resetWayUp(p.id) })
+  if (prep.laneTotal > 1 && job.value?.process === 'fdm') {
+    const kiri = job.value.engine === 'kiri'
+    for (let i = 0; i < prep.laneTotal; i++)
+      if (i !== (p.lane ?? 0)) items.push({ label: kiri ? `Print the job in lane ${i + 1}` : `Print in lane ${i + 1}`, run: () => prep.setPartLane(p.id, i) })
+  }
   items.push({ label: 'Delete from job', run: () => prep.removePart(p.id), danger: true })
   return items
 })
@@ -102,7 +108,10 @@ function selectForMenu(id: number, x: number, y: number, normal: [number, number
 
 const job = computed(() => prep.job)
 const proc = computed(() => prep.job?.process ?? null)
-const mat = computed(() => prep.materials.list.find((m) => m.key === prep.job?.material) ?? null)
+// on a tool with several lanes, the material shown is the selected lane's
+const laneKeys = computed(() => (prep.job?.lanes ? prep.job.lanes.materials.map((m) => ({ material: m, runoutSensor: false })) : []))
+const laneMaterials = computed(() => prep.materials.list.filter((m) => m.path === prep.selectedLane))
+const mat = computed(() => prep.materials.list.find((m) => m.key === (prep.job?.lanes ? prep.job.lanes.materials[prep.selectedLane] : prep.job?.material)) ?? null)
 const accepts = [...MODEL_TYPES, ...GCODE_TYPES].map((t) => `.${t}`).join(',')
 const up = computed(() => prep.uploaded)
 const suits = computed(() => {
@@ -467,6 +476,7 @@ const engineNote = computed(() => {
             :part="prep.part"
             :parts="prep.parts"
             :selected-id="prep.selectedId"
+            :lanes="job.process === 'fdm' ? prep.laneTotal : 1"
             :result="prep.result?.file.bounds ?? null"
             :marks="prep.marksShown"
             :marking="marking === 'mark' || marking === 'block'"
@@ -480,6 +490,7 @@ const engineNote = computed(() => {
             @pick="layFlat"
             @mode="is3d = $event"
             @select="prep.selectPart"
+            @lane="prep.setPartLane"
             @menu="selectForMenu"
           />
           <FileMenu v-if="partMenu && partMenuItems.length" :x="partMenu.x" :y="partMenu.y" :title="prep.parts.find((p) => p.id === partMenu?.id)?.name ?? ''" :items="partMenuItems" @close="partMenu = null" />
@@ -526,10 +537,19 @@ const engineNote = computed(() => {
           </div>
 
           <div v-if="job && !up" class="mat">
-            <label for="prep-mat">Material</label>
-            <select id="prep-mat" :value="job.material" @change="prep.pickMaterial(($event.target as HTMLSelectElement).value)">
-              <option v-for="m in prep.materials.list" :key="m.key" :value="m.key">{{ prettyMaterial(m.name) }}{{ m.nozzle ? ` · ${m.nozzle} mm nozzle` : '' }}{{ m.path !== undefined ? ` · path ${m.path + 1}` : '' }}</option>
-            </select>
+            <template v-if="job.lanes && prep.laneTotal > 1">
+              <LaneKeys v-model="prep.selectedLane" :lanes="laneKeys" :used="prep.lanesUsedNow" />
+              <label for="prep-mat">Lane {{ prep.selectedLane + 1 }} filament</label>
+              <select id="prep-mat" :value="job.lanes.materials[prep.selectedLane] ?? ''" @change="prep.setLaneMaterial(prep.selectedLane, ($event.target as HTMLSelectElement).value)">
+                <option v-for="m in laneMaterials" :key="m.key" :value="m.key">{{ prettyMaterial(m.name) }}{{ m.nozzle ? ` · ${m.nozzle} mm nozzle` : '' }}</option>
+              </select>
+            </template>
+            <template v-else>
+              <label for="prep-mat">Material</label>
+              <select id="prep-mat" :value="job.material" @change="prep.pickMaterial(($event.target as HTMLSelectElement).value)">
+                <option v-for="m in prep.materials.list" :key="m.key" :value="m.key">{{ prettyMaterial(m.name) }}{{ m.nozzle ? ` · ${m.nozzle} mm nozzle` : '' }}{{ m.path !== undefined ? ` · path ${m.path + 1}` : '' }}</option>
+              </select>
+            </template>
             <p class="muted small">
               <template v-if="mat && proc === 'fdm'">Nozzle {{ mat.extruderTemp ?? '–' }}°, bed {{ mat.bedTemp ?? '–' }}°: START_JOB heats from this table, the file never sets a temperature.</template>
               <template v-else-if="mat && proc === 'cnc'">Spindle {{ mat.spindleSpeed ? `${mat.spindleSpeed} rpm` : 'speed' }} is set by CNC_JOB_SETUP when the job starts.</template>
@@ -639,9 +659,11 @@ const engineNote = computed(() => {
 
           <!-- the same as the Preview step: prepares the file if the setup changed, then shows it (Mike, Nov 9) -->
           <div class="prep-go">
-            <RsButton variant="primary" :disabled="!prep.part || !!suits" @click="goStep('preview')">Prepare</RsButton>
+            <RsButton variant="primary" :disabled="!prep.part || !!suits || prep.laneBlock.length > 0" @click="goStep('preview')">Prepare</RsButton>
             <span class="muted small">{{ prep.result ? 'Prepared: opens it in Preview.' : 'Slices it and opens Preview.' }}</span>
           </div>
+          <p v-for="b in prep.laneBlock" :key="b" class="notice small" role="status">{{ b }}</p>
+          <p v-for="n in prep.laneNotes.notes" :key="n" class="muted small">{{ n }}</p>
         </RsPanel>
 
       </div>

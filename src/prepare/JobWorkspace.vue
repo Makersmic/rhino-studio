@@ -28,6 +28,8 @@ const props = defineProps<{
   /** every part in the job, and which one is selected */
   parts?: PartView[]
   selectedId?: number
+  /** how many filament lanes the tool has (a lane chip shows on each part when more than one) */
+  lanes?: number
   result: { min: [number, number, number]; max: [number, number, number] } | null
   /** a ready-made file's text and flat toolpath */
   fileText?: string | null
@@ -44,6 +46,7 @@ const emit = defineEmits<{
   pick: [normal: [number, number, number]]
   mode: [is3d: boolean]
   select: [id: number]
+  lane: [id: number, lane: number]
   menu: [id: number, x: number, y: number, normal: [number, number, number] | null]
   mark: [id: number, point: [number, number, number], reach: number]
   erase: [point: [number, number, number], reach: number]
@@ -235,7 +238,7 @@ const label = computed(() => (props.part ? `${props.part.name} on the bed in 3D$
       @menu="(id, x, y) => emit('menu', id, x, y, null)"
     />
     </div>
-    <PartsList v-if="allParts.length > 1" :parts="allParts" :selected-id="selectedId ?? 0" @select="emit('select', $event)" @menu="(id, x, y) => emit('menu', id, x, y, null)" />
+    <PartsList v-if="allParts.length > 1 || (lanes ?? 1) > 1" :parts="allParts" :lanes="lanes ?? 1" :selected-id="selectedId ?? 0" @select="emit('select', $event)" @lane="(id, l) => emit('lane', id, l)" @menu="(id, x, y) => emit('menu', id, x, y, null)" />
     </div>
 
     <p v-if="fallback" class="notice small" role="status">{{ fallback }}</p>
@@ -254,6 +257,10 @@ const label = computed(() => (props.part ? `${props.part.name} on the bed in 3D$
 @container (min-width: 640px) {
   .area.over > .list { position: absolute; top: var(--rs-space-2); left: var(--rs-space-2); width: 210px; z-index: 1; pointer-events: none; }
   .area.over > .list :deep(ul) { max-height: calc(min(62vh, 640px) - 110px); }
+}
+/* stacked under the drawing (no 3D view), the Process and Settings panels float over this row's right end on a wide page: keep the list, and its lane and ⋯ buttons, clear of them */
+@media (min-width: 1101px) {
+  .area:not(.over) > .list { max-width: min(560px, calc(100% - 410px)); }
 }
 .toggle { display: inline-flex; align-self: flex-start; border: 1px solid var(--rs-line-strong); border-radius: 8px; overflow: hidden; }
 .seg { min-height: 32px; padding: 0 var(--rs-space-3); font: inherit; font-size: var(--rs-text-xs); color: var(--rs-text-strong); background: transparent; border: 0; cursor: pointer; }
