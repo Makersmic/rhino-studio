@@ -66,3 +66,35 @@ heat upward, and refuse a bare `T1`, so they would need rework regardless. Nothi
 
 ## 7. Decided (Mike, Nov 22)
 No lane by height. Pause for a hand change, and a spool-change mode on a runout endstop that is optional per lane. Keep-as-one-assembly is the default when several files are dropped together. Lanes: two to eight, keys as in section 3.
+
+## 8. Test slice findings (Nov 22 2026; PrusaSlicer 2.8.1 and Kiri:Moto 4.7.0; probes in `scripts/dual-probe/`)
+Run on 2.8.1 because the official Linux builds stop there; **the Rhino runs 2.9.7, so the PrusaSlicer findings must be rerun there** ("check on the machine").
+
+**PrusaSlicer**
+1. Several filaments in one nozzle works with `single_extruder_multi_material = 1`. The wipe tower needs relative extrusion (the Rhino already writes M83).
+2. A custom `toolchange_gcode` is written at every change, and `{next_extruder}` is the lane number from 0. **PrusaSlicer still writes a bare `T0` / `T1` after it**, which Klipper
+   rejects: Studio or the Portal must remove those lines from the file.
+3. By default the tower writes a full multi-material routine at each change: ramming, unload, load, purge. Setting the cooling tube, parking, extra-load, ramming, load/unload speed and
+   toolchange-retract options to zero reduces it to a purge only, and `autoemit_temperature_commands = 0` removes the heat-up at the start. A `M104` is still written at each change when
+   the lanes' temperatures differ (none when equal). Whether the file or the machine sets temperature at a change is for the macro design.
+4. **The wipe tower cannot be used when supports or their interface are printed from another lane** (PrusaSlicer refuses; marking the lane soluble didn't help). So there are two modes:
+   *tower* (parts on different lanes, supports on the part's own lane) and *no tower* (supports or interface on lane 2, and parts on different lanes too), where the **machine** must purge
+   after each change. Purge into infill needs the tower, so it exists only in tower mode.
+5. Supports on lane 2 land correctly (supports and interface on lane 2, the part on lane 1) in no-tower mode.
+6. **Lane changes add up fast.** A 26 mm T-shaped part with lane 2 for all supports and interface: **133 changes**. The same with lane 2 for the interface only: **5**. Two small parts on
+   different lanes, 14 mm tall, tower on: **43**; tower off: **42**. This is why the change budget is a real feature, and why "interface only" should be the first choice offered for lane 2.
+
+**Kiri:Moto**
+7. The bundled engine slices **one model at a time** (its engine object holds one widget): several parts on different lanes can't be sliced in one go. In Kiri a job's whole part is on one
+   lane. Per-part lanes and assemblies with different lanes are PrusaSlicer-only.
+8. Supports from a second lane work (`sliceSupportNozzle`): all 99 support segments of the T on lane 2, the part on lane 1. Kiri has **no separate interface filament**, only "supports".
+9. Kiri writes our change command from `gcodeChange` (`SWITCH_LANE LANE={tool}`), no bare `T` and no `M104`. It has a purge tower option (`outputPurgeTower`); both tower and no-tower
+   slice. 100 changes for the same T.
+
+**What this changes in the design**
+- The Setup screen offers per engine only what it can do: Kiri shows one lane for the part, a support lane, no interface choice and no assemblies of mixed lanes; PrusaSlicer shows all of it.
+  Choosing two lanes for parts quietly moves the job to PrusaSlicer's mode only if the user agrees (never silently switch engine).
+- A **Purge** choice per job: *Tower* (parts on different lanes) or *Machine purges* (needed once lane 2 prints supports). Studio explains the rule where it blocks the other.
+- The **change budget** shows the counted changes from the layers (for PrusaSlicer, from the same layer analysis it can do before slicing; exact count after the slice in Job file checks).
+- Interface-only first for lane-2 supports; full support on lane 2 gets the budget warning.
+- The change command and the bare-`T` cleanup become part of the machine interface (section 6): the file contains `SWITCH_LANE`-style lines the new macros define.
