@@ -78,6 +78,7 @@ export async function runKiri(vertices: Float32Array, job: KiriJob, onPhase: (p:
     if (typeof u === 'number') onPhase('Planning the paths', u)
   })
   eng.widget.loadVertices(vertices.slice()).center()
+  if (job.extruder != null) eng.widget.anno = { ...eng.widget.anno, extruder: job.extruder }
   if (marks.length) eng.widget.anno = { ...eng.widget.anno, paint: marks.map((m) => ({ point: { ...m.point }, radius: m.radius })) }
   eng.setMode(job.mode).setDevice(job.device).setProcess(job.process)
   eng.setTopOffset(0)

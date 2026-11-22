@@ -4,7 +4,7 @@ import { cncStock, cutHeight, kiriJob } from './kiriSettings'
 import { fileName, paLine, rhinoFile, shiftXY, xyBounds } from './rhinoFile'
 import { blocking, checkFile } from './check'
 import { footprint, merge, partInfo, transform } from './model'
-import { DEFAULT_MACHINE, type PartInfo } from './types'
+import { DEFAULT_MACHINE, type PartInfo, type PrepareJob } from './types'
 
 const cubeVerts = (s = 20, h = 10) => {
   // two triangles per face are enough for bounds / footprint tests
@@ -386,5 +386,51 @@ describe('PrusaSlicer output', () => {
     expect(f.text).not.toMatch(/prusaslicer_config|layer_height = 0.2|external perimeters/)
     expect(f.text.trimEnd().endsWith('END_PRINT')).toBe(true)
     expect(blocking(checkFile(f.text, job, part(), M).checks)).toEqual([])
+  })
+})
+
+describe('a two-lane file (Nov 22)', () => {
+  const lanes = [';LAYER_CHANGE', ';RHINO_LANE 1', 'T1', 'M104 S230', 'G1 X1 Y1 E1', ';RHINO_LANE 0', 'T0', 'M104 S210', 'G1 X2 Y2 E1', ';RHINO_LANE 1', 'T1', 'G1 X3 E1'].join('\n')
+  const job = (): PrepareJob => {
+    const j = newJob('SwitchFly', 'fdm', [{ key: 'PLA_0_4_T0', name: 'PLA', path: 0 }, { key: 'PETG_0_4_T1', name: 'PETG', path: 1 }])
+    j.engine = 'prusa'
+    j.lanes = { materials: ['PLA_0_4_T0', 'PETG_0_4_T1'], supportLane: null, interfaceLane: null }
+    return j
+  }
+  const part = { name: 'p', size: { x: 10, y: 10, z: 10 }, triangles: 12, footprint: [], flat: false }
+  it('turns the markers into the change command, drops bare T and heat lines, and starts in the lane the slicer starts in', () => {
+    const f = rhinoFile(lanes, job(), part, DEFAULT_MACHINE, 'x', 'PrusaSlicer').text.split('\n')
+    expect(f.filter((l) => l.startsWith('SWITCH_LANE'))).toEqual(['SWITCH_LANE LANE=1', 'SWITCH_LANE LANE=0', 'SWITCH_LANE LANE=1'])
+    expect(f.filter((l) => /^T\d/.test(l))).toEqual([])
+    expect(f.slice(f.findIndex((l) => l.startsWith('START_JOB'))).filter((l) => /^M10[49] /.test(l))).toEqual([])
+    expect(f.find((l) => l.startsWith('START_JOB'))).toContain('MATERIAL=PETG')
+    expect(f.find((l) => l.startsWith('START_JOB'))).toContain('EXTRUDER=1')
+    expect(f.find((l) => l.startsWith('; rhino_lanes'))).toContain('1, 2')
+  })
+  it('a file without lane changes is as it was', () => {
+    const f = rhinoFile('G1 X1 E1\nM104 S210\n', job(), part, DEFAULT_MACHINE, 'x', 'PrusaSlicer').text
+    expect(f).not.toContain('SWITCH_LANE')
+    expect(f).not.toContain('rhino_lanes')
+  })
+  it('is held back from sending until the machine has SWITCH_LANE, and passes with it', () => {
+    const text = rhinoFile(lanes, job(), part, DEFAULT_MACHINE, 'x', 'PrusaSlicer').text
+    const no = checkFile(text, job(), part, DEFAULT_MACHINE).checks.find((c) => c.id === 'lanes')!
+    const yes = checkFile(text, job(), part, DEFAULT_MACHINE, { laneMacro: true }).checks.find((c) => c.id === 'lanes')!
+    expect(no.level).toBe('error')
+    expect(no.label).toContain('lanes 1 and 2')
+    expect(yes.level).toBe('ok')
+    expect(checkFile('G1 X1 E1\n', job(), part, DEFAULT_MACHINE).checks.find((c) => c.id === 'lanes')).toBeUndefined()
+  })
+  it('Kiri:Moto takes the whole job to one lane, supports from another, and writes the change command itself', () => {
+    const j = job()
+    const k = kiriJob(j, part, DEFAULT_MACHINE, { count: 2, partLane: 0, supportLane: 1, tower: true })
+    expect(k.extruder).toBe(0)
+    expect((k.device.extruders as unknown[]).length).toBe(2)
+    expect(k.device.gcodeChange).toEqual(['SWITCH_LANE LANE={tool}'])
+    expect(k.process).toMatchObject({ sliceSupportNozzle: 1, outputPurgeTower: true })
+    const one = kiriJob(j, part, DEFAULT_MACHINE)
+    expect(one.extruder).toBeUndefined()
+    expect((one.device.extruders as unknown[]).length).toBe(1)
+    expect(one.process.sliceSupportNozzle).toBeUndefined()
   })
 })

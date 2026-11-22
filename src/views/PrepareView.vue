@@ -543,6 +543,14 @@ const engineNote = computed(() => {
               <select id="prep-mat" :value="job.lanes.materials[prep.selectedLane] ?? ''" @change="prep.setLaneMaterial(prep.selectedLane, ($event.target as HTMLSelectElement).value)">
                 <option v-for="m in laneMaterials" :key="m.key" :value="m.key">{{ prettyMaterial(m.name) }}{{ m.nozzle ? ` · ${m.nozzle} mm nozzle` : '' }}</option>
               </select>
+              <template v-if="prep.lanesUsedNow.length > 1">
+                <label for="prep-purge">Purge at a lane change</label>
+                <select id="prep-purge" :value="prep.purgeNow.mode" :disabled="prep.purgeNow.forced" @change="prep.setPurge(($event.target as HTMLSelectElement).value as 'tower' | 'machine')">
+                  <option value="tower">A tower on the bed</option>
+                  <option value="machine">The machine purges</option>
+                </select>
+                <p class="muted small">{{ prep.purgeNow.forced ? 'PrusaSlicer can’t build its tower when the supports or their interface come from another lane, so the machine purges at each change.' : prep.purgeNow.mode === 'tower' ? 'The slicer builds a purge tower on the bed beside the parts, clear of them.' : 'The machine purges after each change, as its lane-change macro does.' }}</p>
+              </template>
             </template>
             <template v-else>
               <label for="prep-mat">Material</label>

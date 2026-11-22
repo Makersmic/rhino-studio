@@ -28,9 +28,11 @@ import { laserLoops as loopsOf, type Loop } from '@/slicer/laserOps'
 import { checkFile, blocking, type Check, type FileStats } from '@/slicer/check'
 import { FLAT_TYPES, combine, extOf, merge, partInfo, transform } from '@/slicer/model'
 import { planDrop, skippedMessage } from '@/prepare/dropPlan'
-import { laneCount, laneNotices, lanesUsed, normalizeLanes, type LaneUse } from '@/prepare/lanesJob'
+import { TOWER, laneCount, laneNotices, lanesUsed, normalizeLanes, purgeMode, supportLanes, type LaneUse } from '@/prepare/lanesJob'
 import { MARK_SIZES, MAX_MARKS, markAt, marksForEngine, marksForPrusa, marksOnBed, type MarkPart, type SupportMarks } from '@/prepare/supportMarks'
 import { PART_GAP, freeSpot, rectOf } from '@/viewer/placement'
+import type { KiriLanes } from '@/slicer/kiriSettings'
+import type { LaneRun } from '@/slicer/prusa/config'
 import { DEFAULT_MACHINE, type MachineInfo, type PartInfo, type PartView, type Placement, type PrepareJob, type Process } from '@/slicer/types'
 import { loadModelFile, runKiri, kiriVersion, type Phase } from '@/slicer/engine'
 import { GCODE_TYPES, readJobFile, withToolhead, type JobFileInfo } from '@/slicer/gcodeFile'
@@ -477,7 +479,7 @@ export const usePrepareStore = defineStore('prepare', () => {
   const laneUse = computed<LaneUse | null>(() => {
     const j = job.value
     if (!j || j.process !== 'fdm' || laneTotal.value < 2) return null
-    return { engine: j.engine === 'kiri' ? 'kiri' : 'prusa', count: laneTotal.value, partLanes: partsList.value.map((p) => p.lane ?? 0), supportsOn: supportMode.value !== 'off', lanes: j.lanes }
+    return { engine: j.engine === 'kiri' ? 'kiri' : 'prusa', count: laneTotal.value, partLanes: partsList.value.map((p) => p.lane ?? 0), supportsOn: supportMode.value !== 'off', lanes: j.lanes, hasMarks: !!supportMarks.value?.marks.length }
   })
   const laneNotes = computed(() => (laneUse.value ? laneNotices(laneUse.value) : { blocks: [] as string[], notes: [] as string[] }))
   /** why Prepare is held back (empty when the lanes are in order) */
@@ -510,10 +512,49 @@ export const usePrepareStore = defineStore('prepare', () => {
     const j = job.value
     if (j?.lanes && (lane === null || (lane >= 0 && lane < laneTotal.value))) j.lanes = { ...j.lanes, supportLane: lane }
   }
+  function setPurge(mode: 'tower' | 'machine') {
+    const j = job.value
+    if (j?.lanes) j.lanes = { ...j.lanes, purge: mode }
+  }
+  const purgeNow = computed(() => (laneUse.value ? purgeMode(laneUse.value) : { mode: 'tower' as const, forced: false }))
   function setInterfaceLane(lane: number | null) {
     const j = job.value
     if (j?.lanes && (lane === null || (lane >= 0 && lane < laneTotal.value))) j.lanes = { ...j.lanes, interfaceLane: lane }
   }
+
+  /**
+   * The job's lanes as the slicers take them, or null when it uses one lane only (then it slices exactly as a one-lane job does).
+   * With the tower, it goes where there is room on the bed, clear of the parts; no room is an error rather than a tower over a part.
+   */
+  function laneRunFor(j: PrepareJob): { run: LaneRun; kiri: KiriLanes; objects: { triangles: number; lane: number }[] } | null {
+    const u = laneUse.value
+    if (!u || !j.lanes || lanesUsed(u).length < 2) return null
+    const { mode } = purgeMode(u)
+    const s = supportLanes(u)
+    const m = machineInfo.value
+    let tower = { x: 0, y: 0 }
+    if (mode === 'tower' && u.engine === 'prusa') {
+      const spot = freeSpot(TOWER, { x: m.workArea.x - TOWER.x / 2 - 5, y: TOWER.y / 2 + 5 }, takenAreas(), m.workArea)
+      if (!spot.free) throw new Error('There is no room on the bed for the wipe tower. Move or remove a part, or choose “The machine purges” for lane changes.')
+      tower = { x: spot.x - TOWER.x / 2, y: spot.y - TOWER.y / 2 }
+    }
+    const l = j.lanes
+    const iface = l.interfaceLane != null ? l.interfaceLane + 1 : l.supportLane != null ? l.supportLane + 1 : 0
+    return {
+      run: {
+        count: laneTotal.value,
+        materials: Array.from({ length: laneTotal.value }, (_, i) => materials.value.list.find((x) => x.key === l.materials[i]) ?? null),
+        purge: mode,
+        support: l.supportLane != null ? l.supportLane + 1 : 0,
+        interface: iface,
+        tower,
+      },
+      kiri: { count: laneTotal.value, partLane: u.partLanes[0] ?? 0, supportLane: s.support, tower: mode === 'tower' },
+      objects: parts.value.map((p) => ({ triangles: Math.floor(p.vertices.length / 9), lane: p.lane ?? 0 })),
+    }
+  }
+  /** Klipper has the machine's lane-change macro (written with the new hardware); files that change lane are held back without it */
+  const laneMacro = computed(() => machine.objects.has('gcode_macro SWITCH_LANE'))
 
   /** what a click places while marking: support, or (PrusaSlicer) a block */
   const markKind = ref<'mark' | 'block'>('mark')
@@ -873,7 +914,7 @@ export const usePrepareStore = defineStore('prepare', () => {
   const uploadResult = computed<PrepResult | null>(() => {
     const up = uploaded.value
     if (!up || !confirmed.value || !job.value) return null
-    const { checks, stats } = checkFile(up.text, job.value, null, machineInfo.value, { upload: true })
+    const { checks, stats } = checkFile(up.text, job.value, null, machineInfo.value, { upload: true, laneMacro: laneMacro.value })
     const b = up.info.bounds!
     return {
       file: { text: withToolhead(up.text, job.value.toolhead), name: safeName(up.name), bounds: { min: [b.min[0], b.min[1], 0], max: [b.max[0], b.max[1], 0] } },
@@ -1033,23 +1074,24 @@ export const usePrepareStore = defineStore('prepare', () => {
         if (!st.engine.installed) throw new Error('PrusaSlicer isn’t installed on the Rhino yet: Settings > Software > PrusaSlicer engine > Install.')
         if (st.refuse) throw new Error(st.refuse)
         if (!engineKeys || engineKeys.version !== st.engine.installed) engineKeys = { version: st.engine.installed, keys: new Set(await portal.slicerKeys()) }
-        const ctx: RhinoCtx = { ...rhinoCtx.value!, job: j }
+        const lr = laneRunFor(j)
+        const ctx: RhinoCtx = { ...rhinoCtx.value!, job: j, ...(lr ? { lanes: lr.run } : {}) }
         const ini = buildIni(sch, ctx, engineKeys.keys)
         // marks and blocks go beside the part; the Portal builds them into the 3MF PrusaSlicer reads
         const supports = supportMarks.value && supportMode.value !== 'off' ? marksForPrusa(markParts.value, supportMarks.value.marks, markParts.value.length > 1 ? { x: j.placement.x, y: j.placement.y } : null) : null
-        const out = await runPrusa(portal, model, ini, p.name, [j.placement.x, j.placement.y], onPhase, () => id === runId, undefined, supports)
+        const out = await runPrusa(portal, model, ini, p.name, [j.placement.x, j.placement.y], onPhase, () => id === runId, undefined, supports, lr?.objects ?? null)
         if (id !== runId) return
         // CALCULATE_PA and the header read the layer height and speed the engine actually used
         j.fdm.layerHeight = Number(valueOf('layer_height', sch, ctx).value) || j.fdm.layerHeight
         j.fdm.speed = Number(valueOf('perimeter_speed', sch, ctx).value) || j.fdm.speed
         const file = rhinoFile(out.gcode, j, p, m, STUDIO_VERSION, 'PrusaSlicer')
-        const { checks, stats } = checkFile(file.text, j, p, m)
+        const { checks, stats } = checkFile(file.text, j, p, m, { laneMacro: laneMacro.value })
         // what the Rhino says it received, against what was sent: if these differ the wrong part got there; if they match
         // and the file is still wrong, PrusaSlicer read the wrong thing (Mike, Nov 21: a first model kept coming back)
         const rc = out.received
         if (rc) {
           const same = rc.triangles === out.sent.triangles && rc.bytes === out.sent.bytes && rc.crc === out.sent.crc
-          const how = rc.as === '3mf' ? `as a 3MF with ${rc.enforce} support spot${rc.enforce === 1 ? '' : 's'}${rc.block ? ` and ${rc.block} block${rc.block === 1 ? '' : 's'}` : ''}` : 'as a plain STL'
+          const how = rc.as === '3mf' && !rc.enforce && !rc.block && (rc.objects ?? 1) > 1 ? `as a 3MF of ${rc.objects} parts, each in its lane` : rc.as === '3mf' ? `as a 3MF with ${rc.enforce} support spot${rc.enforce === 1 ? '' : 's'}${rc.block ? ` and ${rc.block} block${rc.block === 1 ? '' : 's'}` : ''}` : 'as a plain STL'
           checks.push({
             id: 'sent',
             level: same ? 'ok' : 'warn',
@@ -1060,7 +1102,8 @@ export const usePrepareStore = defineStore('prepare', () => {
         modelResult.value = { file, checks, stats, kiri: `PrusaSlicer ${st.engine.installed}${out.cached ? ' (from the cache)' : ''}`, kiriSeconds: out.seconds, kiriFilament: out.filamentMm }
         return
       }
-      const kj = kiriJob(j, p, m)
+      const lrk = laneRunFor(j)
+      const kj = kiriJob(j, p, m, lrk?.kiri ?? null)
       let marks: ReturnType<typeof marksForEngine> = []
       if (j.process === 'fdm' && j.fdm.supports && supportMarks.value) {
         // Only where marked: Kiri's manual supports, under the marks and nowhere else (none marked: no support)
@@ -1071,7 +1114,7 @@ export const usePrepareStore = defineStore('prepare', () => {
       if (id !== runId) return
       if (j.process === 'laser') laserLoops.value = loopsOf(engineBody(kiri))
       const file = rhinoFile(kiri, j, p, m, STUDIO_VERSION)
-      const { checks, stats } = checkFile(file.text, j, p, m)
+      const { checks, stats } = checkFile(file.text, j, p, m, { laneMacro: laneMacro.value })
       const t = /print time: (\d+)s/.exec(kiri)
       const fl = /filament used: ([\d.]+) mm/.exec(kiri)
       modelResult.value = { file, checks, stats, kiri: await kiriVersion(), kiriSeconds: t ? +t[1]! : null, kiriFilament: fl ? +fl[1]! : null }
@@ -1168,6 +1211,8 @@ export const usePrepareStore = defineStore('prepare', () => {
     setPartLane,
     setSupportLane,
     setInterfaceLane,
+    setPurge,
+    purgeNow,
     canMark,
     markKind,
     markSize,

@@ -206,6 +206,8 @@ export interface JobLanes {
   supportLane: number | null
   /** lane that prints the support interface layers, or null = same as the supports (PrusaSlicer only) */
   interfaceLane: number | null
+  /** how a lane change is purged: PrusaSlicer's or Kiri's tower on the bed, or the machine itself (default: the tower) */
+  purge?: 'tower' | 'machine'
 }
 
 export interface PrepareJob {

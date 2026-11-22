@@ -676,13 +676,15 @@ export class PortalClient {
   }
   /** Queue a slice: the part as binary STL and the full INI. The Portal answers with a job id. */
   /** `supports`: marks placed by hand, as the Portal takes them (prepare/supportMarks.ts marksForPrusa) */
-  async slice(model: Blob, ini: string, name: string, center: [number, number], supports?: { enforce: number[][]; block: number[][] } | null): Promise<{ id: string }> {
+  /** `objects`: with parts in different filament lanes, how many triangles each part has (in the model's order) and its lane */
+  async slice(model: Blob, ini: string, name: string, center: [number, number], supports?: { enforce: number[][]; block: number[][] } | null, objects?: { triangles: number; lane: number }[] | null): Promise<{ id: string }> {
     const f = new FormData()
     f.append('model', model, 'part.stl')
     f.append('config', new Blob([ini], { type: 'text/plain' }), 'rhino.ini')
     f.append('name', name)
     f.append('center', `${center[0]},${center[1]}`)
     if (supports && (supports.enforce.length || supports.block.length)) f.append('supports', JSON.stringify(supports))
+    if (objects && objects.length) f.append('objects', JSON.stringify(objects))
     return this.write<{ ok: boolean; id: string }>('slice', 'POST', '/api/slicer/slice', f)
   }
   async sliceJob(id: string): Promise<SliceJobState> {

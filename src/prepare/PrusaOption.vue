@@ -9,7 +9,7 @@
  */
 import { computed, inject, ref, watch, useId } from 'vue'
 import { CHANGED_KEYS } from './changed'
-import { LOCKS, invalid, refused, valueOf, type RhinoCtx, type Schema } from '@/slicer/prusa/config'
+import { LANE_REASON, LOCKS, invalid, laneLocks, refused, valueOf, type RhinoCtx, type Schema } from '@/slicer/prusa/config'
 
 const props = defineProps<{ k: string; schema: Schema; ctx: RhinoCtx; showKey?: boolean }>()
 const emit = defineEmits<{ (e: 'set', key: string, value: string | null): void }>()
@@ -22,7 +22,7 @@ const cur = computed(() => valueOf(props.k, props.schema, props.ctx))
 const label = computed(() => d.value.full_label ?? d.value.label ?? props.k)
 const isChanged = computed(() => (changedKeys ? changedKeys.value.has(props.k) : cur.value.from === 'yours'))
 const locked = computed(() => cur.value.from === 'rhino')
-const lockReason = computed(() => (locked.value ? LOCKS[props.k]?.reason ?? '' : ''))
+const lockReason = computed(() => (locked.value ? LOCKS[props.k]?.reason ?? (laneLocks(props.ctx)?.[props.k] !== undefined ? LANE_REASON : '') : ''))
 const kind = computed(() => {
   const t = d.value.type
   if (t === 'bool' || t === 'bools') return 'bool'

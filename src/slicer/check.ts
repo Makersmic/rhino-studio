@@ -71,13 +71,20 @@ const word = (l: string, w: string) => {
 /** Klipper's heater limits in Studio (the same record the Control screen uses: src/control/heatLimits.ts) */
 export const HEAT_MAX = HEAT_LIMITS
 
-export function checkFile(text: string, job: PrepareJob, part: PartInfo | null, m: MachineInfo, opts: { upload?: boolean } = {}): { checks: Check[]; stats: FileStats } {
+export function checkFile(text: string, job: PrepareJob, part: PartInfo | null, m: MachineInfo, opts: { upload?: boolean; laneMacro?: boolean } = {}): { checks: Check[]; stats: FileStats } {
   const upload = !!opts.upload
   const checks: Check[] = []
   const add = (id: string, ok: boolean, label: string, detail?: string, warnOnly = false) =>
     checks.push({ id, level: ok ? 'ok' : warnOnly ? 'warn' : 'error', label, detail: ok ? undefined : detail })
 
   const raw = text.split(/\r?\n/)
+  // lane changes (two filaments in one job): the machine needs the macro, or Klipper reports an unknown command and carries on
+  const laneChanges = raw.filter((l) => /^SWITCH_LANE\b/.test(l)).length
+  if (laneChanges) {
+    const lanes = [...new Set(raw.map((l) => /^SWITCH_LANE LANE=(\d+)/.exec(l)?.[1]).filter((v): v is string => !!v))].map((v) => Number(v) + 1).sort()
+    add('lanes', !!opts.laneMacro, `Selects a filament lane ${laneChanges} time${laneChanges === 1 ? '' : 's'} (lanes ${lanes.join(' and ')})`,
+      'This machine has no SWITCH_LANE macro yet, so Klipper would skip each lane change with an "unknown command" and carry on, printing with the wrong filament. Slicing and previewing work; sending waits for the machine’s lane-change macros.')
+  }
   const head = /^;\s*rhino_toolhead\s*=\s*(\S+)/m.exec(text)
   const sj = /^\s*START_JOB\b[^\n;]*?\bTOOLHEAD=("?)([A-Za-z0-9_-]+)\1/im.exec(text)
   const declared = head?.[1] ?? (upload ? sj?.[2] : undefined) ?? null

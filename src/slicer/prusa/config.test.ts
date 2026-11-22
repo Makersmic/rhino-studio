@@ -112,3 +112,40 @@ describe('options Studio replaces with its own control', () => {
     expect(shownOption('support_material_threshold')).toBe(true)
   })
 })
+
+describe('a job in several lanes (Nov 22 test slices)', () => {
+  const mats = [
+    { key: 'PLA_0_4_T0', name: 'PLA', nozzle: 0.4, path: 0 as const, extruderTemp: 200, bedTemp: 60 },
+    { key: 'PETG_0_4_T1', name: 'PETG', nozzle: 0.4, path: 1 as const, extruderTemp: 240, bedTemp: 70 },
+  ]
+  const sch = schemaJson as unknown as Schema
+  const job = () => { const j = newJob('SwitchFly', 'fdm', mats); j.engine = 'prusa'; return j }
+  const ctx = (purge: 'tower' | 'machine', over: Partial<NonNullable<RhinoCtx['lanes']>> = {}): RhinoCtx => ({
+    job: job(), material: mats[0]!, machine: DEFAULT_MACHINE, hasExcludeObject: false, hasArcs: false,
+    lanes: { count: 2, materials: mats, purge, support: 0, interface: 0, tower: { x: 445, y: 40 }, ...over },
+  })
+  const ini = (c: RhinoCtx) => buildIni(sch, c)
+  it('writes the multi-material settings, a temperature per lane, the tower where Studio put it, and the one allowed change template', async () => {
+    const { buildIni: _b, laneLocks } = await import('./config')
+    const t = ini(ctx('tower'))
+    for (const l of ['single_extruder_multi_material = 1', 'single_extruder_multi_material_priming = 0', 'nozzle_diameter = 0.4,0.4', 'temperature = 200,240', 'bed_temperature = 60,70',
+      'toolchange_gcode = ;RHINO_LANE {next_extruder}', 'wipe_tower = 1', 'wipe_tower_x = 445', 'wipe_tower_y = 40', 'autoemit_temperature_commands = 0', 'cooling_tube_length = 0', 'retract_length_toolchange = 0,0'])
+      expect(t).toContain(l)
+    expect(laneLocks(ctx('tower'))!.use_relative_e_distances).toBeUndefined() // already the Rhino's lock
+    expect(t).toContain('use_relative_e_distances = 1')
+  })
+  it('turns the tower off when the machine purges, and sends the support and interface lanes as extruder numbers', () => {
+    const t = ini(ctx('machine', { support: 2, interface: 2 }))
+    expect(t).toContain('wipe_tower = 0')
+    expect(t).toContain('support_material_extruder = 2')
+    expect(t).toContain('support_material_interface_extruder = 2')
+  })
+  it('changes nothing for a one-lane job, and locks what the lanes set', () => {
+    const one: RhinoCtx = { job: job(), material: mats[0]!, machine: DEFAULT_MACHINE, hasExcludeObject: false, hasArcs: false }
+    expect(ini(one)).toContain('single_extruder_multi_material = 0')
+    expect(ini(one)).toContain('toolchange_gcode = \n')
+    expect(valueOf('support_material_extruder', sch, ctx('tower')).from).toBe('rhino')
+    expect(invalid('support_material_extruder', '1', sch, ctx('tower'))).toBe('Set by the Rhino')
+    expect(invalid('support_material_extruder', '1', sch, one)).not.toBe('Set by the Rhino')
+  })
+})

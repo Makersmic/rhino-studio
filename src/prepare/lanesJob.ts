@@ -16,10 +16,10 @@ import { MAX_LANES } from './laneKeys'
 export type { JobLanes }
 
 /**
- * Two-lane jobs are built and shown but not sliced yet: step 3 builds the slice (change command, purge, 3MF with a lane per part)
- * and turns this on. Until then Prepare says why it won't.
+ * Two-lane jobs slice (step 3: the Portal's 3MF with a lane per part, the change markers, the purge). The flag stays so a slicer
+ * problem found later can switch them off again without a release of the whole screen.
  */
-export const LANES_SLICE_READY = false
+export const LANES_SLICE_READY = true
 
 /** How many lanes a tool has: how many different filament paths its materials name, at least one */
 export function laneCount(materials: readonly Pick<Material, 'path'>[]): number {
@@ -46,8 +46,12 @@ export function normalizeLanes(raw: unknown, materials: readonly Material[], cou
     }),
     supportLane: inRange(r.supportLane, count) ? r.supportLane : null,
     interfaceLane: inRange(r.interfaceLane, count) ? r.interfaceLane : null,
+    ...(r.purge === 'machine' || r.purge === 'tower' ? { purge: r.purge } : {}),
   }
 }
+
+/** The wipe tower's footprint on the bed, kept clear of the parts (PrusaSlicer sizes it from the purge; this is room for it) */
+export const TOWER = { x: 70, y: 70 }
 
 export interface LaneUse {
   engine: 'prusa' | 'kiri'
@@ -56,6 +60,8 @@ export interface LaneUse {
   partLanes: number[]
   supportsOn: boolean
   lanes: JobLanes | undefined
+  /** supports placed by hand are in use */
+  hasMarks?: boolean
 }
 
 /** What each engine can do with lanes */
@@ -68,6 +74,17 @@ export function supportLanes(u: LaneUse): { support: number; interface: number }
   const support = u.lanes?.supportLane ?? part
   const iface = engineLanes(u.engine).interfaceLane ? (u.lanes?.interfaceLane ?? support) : support
   return { support, interface: iface }
+}
+
+/**
+* How a lane change is purged. PrusaSlicer can't build its wipe tower when supports or their interface print from a different lane than
+ * their part (test slices, Nov 22), so then the machine has to purge; Kiri:Moto can do both. Otherwise the job's choice, the tower by default.
+ */
+export function purgeMode(u: LaneUse): { mode: 'tower' | 'machine'; forced: boolean } {
+  const s = supportLanes(u)
+  const other = u.engine === 'prusa' && u.supportsOn && (u.lanes?.supportLane != null || u.lanes?.interfaceLane != null) && u.partLanes.some((l) => l !== s.support || l !== s.interface)
+  if (other) return { mode: 'machine', forced: true }
+  return { mode: u.lanes?.purge ?? 'tower', forced: false }
 }
 
 /** The lanes this job prints with, lowest first */
@@ -91,6 +108,7 @@ export function laneNotices(u: LaneUse): { blocks: string[]; notes: string[] } {
   const eng = engineLanes(u.engine)
   if (!eng.partsOnLanes && new Set(u.partLanes).size > 1) blocks.push('Kiri:Moto prints the whole job from one lane. Put every part in the same lane, or use PrusaSlicer for parts in different lanes.')
   for (const i of used) if (!u.lanes?.materials[i]) blocks.push(`Choose a filament for lane ${i + 1}.`)
+  if (used.length > 1 && u.engine === 'prusa' && u.hasMarks && new Set(u.partLanes).size > 1) blocks.push('Support marks aren’t used with parts in different lanes yet: use automatic supports, or put the parts in one lane.')
   if (used.length > 1 && !LANES_SLICE_READY) blocks.push('Jobs that use two lanes can’t be sliced yet: this part of Studio is still being built. Use one lane for now.')
   if (u.supportsOn && !eng.interfaceLane) notes.push('Kiri:Moto has one support filament; PrusaSlicer can print the interface layers from another lane.')
   // test slices: all supports from the other lane = about 133 lane changes on a 26 mm part; the interface layers alone = 5

@@ -63,7 +63,7 @@ export interface SliceJobState {
   /** served from the cache: same part and settings as an earlier slice */
   cached?: boolean
   /** what the Portal received of the part: checked against what Studio sent (older Portals leave it out) */
-  model?: { triangles: number; bytes: number; crc: string; as: 'stl' | '3mf'; enforce: number; block: number } | null
+  model?: { triangles: number; bytes: number; crc: string; as: 'stl' | '3mf'; enforce: number; block: number; objects?: number } | null
 }
 
 
@@ -88,11 +88,12 @@ export async function runPrusa(
   stillWanted: () => boolean,
   timeoutMs = 20 * 60_000,
   supports: { enforce: number[][]; block: number[][] } | null = null,
+  objects: { triangles: number; lane: number }[] | null = null,
 ): Promise<{ gcode: string; seconds: number | null; filamentMm: number | null; cached: boolean; sent: SentFacts; received: SliceJobState['model'] }> {
   onPhase('Sending to the Rhino')
   const blob = toStl(vertices)
   const sent: SentFacts = { triangles: Math.floor(vertices.length / 9), bytes: blob.size, crc: crc32Hex(new Uint8Array(await blob.arrayBuffer())) }
-  const { id } = await portal.slice(blob, ini, name, center, supports)
+  const { id } = await portal.slice(blob, ini, name, center, supports, objects)
   const started = Date.now()
   let wait = 300
   for (;;) {

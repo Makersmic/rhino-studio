@@ -23,6 +23,7 @@
  * A job keeps only the options the user changed (job.prusa); everything else
  * comes from the Rhino's starting profile (RHINO_BASE) over PrusaSlicer's defaults.
  */
+import { LANE_TEMPLATE } from '../laneFile'
 import type { MachineInfo, PrepareJob } from '../types'
 import type { Material } from '../profiles'
 
@@ -74,6 +75,22 @@ export interface RhinoCtx {
   /** Klipper objects present: [exclude_object], [gcode_arcs] */
   hasExcludeObject: boolean
   hasArcs: boolean
+  /** several lanes in use: see LaneRun */
+  lanes?: LaneRun
+}
+
+/** A job that prints with several filament lanes (single-extruder multi-material in PrusaSlicer): what the Rhino sets then */
+export interface LaneRun {
+  /** lanes the tool has (one extruder entry each) */
+  count: number
+  /** each lane's material, for its temperatures */
+  materials: (Material | null)[]
+  purge: 'tower' | 'machine'
+  /** PrusaSlicer's extruder number (from 1) for the supports and their interface; 0 = the part's own lane */
+  support: number
+  interface: number
+  /** the wipe tower's front-left corner on the bed */
+  tower: { x: number; y: number }
 }
 
 export interface Lock {
@@ -214,7 +231,53 @@ export function materialType(key: string): string {
 // ---- values ------------------------------------------------------------------
 
 /** The value an option takes for this job, and where it comes from. */
+/**
+ * What a job in several lanes sets in the INI, on top of the Rhino's locks. The test slices (Nov 22, scripts/dual-probe) found: the wipe
+ * tower needs relative E (already so), writes ramming, unloading and loading by default (zeroed here: the machine's lane change does the
+ * mechanical part and the tower only purges), emits `Tn` and heat commands after the change template (Studio removes them from the file),
+ * and can't be built when supports print from another lane (the Rhino purges instead: wipe_tower off).
+ */
+export function laneLocks(c: RhinoCtx): Record<string, string> | null {
+  const l = c.lanes
+  if (!l) return null
+  const each = (f: (m: Material | null) => string) => Array.from({ length: l.count }, (_, i) => f(l.materials[i] ?? null)).join(',')
+  const same = (v: string) => Array.from({ length: l.count }, () => v).join(',')
+  const t = (m: Material | null, k: 'extruderTemp' | 'bedTemp') => String(Math.round(m?.[k] ?? 0))
+  return {
+    single_extruder_multi_material: '1',
+    // PrusaSlicer would prime every lane with lines at the very front edge of the bed; START_JOB already primes
+    single_extruder_multi_material_priming: '0',
+    nozzle_diameter: same(fmt(c.job.fdm.nozzle)),
+    temperature: each((m) => t(m, 'extruderTemp')),
+    first_layer_temperature: each((m) => t(m, 'extruderTemp')),
+    bed_temperature: each((m) => t(m, 'bedTemp')),
+    first_layer_bed_temperature: each((m) => t(m, 'bedTemp')),
+    toolchange_gcode: LANE_TEMPLATE,
+    wipe_tower: l.purge === 'tower' ? '1' : '0',
+    wipe_tower_x: fmt(l.tower.x),
+    wipe_tower_y: fmt(l.tower.y),
+    support_material_extruder: String(l.support),
+    support_material_interface_extruder: String(l.interface),
+    autoemit_temperature_commands: '0',
+    cooling_tube_length: '0',
+    cooling_tube_retraction: '0',
+    parking_pos_retraction: '0',
+    extra_loading_move: '0',
+    filament_load_time: same('0'),
+    filament_unload_time: same('0'),
+    filament_loading_speed: same('0'),
+    filament_unloading_speed: same('0'),
+    filament_loading_speed_start: same('0'),
+    filament_unloading_speed_start: same('0'),
+    retract_length_toolchange: same('0'),
+    retract_restart_extra_toolchange: same('0'),
+  }
+}
+export const LANE_REASON = 'Set by the Rhino for a job in several filament lanes: the lane change is the machine’s, and the tower only purges.'
+
 export function valueOf(key: string, s: Schema, c: RhinoCtx): { value: string; from: 'rhino' | 'yours' | 'start' | 'prusa' } {
+  const ll = laneLocks(c)?.[key]
+  if (ll !== undefined) return { value: ll, from: 'rhino' }
   const lock = LOCKS[key]
   if (lock) return { value: lock.value(c), from: 'rhino' }
   const mine = c.job.prusa?.[key]
@@ -234,7 +297,7 @@ export function firstOf(v: string, type: OptionType | undefined): string {
 export function invalid(key: string, value: string, s: Schema, c: RhinoCtx): string | null {
   const d = s.options[key]
   if (!d) return 'Unknown option'
-  if (LOCKS[key]) return 'Set by the Rhino'
+  if (LOCKS[key] || laneLocks(c)?.[key] !== undefined) return 'Set by the Rhino'
   const v = value.trim()
   if (d.nullable && v === 'nil') return null
   const range = (n: number) =>
@@ -275,11 +338,12 @@ export function invalid(key: string, value: string, s: Schema, c: RhinoCtx): str
 
 /** Every option the engine gets, as PrusaSlicer INI text. `known` = keys the installed engine accepts. */
 export function buildIni(s: Schema, c: RhinoCtx, known?: ReadonlySet<string>): string {
-  const keys = new Set<string>([...Object.keys(s.options), ...Object.keys(LOCKS)])
+  const lane = laneLocks(c)
+  const keys = new Set<string>([...Object.keys(s.options), ...Object.keys(LOCKS), ...Object.keys(lane ?? {})])
   const lines = [`# Rhino Studio for ${c.job.toolhead} / ${c.job.material}, PrusaSlicer ${s.version} option list`]
   for (const k of [...keys].sort()) {
     if (known && !known.has(k)) continue
-    if (!s.options[k] && !LOCKS[k]) continue
+    if (!s.options[k] && !LOCKS[k] && lane?.[k] === undefined) continue
     const { value } = valueOf(k, s, c)
     if (/[\r\n]/.test(value)) continue // never multi-line: nothing can sneak G-code in
     lines.push(`${k} = ${value}`)

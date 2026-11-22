@@ -57,14 +57,26 @@ describe('lanes on a two-path tool', () => {
     expect(p.job!.material).toBe('PLA_0_4_T1')
     expect(p.job!.fdm.path).toBe(1)
   })
-  it('holds a job back that uses both lanes (until the slice is built), but not one that uses just lane 2', async () => {
+  it('a job that uses both lanes goes on; one that lacks a filament in a lane in use does not', async () => {
     const p = await start()
     p.setPartLane(p.parts[1]!.id, 1)
-    expect(p.laneBlock.join(' ')).toContain('can’t be sliced yet')
-    await p.prepare()
-    expect(p.prepError).toContain('can’t be sliced yet')
-    p.setPartLane(p.parts[0]!.id, 1)
     expect(p.laneBlock).toEqual([])
+    expect(p.lanesUsedNow).toEqual([0, 1])
+    p.job!.lanes!.materials[1] = null
+    expect(p.laneBlock).toContain('Choose a filament for lane 2.')
+    await p.prepare()
+    expect(p.prepError).toContain('Choose a filament for lane 2.')
+  })
+  it("PrusaSlicer's purge choice is the job's, until supports come from another lane; Kiri keeps the choice", async () => {
+    const p = await start()
+    expect(p.purgeNow).toEqual({ mode: 'tower', forced: false })
+    p.setPurge('machine')
+    expect(p.purgeNow).toEqual({ mode: 'machine', forced: false })
+    p.setPurge('tower')
+    p.job!.engine = 'kiri'
+    p.setSupportMode('auto')
+    p.setSupportLane(1)
+    expect(p.purgeNow).toEqual({ mode: 'tower', forced: false })
   })
   it('Kiri:Moto moves the whole job to one lane, PrusaSlicer one part at a time', async () => {
     const p = await start()

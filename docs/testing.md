@@ -820,11 +820,15 @@ Needs the machine with a print head (BlockOne) mounted and confirmed; the fan sp
 
 ## Job setup: filament lanes on SwitchFly (building: not in a release yet)
 
-Nothing moves; the mock's `MOCK_SCENARIO=switchfly` is enough. **A job that uses both lanes is not sliced yet** (the slice is built in a later step); this checks the screens and the rules.
+Nothing moves; the mock's `MOCK_SCENARIO=switchfly` is enough for 1-5, and the Rhino's PrusaSlicer for 7-9. Two-lane files can be sliced and previewed but **not sent or downloaded** until the machine has a `SWITCH_LANE` macro (the machine's lane change comes with the hardware redesign).
 
 1. Job setup, load a model, pick 3D printing on SwitchFly. **Pass:** two piano keys (1, 2) sit in the Process panel above "Lane N filament"; pressing a key shows that lane's materials only (path 1 or path 2). Other tools show the old Material drop-down.
 2. Parts list: **Pass:** each part has a lane chip (colour square and number); clicking it moves that part to the next lane, and the part's menu has "Print in lane N". With Kiri:Moto selected, moving one part moves them all.
 3. Supports on (Support material page): **Pass:** "Support filament" (and, in PrusaSlicer, "Interface filament") appear, each "Same as the part" or a lane. Supports from the other lane show the note about many lane changes and, in PrusaSlicer, to use only the interface layers instead.
-4. Put parts in both lanes, or supports or interface on the other lane. **Pass:** Prepare is disabled with the reason ("can't be sliced yet"); Kiri:Moto with parts in two lanes says it prints the whole job from one lane. Put everything in lane 2: Prepare works and the job uses lane 2's filament.
+4. Kiri:Moto with parts in two lanes. **Pass:** Prepare is disabled with the reason (it prints the whole job from one lane). Put everything in lane 2: Prepare works and the job uses lane 2's filament.
 5. Wide window, two or more parts: **Pass:** the Parts list's lane and ⋯ buttons are not covered by the floating Settings panel.
 6. **Stop if** a one-lane job slices with the wrong lane's filament, or a two-lane job slices as if it were one lane.
+7. PrusaSlicer, two parts, one in each lane, "A tower on the bed". **Pass:** Prepare works; Job file says the Rhino received a 3MF of 2 parts, each in its lane; the preview shows both parts and a purge tower at the bed's front-right, clear of the parts; "Selects a filament lane N times" is a red check that stops Send and Download (no `SWITCH_LANE` macro), and every other check is green. No bare `T0` / `T1` and no `M104` / `M109` are in the file after START_JOB. **Stop if** a part prints in the wrong lane (look at the layers where each part sits), the tower overlaps a part, or the file would send.
+8. PrusaSlicer, supports on, "Interface filament" = lane 2, supports on the part's lane. **Pass:** "Purge at a lane change" turns to "The machine purges" and can't be changed (reason shown); the file has no tower; the changes are few (the interface layers only).
+9. Same part, "Support filament" = lane 2. **Pass:** the many-changes warning shows; the file has a lane change on every layer that has support. Kiri:Moto with the same: slices (its tower option works both ways).
+10. **Rhino's PrusaSlicer is 2.9.7; these were proved on 2.8.1.** Slice item 7 on the Rhino and look for: a purge tower, the markers made into `SWITCH_LANE LANE=n`, and no ramming moves at a change (a short purge only).

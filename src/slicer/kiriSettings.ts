@@ -28,17 +28,32 @@ export interface KiriJob {
   origin?: [number, number, number]
   /** move the (centred) part by this much before slicing */
   move?: [number, number, number]
+  /** the extruder (filament lane, from 0) the part prints with */
+  extruder?: number
 }
+
+/** A job in several filament lanes, as Kiri:Moto takes it: the whole job in one lane, the supports from another, with or without its tower */
+export interface KiriLanes {
+  count: number
+  partLane: number
+  supportLane: number
+  tower: boolean
+}
+
+/** What the lane change writes in Kiri's G-code ({tool} is the lane from 0); Studio's file keeps it as it is (laneFile.ts) */
+export const KIRI_CHANGE = 'SWITCH_LANE LANE={tool}'
 
 const r3 = (v: number) => Math.round(v * 1000) / 1000
 
-export function kiriJob(job: PrepareJob, part: PartInfo, m: MachineInfo): KiriJob {
+export function kiriJob(job: PrepareJob, part: PartInfo, m: MachineInfo, lanes?: KiriLanes | null): KiriJob {
   const W = m.workArea.x
   const D = m.workArea.y
   switch (job.process) {
     case 'fdm': {
       const f = job.fdm
+      const ext = { extFilament: 1.75, extNozzle: f.nozzle, extOffsetX: 0, extOffsetY: 0 }
       return {
+        ...(lanes ? { extruder: lanes.partLane } : {}),
         mode: 'FDM',
         device: {
           bedWidth: W,
@@ -51,7 +66,8 @@ export function kiriJob(job: PrepareJob, part: PartInfo, m: MachineInfo): KiriJo
           gcodeLayer: [';LAYER_CHANGE', ';Z:{z}'],
           gcodeTrack: [],
           gcodeFeature: [],
-          extruders: [{ extFilament: 1.75, extNozzle: f.nozzle, extOffsetX: 0, extOffsetY: 0 }],
+          extruders: Array.from({ length: lanes?.count ?? 1 }, () => ({ ...ext })),
+          ...(lanes ? { gcodeChange: [KIRI_CHANGE] } : {}),
         },
         process: {
           sliceHeight: f.layerHeight,
@@ -105,6 +121,7 @@ export function kiriJob(job: PrepareJob, part: PartInfo, m: MachineInfo): KiriJo
           firstLayerBedTemp: 0,
           antiBacklash: 0,
           zHopDistance: f.zHop,
+          ...(lanes ? { sliceSupportNozzle: lanes.supportLane, outputPurgeTower: lanes.tower } : {}),
         },
         move: [r3(job.placement.x - W / 2), r3(job.placement.y - D / 2), 0],
       }

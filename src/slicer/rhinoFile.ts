@@ -21,6 +21,7 @@
  *   cnc        G21 G90, the toolpath in work coordinates, M5, END_PRINT. The spindle
  *              is started and stopped by CNC_JOB_SETUP / M5, not by this file.
  */
+import { hasLaneChanges, laneBody } from './laneFile'
 import type { MachineInfo, PartInfo, PrepareJob } from './types'
 import { assembleLaser } from './laserOps'
 
@@ -97,7 +98,7 @@ function settingsFor(job: PrepareJob) {
 }
 
 /** PrusaSlicer comments worth keeping: layer and feature markers (previews use them). */
-const PRUSA_KEEP = /^;(LAYER_CHANGE|Z:|HEIGHT:|TYPE:|WIDTH:|BEFORE_LAYER_CHANGE|AFTER_LAYER_CHANGE)/
+const PRUSA_KEEP = /^;(LAYER_CHANGE|Z:|HEIGHT:|TYPE:|WIDTH:|BEFORE_LAYER_CHANGE|AFTER_LAYER_CHANGE|RHINO_LANE \d)/
 
 /**
  * Engine lines we keep: moves, fan, dwell, laser on/off. Kiri's header comments
@@ -179,11 +180,17 @@ export function rhinoFile(kiri: string, job: PrepareJob, part: PartInfo, _machin
   switch (job.process) {
     case 'fdm': {
       const f = job.fdm
-      const mat = materialParam(job.material)
+      // a job in several lanes: the change markers become the lane-change command, and the file begins in the lane the slicer starts with
+      const lf = hasLaneChanges(kiri) ? laneBody(cut) : null
+      if (lf) cut = lf.lines
+      const startLane = lf?.start ?? null
+      const startMat = startLane != null && job.lanes?.materials[startLane] ? job.lanes.materials[startLane]! : job.material
+      const mat = materialParam(startMat)
+      if (lf) out.splice(head.length, 0, `; rhino_lanes = ${lf.lanes.map((l) => l + 1).join(', ')} (${lf.changes} lane change${lf.changes === 1 ? '' : 's'}; the machine's SWITCH_LANE changes lane)`)
       out.push(
         'M140 S0 ; bed off until START_JOB heats it from the material table',
         'M104 S0 ; nozzle off until START_JOB heats it',
-        `START_JOB TOOLHEAD=${job.toolhead} MATERIAL=${mat} NOZZLE_SIZE=${fmt(f.nozzle)} EXTRUDER=${f.path}`,
+        `START_JOB TOOLHEAD=${job.toolhead} MATERIAL=${mat} NOZZLE_SIZE=${fmt(f.nozzle)} EXTRUDER=${startLane ?? f.path}`,
         ...(paLine(job) ? [paLine(job)!] : []),
         'G90 ; absolute X/Y/Z',
         'G21 ; millimetres',

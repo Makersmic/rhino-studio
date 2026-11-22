@@ -1,6 +1,6 @@
 # Design: two filaments in one job (Studio side)
 
-Status: **design, decisions of Nov 22 2026 folded in. Built so far: the lane keys (section 3) and their logic, shown in the style guide; nothing yet in Job setup.** Mike's answers: the lanes feed one nozzle; lane 2 can print the supports *and* their interface layers;
+Status: **decisions of Nov 22 2026 folded in. Built: the lane keys; lanes in Job setup (material per lane, a lane per part, support and interface lane, purge choice); the two-lane slice in both engines (Portal 3MF with a lane per part, change markers, tower, Kiri lanes), held back from sending until the machine has `SWITCH_LANE`. Not built: Lane tabs, tower drawn on the bed, assemblies, preview by lane, change budget, temperature check, start checks, spool change on runout.** Mike's answers: the lanes feed one nozzle; lane 2 can print the supports *and* their interface layers;
 both slicers (PrusaSlicer and Kiri:Moto). The machine's lane-change macros are **not** part of this: Mike is redesigning the hardware and the macros are written when that
 design is assembled. So the Studio side below treats the machine as an interface (section 6) and never sends a two-lane job until the machine says it can run one.
 
@@ -98,3 +98,11 @@ Run on 2.8.1 because the official Linux builds stop there; **the Rhino runs 2.9.
 - The **change budget** shows the counted changes from the layers (for PrusaSlicer, from the same layer analysis it can do before slicing; exact count after the slice in Job file checks).
 - Interface-only first for lane-2 supports; full support on lane 2 gets the budget warning.
 - The change command and the bare-`T` cleanup become part of the machine interface (section 6): the file contains `SWITCH_LANE`-style lines the new macros define.
+
+## 9. Step 3 as built (Nov 22 2026)
+- **The Portal** takes `objects` beside the model: how many triangles each part has, in order, and its lane. Several lanes become a 3MF with one object per part and its `extruder`; all in lane 1 stays a plain STL. Marks with several lanes are refused. The INI may carry only one G-code template: `toolchange_gcode = ;RHINO_LANE {next_extruder}`, a comment, so no G-code that the machine would run travels in the settings.
+- **Studio turns the markers into `SWITCH_LANE LANE=n`** (`slicer/laneFile.ts`), removes PrusaSlicer's bare `Tn` and its heat commands, and starts `START_JOB` in the lane PrusaSlicer starts in. Kiri:Moto writes `SWITCH_LANE LANE={tool}` itself. `SWITCH_LANE` is a placeholder name until the macros exist.
+- **Settings the lanes lock** (`laneLocks` in `prusa/config.ts`): single-extruder multi-material on, a temperature per lane, the tower on or off and where it is, support and interface extruder, ramming, loading and unloading zeroed (so the tower only purges), no temperature commands, and **PrusaSlicer's front-edge priming off** (found by measuring the tower in a real slice: it otherwise printed priming lines at the very front of the bed).
+- **Tower**: placed at the bed's front-right in a 70 x 70 mm area kept clear of the parts; if there is no room Prepare says so. Measured with PrusaSlicer 2.8.1: 60 mm wide, about 13 mm deep, exactly at the asked position. The 70 mm area is room to spare.
+- **Held back:** the job file check "Selects a filament lane N times" is an error unless Klipper has a `SWITCH_LANE` macro, so Send and Download are refused. Reason: Klipper only reports an unknown command and carries on, which would print the second lane's parts in the first lane's filament.
+- Not yet: the tower drawn in the 3D view (placed and sliced, not shown), per-lane Lane tabs, assemblies, preview by lane, the change budget, the temperature check.

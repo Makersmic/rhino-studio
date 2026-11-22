@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { LANES_SLICE_READY, engineLanes, laneCount, laneNotices, lanesUsed, materialsOfLane, normalizeLanes, supportLanes, type JobLanes, type LaneUse } from './lanesJob'
+import { LANES_SLICE_READY, engineLanes, purgeMode, laneCount, laneNotices, lanesUsed, materialsOfLane, normalizeLanes, supportLanes, type JobLanes, type LaneUse } from './lanesJob'
 import type { Material } from '@/slicer/profiles'
 
 const m = (key: string, path?: 0 | 1): Material => ({ key, name: key.split('_')[0]!, path })
@@ -65,10 +65,14 @@ describe('lane notices', () => {
     const r = laneNotices(use({ partLanes: [1], lanes: { materials: ['PLA_0_4_T0', null], supportLane: null, interfaceLane: null } }))
     expect(r.blocks).toContain('Choose a filament for lane 2.')
   })
-  it('holds back a job in two lanes until the slice is built', () => {
-    expect(LANES_SLICE_READY).toBe(false)
-    expect(laneNotices(use({ partLanes: [0, 1] })).blocks.join(' ')).toContain('can’t be sliced yet')
-    expect(laneNotices(use({ partLanes: [1] })).blocks).toEqual([])
+  it('lets a job in two lanes through now the slice is built', () => {
+    expect(LANES_SLICE_READY).toBe(true)
+    expect(laneNotices(use({ partLanes: [0, 1] })).blocks).toEqual([])
+  })
+  it("support marks can't go with parts in different lanes yet", () => {
+    expect(laneNotices(use({ partLanes: [0, 1], hasMarks: true })).blocks.join(' ')).toContain('Support marks')
+    expect(laneNotices(use({ partLanes: [1, 1], hasMarks: true })).blocks).toEqual([])
+    expect(laneNotices(use({ engine: 'kiri', partLanes: [1, 1], hasMarks: true })).blocks).toEqual([])
   })
   it('warns when the supports come from the other lane, and points to interface-only (PrusaSlicer)', () => {
     const n = laneNotices(use({ supportsOn: true, lanes: lanes({ supportLane: 1 }) })).notes.join(' ')
@@ -76,5 +80,21 @@ describe('lane notices', () => {
     expect(n).toContain('only the interface layers')
     expect(laneNotices(use({ engine: 'kiri', supportsOn: true, lanes: lanes({ supportLane: 1 }) })).notes.join(' ')).not.toContain('only the interface layers')
     expect(laneNotices(use({ supportsOn: true, lanes: lanes({ interfaceLane: 1 }) })).notes.join(' ')).not.toContain('a lot of changes')
+  })
+})
+
+describe('purgeMode', () => {
+  it('is the job’s choice, the tower by default', () => {
+    expect(purgeMode(use({ partLanes: [0, 1] }))).toEqual({ mode: 'tower', forced: false })
+    expect(purgeMode(use({ partLanes: [0, 1], lanes: lanes({ purge: 'machine' }) }))).toEqual({ mode: 'machine', forced: false })
+  })
+  it('Kiri:Moto can build its tower with supports from another lane', () => {
+    expect(purgeMode(use({ engine: 'kiri', supportsOn: true, lanes: lanes({ supportLane: 1 }), partLanes: [0] }))).toEqual({ mode: 'tower', forced: false })
+  })
+  it('is the machine when supports or the interface print from another lane than their part (PrusaSlicer has no tower then)', () => {
+    expect(purgeMode(use({ supportsOn: true, lanes: lanes({ interfaceLane: 1 }), partLanes: [0] }))).toEqual({ mode: 'machine', forced: true })
+    expect(purgeMode(use({ supportsOn: true, lanes: lanes({ supportLane: 1, purge: 'tower' }), partLanes: [0] }))).toEqual({ mode: 'machine', forced: true })
+    expect(purgeMode(use({ supportsOn: true, lanes: lanes({ supportLane: 1 }), partLanes: [1] }))).toEqual({ mode: 'tower', forced: false })
+    expect(purgeMode(use({ supportsOn: false, lanes: lanes({ supportLane: 1 }), partLanes: [0] }))).toEqual({ mode: 'tower', forced: false })
   })
 })
