@@ -151,6 +151,12 @@ const HIDDEN_GROUPS = new Set([
   'Flush parameters (experimental)', 'Position (for multi-extruder printers)', 'Retraction when tool is disabled (advanced settings for multi-extruder setups)',
   'Retraction when tool is disabled', 'Capabilities', 'Preview', 'Sequential printing limits',
 ])
+/**
+ * Options Studio's own control replaces (Mike, Nov 21): the Supports drop-down (Off / Automatic / Only where I mark) sets
+ * support_material and support_material_auto, so PrusaSlicer's two checkboxes for them would only say the same thing twice.
+ */
+const HIDDEN_OPTIONS = new Set(['support_material', 'support_material_auto'])
+export const shownOption = (key: string): boolean => !HIDDEN_OPTIONS.has(key)
 export function shownPage(label: string): boolean {
   return !HIDDEN_PAGES.has(label)
 }

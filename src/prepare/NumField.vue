@@ -5,13 +5,15 @@
  * never reaches the slicer.
  */
 import { ref, watch, useId } from 'vue'
+import { useChanged } from './changed'
 
 const props = withDefaults(
-  defineProps<{ label: string; unit?: string; min?: number; max?: number; step?: number; hint?: string; percent?: boolean }>(),
-  { unit: undefined, min: -Infinity, max: Infinity, step: 1, hint: undefined, percent: false },
+  defineProps<{ label: string; unit?: string; min?: number; max?: number; step?: number; hint?: string; percent?: boolean; setting?: string }>(),
+  { unit: undefined, min: -Infinity, max: Infinity, step: 1, hint: undefined, percent: false, setting: undefined },
 )
 const model = defineModel<number>({ required: true })
 const id = useId()
+const changed = useChanged()
 
 const show = (v: number) => String(props.percent ? Math.round(v * 1000) / 10 : v)
 const text = ref(show(model.value))
@@ -29,7 +31,7 @@ function input(e: Event) {
 </script>
 
 <template>
-  <div class="field" :class="{ bad }">
+  <div class="field" :class="{ bad, chg: changed(setting) }">
     <label :for="id">{{ label }}</label>
     <span class="box">
       <input :id="id" type="number" inputmode="decimal" :step="percent ? step * 100 : step" :value="text" :aria-invalid="bad" :aria-describedby="hint ? `${id}-h` : undefined" @input="input" @blur="bad && (text = show(model), bad = false)" />
@@ -49,4 +51,5 @@ input:focus { outline: none; }
 .unit { font-size: var(--rs-text-xs); color: var(--rs-field-muted); }
 .hint { font-size: 11px; color: var(--rs-text-muted); }
 .bad .box { border-color: var(--rs-danger); }
+.chg:not(.bad) .box { border-color: var(--rs-changed); box-shadow: inset 0 0 0 1px var(--rs-changed); }
 </style>

@@ -103,3 +103,12 @@ describe('files', () => {
     expect(Object.values(LOCKS).every((l) => l.reason.length > 5)).toBe(true)
   })
 })
+
+describe('options Studio replaces with its own control', () => {
+  it('hides the two support checkboxes the Supports drop-down sets', async () => {
+    const { shownOption } = await import('./config')
+    expect(shownOption('support_material')).toBe(false)
+    expect(shownOption('support_material_auto')).toBe(false)
+    expect(shownOption('support_material_threshold')).toBe(true)
+  })
+})

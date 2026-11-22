@@ -4,7 +4,8 @@
  * under the 3D view): Off / Automatic / Only where I mark, the buttons that mark, erase or block on the part, and the
  * mark's reach. The marking itself still happens on the 3D view; this only switches it on and off.
  */
-import { computed } from 'vue'
+import { computed, inject } from 'vue'
+import { SUPPORT_CHANGED } from './changed'
 import RsButton from '@/components/RsButton.vue'
 import NumField from './NumField.vue'
 import { MARK_SIZES, SHOW_BLOCKS, marksNote } from './supportMarks'
@@ -14,6 +15,7 @@ import { usePrepareStore } from '@/stores/prepare'
 const props = defineProps<{ is3d: boolean }>()
 const marking = defineModel<'mark' | 'block' | 'erase' | null>('marking', { default: null })
 const prep = usePrepareStore()
+const changed = inject(SUPPORT_CHANGED, null)
 
 const engine = computed(() => prep.job?.engine)
 const selReach = computed({ get: () => prep.selectedMarkReach ?? MARK_SIZES.start, set: (v: number) => prep.setSelectedReach(v) })
@@ -27,7 +29,7 @@ function toggle(k: 'mark' | 'block' | 'erase') {
 <template>
   <div class="supports wide" role="group" aria-label="Supports">
     <div class="row">
-      <label class="field">
+      <label class="field" :class="{ chg: changed }">
         <span>Supports</span>
         <select :value="prep.supportMode" :disabled="engine === 'prusa' && !prep.schema" @change="prep.setSupportMode(($event.target as HTMLSelectElement).value as 'off' | 'auto' | 'marked')">
           <option value="off">Off</option>
@@ -65,6 +67,7 @@ function toggle(k: 'mark' | 'block' | 'erase') {
 .field { display: flex; flex-direction: column; gap: 4px; min-width: 180px; }
 .field > span { font-size: 12px; font-weight: var(--rs-weight-medium); color: var(--rs-text-muted); }
 select { height: 38px; padding: 0 10px; border: 1px solid var(--rs-line-strong); border-radius: var(--rs-radius-md); background: var(--rs-surface); color: var(--rs-text-strong); font: inherit; font-size: var(--rs-text-sm); }
+.chg select { border-color: var(--rs-changed); box-shadow: inset 0 0 0 1px var(--rs-changed); }
 .note { margin: 0; font-size: var(--rs-text-xs); color: var(--rs-text-muted); }
 .note.strong { color: var(--rs-text-strong); }
 </style>

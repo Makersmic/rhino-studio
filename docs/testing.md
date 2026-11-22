@@ -795,3 +795,14 @@ Nothing moves; no machine needed beyond Studio itself (the mock is enough).
 3. Drag the part and turn the view with the mouse in the gaps around the panels. **Pass:** both still work. A long Settings list scrolls inside its own panel, not the page.
 4. Make the window narrower than about 1100 px, or open it on a phone. **Pass:** the panels stack under the model as before, nothing runs off the screen.
 5. **Stop if** a panel covers the Angle / Top / Fit part buttons, hides Prepare with no way to scroll to it, or the model can no longer be dragged.
+
+## Job setup: supports control, folded groups, changed settings, save before Preview (0.33.0)
+
+Nothing moves; the mock plus Portal profiles is enough, but do it once with the real Portal and PrusaSlicer.
+
+1. Job setup, 3D printing, PrusaSlicer, Print tab, Support material page. **Pass:** the only support control is the Supports drop-down (Off / Automatic / Only where I mark); PrusaSlicer's "Generate support material" and "Auto generated supports" checkboxes are gone, also from the search box. Slice with Off, Automatic and Only where I mark: the three results differ as before (none, everywhere, only under marks).
+2. Same with Kiri:Moto. **Pass:** the same drop-down, same three results.
+3. Open Job setup fresh (clear site data first). **Pass:** every group in Settings (PrusaSlicer's groups; Kiri's Quality, Strength, Speed, ...; the laser, knife and CNC Advanced groups) starts folded. Open one, reload: it stays open on that browser.
+4. Change a number, a drop-down and a tick box. **Pass:** each shows a red border; set it back to the profile's value and the border goes. Changing the Supports drop-down turns it red too. Pick another profile or press Reset: all borders clear.
+5. With changes made, press Prepare (or the Preview step). **Pass:** a dialog asks to Save to profile (only when a saved profile is in use), Save as new profile…, or Continue without saving; × or Esc stays in Setup. Each choice then opens Preview. A saved profile shows in the Profile list and the borders clear. After "Continue without saving", going back and pressing Prepare does not ask again until you change something else.
+6. **Stop if** the dialog doesn't appear with changes, appears with none, loses the changes on any choice, or a PrusaSlicer slice no longer honours the Supports drop-down.

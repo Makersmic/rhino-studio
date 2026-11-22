@@ -7,16 +7,20 @@
  *   start / prusa  the Rhino's starting profile or PrusaSlicer's default
  * Values are PrusaSlicer INI text; vector options (per extruder) show their first value.
  */
-import { computed, ref, watch, useId } from 'vue'
+import { computed, inject, ref, watch, useId } from 'vue'
+import { CHANGED_KEYS } from './changed'
 import { LOCKS, invalid, refused, valueOf, type RhinoCtx, type Schema } from '@/slicer/prusa/config'
 
 const props = defineProps<{ k: string; schema: Schema; ctx: RhinoCtx; showKey?: boolean }>()
 const emit = defineEmits<{ (e: 'set', key: string, value: string | null): void }>()
 const id = useId()
+/** changed from the profile in use (the Settings panel provides the set); on its own, changed from the Rhino's starting profile */
+const changedKeys = inject(CHANGED_KEYS, null)
 
 const d = computed(() => props.schema.options[props.k]!)
 const cur = computed(() => valueOf(props.k, props.schema, props.ctx))
 const label = computed(() => d.value.full_label ?? d.value.label ?? props.k)
+const isChanged = computed(() => (changedKeys ? changedKeys.value.has(props.k) : cur.value.from === 'yours'))
 const locked = computed(() => cur.value.from === 'rhino')
 const lockReason = computed(() => (locked.value ? LOCKS[props.k]?.reason ?? '' : ''))
 const kind = computed(() => {
@@ -55,7 +59,7 @@ function onText(v: string) {
 </script>
 
 <template>
-  <div class="opt" :class="{ locked, mine: cur.from === 'yours', err: !!err }">
+  <div class="opt" :class="{ locked, mine: cur.from === 'yours', chg: isChanged, err: !!err }">
     <div class="top">
       <label :for="id" class="lab">{{ label }}<span v-if="showKey" class="key">{{ k }}</span></label>
       <button v-if="d.tooltip" type="button" class="tip-btn" :aria-expanded="tipOpen" :aria-label="`About ${label}`" @click="tipOpen = !tipOpen">?</button>
@@ -130,6 +134,8 @@ select { flex: 1; min-width: 0; height: 36px; padding: 0 8px; border-radius: var
 .locked .box input, .locked select { color: var(--rs-text-muted); cursor: not-allowed; }
 .msg { margin: 0; font-size: 11px; color: var(--rs-text-muted); }
 .msg.bad { color: var(--rs-text-strong); font-weight: var(--rs-weight-medium); }
+.chg .box, .chg select { border-color: var(--rs-changed); box-shadow: inset 0 0 0 1px var(--rs-changed); }
+.chg .sw input { outline: 2px solid var(--rs-changed); outline-offset: 1px; }
 .err .box { border-color: var(--rs-danger); }
 .tip { margin: 2px 0 0; padding: 8px 10px; border-radius: var(--rs-radius-sm); background: var(--rs-surface-2); font-size: 12px; line-height: 1.45; color: var(--rs-text); }
 </style>

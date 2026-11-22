@@ -15,7 +15,7 @@ import TunedNote from '@/prepare/TunedNote.vue'
 import { useSettingsStore } from '@/stores/settings'
 import PreviewView from '@/views/PreviewView.vue'
 import StartEndLine from '@/toolmgr/StartEndLine.vue'
-import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue'
 import RsPanel from '@/components/RsPanel.vue'
 import RsButton from '@/components/RsButton.vue'
 import Icon from '@/icons/Icon.vue'
@@ -32,6 +32,9 @@ import FoldGroup from '@/prepare/FoldGroup.vue'
 import SupportControls from '@/prepare/SupportControls.vue'
 import PrusaPanel from '@/prepare/PrusaPanel.vue'
 import ProfileBar from '@/prepare/ProfileBar.vue'
+import SaveChangesDialog from '@/prepare/SaveChangesDialog.vue'
+import { CHANGED_KEYS, SUPPORT_CHANGED, SUPPORT_KEYS } from '@/prepare/changed'
+import { useSliceProfilesStore } from '@/stores/sliceProfiles'
 import { rhinoBase, firstOf, valueOf } from '@/slicer/prusa/config'
 import CncOps from '@/prepare/CncOps.vue'
 import CncBitField from '@/prepare/CncBitField.vue'
@@ -140,7 +143,32 @@ function onMarkKey(e: KeyboardEvent) {
 onMounted(() => window.addEventListener('keydown', onMarkKey))
 onBeforeUnmount(() => window.removeEventListener('keydown', onMarkKey))
 
+// Settings changed from their profile get a red border (Mike, Nov 21)
+const changedSet = computed(() => new Set(Object.keys(prep.overrides)))
+provide(CHANGED_KEYS, changedSet)
+const changed = (k: string) => changedSet.value.has(k)
+const supportChanged = computed(() => SUPPORT_KEYS.some((k) => changedSet.value.has(k)))
+provide(SUPPORT_CHANGED, supportChanged)
+
+// Before Preview: unsaved changes ask whether to save them to the profile, as a new one, or neither. "Neither" isn't asked
+// again until the changes themselves change.
+const profilesStore = useSliceProfilesStore()
+const askSave = ref(false)
+const declined = ref<string | null>(null)
+const unsaved = computed(() => profilesStore.online && !up.value && Object.keys(prep.overrides).length > 0 && prep.profileState?.kind !== 'stale')
 function goStep(s: 'file' | 'process' | 'setup' | 'preview' | 'jobfile') {
+  if (s === 'preview' && prep.step !== 'preview' && unsaved.value && declined.value !== JSON.stringify(prep.overrides)) {
+    askSave.value = true
+    return
+  }
+  go(s)
+}
+function afterAsk(saved: boolean) {
+  declined.value = saved ? null : JSON.stringify(prep.overrides)
+  askSave.value = false
+  go('preview')
+}
+function go(s: 'file' | 'process' | 'setup' | 'preview' | 'jobfile') {
   if (s === 'file') prep.clearPart()
   else if (s === 'process') prep.changeProcess()
   else prep.goStage(s)
@@ -283,6 +311,7 @@ const engineNote = computed(() => {
 
     <input ref="picker" type="file" multiple :accept="accepts" class="visually-hidden" aria-label="Choose a model file" @change="pick(($event.target as HTMLInputElement).files)" />
     <StepBar :step="prep.step" @go="goStep" />
+    <SaveChangesDialog :open="askSave" @close="askSave = false" @proceed="afterAsk" />
 
     <!-- ============ 1. File -->
     <template v-if="prep.step === 'file'">
@@ -529,17 +558,17 @@ const engineNote = computed(() => {
             <p v-else class="muted small">Loading PrusaSlicer’s options…</p>
           </template>
           <div v-if="proc === 'fdm' && job.engine !== 'prusa'" class="grid">
-            <NumField v-model="job.fdm.layerHeight" label="Layer height" unit="mm" :min="0.04" :max="job.fdm.nozzle * 0.8" :step="0.04" />
-            <NumField v-model="job.fdm.firstLayer" label="First layer" unit="mm" :min="0.08" :max="job.fdm.nozzle" :step="0.04" />
-            <NumField v-model="job.fdm.walls" label="Walls" :min="1" :max="20" />
-            <NumField v-model="job.fdm.infill" label="Infill" unit="%" :min="0" :max="1" :step="0.05" percent />
-            <NumField v-model="job.fdm.topLayers" label="Top layers" :min="0" :max="50" />
-            <NumField v-model="job.fdm.bottomLayers" label="Bottom layers" :min="0" :max="50" />
-            <NumField v-model="job.fdm.speed" label="Speed" unit="mm/s" :min="5" :max="300" />
-            <NumField v-model="job.fdm.firstLayerSpeed" label="First layer speed" unit="mm/s" :min="5" :max="100" />
-            <NumField v-model="job.fdm.retract" label="Retract" unit="mm" :min="0" :max="8" :step="0.1" />
-            <NumField v-model="job.fdm.fan" label="Part fan" unit="%" :min="0" :max="1" :step="0.05" percent hint="From layer 2" />
-            <div class="field">
+            <NumField v-model="job.fdm.layerHeight" setting="layerHeight" label="Layer height" unit="mm" :min="0.04" :max="job.fdm.nozzle * 0.8" :step="0.04" />
+            <NumField v-model="job.fdm.firstLayer" setting="firstLayer" label="First layer" unit="mm" :min="0.08" :max="job.fdm.nozzle" :step="0.04" />
+            <NumField v-model="job.fdm.walls" setting="walls" label="Walls" :min="1" :max="20" />
+            <NumField v-model="job.fdm.infill" setting="infill" label="Infill" unit="%" :min="0" :max="1" :step="0.05" percent />
+            <NumField v-model="job.fdm.topLayers" setting="topLayers" label="Top layers" :min="0" :max="50" />
+            <NumField v-model="job.fdm.bottomLayers" setting="bottomLayers" label="Bottom layers" :min="0" :max="50" />
+            <NumField v-model="job.fdm.speed" setting="speed" label="Speed" unit="mm/s" :min="5" :max="300" />
+            <NumField v-model="job.fdm.firstLayerSpeed" setting="firstLayerSpeed" label="First layer speed" unit="mm/s" :min="5" :max="100" />
+            <NumField v-model="job.fdm.retract" setting="retract" label="Retract" unit="mm" :min="0" :max="8" :step="0.1" />
+            <NumField v-model="job.fdm.fan" setting="fan" label="Part fan" unit="%" :min="0" :max="1" :step="0.05" percent hint="From layer 2" />
+            <div class="field" :class="{ chg: changed('infillType') }">
               <label for="prep-fill">Infill pattern</label>
               <select id="prep-fill" v-model="job.fdm.infillType">
                 <option value="grid">Grid</option>
@@ -556,54 +585,54 @@ const engineNote = computed(() => {
           </FdmAdvanced>
 
           <div v-else-if="proc === 'laser'" class="grid">
-            <NumField v-model="job.laser.power" label="Power" unit="%" :min="0.01" :max="1" :step="0.05" percent :hint="`S ${Math.round(job.laser.power * prep.machineInfo.laserSMax)} of ${prep.machineInfo.laserSMax}`" />
-            <NumField v-model="job.laser.feed" label="Speed" unit="mm/min" :min="10" :max="6000" :step="10" />
-            <NumField v-model="job.laser.passes" label="Passes" :min="1" :max="20" :hint="job.laser.ops?.length ? 'Everything else, repeated' : 'The whole cut, repeated'" />
-            <NumField v-model="job.laser.kerf" label="Kerf" unit="mm" :min="0" :max="1" :step="0.05" hint="Beam width allowance" />
+            <NumField v-model="job.laser.power" setting="power" label="Power" unit="%" :min="0.01" :max="1" :step="0.05" percent :hint="`S ${Math.round(job.laser.power * prep.machineInfo.laserSMax)} of ${prep.machineInfo.laserSMax}`" />
+            <NumField v-model="job.laser.feed" setting="feed" label="Speed" unit="mm/min" :min="10" :max="6000" :step="10" />
+            <NumField v-model="job.laser.passes" setting="passes" label="Passes" :min="1" :max="20" :hint="job.laser.ops?.length ? 'Everything else, repeated' : 'The whole cut, repeated'" />
+            <NumField v-model="job.laser.kerf" setting="kerf" label="Kerf" unit="mm" :min="0" :max="1" :step="0.05" hint="Beam width allowance" />
             <NumField v-if="!prep.flat" v-model="job.laser.cutHeight" label="Cut outline at" unit="mm" :min="0.01" :max="prep.part?.size.z ?? 1000" :step="0.5" hint="Height above the bed" />
             <TunedNote />
             <LaserOps />
           </div>
           <div v-if="proc === 'laser'" class="adv">
             <FoldGroup title="Advanced" note="smoothing, outer outline only">
-              <NumField v-model="job.laser.smooth" label="Smoothing" unit="mm" :min="0" :max="2" :step="0.05" hint="Merges tiny segments; 0 = off" />
+              <NumField v-model="job.laser.smooth" setting="smooth" label="Smoothing" unit="mm" :min="0" :max="2" :step="0.05" hint="Merges tiny segments; 0 = off" />
               <label class="check"><input v-model="job.laser.outerOnly" type="checkbox" /> Outer outline only (no holes)</label>
             </FoldGroup>
           </div>
 
           <div v-else-if="proc === 'dragknife'" class="grid">
-            <NumField v-model="job.knife.feed" label="Speed" unit="mm/min" :min="50" :max="6000" :step="50" />
-            <NumField v-model="job.knife.depth" label="Depth per pass" unit="mm" :min="0.05" :max="1.5" :step="0.05" />
-            <NumField v-model="job.knife.passes" label="Passes" :min="1" :max="5" />
-            <NumField v-model="job.knife.tip" label="Blade offset" unit="mm" :min="0" :max="3" :step="0.05" hint="Axis to blade tip" />
-            <NumField v-model="job.knife.plunge" label="Plunge speed" unit="mm/min" :min="10" :max="1000" :step="10" />
+            <NumField v-model="job.knife.feed" setting="feed" label="Speed" unit="mm/min" :min="50" :max="6000" :step="50" />
+            <NumField v-model="job.knife.depth" setting="depth" label="Depth per pass" unit="mm" :min="0.05" :max="1.5" :step="0.05" />
+            <NumField v-model="job.knife.passes" setting="passes" label="Passes" :min="1" :max="5" />
+            <NumField v-model="job.knife.tip" setting="tip" label="Blade offset" unit="mm" :min="0" :max="3" :step="0.05" hint="Axis to blade tip" />
+            <NumField v-model="job.knife.plunge" setting="plunge" label="Plunge speed" unit="mm/min" :min="10" :max="1000" :step="10" />
             <NumField v-if="!prep.flat" v-model="job.knife.cutHeight" label="Cut outline at" unit="mm" :min="0.01" :max="prep.part?.size.z ?? 1000" :step="0.5" />
             <TunedNote />
           </div>
           <div v-if="proc === 'dragknife'" class="adv">
             <FoldGroup title="Advanced" note="smoothing, outer outline only">
-              <NumField v-model="job.knife.smooth" label="Smoothing" unit="mm" :min="0" :max="2" :step="0.05" hint="Merges tiny segments; 0 = off" />
+              <NumField v-model="job.knife.smooth" setting="smooth" label="Smoothing" unit="mm" :min="0" :max="2" :step="0.05" hint="Merges tiny segments; 0 = off" />
               <label class="check"><input v-model="job.knife.outerOnly" type="checkbox" /> Outer outline only (no holes)</label>
             </FoldGroup>
           </div>
 
           <div v-else-if="proc === 'cnc'" class="grid">
             <CncBitField />
-            <div class="field">
+            <div class="field" :class="{ chg: changed('toolType') }">
               <label for="prep-tool">Tool</label>
               <select id="prep-tool" v-model="job.cnc.toolType">
                 <option value="endmill">Flat end mill</option>
                 <option value="ballmill">Ball end mill</option>
               </select>
             </div>
-            <NumField v-model="job.cnc.toolDiameter" label="Diameter" unit="mm" :min="0.5" :max="12.7" :step="0.025" />
-            <NumField v-model="job.cnc.fluteLength" label="Cutting length" unit="mm" :min="1" :max="60" :step="0.5" hint="Nothing cuts deeper" />
-            <NumField v-model="job.cnc.feed" label="Feed" unit="mm/min" :min="10" :max="5000" :step="10" />
-            <NumField v-model="job.cnc.plunge" label="Plunge" unit="mm/min" :min="10" :max="1000" :step="10" />
-            <NumField v-model="job.cnc.clearance" label="Clearance" unit="mm" :min="1" :max="30" hint="Above the stock between cuts" />
+            <NumField v-model="job.cnc.toolDiameter" setting="toolDiameter" label="Diameter" unit="mm" :min="0.5" :max="12.7" :step="0.025" />
+            <NumField v-model="job.cnc.fluteLength" setting="fluteLength" label="Cutting length" unit="mm" :min="1" :max="60" :step="0.5" hint="Nothing cuts deeper" />
+            <NumField v-model="job.cnc.feed" setting="feed" label="Feed" unit="mm/min" :min="10" :max="5000" :step="10" />
+            <NumField v-model="job.cnc.plunge" setting="plunge" label="Plunge" unit="mm/min" :min="10" :max="1000" :step="10" />
+            <NumField v-model="job.cnc.clearance" setting="clearance" label="Clearance" unit="mm" :min="1" :max="30" hint="Above the stock between cuts" />
             <CncOps :cnc="job.cnc" />
-            <NumField v-model="job.cnc.margin" label="Stock margin" unit="mm" :min="0" :max="100" hint="Each side of the part" />
-            <NumField v-model="job.cnc.extraTop" label="Stock above the part" unit="mm" :min="0" :max="50" :step="0.5" hint="0 = stock as thick as the part" />
+            <NumField v-model="job.cnc.margin" setting="margin" label="Stock margin" unit="mm" :min="0" :max="100" hint="Each side of the part" />
+            <NumField v-model="job.cnc.extraTop" setting="extraTop" label="Stock above the part" unit="mm" :min="0" :max="50" :step="0.5" hint="0 = stock as thick as the part" />
             <TunedNote />
             <p class="muted small wide">One tool per job: the Rhino has no tool changer. Clamp the stock, then CNC_JOB_SETUP sets X0 Y0 on its front-left corner and Z0 on its top.</p>
           </div>
@@ -773,6 +802,7 @@ select { height: 38px; padding: 0 10px; border: 1px solid var(--rs-line-strong);
 
 .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--rs-space-3) var(--rs-space-4); }
 .field { display: flex; flex-direction: column; gap: 4px; }
+.field.chg select { border-color: var(--rs-changed); box-shadow: inset 0 0 0 1px var(--rs-changed); }
 .wide { grid-column: 1 / -1; }
 .adv { margin-top: var(--rs-space-4); }
 .check { display: flex; align-items: center; gap: 8px; font-size: var(--rs-text-sm); align-self: end; min-height: 38px; }

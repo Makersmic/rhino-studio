@@ -10,7 +10,7 @@
  */
 import { computed, ref, watch } from 'vue'
 import PrusaOption from './PrusaOption.vue'
-import { LOCKS, MODE_RANK, shownGroup, shownPage, staleChanges, type Mode, type RhinoCtx, type Schema } from '@/slicer/prusa/config'
+import { LOCKS, MODE_RANK, shownGroup, shownOption, shownPage, staleChanges, type Mode, type RhinoCtx, type Schema } from '@/slicer/prusa/config'
 
 const props = defineProps<{ schema: Schema; ctx: RhinoCtx }>()
 const emit = defineEmits<{ (e: 'set', key: string, value: string | null): void; (e: 'resetAll'): void }>()
@@ -35,12 +35,13 @@ const mode = ref<Mode>(load('rs.prusa.mode', 'simple'))
 const tabId = ref<string>(load('rs.prusa.tab', 'print'))
 const pageByTab = ref<Record<string, string>>(load('rs.prusa.pages', {}))
 const query = ref('')
-/** groups folded shut, by "tab › page › group" (a per-viewer convenience, Mike Nov 9: every section folds) */
-const folded = ref<Record<string, boolean>>(load('rs.prusa.folded', {}))
-watch(folded, (v) => save('rs.prusa.folded', v), { deep: true })
+/** groups opened, by "tab › page › group": every group starts folded and the viewer's choice is kept (a per-viewer convenience; Mike Nov 9 every section folds, Nov 21 folded to begin with) */
+const opened = ref<Record<string, boolean>>(load('rs.prusa.opened', {}))
+watch(opened, (v) => save('rs.prusa.opened', v), { deep: true })
 const foldKey = (g: string) => `${tab.value.id} › ${page.value?.label ?? ''} › ${g}`
 function toggleFold(g: string, e: Event) {
-  folded.value = { ...folded.value, [foldKey(g)]: !(e.target as HTMLDetailsElement).open }
+  const open = (e.target as HTMLDetailsElement).open
+  if (!!opened.value[foldKey(g)] !== open) opened.value = { ...opened.value, [foldKey(g)]: open }
 }
 /** the page that holds the support options: Studio's support controls go at its top */
 const isSupportPage = (label: string | undefined) => !!label && /support/i.test(label)
@@ -50,7 +51,7 @@ watch(pageByTab, (v) => save('rs.prusa.pages', v), { deep: true })
 
 const visible = (k: string) => {
   const d = props.schema.options[k]
-  return !!d && MODE_RANK[d.mode] <= MODE_RANK[mode.value]
+  return !!d && shownOption(k) && MODE_RANK[d.mode] <= MODE_RANK[mode.value]
 }
 const tabs = computed(() =>
   props.schema.tabs.map((t) => ({
@@ -63,12 +64,12 @@ const tabs = computed(() =>
 )
 const tab = computed(() => tabs.value.find((t) => t.id === tabId.value) ?? tabs.value[0]!)
 const page = computed(() => tab.value.pages.find((p) => p.label === pageByTab.value[tab.value.id]) ?? tab.value.pages[0])
-const changed = computed(() => Object.keys(props.ctx.job.prusa ?? {}).filter((k) => props.schema.options[k] && !LOCKS[k]))
+const changed = computed(() => Object.keys(props.ctx.job.prusa ?? {}).filter((k) => props.schema.options[k] && !LOCKS[k] && shownOption(k)))
 const changedOn = (keys: string[]) => keys.filter((k) => changed.value.includes(k)).length
 const pageChanged = (p: { groups: { options: string[] }[] }) => changedOn(p.groups.flatMap((g) => g.options))
 const stale = computed(() => staleChanges(props.schema, props.ctx.job))
 const counts = computed(() => {
-  const all = props.schema.tabs.flatMap((t) => t.pages.filter((p) => shownPage(p.label)).flatMap((p) => p.groups.filter((g) => shownGroup(g.label)).flatMap((g) => g.options)))
+  const all = props.schema.tabs.flatMap((t) => t.pages.filter((p) => shownPage(p.label)).flatMap((p) => p.groups.filter((g) => shownGroup(g.label)).flatMap((g) => g.options.filter(shownOption))))
   const n = (m: Mode) => all.filter((k) => MODE_RANK[props.schema.options[k]!.mode] <= MODE_RANK[m]).length
   return { simple: n('simple'), advanced: n('advanced'), expert: n('expert') }
 })
@@ -84,6 +85,7 @@ const hits = computed(() => {
         for (const g of p.groups)
           if (shownGroup(g.label))
             for (const k of g.options) {
+              if (!shownOption(k)) continue
               const d = props.schema.options[k]!
               const hay = `${k} ${d.label ?? ''} ${d.full_label ?? ''} ${d.tooltip ?? ''}`.toLowerCase()
               if (hay.includes(q)) out.push({ path: `${t.label} › ${p.label} › ${g.label}`, key: k })
@@ -147,7 +149,7 @@ const MODES: { value: Mode; label: string }[] = [
       </div>
 
       <div v-if="isSupportPage(page?.label) && $slots.support" class="studio-support"><slot name="support" /></div>
-      <details v-for="g in page?.groups ?? []" :key="`${tab.id}|${page?.label}|${g.label}`" class="group" :open="!folded[foldKey(g.label)]" @toggle="toggleFold(g.label, $event)">
+      <details v-for="g in page?.groups ?? []" :key="`${tab.id}|${page?.label}|${g.label}`" class="group" :open="!!opened[foldKey(g.label)]" @toggle="toggleFold(g.label, $event)">
         <summary>
           <span class="chev" aria-hidden="true">▸</span>
           <span class="gt">{{ g.label }}</span>

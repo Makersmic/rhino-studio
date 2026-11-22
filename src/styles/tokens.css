@@ -252,3 +252,6 @@
   /* A soft dark pool behind it, so light colours glow over a bright camera picture */
   --rs-holo-pool: radial-gradient(closest-side, rgb(0 0 0 / 0.62), rgb(0 0 0 / 0.38) 55%, rgb(0 0 0 / 0) 100%);
 }
+
+/* A setting changed from its profile (Mike, Nov 21): a red border. Follows the danger red, so themes keep it readable. */
+:root { --rs-changed: var(--rs-danger); }

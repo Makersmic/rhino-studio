@@ -1,5 +1,5 @@
 <script setup lang="ts">
-/** A titled fold-out for advanced settings. Remembers nothing; closed unless `open`. */
+/** A titled fold-out for advanced settings. Remembers nothing; always starts closed unless `open` (Mike, Nov 21: settings groups start folded). */
 defineProps<{ title: string; note?: string; open?: boolean }>()
 </script>
 
