@@ -111,7 +111,7 @@ const plural = (n: number) => `${n} task${n === 1 ? '' : 's'}`
 
       <section class="card">
         <h2>Priorities</h2>
-        <p class="tm-hint">Four levels, most urgent last. They order the Mainsail reminder; rename them to suit you.</p>
+        <p class="tm-hint">Four levels, most urgent last. They order the start-up reminder; rename them to suit you.</p>
         <div class="prio">
           <label v-for="(k, i) in Object.keys(prio)" :key="k" class="tm-fld">
             <span class="tm-lbl"><span class="lvl" :style="{ '--n': i + 1 }" />{{ k.charAt(0).toUpperCase() + k.slice(1) }}</span>

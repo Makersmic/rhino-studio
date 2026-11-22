@@ -176,7 +176,7 @@ const ago = (t?: number | null) => (t ? new Date(t * 1000).toLocaleString(undefi
   <RsPanel title="Install from zip" index="02" panel-id="settings.zipupdate" class="wide">
     <p v-if="tooOld" class="muted small">
       The Rhino's Tool Manager is older than 1.5.3, which brings this. Install rhino-config-1.5.3.zip once the usual way
-      (upload it in Mainsail, <code>rhino.sh</code> option 3); after that, the next zips install from here.
+      (copy it into the Rhino's config folder, for example with scp, then <code>rhino.sh</code> option 3); after that, the next zips install from here.
     </p>
     <p v-else-if="!st && !reachable" class="muted small">Can't reach the Rhino Portal right now.</p>
     <template v-else-if="st">

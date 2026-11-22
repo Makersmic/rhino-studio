@@ -100,7 +100,7 @@ const mmss = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, 
           <div class="cell">
             <span class="k">Screens connected</span>
             <span class="big rs-num" :class="{ empty: net.connections == null }">{{ net.connections ?? '—' }}</span>
-            <span class="sub">Studio, Mainsail, phones</span>
+            <span class="sub">Studio, phones, other screens</span>
           </div>
         </div>
         <p v-if="addressLine" class="addr mono">{{ addressLine }}</p>

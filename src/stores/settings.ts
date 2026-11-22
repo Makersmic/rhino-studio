@@ -54,7 +54,7 @@ export function portalBase(portalUrl: string): string {
   return normalizeAddress(portalUrl) || '/portal'
 }
 
-/** Accepts "192.168.1.50", "mainsailos.local", "http://host:7125". Returns '' for blank. */
+/** Accepts "192.168.1.50", "rhino.local", "http://host:7125". Returns '' for blank. */
 export function normalizeAddress(input: string): string {
   const t = input.trim().replace(/\/+$/, '')
   if (!t) return ''

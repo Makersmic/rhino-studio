@@ -9,7 +9,7 @@
  *
  * When a mesh was made: the Rhino records the time when Studio starts the
  * mesh (RHINO_MESH_CALIBRATE WHEN=). Meshes made at a print start, from the
- * console or in Mainsail have no time; for those Studio keeps the first time
+ * console or from another front end have no time; for those Studio keeps the first time
  * it saw that exact mesh in Moonraker's database (key mesh_seen), shown as
  * "first seen".
  */

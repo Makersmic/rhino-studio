@@ -37,7 +37,7 @@ export const WIZARD_BY_TYPE: Record<string, string> = {
 export function startMethodFor(type: string | null, macros: ReadonlySet<string>): StartMethod | { error: string } {
   if (type === 'DEPOSITION') return { kind: 'print' }
   const macro = (type && WIZARD_BY_TYPE[type]) ?? 'TOOL_JOB_SETUP'
-  if (!macros.has(macro)) return { error: `This config has no ${macro} macro to start the job with. Update the Rhino config, or start it from Mainsail.` }
+  if (!macros.has(macro)) return { error: `This config has no ${macro} macro to start the job with. Update the Rhino config (Settings > Software).` }
   return { kind: 'wizard', macro }
 }
 

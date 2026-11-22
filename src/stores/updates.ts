@@ -183,7 +183,7 @@ export const useUpdatesStore = defineStore('updates', () => {
       busy: tmBusy.value,
       error: tmError.value ?? (rel?.error && rel.error !== 'No releases on GitHub yet.' ? rel.error : null),
       how: !tmUpdate.value
-        ? `This Rhino's Tool Manager is older than 1.5.3: install rhino-config-${latestTm.value ?? '<version>'}.zip once with rhino.sh option 3 (upload it in Mainsail, Machine), then FIRMWARE_RESTART.`
+        ? `This Rhino's Tool Manager is older than 1.5.3: install rhino-config-${latestTm.value ?? '<version>'}.zip once with rhino.sh option 3 (copy it into the Rhino's config folder, for example with scp), then FIRMWARE_RESTART.`
         : !tmUpdate.value.helper
           ? 'The updater isn’t set up on this Rhino yet: install the zip once by hand (rhino.sh option 3); after that Update works from here.'
           : !rel?.version || !newer(tmv, rel.version)

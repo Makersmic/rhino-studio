@@ -7,12 +7,12 @@ Status: Job setup for print, laser, knife and CNC (Kiri:Moto in the browser), ma
 ### What it can do
 
 - **Dashboard** (the home screen): a landscape "lock screen" for the machine. The camera fills the background. The mounted tool sits top-left and the machine state (Idle, Busy, Printing, Paused…) top-right. While a job runs, a large job % sits bottom-left with its file, time left and finish time; with no job running that spot stays empty. There's no clock. Every other reading (the mounted tool's temperatures or outputs, position, care) sits on one rail along the bottom, and a short stack of notices says what needs you, in red. It's look-only: values link to the screen with the details, and the only control is the top bar's Stop.
-- **Cameras**: every camera Moonraker knows (the same list Mainsail uses), shown on Control in a Camera panel with gallery arrows and dots, and behind the Dashboard. Add, edit, turn, mirror, switch off and delete cameras in Settings → Cameras, with a live preview. MJPEG streams, MJPEG snapshots, IP-camera video and web-page cameras work; WebRTC and HLS come later.
+- **Cameras**: every camera Moonraker knows (Moonraker's camera list), shown on Control in a Camera panel with gallery arrows and dots, and behind the Dashboard. Add, edit, turn, mirror, switch off and delete cameras in Settings → Cameras, with a live preview. MJPEG streams, MJPEG snapshots, IP-camera video and web-page cameras work; WebRTC and HLS come later.
 - **Control** screen: temperatures set right in the status strip (click the reading, type, Enter), each with a small history graph (last 5 minutes; the dots widen it to 20), the running job with Pause, Resume and Cancel in the same top box, a camera, jog (locked until you unlock it, relocks after 60 s idle) with the X/Y/Z position under the keys, home, motors off, and a console. Macros come in two sets: the mounted tool's own (on desktop a row of small buttons along the bottom of the status box; on smaller screens a **<tool> Macros** panel with its accent tab; changes on a swap) and **System Macros** (macros that never move: backups, care status, and the machine's lights, chamber or exhaust hardware, picked up by name; the long Other macros list folds away). Swap and Confirm tool are in the top bar; Swap drops an orange list of the toolheads Klipper knows, and picking one runs the Rhino's SWAP_TOOL for that slot after a confirmation; Pause, Resume and Cancel stay with the job.
 - **Pendant mode** (Control → Pendant mode, or `#/pendant`): the phone as a pendant at the machine, with Stop always on screen.
   - **Jog** screen uses two-hand control: the jog keys stay greyed out unless the **Hold** button in the bottom corner is held. Hold with one thumb, tap with the other; one tap is one step. Letting go, a cancelled touch, the screen turning off or switching apps kills the keys at once. A left-handed option mirrors the layout. On a computer, hold Shift as the Hold button.
   - **Status** screen: big work/machine position, Home, Set Z zero / Set work zero.
-- **Klipper prompts**: the Rhino wizards' questions (SWAP_TOOL, RESTORE_TOOL, the job setup wizards) pop up in Studio as well as Mainsail. A button runs only its own command.
+- **Klipper prompts**: the Rhino wizards' questions (SWAP_TOOL, RESTORE_TOOL, the job setup wizards) pop up in Studio. A button runs only its own command.
 - **Assets**: everything the machine is made of, in three groups (old `#/toolheads/...` links still work).
   - **Toolheads**: **Library** (the Rhino Portal's tools as Studio's tool tiles; each tool has its own page laid out like its manual pages: what it does and how to start a job with it, the tool connector drawn as in the manual, materials, macros, its usage meters and care, and its drawing or photos; added tools have **Edit tool**: name, power limits, materials, checklist, connector contacts, notes, photos, controls and macros, each checked live against your Klipper config with the exact text it adds to `custom_tools.cfg`), **Tool connector** (with a toolhead picker that inks only that tool's contacts) and **Kinds of tool** (what Add a toolhead offers, with starting values). **Add a toolhead** walks through the Portal's steps (kind, outputs or connector or the print head it copies, limits, materials, controls, macros, review).
   - **Hardware**: **System hardware** (the fans, lights, pumps, heaters, sensors and switches wired to the board) and **Board pins and outputs** (the board's **pin labels**, kept as Klipper aliases in `[board_pins rhino]`, its outputs and a pin map). **Add hardware** is a wizard: what is it, how is it wired (each pin checked against what the board can do; second boards such as an EBB or SKR Pico are added here too), which tools it's for, what it follows, what it shows. Fans take 2, 3 or 4 wires (speed signal, tach, power pin).
@@ -79,7 +79,7 @@ Open the address it prints (http://localhost:5173). Because `dev` runs with `--h
 The dev server forwards Moonraker's paths to the Pi, so nothing on the Pi needs changing:
 
 ```bash
-MOONRAKER=http://mainsailos.local npm run dev        # the default
+MOONRAKER=http://rhino.local npm run dev             # the default
 MOONRAKER=http://192.168.1.50 npm run dev            # or the Pi's IP
 ```
 
@@ -96,7 +96,7 @@ Preventive maintenance comes from the Rhino Portal that already runs on the Pi (
   - **Tasks**: every task, grouped by what it's for, one fold per area or tool (quiet groups start folded so what's due stands out). Filter by state, by what it's for, or by typing. **New task** and the task editor: what and for, the schedule rules (every so often, after so much use, after each event, once on a date) with the schedule said back in plain words as you type, where counting starts, steps, parts, safety, reminders. Log work and Set status from any row.
   - **Task Library**: Task Books as cards (what's in each, where it's on, assign or take off, "fits FoamWire: add") and the library tasks. Editing a library task updates every task made from it; a task from the library can be detached to make it your own.
   - **Work log**: everything done, skipped, set or measured, a fold per month.
-  - **Usage meters**: the machine's meters as readouts, each tool's in a fold, Set a reading, and the Mainsail reminder switch.
+  - **Usage meters**: the machine's meters as readouts, each tool's in a fold, Set a reading, and the start-up reminder switch.
   - **Care setup**: status codes (the four questions, each folded card saying its answers in a line) and the areas, kinds of work and priorities tasks choose from.
 - **Top bar and nav**: what's due, one tap away.
 - **Toolhead tiles** (Prepare, Assets): each tool's care status.
@@ -132,8 +132,8 @@ The built `dist/` folder is plain static files and works from any folder.
 
 Studio ships inside each Tool Manager release zip (`rhino-config-<version>.zip`): the release workflow builds it from
 this repo's `main`. The Tool Manager's installer serves it with the host's nginx on the **bare address**
-(`http://rhino.local`, since Tool Manager 1.9.19), by name at `http://rhinostudio.local`, and on port 5001; Mainsail
-moves to port 8090 as a spare. nginx forwards Moonraker, the cameras and `/portal` the same way the dev server does, so
+(`http://rhino.local`, since Tool Manager 1.9.19), by name at `http://rhinostudio.local`, and on port 5001. Mainsail, if the
+host still has it, moves to port 8090 as a spare and isn't needed. nginx forwards Moonraker, the cameras and `/portal` the same way the dev server does, so
 Studio works exactly as it does from a PC, from any phone, tablet or PC on the network with nothing to install.
 Updating the Tool Manager updates Studio: Studio › Settings › Software checks GitHub and installs the signed zip;
 Settings › Software shows both versions. The host is a Dell OptiPlex 7050 on Debian 12 (a Pi works too). Running
@@ -181,7 +181,7 @@ AGENTS.md       rules for any contributor, human or AI
 
 ## Design system
 
-Open **Style** in the app for the live guide. The direction is an **e-paper instrument**: every card is a small e-paper display, the whole app is one consistent set of modules (in the spirit of Mainsail's dashboard), and almost everything is drawn with two colours.
+Open **Style** in the app for the live guide. The direction is an **e-paper instrument**: every card is a small e-paper display, the whole app is one consistent set of modules (in the spirit of a modular dashboard), and almost everything is drawn with two colours.
 
 - **Ink and paper** do the work. Night theme is inverted e-ink (charcoal paper, light ink); day theme is warm matte paper with black ink.
 - **Graphs may use a few simple colours.** Temperature graphs draw the reading as a thin red line and the set temperature as a grey line. The bed mesh map shades blue below the average and amber above it (`--rs-mesh-low/high`), never red, on a fixed ±0.25 mm scale that only widens when a mesh needs it, so a flat bed looks flat.
@@ -205,7 +205,7 @@ Open **Style** in the app for the live guide. The direction is an **e-paper inst
 - The console is a full console (your choice): you can confirm anything. It guards against slips, not against intent.
 - Jogging is locked until you unlock it, relocks after 60 s idle, when you leave the screen, lock the phone or switch apps, and whenever Klipper isn't ready, a job is running, a swap is under way or the mounted tool changes. It needs a confirmed toolhead (tool lengths differ) and homed axes, and refuses moves past the machine's travel. One tap is one fixed step: there is no hold-to-move, so a lost touch or dropped Wi-Fi can't leave the machine moving.
 - Prompt buttons run only their own command. A button whose command is `action:prompt_end` is sent back as `RESPOND TYPE=command MSG="action:prompt_end"`.
-- Heaters: setting a temperature runs without asking (as in Mainsail), within 0-300° (hotend) and 0-130° (bed). The hotend can only be heated with a confirmed print head mounted: the hotend heater output stays wired when a laser, spindle or knife is fitted, and those tools show their body temperature (thermistor on the shared T0 input) read-only. Switching a heater off is always allowed.
+- Heaters: setting a temperature runs without asking (as on other front ends), within 0-300° (hotend) and 0-130° (bed). The hotend can only be heated with a confirmed print head mounted: the hotend heater output stays wired when a laser, spindle or knife is fitted, and those tools show their body temperature (thermistor on the shared T0 input) read-only. Switching a heater off is always allowed.
 - Jobs: Start is blocked unless the mounted tool is confirmed and matches the file; files that declare no toolhead get a warning. Cancel and Resume ask; Pause doesn't.
 - Maintenance never blocks: overdue care shows in the start confirmation, nothing more.
 - Bed mesh (needs Tool Manager 1.6.0): making a mesh (RHINO_MESH_CALIBRATE: home if needed, heat, soak, level, probe) needs a confirmed print head, because the probe is on the print heads, and asks first naming each step. Using a mesh and switching it off ask first (Z follows the change from the next move). Removing asks; Save (SAVE_CONFIG) asks, says Klipper restarts and names anything pending that isn't a mesh (a probe z_offset would shift every head). None of it is offered during a job: a print loads its own mesh at the start. Looking at a mesh changes nothing on the machine. On the Rhino, a spindle never cuts with a mesh loaded (SET_Z_ZERO switches it off; the job refuses otherwise).

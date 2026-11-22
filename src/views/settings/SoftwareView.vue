@@ -142,7 +142,7 @@ const libs = __BUILT_WITH__
           <ol class="steps quiet">
             <li>System packages</li><li>Moonraker</li><li>Config and helper repos</li><li>Klipper, restarted once</li><li>Web apps</li>
           </ol>
-          <span class="muted small">Up-to-date steps are skipped. Refused while a job runs. Mainsail isn't listed or updated here. The PrusaSlicer engine comes from Flathub and can keep itself up to date while you use it: it restarts nothing, and the version before can be put back. The Rhino Tool Manager's Update downloads its newest release from GitHub onto the Rhino and installs it; Install from zip, below, takes one you downloaded. Rhino Studio comes in the same zip, so it updates with the Tool Manager.</span>
+          <span class="muted small">Up-to-date steps are skipped. Refused while a job runs. Other front ends (Mainsail, Fluidd), if one is installed, aren't listed or updated here. The PrusaSlicer engine comes from Flathub and can keep itself up to date while you use it: it restarts nothing, and the version before can be put back. The Rhino Tool Manager's Update downloads its newest release from GitHub onto the Rhino and installs it; Install from zip, below, takes one you downloaded. Rhino Studio comes in the same zip, so it updates with the Tool Manager.</span>
         </div>
       </RsPanel>
 

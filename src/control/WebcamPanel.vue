@@ -63,7 +63,7 @@ function onKey(e: KeyboardEvent) {
     <div v-else class="none">
       <Icon nav="camera" :size="28" />
       <p v-if="machine.online">
-        No cameras yet. Add one in <RouterLink to="/settings">Settings</RouterLink>; cameras you set up in Mainsail show here too.
+        No cameras yet. Add one in <RouterLink to="/settings">Settings</RouterLink>; every camera in Moonraker's list shows here.
       </p>
       <p v-else>Cameras show once the machine is connected.</p>
     </div>

@@ -249,7 +249,7 @@ const rulesNow = computed(() => task.value?.status?.rules ?? [])
           <fieldset class="tm-set">
             <legend>1. What and for</legend>
             <div class="tm-row">
-              <label class="tm-fld title"><span class="tm-lbl">Task</span><input v-model="f.title" class="tm-in" maxlength="80" placeholder="Tension the X/Y belts" required /><span class="tm-hint">Short: it's also the Mainsail reminder line.</span></label>
+              <label class="tm-fld title"><span class="tm-lbl">Task</span><input v-model="f.title" class="tm-in" maxlength="80" placeholder="Tension the X/Y belts" required /><span class="tm-hint">Short: it's also the start-up reminder line.</span></label>
               <label v-if="!tmpl" class="tm-fld">
                 <span class="tm-lbl">For</span>
                 <select v-model="f.asset" class="tm-sel">
@@ -323,10 +323,10 @@ const rulesNow = computed(() => task.value?.status?.rules ?? [])
           <section class="sx-fold" :class="{ open: open.more }">
             <button type="button" class="fh" :aria-expanded="open.more" @click="open.more = !open.more">
               <span class="sx-chev" /><span class="ft">{{ !id && !tmpl ? 5 : 4 }}. Reminders, notes and links</span>
-              <span class="fr fm">{{ f.remind_boot ? 'Reminded in Mainsail' : 'No Mainsail reminder' }}{{ !tmpl && !f.enabled ? ' · paused' : '' }}</span>
+              <span class="fr fm">{{ f.remind_boot ? 'In the start-up reminder' : 'Not in the start-up reminder' }}{{ !tmpl && !f.enabled ? ' · paused' : '' }}</span>
             </button>
             <div v-show="open.more" class="fb">
-              <label class="tm-check"><input v-model="f.remind_boot" type="checkbox" /><span>Remind me in Mainsail when Klipper starts and this is due</span></label>
+              <label class="tm-check"><input v-model="f.remind_boot" type="checkbox" /><span>Remind me when Klipper starts and this is due</span></label>
               <label v-if="!tmpl" class="tm-check"><input v-model="f.enabled" type="checkbox" :true-value="false" :false-value="true" /><span>Paused<br /><span class="tm-hint">Keeps the task but stops tracking it.</span></span></label>
               <label class="tm-fld"><span class="tm-lbl">Notes</span><textarea v-model="f.notes" class="tm-ta" rows="2" /></label>
               <label class="tm-fld"><span class="tm-lbl">Links: manuals, videos, one per line</span><textarea v-model="f.links" class="tm-ta code" rows="2" placeholder="https://…" /></label>

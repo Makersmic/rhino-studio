@@ -9,7 +9,7 @@ Before you start: Rhino idle, no job running, nothing hot. Run `npm test` first;
 Start the app against the machine:
 
 ```bash
-MOONRAKER=http://mainsailos.local npm run dev
+MOONRAKER=http://rhino.local npm run dev
 ```
 
 Open http://localhost:5173 and keep Mainsail open in another tab to compare.
@@ -18,7 +18,7 @@ Open http://localhost:5173 and keep Mainsail open in another tab to compare.
 
 | # | Do this | Pass when | If it fails |
 |---|---|---|---|
-| A1 | Open the app | Top bar shows "Connected" within a few seconds | Stop. Note the text under Device → Connection and send it to me. Try the Pi's IP instead of `mainsailos.local`. |
+| A1 | Open the app | Top bar shows "Connected" within a few seconds | Stop. Note the text under Device → Connection and send it to me. Try the Pi's IP instead of `rhino.local`. |
 | A2 | Look at the top bar and Device → Mounted toolhead | Shows the same tool Mainsail's SWAP_TOOL says is installed, in that tool's colour | Stop. Don't trust the app's tool display until fixed. Send me the screen. |
 | A3 | Device readouts | Hotend, bed and Z match Mainsail (within a degree / 0.1 mm) and update | Note which readout is wrong. |
 | A4 | Files | Every file is listed; Orca BlockOne files show BlockOne; files the mounted tool can run say "Fits mounted tool" | Note the file name. A file showing the wrong toolhead is a stop condition. |
@@ -29,7 +29,7 @@ Open http://localhost:5173 and keep Mainsail open in another tab to compare.
 
 ## Care (maintenance)
 
-Needs the Portal running on the Pi (it normally is: `http://mainsailos.local:5000`). Start the dev server as above; it forwards `/portal` to port 5000 on the same host.
+Needs the Portal running on the Pi (it normally is: `http://rhino.local:5000`). Start the dev server as above; it forwards `/portal` to port 5000 on the same host.
 
 | # | Do this | Pass when | If it fails |
 |---|---|---|---|
@@ -147,7 +147,7 @@ Nothing here moves the machine. Camera edits change Moonraker's camera list, whi
 
 | # | Do this | Pass when | If it fails |
 |---|---|---|---|
-| D1 | Open Control | The Camera panel shows the cameras already set up in Mainsail, live | "isn't answering": open `http://mainsailos.local/webcam/?action=stream` in the browser. If that fails too, crowsnest isn't running |
+| D1 | Open Control | The Camera panel shows the cameras already set up in Mainsail, live | "isn't answering": open `http://rhino.local/webcam/?action=stream` in the browser. If that fails too, crowsnest isn't running |
 | D2 | With two or more cameras, use the arrows, the dots, and the left/right keys | Each switches camera and the count (e.g. 2 of 3) follows; the Dashboard shows the same camera | Note which control |
 | D3 | Settings → Cameras → Add camera, with a wrong address | The preview says the camera isn't answering; Save still works but the panel shows the same message | |
 | D4 | Edit that camera to a real address, turn it, mirror it | The preview updates; after saving, Mainsail shows the same camera with the same turn and mirror | Mainsail doesn't show it: note the Moonraker version |

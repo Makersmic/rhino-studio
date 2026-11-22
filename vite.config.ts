@@ -67,12 +67,12 @@ const builtWith = [
  *
  * Point it at your machine with the MOONRAKER environment variable:
  *   MOONRAKER=http://192.168.1.50 npm run dev
- * Default: http://mainsailos.local (Mainsail's nginx forwards to Moonraker).
+ * Default: http://rhino.local (the Rhino's nginx forwards to Moonraker).
  *
  * For the mock Moonraker (no machine needed): npm run mock, then
  *   MOONRAKER=http://localhost:7125 npm run dev
  */
-const target = process.env.MOONRAKER ?? 'http://mainsailos.local'
+const target = process.env.MOONRAKER ?? 'http://rhino.local'
 
 /**
  * The Rhino Portal (maintenance engine) runs on the same Pi, port 5000.
@@ -82,7 +82,7 @@ const portalTarget = process.env.PORTAL ?? target.replace(/(:\d+)?\/?$/, ':5000'
 
 // Moonraker accepts a websocket only when the Origin header matches its host
 // (or cors_domains). Rewrite Origin to the target so the forwarded request
-// looks like it came from Mainsail's own site.
+// looks like it came from the Rhino's own site.
 const originFix: ProxyOptions = {
   target,
   changeOrigin: true,

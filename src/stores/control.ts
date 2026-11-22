@@ -593,7 +593,7 @@ export const useControlStore = defineStore('control', () => {
         ? 'Moonraker starts the file. The machine picks up the tools the file uses, as your start macro and the file say.'
         : c.method.kind === 'print'
         ? 'Moonraker starts the file. Its START_JOB line checks the toolhead again, homes and runs your start sequence.'
-        : `Runs ${c.method.macro} FILE=${path}: the Rhino wizard walks you through its safety checks, work zero and test, then starts the job. Its questions appear here and in Mainsail.`
+        : `Runs ${c.method.macro} FILE=${path}: the Rhino wizard walks you through its safety checks, work zero and test, then starts the job. Its questions appear here.`
     const ok = await confirm({
       title: `Start ${path.split('/').pop()}?`,
       body: [how, ...c.warnings, careNote].filter(Boolean).join('\n\n'),

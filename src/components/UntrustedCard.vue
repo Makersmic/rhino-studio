@@ -48,7 +48,7 @@ const retry = () => machine.connect(settings.moonrakerUrl)
         <p class="lead">
           <template v-if="address">This screen's address, <strong class="mono">{{ address }}</strong>, isn't</template>
           <template v-else>This screen's address isn't</template>
-          in Moonraker's <code>trusted_clients</code>, so Moonraker won't let it connect. Mainsail would say "Unauthorized" here too.
+          in Moonraker's <code>trusted_clients</code>, so Moonraker won't let it connect.
         </p>
         <p class="step">Add it in <code>moonraker.conf</code> (from a trusted screen: Settings › Trusted addresses, or over SSH), keeping any lines already there:</p>
         <pre class="snip">{{ snippet }}</pre>

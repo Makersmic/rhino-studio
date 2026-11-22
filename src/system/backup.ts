@@ -83,7 +83,7 @@ export function planLines(p: RestorePlan): string[] {
   if (p.same.length) out.push(`${n(p.same.length, ns ? 'setting is' : 'file is', ns ? 'settings are' : 'files are')} already the same`)
   if (p.keep.length) out.push(`${n(p.keep.length, ns ? 'setting' : 'file', ns ? 'settings' : 'files')} made since ${p.keep.length === 1 ? 'stays' : 'stay'} as ${p.keep.length === 1 ? 'it is' : 'they are'}`)
   if (p.item === 'all') {
-    if (p.history_jobs != null) out.push(`Moonraker's database comes back whole: job history (${p.history_jobs} jobs), Studio and Mainsail settings`)
+    if (p.history_jobs != null) out.push(`Moonraker's database comes back whole: job history (${p.history_jobs} jobs), Studio settings`)
     if (p.backup_version && p.installed_version && p.backup_version !== p.installed_version)
       out.push(`Made with Tool Manager ${p.backup_version}; ${p.installed_version} stays installed (its program files aren't touched)`)
   }

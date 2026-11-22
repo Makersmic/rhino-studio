@@ -244,7 +244,7 @@ export function statusSummary(s: Pick<CustomStatus, 'list' | 'clock' | 'expiry' 
   const where = { due: 'Listed with due tasks', upcoming: 'Listed with upcoming tasks', own: 'Its own group' }[s.list] ?? s.list
   const clock = { none: 'keeps ageing', pause: 'clock paused', done: 'counts as done' }[s.clock] ?? s.clock
   const ends = s.expiry === 'days' ? `ends after ${plural(s.expiry_days || 0, 'days')}` : s.expiry === 'meter' ? 'ends when the machine runs again' : 'until changed'
-  return [where, clock, ends, s.note_required && 'note required', s.log_option && 'in Log work', s.boot_prompt && 'in the Mainsail reminder'].filter(Boolean).join(' · ')
+  return [where, clock, ends, s.note_required && 'note required', s.log_option && 'in Log work', s.boot_prompt && 'in the start-up reminder'].filter(Boolean).join(' · ')
 }
 
 export const blankStatus = (): CustomStatus => ({

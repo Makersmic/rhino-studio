@@ -3,7 +3,7 @@
  * Usage meters: what the Portal counts from Klipper and Moonraker (hours,
  * jobs, filament, swaps), for the machine and for each toolhead. Usage rules
  * count these. Set one by hand if the machine had hours before tracking
- * started. Also the Mainsail reminder switch.
+ * started. Also the start-up reminder switch.
  */
 import { computed, ref } from 'vue'
 import RsButton from '@/components/RsButton.vue'
@@ -38,7 +38,7 @@ async function setReminder(on: boolean) {
   saving.value = true
   try {
     await care.write((c) => c.careSettings({ boot_reminder: on }))
-    say(on ? 'Mainsail reminder on' : 'Mainsail reminder off')
+    say(on ? 'Start-up reminder on' : 'Start-up reminder off')
   } catch (e) {
     say((e as Error).message)
   } finally {
@@ -93,7 +93,7 @@ async function setReminder(on: boolean) {
         <h2>Reminders</h2>
         <label class="tm-check">
           <input type="checkbox" :checked="!!care.overview?.settings?.boot_reminder" :disabled="saving" @change="setReminder(($event.target as HTMLInputElement).checked)" />
-          <span>Show overdue and due-soon tasks in Mainsail after Klipper starts<br /><span class="tm-hint">Once per start, after the “which tool is mounted?” question. It never blocks a job. PM_STATUS in the console lists them any time. A status code can leave its tasks out (Care setup → Status codes).</span></span>
+          <span>Show overdue and due-soon tasks after Klipper starts<br /><span class="tm-hint">Once per start, after the “which tool is mounted?” question. It never blocks a job. PM_STATUS in the console lists them any time. A status code can leave its tasks out (Care setup → Status codes).</span></span>
         </label>
       </section>
     </template>

@@ -169,7 +169,7 @@ async function doRestore() {
         <span class="txt">
           <strong :class="{ warn: head.tone === 'warn' }">{{ head.text }}</strong>
           <span class="muted small" :class="{ bad: gh.bad }">{{ gh.text }}</span>
-          <span class="muted small">Kept on the Rhino in {{ st.folder }}, the last {{ st.keep }}. Config, job history, Studio and Mainsail settings, toolhead photos.</span>
+          <span class="muted small">Kept on the Rhino in {{ st.folder }}, the last {{ st.keep }}. Config, job history, Studio settings, toolhead photos.</span>
         </span>
         <RsButton variant="primary" :disabled="!!block || !!working" :title="block ?? ''" @click="backupNow">{{ working === 'now' ? 'Backing up…' : 'Back up now' }}</RsButton>
       </div>

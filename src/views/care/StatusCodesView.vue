@@ -116,7 +116,7 @@ const use = (s: CustomStatus) => L.value?.status_use[s.id] ?? 0
           <fieldset class="tm-set">
             <legend>4. Also</legend>
             <div class="tm-row">
-              <label class="tm-check"><input v-model="s.boot_prompt" type="checkbox" /><span>Keep it in the Mainsail reminder<br /><span class="tm-hint">The task still shows after a Klipper start when it's due.</span></span></label>
+              <label class="tm-check"><input v-model="s.boot_prompt" type="checkbox" /><span>Keep it in the start-up reminder<br /><span class="tm-hint">The task still shows after a Klipper start when it's due.</span></span></label>
               <label class="tm-check"><input v-model="s.note_required" type="checkbox" /><span>A note is required<br /><span class="tm-hint">Whoever sets it says why: which parts, who, when.</span></span></label>
               <label class="tm-check"><input v-model="s.log_option" type="checkbox" /><span>Offer it in Log work<br /><span class="tm-hint">Next to Done and Skipped.</span></span></label>
             </div>

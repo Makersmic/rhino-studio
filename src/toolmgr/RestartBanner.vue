@@ -30,7 +30,7 @@ const autoIn = computed(() => {
 })
 const why = computed(() => {
   if (tm.restarting) return 'Restarting Klipper…'
-  if (!pr.value?.online) return "Moonraker isn't answering, so the Portal can't restart Klipper. Restart it from Mainsail."
+  if (!pr.value?.online) return "Moonraker isn't answering, so the Portal can't restart Klipper. Restart Moonraker on the Rhino's host (or restart the host), then try again."
   if (tm.restartBlocked)
     return `Klipper loads them at its next restart, which waits until the job ${pr.value.print_state === 'paused' ? 'is finished (it is paused now)' : 'finishes'}: restarting now would stop it.`
   if (autoIn.value != null) return autoIn.value > 0 ? `The job has finished. Klipper restarts by itself in ${autoIn.value} s.` : 'Restarting Klipper…'

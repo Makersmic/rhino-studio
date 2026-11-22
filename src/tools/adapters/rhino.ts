@@ -99,7 +99,7 @@ export const rhinoAdapter: ToolAdapter = {
   },
   canSwap: (objects) => objects.has(SWAP),
   swapScript: (slot) => `SWAP_TOOL TOOL=${slot}`,
-  swapNote: (name) => `The machine cools down and lowers the bed, then asks you to fit ${name}. Follow its questions here or in Mainsail.`,
+  swapNote: (name) => `The machine cools down and lowers the bed, then asks you to fit ${name}. Follow its questions here.`,
   pickerScript: 'SWAP_TOOL',
   confirm: { script: 'RESTORE_TOOL', label: 'Confirm mounted tool', button: 'Confirm tool', requires: 'gcode_macro RESTORE_TOOL' },
 }

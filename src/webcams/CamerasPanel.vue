@@ -68,7 +68,7 @@ async function save() {
 async function remove(cam: Webcam) {
   const ok = await control.confirm({
     title: `Delete the camera "${cam.name}"?`,
-    body: 'It disappears from Studio, Mainsail and Fluidd. The camera and crowsnest are not changed, so you can add it again later.',
+    body: 'It disappears from Studio and from any other screen that uses the camera list in Moonraker. The camera and crowsnest are not changed, so you can add it again later.',
     confirmLabel: 'Delete camera',
     tone: 'danger',
   })

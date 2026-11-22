@@ -193,7 +193,7 @@ const step = computed(() => (c.value?.dir === 'out' ? 4 : 3))
           <div class="tm-fld">
             <label for="mac-purpose">Purpose</label>
             <input id="mac-purpose" v-model="m.purpose" class="tm-in" maxlength="120" placeholder="Purge the needle before a cut" @input="schedule()" />
-            <span class="tm-hint">One line, shown in Mainsail's macro list and the console.</span>
+            <span class="tm-hint">One line, shown in the macro list and the console.</span>
           </div>
         </div>
         <label class="tm-check"><input v-model="m.mounted_only" type="checkbox" @change="schedule(0)" /> Only run when this tool is mounted (refused with a message otherwise)</label>

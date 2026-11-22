@@ -64,7 +64,7 @@ async function add(entry: string) {
   if (!c || !entry.trim()) return
   const ok = await control.confirm({
     title: `Trust ${entry.trim()}?`,
-    body: `Every device at ${entry.trim()} can then use this Rhino from Studio or Mainsail, without a login. Moonraker restarts to take it in; screens reconnect by themselves in a few seconds.`,
+    body: `Every device at ${entry.trim()} can then use this Rhino from Studio, without a login. Moonraker restarts to take it in; screens reconnect by themselves in a few seconds.`,
     confirmLabel: 'Trust and restart Moonraker',
     tone: 'normal',
   })
@@ -77,7 +77,7 @@ async function remove(entry: string) {
   if (!c) return
   const ok = await control.confirm({
     title: `Stop trusting ${entry}?`,
-    body: `Devices that only ${entry} let in will see "Moonraker doesn't trust this screen" (Mainsail: Unauthorized). Moonraker restarts.`,
+    body: `Devices that only ${entry} let in will see "Moonraker doesn't trust this screen" (Unauthorized). Moonraker restarts.`,
     confirmLabel: 'Remove and restart Moonraker',
     tone: 'danger',
   })
@@ -113,7 +113,7 @@ async function change(entry: string, fn: () => Promise<TrustState>, msg: string)
             <p class="muted small">
               This screen is <strong class="mono">{{ st.address }}</strong><template v-if="mine">, let in by <span class="mono">{{ mine }}</span></template>.
             </p>
-            <p v-if="st.force_logins" class="msg bad">Moonraker has <code>force_logins</code> on, so it ignores this list and asks every screen for a login. Mainsail and Studio need it off.</p>
+            <p v-if="st.force_logins" class="msg bad">Moonraker has <code>force_logins</code> on, so it ignores this list and asks every screen for a login. Studio needs it off.</p>
             <ul class="list">
               <li v-for="e in st.entries" :key="e">
                 <span class="mono">{{ e }}</span>
