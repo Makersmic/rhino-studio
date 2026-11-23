@@ -1174,6 +1174,32 @@ function mockCores() {
   const c = [w(8, 6), w(5, 4), w(14, 10), HOT ? w(93, 4) : w(22, 8)]
   return { cpu: c.reduce((a, b) => a + b, 0) / 4, cpu0: c[0], cpu1: c[1], cpu2: c[2], cpu3: c[3] }
 }
+// The health check page (Tool Manager 1.9.45): one result with every level, ready 3 s after a run starts
+let healthRunning = 0
+let healthAt: number | null = null
+const healthResult = {
+  made: '2026-11-23 09:00:00',
+  counts: { PASS: 9, WARN: 1, FAIL: 1, INFO: 1 },
+  facts: { 'host name': 'rhino', 'tool manager': '1.9.45', boards: ['Klipper_stm32g0b1xx_EBB-if00'] },
+  results: [
+    { section: 'This computer', level: 'PASS', what: 'Sleep and suspend are switched off (masked)', detail: '' },
+    { section: 'This computer', level: 'PASS', what: 'The clock is set from the network', detail: '' },
+    { section: 'This computer', level: 'INFO', what: 'USB power saving is on for the board\'s port', detail: 'if the board drops out, turn it off (docs 9.4)' },
+    { section: 'The board and the camera', level: 'FAIL', what: '[mcu] isn\'t connected', detail: 'ls /dev/serial/by-id/ shows what is plugged in; the name in printer.cfg must match' },
+    { section: 'The board and the camera', level: 'PASS', what: 'The camera is there', detail: '' },
+    { section: 'Services', level: 'PASS', what: 'klipper is running', detail: '' },
+    { section: 'Services', level: 'PASS', what: 'moonraker is running', detail: '' },
+    { section: 'Services', level: 'WARN', what: 'The Portal\'s service file is from before 1.9.45: it restarts after a crash but not after a hang', detail: 'install the current release again (option 3) to bring in the watchdog' },
+    { section: 'Rhino files', level: 'PASS', what: 'Tool Manager 1.9.45', detail: '' },
+    { section: 'Rhino files', level: 'PASS', what: 'pause_resume.cfg is there (the Rhino\'s own pause, resume and cancel)', detail: '' },
+    { section: 'Backups', level: 'PASS', what: 'A Rhino backup was made today', detail: '' },
+    { section: 'Backups', level: 'PASS', what: 'klipper-backup is set up', detail: '' },
+  ],
+}
+function healthState() {
+  if (healthRunning && Date.now() - healthRunning > 3000) { healthAt = Date.now() / 1000; healthRunning = 0 }
+  return { running: healthRunning > 0, at: healthAt, result: healthAt ? healthResult : null, error: null }
+}
 const hostExtras = {
   ok: true, klipper_dir: '/home/pi/klipper', found: process.env.MOCK_EXTRAS !== 'noklipper', all_linked: process.env.MOCK_EXTRAS === 'linked',
   extras: [
@@ -1984,6 +2010,12 @@ async function portal(req: IncomingMessage, res: import('node:http').ServerRespo
     for (const e of hostExtras.extras) e.linked = true
     hostExtras.all_linked = true
     return json(res, 200, hostExtras), true
+  }
+  // Tool Manager 1.9.45: the health check page (the demo result has one of each level; a run takes 3 s)
+  if (req.method === 'GET' && url === '/api/health') return json(res, 200, { ok: true, ...healthState() }), true
+  if (req.method === 'POST' && url === '/api/health/run') {
+    if (!healthState().running) { healthRunning = Date.now() }
+    return json(res, 200, { ok: true, ...healthState() }), true
   }
   if (req.method === 'GET' && url === '/api/hardware/devices') return json(res, 200, { ok: true, devices: wizardDevices }), true
   // Tool library, read-only, from the Portal's demo (scripts/fixtures/portal-*.json). Changes need the real

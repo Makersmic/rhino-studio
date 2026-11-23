@@ -11,6 +11,7 @@ import RsButton from '@/components/RsButton.vue'
 import { useMachineStore } from '@/stores/machine'
 import { useSettingsStore, portalBase } from '@/stores/settings'
 import { suggestRange } from '@/moonraker/trust'
+import { fetchWithin } from '@/net/fetchWithin'
 
 const machine = useMachineStore()
 const settings = useSettingsStore()
@@ -21,7 +22,7 @@ const copied = ref(false)
 
 onMounted(async () => {
   try {
-    const r = await fetch(`${portalBase(settings.portalUrl)}/api/state`, { headers: { Accept: 'application/json' } })
+    const r = await fetchWithin(`${portalBase(settings.portalUrl)}/api/state`, { headers: { Accept: 'application/json' } }, 10_000)
     const j = (await r.json()) as { address?: string }
     if (typeof j.address === 'string') address.value = j.address
   } catch {

@@ -115,6 +115,7 @@ export const router = createRouter({
         { path: 'software', component: () => import('./views/settings/SoftwareView.vue'), meta: { title: 'Software and updates', lead: 'What Studio runs on, and what it is built with.' } },
         { path: 'host', component: () => import('./views/settings/HostView.vue'), meta: { title: 'Host', heading: 'Host, restarts and backups', lead: 'Restart Klipper and services, reboot or shut down the host, back up and restore. Never during a job.' } },
         { path: 'health', component: () => import('./views/settings/HealthView.vue'), meta: { title: 'Host health', lead: 'How hard the host and the boards are working, how warm they are, and what deserves a look. Read only.' } },
+        { path: 'health-check', component: () => import('./views/settings/HealthCheckView.vue'), meta: { title: 'Health check', lead: 'Is this Rhino set up the way it needs to be, and will it stay that way when left alone? Looks and says; changes nothing.' } },
         { path: 'logs', component: () => import('./views/settings/LogsView.vue'), meta: { title: 'Logs', lead: 'Klipper and Moonraker logs, and the last error in them.' } },
         { path: 'network', component: () => import('./views/settings/NetworkView.vue'), meta: { title: 'Network', lead: 'How this screen reaches the Rhino, and the Rhino’s own network.' } },
         { path: 'help/:chapter?/:section?', component: () => import('./views/settings/HelpView.vue'), meta: { title: 'Help', lead: 'The Rhino manual, served by the Rhino itself: no internet needed.' } },

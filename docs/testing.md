@@ -12,19 +12,19 @@ Start the app against the machine:
 MOONRAKER=http://rhino.local npm run dev
 ```
 
-Open http://localhost:5173 and keep Mainsail open in another tab to compare.
+Open http://localhost:5173. Where a check says "Klipper's own answer", ask Klipper in Studio's Console (for example `GET_POSITION` or `M105`) instead of trusting one screen.
 
 ## Checks
 
 | # | Do this | Pass when | If it fails |
 |---|---|---|---|
 | A1 | Open the app | Top bar shows "Connected" within a few seconds | Stop. Note the text under Device → Connection and send it to me. Try the Pi's IP instead of `rhino.local`. |
-| A2 | Look at the top bar and Device → Mounted toolhead | Shows the same tool Mainsail's SWAP_TOOL says is installed, in that tool's colour | Stop. Don't trust the app's tool display until fixed. Send me the screen. |
-| A3 | Device readouts | Hotend, bed and Z match Mainsail (within a degree / 0.1 mm) and update | Note which readout is wrong. |
+| A2 | Look at the top bar and Device → Mounted toolhead | Shows the same tool Klipper's SWAP_TOOL says is installed, in that tool's colour | Stop. Don't trust the app's tool display until fixed. Send me the screen. |
+| A3 | Device readouts | Hotend, bed and Z match Klipper's own answer (`M105`, `GET_POSITION` in the Console) (within a degree / 0.1 mm) and update | Note which readout is wrong. |
 | A4 | Files | Every file is listed; Orca BlockOne files show BlockOne; files the mounted tool can run say "Fits mounted tool" | Note the file name. A file showing the wrong toolhead is a stop condition. |
-| A5 | In Mainsail run `FIRMWARE_RESTART` | The app's band turns hatched, the tool shows unknown, then "not confirmed since restart" with the last saved tool. After you answer RESTORE_TOOL in Mainsail, the app shows the tool again | Stop if the app ever shows a tool as mounted before RESTORE_TOOL is answered. |
-| A6 | With the machine idle and cold, press **Stop** in the app | Klipper shuts down within a second (Mainsail shows the M112 shutdown) and the app shows the red "Klipper is shut down" banner | Stop. Do not rely on the app's Stop button. Use the machine's switch. |
-| A7 | Run `FIRMWARE_RESTART` in Mainsail after A6 | App reconnects to Klipper on its own; banner clears | Note what the app shows. |
+| A5 | In Studio's Console run `FIRMWARE_RESTART` | The app's band turns hatched, the tool shows unknown, then "not confirmed since restart" with the last saved tool. After you answer RESTORE_TOOL, the app shows the tool again | Stop if the app ever shows a tool as mounted before RESTORE_TOOL is answered. |
+| A6 | With the machine idle and cold, press **Stop** in the app | Klipper shuts down within a second (the Console shows the M112 shutdown) and the app shows the red "Klipper is shut down" banner | Stop. Do not rely on the app's Stop button. Use the machine's switch. |
+| A7 | Run `FIRMWARE_RESTART` in the Console after A6 | App reconnects to Klipper on its own; banner clears | Note what the app shows. |
 | A8 | Unplug the Pi's network, or stop Moonraker, for 10 s, then restore it | App shows "Can't reach machine", tool goes unknown, then reconnects by itself | Note what the app shows. |
 
 ## Care (maintenance)
@@ -51,13 +51,13 @@ Before you start: bed clear, nothing in the nozzle path, hand near the physical 
 |---|---|---|---|
 | B1 | Open Control without unlocking | Jog buttons are disabled; the console shows Klipper's recent history | Any jog button works while locked |
 | B2 | Unlock motion, wait 60 s without jogging | It relocks by itself; also relocks when you switch to another screen | It stays unlocked |
-| B3 | Unlock, jog X+ 1 mm, Y+ 1 mm, Z+ 1 mm (BlockOne mounted) | Each axis moves 1 mm the right way; Mainsail's position agrees | Wrong axis or direction |
+| B3 | Unlock, jog X+ 1 mm, Y+ 1 mm, Z+ 1 mm (BlockOne mounted) | Each axis moves 1 mm the right way; `GET_POSITION` in the Console agrees | Wrong axis or direction |
 | B4 | Jog toward a limit with 50 mm steps | Studio refuses the step that would pass the travel, before sending | The machine tries to move past it |
 | B5 | Home all, then Home X Y | Each asks first and says what will happen; your G28 rules apply (no Z with a non-print head) | It homes without asking |
 | B6 | Type `G1 Z5` in the console | A confirmation lists the line and "moves the machine"; Cancel sends nothing | It moves without asking |
 | B7 | Type `M3 S100` with LightSaber **not** mounted, then Cancel | A "This powers a tool" confirmation appears; Cancel sends nothing | It sends without asking |
-| B8 | Swap toolhead button | SWAP_TOOL's question appears in Studio and Mainsail; picking a slot and finishing the swap shows the new tool in Studio | Studio shows the new tool before you confirm it in the wizard |
-| B9 | In the status strip, click the bed temperature, type 40, Enter; then click it again, type 0, Enter | The box fills light grey while you type; the small set temperature in its corner reads 40°, then Off; Mainsail agrees | |
+| B8 | Swap toolhead button | SWAP_TOOL's question appears in Studio and in the Console; picking a slot and finishing the swap shows the new tool in Studio | Studio shows the new tool before you confirm it in the wizard |
+| B9 | In the status strip, click the bed temperature, type 40, Enter; then click it again, type 0, Enter | The box fills light grey while you type; the small set temperature in its corner reads 40°, then Off; `M105` in the Console agrees | |
 | B9b | Click the hotend temperature, type 80, press Esc (or click away) | Nothing is sent; the set temperature is unchanged | A target is set |
 | B9c | Mount LightSaber (or any non-print tool) | The hotend reads "Body temperature", says "No heater on this tool" and can't be clicked. (The console can still send a hotend target: it's a full console.) | The box can be edited |
 | B9d | Watch the graphs for a few minutes; press the dots | Red line follows the reading, grey line sits at the set temperature; the dots widen the graph to the last 20 minutes and back | |
@@ -83,9 +83,9 @@ Needs Toolhead_Manager 1.4.7 (per-path materials for SwitchFly, and the record t
 |---|---|---|---|
 | X1 | Mount LightSaber, open Control | No extruder block | The block shows, or Extrude can be pressed |
 | X2 | Mount BlockOne, hotend cold | Block under the status box, the same height; Path row greyed out, "SwitchFly only"; Extrude and Retract solid grey, "Hotend cold" | Extrude sends anything |
-| X3 | Heat BlockOne to its print temperature, Length 5, Speed 2, Extrude, then Retract | No confirmation; filament goes in 5 mm, then back 5 mm; X, Y and Z don't move; Mainsail's console shows the G1 E lines inside SAVE/RESTORE_GCODE_STATE | Filament goes the wrong way, or the head moves |
-| X4 | Flow: drag to 95%, let go; then + once | Mainsail shows M221 S95, then S96; the big number agrees | |
-| X5 | Pressure advance: arrow up twice, wait; type 0.045 in Smooth, Enter | One SET_PRESSURE_ADVANCE per pause, values match `GET_PRESSURE_ADVANCE` (or Mainsail's extruder panel) | Values outside 0–1 s / 0.005–0.2 s are sent |
+| X3 | Heat BlockOne to its print temperature, Length 5, Speed 2, Extrude, then Retract | No confirmation; filament goes in 5 mm, then back 5 mm; X, Y and Z don't move; the Console shows the G1 E lines inside SAVE/RESTORE_GCODE_STATE | Filament goes the wrong way, or the head moves |
+| X4 | Flow: drag to 95%, let go; then + once | the Console shows M221 S95, then S96; the big number agrees | |
+| X5 | Pressure advance: arrow up twice, wait; type 0.045 in Smooth, Enter | One SET_PRESSURE_ADVANCE per pause, values match `GET_PRESSURE_ADVANCE` (in the Console) | Values outside 0–1 s / 0.005–0.2 s are sent |
 | X6 | During a BlockOne print: change Flow and Advance; try Extrude | Flow and Advance apply live; Extrude and Retract are dead, "Not while a job is running" | Extrude works during a job |
 | X7 | Mount SwitchFly (record still says BlockOne) | Path row live; neither T0 nor T1 selected; feed keys dead, "Pick a path first" | Extrude works before a path is picked |
 | X8 | Press T0 | Confirmation "Switch to T0?" saying it lifts Z, retracts, heats, loads and purges, with the remembered material; Cancel sends nothing; Switch to T0 runs SWITCH_T0 | It switches without asking |
@@ -100,7 +100,7 @@ Pi side). Machine idle, no job.
 | # | Do this | Pass when | Stop if |
 |---|---|---|---|
 | S1 | Open Settings | A menu like Care: Appearance; Machine (Connection, Tool changing, Cameras); System (Software, Network); About. Every old setting is still there | A setting is missing |
-| S2 | Software | Same packages and versions as Mainsail's update panel, without Mainsail; one Status column: "Up to date" or an Update button | Mainsail is listed |
+| S2 | Software | Klipper, Moonraker and the Rhino's own packages with their versions; one Status column: "Up to date" or an Update button | A web interface such as Mainsail or Fluidd is listed |
 | S3 | Update one package (e.g. Crowsnest) | Asks first, lists what restarts; progress lines appear; ends "Up to date" | It starts without asking |
 | S4 | Update all with Moonraker and Klipper behind | Order: system, Moonraker, repos, Klipper last; Studio reconnects after Moonraker by itself and carries on; Klipper restarts once | Klipper restarts more than once, or the run stops at Moonraker |
 | S5 | Start a print, open Software | Update buttons are dead, "Not while a job is running" | An update can start |
@@ -110,11 +110,11 @@ Pi side). Machine idle, no job.
 
 ## Studio served from the Rhino
 
-Needs Toolhead_Manager 1.5.1 installed. **Stop if** Mainsail stops opening.
+Needs Toolhead_Manager 1.5.1 installed. **Stop if** another site on this host (a spare Mainsail, if you still have one) stops opening.
 
 | # | Do this | Pass when | Stop if |
 |---|---|---|---|
-| S1 | Open `http://<pi>:5001` on the PC | Studio opens, Connected, the mounted tool shows | Mainsail (port 80) no longer opens |
+| S1 | Open `http://<pi>:5001` on the PC | Studio opens, Connected, the mounted tool shows | A spare Mainsail (if installed) no longer opens |
 | S2 | Same address on a phone | Studio opens and works the same | |
 | S3 | Care and Toolheads | Tasks, tools and photos come from the Portal | "Portal not reachable" |
 | S4 | From this address, Settings › Software, PrusaSlicer engine: Install (that is P1) | It starts installing; no "Cross-site request refused" | |
@@ -143,20 +143,20 @@ slicing, or anything asks for a password.
 
 ## Cameras and Dashboard
 
-Nothing here moves the machine. Camera edits change Moonraker's camera list, which Mainsail uses too.
+Nothing here moves the machine. Camera edits change Moonraker's camera list, which every other screen on the host uses too.
 
 | # | Do this | Pass when | If it fails |
 |---|---|---|---|
-| D1 | Open Control | The Camera panel shows the cameras already set up in Mainsail, live | "isn't answering": open `http://rhino.local/webcam/?action=stream` in the browser. If that fails too, crowsnest isn't running |
+| D1 | Open Control | The Camera panel shows the cameras already set up in Moonraker, live | "isn't answering": open `http://rhino.local/webcam/?action=stream` in the browser. If that fails too, crowsnest isn't running |
 | D2 | With two or more cameras, use the arrows, the dots, and the left/right keys | Each switches camera and the count (e.g. 2 of 3) follows; the Dashboard shows the same camera | Note which control |
 | D3 | Settings → Cameras → Add camera, with a wrong address | The preview says the camera isn't answering; Save still works but the panel shows the same message | |
-| D4 | Edit that camera to a real address, turn it, mirror it | The preview updates; after saving, Mainsail shows the same camera with the same turn and mirror | Mainsail doesn't show it: note the Moonraker version |
-| D5 | Delete it | Asks first; it disappears from Studio and Mainsail; crowsnest is unchanged | It deletes without asking |
+| D4 | Edit that camera to a real address, turn it, mirror it | The preview updates; after saving, `http://rhino.local/server/webcams/list` shows the same camera with the same turn and mirror | It doesn't: note the Moonraker version |
+| D5 | Delete it | Asks first; it disappears from Studio and from `/server/webcams/list`; crowsnest is unchanged | It deletes without asking |
 | D6 | Leave Control open, switch to another app or lock the phone for 30 s, come back | The picture resumes. On the Pi, `top` shows crowsnest's CPU drop while it's hidden | CPU stays up while hidden |
 | D7 | Open the Dashboard during a print | Stats along the top, notices on the left, job along the bottom with time left and finish time. No buttons that act on the machine; tapping a value opens its screen; Stop stays in the top bar | Anything on it starts, stops or moves something (apart from the top bar's Stop) |
 | D8 | During a job run a wizard that asks a question (or start a laser job) | The Dashboard shows "Klipper is asking" in red; the question itself appears on Control, not on the Dashboard | |
 | D9 | Mount a non-print tool | The Dashboard says "Body temperature" with "No sensor yet" instead of the hotend | It shows a hotend reading for a laser, spindle or knife |
-| D10 | Klipper busy without a job (Home all from Mainsail) | The Dashboard's state reads Busy and a "Machine busy" notice shows until homing ends | |
+| D10 | Klipper busy without a job (Home all from the Console) | The Dashboard's state reads Busy and a "Machine busy" notice shows until homing ends | |
 | D11 | Scroll down the Dashboard | Reports under the camera screen: five number tiles, Toolheads (hours, jobs, at a glance, jobs per week) and Maintenance (task status, next up, tasks by machine and toolhead, work per week). The figures match the Portal's own Dashboard at port 5000 | A figure differs from the Portal's |
 | D12 | Press Table on any report, then Chart | The numbers as a table, then the chart again; nothing is logged or changed | |
 | D13 | Stop the Portal (`sudo systemctl stop rhino-portal`), reload the Dashboard; start it again | The reports say the Portal isn't answering, the camera screen above still works; they come back within 2 minutes of starting it | The Dashboard breaks or goes blank |
@@ -168,13 +168,13 @@ Notes:
 
 ## What each tool shows
 
-Read only, nothing moves. Compare each tool's status strip with Mainsail.
+Read only, nothing moves. Compare each tool's status strip with Klipper's own answer in the Console.
 
 | # | Do this | Pass when | If it fails |
 |---|---|---|---|
 | E1 | Mount BlockOne | Hotend, bed and part fan; position is machine position | |
-| E2 | Mount LightSaber | No hotend or bed; Laser shows Off with the rail off. During a laser job it shows Armed, then Firing with the power Mainsail shows for `output_pin SERVO_LASER` | Bed or hotend shows while both are cold and off |
-| E3 | Mount HotJoe, set a work zero, run CNC_JOB_SETUP to spin-up | Spindle Running with the throttle the wizard reports; Work position matches Mainsail's work coordinates, machine position below | Spindle shows Off while it's running (pin names differ on your config: note them) |
+| E2 | Mount LightSaber | No hotend or bed; Laser shows Off with the rail off. During a laser job it shows Armed, then Firing with the power Klipper reports for `output_pin SERVO_LASER` | Bed or hotend shows while both are cold and off |
+| E3 | Mount HotJoe, set a work zero, run CNC_JOB_SETUP to spin-up | Spindle Running with the throttle the wizard reports; Work position matches Klipper's work coordinates (`GET_POSITION` in the Console), machine position below | Spindle shows Off while it's running (pin names differ on your config: note them) |
 | E4 | With HotJoe or LightSaber mounted, set the bed to 50 from the console | "Bed heating" appears in the strip and on the Dashboard; typing anything but 0 there is refused; 0 switches it off and it goes away once below 40° | |
 | E7 | Panel ⋮ > Panel colours on any panel; pick a background, text and border; Save to theme; open Studio on a second device | The panel previews while choosing; after saving, the second device shows the same colours (day and night kept apart). Low-contrast or red/orange picks show a warning. Stop, Cancel, the swap list and graph lines keep their colours. Reset to default colours and Settings > Reset all panels bring back the default | Colours only on the first device; Stop or Cancel change colour; reset leaves colours behind |
 | E8 | Settings > Appearance: save the colours as a theme; Reset all panels; pick the saved theme; Revert; pick it again and Apply; Download theme file; Load theme file | Picking previews on screen without saving; Revert brings back what was in use; Apply makes it current on every device; the downloaded file loads back as a new saved theme ("… 2"), previewed until Apply; a non-theme file gives a plain error | A pick is saved without Apply; leaving the page keeps an unapplied preview; loading overwrites a saved theme |
@@ -202,7 +202,7 @@ Before any of these: Rhino config **1.4.3 or later** (real Z travel), `zero_max_
 | P6b | Put the part on the hatched Leadscrew area (Centre X 500, Y 325) | "Clear of the leadscrew" fails; Send is greyed | It can still be sent |
 | P7 | Drag a part past the bed edge, or type Centre X 560 | "Inside the bed" fails and Send/Download are greyed | The file can still be sent |
 | P8 | LightSaber, PLYWOOD, an SVG at **10 % power**, cardboard, Prepare, Send, Start from Files | Files starts it through LASER_JOB_SETUP (focus, test fire); the laser only fires inside the shape's outline, where the bed view showed it; rail off and bed parked at the end | The laser fires before the wizard's test, fires outside the outline, or stays on after the job: power off at once |
-| P9 | Download the laser file, open it, start it from Mainsail's own Print (skipping the wizard), on cardboard | Head traces the shape but the laser **doesn't fire** (rail never switched on); END_PRINT parks | It fires: power off and report it |
+| P9 | Download the laser file, open it, start it with `SDCARD_PRINT_FILE FILENAME=<file>` from the Console (skipping the wizard), on cardboard | Head traces the shape but the laser **doesn't fire** (rail never switched on); END_PRINT parks | It fires: power off and report it |
 | P10 | DragKnife, VINYL, an SVG, Prepare | The file plunges `G1 Z-0.3 F200` and lifts `G0 Z5`; start it from Files (DRAGKNIFE_JOB_SETUP sets Z0 on the vinyl); cuts the shape, backing uncut | The blade goes deeper than set, or the cut lands somewhere other than the bed view |
 | P11 | HotJoe, SOFT_WOOD, a small plate, Steps: only **Outline, outside**, scrap board on a spoil board, Prepare | Checks show the stock size, depth = plate thickness, 5 mm clearance, and the through-cut note | Any check fails |
 | P12 | Send, Start from Files, CNC_JOB_SETUP: X0 Y0 on the stock's front-left corner, Z0 on top | Spindle spins up from the wizard, cuts around the part (outside it) stepping down 1 mm, never moves outside the stock, lifts 5 mm between cuts, stops the spindle at the end | It cuts inside the part, goes outside the stock or below the board: E-stop |
@@ -250,7 +250,7 @@ Maintenance records only: nothing here moves the machine or changes Klipper. Run
 | M5 | Delete task | Asks first (red); it's gone; its work-log lines stay | |
 | M6 | Task Library → New Task Book with one task; Assign… to a toolhead; take it off with × | Assign adds the task to that tool (Tasks shows it); × asks, then archives it (Archived filter shows it) | The task is deleted outright |
 | M7 | Usage meters → Set on Emergency stops: one more than now; then back | The readout and the Portal agree; the work log shows "Meter set" twice | |
-| M8 | Untick, then tick the Mainsail reminder | The Portal's Usage meters → Reminders follows | |
+| M8 | Untick, then tick the start-up reminder | The Portal's Usage meters → Reminders follows | |
 | M9 | Care setup → Status codes: add one, Save, remove it, Save | Saved, then gone; a code set on a task can't be removed | One in use is removed |
 | M10 | Care setup → Areas: add one, Save, remove it, Save; try to remove Motion X/Y | Saved, then gone; Remove is greyed for an area with tasks | |
 | M11 | Phone: Care → the section button | The menu opens under it with the groups; picking one closes it | The page scrolls sideways |
@@ -265,7 +265,7 @@ On the machine, Klipper ready, no job unless a row says so.
 | FL1 | Files: drag two .gcode files and one .stl onto the dashed drop area | Both G-code files upload with progress, the list refreshes; the .stl is named as skipped. Nothing starts | A job starts, or the .stl reaches the Pi |
 | FL2 | Files: click the drop area | The file picker opens (several files allowed) | |
 | FL3 | Files with BlockOne mounted and verified | BlockOne files have one pastel green pill behind icon and name; other tools' files have none; there is no "Fits"/"Needs" column | Green shows while the mounted tool is unverified |
-| FL4 | Files: Last run column, after a print finishes and after one is cancelled | "✓ Completed" and "– Cancelled" with the date, matching Mainsail's history; never-run files have a small hollow ring after the name (tooltip "Not run yet") | |
+| FL4 | Files: Last run column, after a print finishes and after one is cancelled | "✓ Completed" and "– Cancelled" with the date, matching Job history; never-run files have a small hollow ring after the name (tooltip "Not run yet") | |
 | H1 | Settings → Host, no job: Restart firmware, confirm | Klipper restarts; Studio shows it ready again | Anything moves |
 | H2 | Settings → Host, Moonraker → Restart, confirm | Studio drops the connection and reconnects by itself | Studio stays disconnected |
 | H3 | Start a job, open Settings → Host | Every button is greyed, "A job is running" shown | Any action runs |
@@ -280,7 +280,7 @@ BlockOne mounted and confirmed, homed. Have a hand near Stop.
 | # | Do | Pass | Stop if |
 |---|---|---|---|
 | T1 | Control, tuning strip, padlock closed | Speed, Z and limit controls are faded and do nothing | Any of them sends a command |
-| T2 | Tap the red padlock | It opens (outlined); controls light up. Speed + → 105% in the strip and in Mainsail | |
+| T2 | Tap the red padlock | It opens (outlined); controls light up. Speed + → 105% in the strip and the Console's M220 line | |
 | T3 | Z: step 0.01, tap ↓ Closer twice | Z offset −0.020; the nozzle moves 0.02 mm down, nothing else moves | Anything other than Z moves, or a step larger than chosen |
 | T4 | Reset | Z offset back to +0.000, nozzle back up by the same amount | |
 | T5 | During a print: unlock, adjust speed and Z | Applied live, no dialogs; the print continues | The print stops or the head jumps |
@@ -301,23 +301,23 @@ The first 1.5.3 install is by hand (rhino.sh option 3); these check the next one
 
 ## 0.6.2: File manager (Files tabs)
 
-Klipper ready. Keep Mainsail open on another screen to compare. **Stop if** anything outside Moonraker's gcodes / config / logs folders is listed or changed, or Klipper restarts without you pressing a restart.
+Klipper ready. Keep Studio's Console open to compare. **Stop if** anything outside Moonraker's gcodes / config / logs folders is listed or changed, or Klipper restarts without you pressing a restart.
 
 | # | Do | Pass | Stop if |
 |---|---|---|---|
-| F1 | Files: tabs Gcode files · Config · Logs · Job history | Each lists what Mainsail shows for that folder; folders first; sort by Name, Modified, Size (click again to flip) | Files from elsewhere on the disk |
+| F1 | Files: tabs Gcode files · Config · Logs · Job history | Each lists what is in that folder on the host (`ls ~/printer_data/gcodes` over SSH); folders first; sort by Name, Modified, Size (click again to flip) | Files from elsewhere on the disk |
 | F2 | Gcode files: New folder "test", drag a .gcode from the PC onto its row | The row outlines while dragging; the file uploads into test (progress shown); breadcrumb Gcode files › test after opening it | It starts a job |
-| F3 | Row menu (right-click; long-press on a phone; or ⋯) on that file: Rename, Duplicate, Move to folder… (back to the top), Download; then drag the row out to the desktop (Chrome/Edge) | Each does what it says, and Mainsail agrees; Download and drag-out give the file | |
+| F3 | Row menu (right-click; long-press on a phone; or ⋯) on that file: Rename, Duplicate, Move to folder… (back to the top), Download; then drag the row out to the desktop (Chrome/Edge) | Each does what it says, and the folder on the host agrees; Download and drag-out give the file | |
 | F4 | Upload a file with a name already there | Asks Replace / Keep both / Cancel; Keep both makes "name (1).gcode" | It overwrites without asking |
 | F5 | Start a print; open the menu on its file and on its folder | Edit, Rename, Move, Delete are greyed with "A job is using this file" / "…a file in this folder"; Duplicate and Download work; an "In use" tag on the row | Any of them runs |
 | F6 | Config: open printer.cfg, add a comment line, Ctrl+S | "Saved. The file as it was is in studio_backups/printer.cfg.<time>.bak"; Klipper is NOT restarted; Restart Klipper to apply asks first | Klipper restarts by itself |
 | F7 | Close the editor with unsaved changes; reload the page with unsaved changes | "Close without saving?" asks first; the browser warns before leaving | Changes lost without a question |
 | F8 | Save printer.cfg 11 times | studio_backups keeps the newest 10 copies of it | |
 | F9 | Open a G-code file over 2 MB, then klippy.log | Opens read-only (says why); nothing over 25 MB opens (downloads instead) | The page freezes |
-| F10 | Delete the test folder | Confirms (red outline Delete) and says everything in it goes; gone in Mainsail too | It deletes without asking |
+| F10 | Delete the test folder | Confirms (red outline Delete) and says everything in it goes; gone from the folder on the host too | It deletes without asking |
 | F11 | Logs tab | Read-only: no Upload, New, Rename or Delete anywhere | |
 | F12 | Phone | No sideways scrolling; Upload button works; the drop area only appears while uploading | |
-| JH1 | Job history | Matches Mainsail's history (status, start, print time, filament) and its totals; a deleted file is struck through with Reprint off | |
+| JH1 | Job history | Matches Moonraker's history (`http://rhino.local/server/history/list`: status, start, print time, filament) and its totals; a deleted file is struck through with Reprint off | |
 | JH2 | Reprint a finished print-head job with the same tool mounted | The same checks as Start (care note if due), then it starts | It starts with the wrong tool mounted |
 
 ## 0.6.2: Cameras, red panels, pin labels, Scan Config
@@ -342,15 +342,15 @@ Klipper ready. Keep Mainsail open on another screen to compare. **Stop if** anyt
 | LG2 | Open a Toolheads page, start a print, watch the Portal log (or the network tab) for a minute | No /api/state reads every 10 s while printing; they resume when the job ends; a change you make still refreshes at once | |
 | LG3 | During a print: upload a G-code file; open a G-code file over 1 MB | Each asks first ("…is printing… can make a small host stutter"); Cancel does nothing; small config files open without asking | It uploads or reads without asking |
 
-## 0.6.3: trusted_clients, as Mainsail (needs Tool Manager 1.5.4 for the Portal part)
+## 0.6.3: trusted_clients (needs Tool Manager 1.5.4 for the Portal part)
 
-Studio has no login, like Mainsail: Moonraker's `[authorization] trusted_clients` decides. Before: note your
+Studio has no login: Moonraker's `[authorization] trusted_clients` decides. Before: note your
 `trusted_clients` lines so you can put them back.
 
 | # | Do | Pass | Stop if |
 |---|---|---|---|
-| TC1 | Open Studio as you run it today | No card; connects as before | The "doesn't trust this screen" card shows on a screen Mainsail works on |
-| TC2 | Take your network's range out of `trusted_clients`, restart Moonraker, open Studio (and Mainsail) | Mainsail says Unauthorized; Studio shows "Moonraker doesn't trust this screen" with this screen's address and a `/24` to add; top bar "Not trusted"; Moonraker's log shows no reconnect storm | Studio keeps reconnecting, or shows the page with no data |
+| TC1 | Open Studio as you run it today | No card; connects as before | The "doesn't trust this screen" card shows on a screen that is in `trusted_clients` |
+| TC2 | Take your network's range out of `trusted_clients`, restart Moonraker, open Studio | Studio shows "Moonraker doesn't trust this screen" with this screen's address and a `/24` to add; top bar "Not trusted"; Moonraker's log shows no reconnect storm | Studio keeps reconnecting, or shows the page with no data |
 | TC3 | Same state: open `http://<rhino>:5000` (the old Portal page) and try any change | Every action says "Moonraker doesn't trust this address (…)" | A change goes through |
 | TC4 | Put the range back (Copy the lines helps), restart Moonraker, press Try again | Connects; Toolheads and Care load | |
 
@@ -360,7 +360,7 @@ Studio has no login, like Mainsail: Moonraker's `[authorization] trusted_clients
 |---|---|---|---|
 | TC5 | Settings › Trusted addresses | Lists `trusted_clients`; "This screen is <address>, let in by <entry>"; no Remove on that entry or on 127.0.0.0/8 | |
 | TC6 | Install Tailscale on the Pi (`curl -fsSL https://tailscale.com/install.sh \| sh`, `sudo tailscale up`); reload the page | **100.64.0.0/10 Tailscale** offered; Add, confirm: Moonraker restarts, screens reconnect, the list shows it; `ls ~/printer_data/rhino_data/config_backups` has a `moonraker.conf.*` copy | Moonraker doesn't come back (send `journalctl -u moonraker -n 30`) |
-| TC7 | On your phone with Tailscale on and Wi-Fi off, open `http://<rhino's tailscale name or 100.x address>:5001` | Studio connects; Mainsail at the same address works too | The "doesn't trust" card shows |
+| TC7 | On your phone with Tailscale on and Wi-Fi off, open `http://<rhino's tailscale name or 100.x address>:5001` | Studio connects | The "doesn't trust" card shows |
 | TC8 | During a print: try to Add or Remove | Refused: "A job is running…"; Moonraker not restarted | Moonraker restarts during the print |
 | TC9 | Add `printer.local`, then `0.0.0.0/0` | Both refused with a clear message | Either is written |
 
@@ -400,7 +400,7 @@ Start with BlockOne mounted and confirmed, the bed clear, a hand near Stop. Mesh
 | MS2 | After 1.6.0, open Bed mesh | "No bed mesh in use: moves don't follow the bed." Make a mesh shows 60 °C (the material's bed temperature), soak 5, name bed-60 | |
 | MS3 | Mount the laser (or no tool confirmed) | Make the mesh is greyed with the reason (the probe is on the print heads) | It lets you start |
 | MS4 | BlockOne, press Make the mesh | Asks first, naming each step (home if needed, heat, soak, level, probe) and the command. On yes: the bed heats, soaks, Z_TILT_ADJUST runs, the bed is probed. Then "bed-60 is in use", "60°C · BlockOne · today", "Not saved yet: bed-60" | Anything moves before you confirm; the head goes outside the bed |
-| MS5 | Compare the map with the bed | Front of the machine at the bottom of the map; the low/high corners match what you know of the bed; the probed numbers match Mainsail's Heightmap (same mesh) | The map is mirrored or rotated |
+| MS5 | Compare the map with the bed | Front of the machine at the bottom of the map; the low/high corners match what you know of the bed; the probed numbers match the Console's `BED_MESH_OUTPUT` numbers (same mesh) | The map is mirrored or rotated |
 | MS6 | Reading | Range, tilt and warp make sense: after levelling, tilt should be small. Highest/lowest X/Y match the points on the map | |
 | MS7 | Save to printer.cfg | Asks, says Klipper restarts. After: no "Not saved", the tool question comes back, and "No bed mesh in use" (Klipper loads none at start) | It saves during a job; it would save something other than meshes without saying |
 | MS8 | Use bed-60 | Asks; nothing moves; then "bed-60 is in use" | Anything moves |
@@ -877,3 +877,13 @@ Use a laptop or phone on Wi-Fi with Studio open. Keep heaters off and nothing mo
 6. Laptop on Wi-Fi, machine idle: switch Wi-Fi off, and press Stop straight away. **Pass:** within about 5 seconds the Stop button says the stop was NOT confirmed and names both routes. Wi-Fi back on: Stop works as in 5.
 7. **Stop if** "Connected" stays lit with frozen readings for more than 30 seconds, Stop says it was sent when Klipper did not shut down, or Studio reconnects in a loop while the machine is fine.
 
+
+## Settings > Health check (Studio 0.36.2, needs Tool Manager 1.9.45)
+
+Nothing here moves the machine. The check only looks.
+
+- [ ] **HC1 Run it.** Settings > System > Health check, **Run the check**. *Pass:* the button says "Checking…" for a few seconds, then a one-line verdict (Fix, Look or Good) and any lines needing you, fixes first; "Everything it checked" lists every line by section. *Stop if* it sits on "Checking…" for over 2 minutes with no message.
+- [ ] **HC2 It agrees with the menu.** On the host, `bash ~/rhino-<version>/rhino.sh` option 7. *Pass:* the same lines, the same Fix/Look counts. *Stop if* they differ.
+- [ ] **HC3 It notices an old Portal service file.** Before updating the Rhino to 1.9.45, run the check. *Pass:* it says the Portal's service file is from before 1.9.45 (Look), with what to do. After installing 1.9.45 and running it again, it says "The Portal restarts itself if it hangs" (Good).
+- [ ] **HC4 It's remembered, and Copy report works.** Leave the page and come back. *Pass:* the last result is still there, with when it was checked. **Copy report**, paste into a note: plain text, every line, the summary and the facts.
+- [ ] **HC5 During a job.** Start a short print, run the check. *Pass:* the print is not disturbed (no stutter, no error in the console) and the check finishes. *Stop if* the print stutters: press Pause and tell me.

@@ -57,6 +57,7 @@
  */
 import type { HostStats } from '@/system/hostHealth'
 import type { HostExtras } from '@/system/klipperExtras'
+import type { HealthState } from '@/system/healthCheck'
 import type { JobsWeeks, MaintHistory, MaintOverview, TaskLibrary, MaintLists, TaskDef, BookDef, StatusEdit } from '@/maintenance/types'
 import type { NetState, WifiNetwork } from '@/system/network'
 import type { EngineAuto, SliceJobState, SlicerState } from '@/slicer/prusa/portal'
@@ -68,6 +69,40 @@ import type { PortalState, PreviewResult, ToolDetail, ToolLists, ToolOptions, To
 /** GET /api/update (Tool Manager 1.5.3+) */
 import type { MacroDraft, UserMacro } from '@/control/userMacros'
 import type { SavedTest, TuningState } from '@/tuning/tuning'
+
+// ---- how long to wait for the Portal --------------------------------------------------------------------------
+// A Portal that is running but stuck never refuses a connection, so without a limit a screen would wait until nginx
+// gives up (5 minutes). Reads wait 15 s; a change 30 s; a picture, font or file being sent or fetched 60 s; the jobs
+// that really are slow (zip install, GitHub download, backup, restore) 5 minutes, which is nginx's own limit for them.
+export const READ_MS = 15_000
+export const WRITE_MS = 30_000
+export const SEND_MS = 60_000
+export const LONG_MS = 300_000
+const SLOW_WRITES = new Set<string>(['update-upload', 'update-install', 'update-github', 'backup-now', 'backup-upload', 'restore-plan', 'restore'])
+
+/** The Portal didn't answer in time. For a change that is not the same as "it didn't happen". */
+export class PortalTimeout extends Error {
+  constructor(changes: boolean) {
+    super(changes
+      ? "The Portal didn't answer in time. That change may still have been made. Look before you send it again."
+      : "The Portal didn't answer in time. It may be busy or stuck: try again in a moment.")
+    this.name = 'PortalTimeout'
+  }
+}
+
+async function portalFetch(url: string, init: RequestInit = {}, ms = READ_MS, changes = false): Promise<Response> {
+  const ctl = new AbortController()
+  const timer = setTimeout(() => ctl.abort(), ms)
+  try {
+    return await fetch(url, { ...init, signal: ctl.signal })
+  } catch (e) {
+    if (ctl.signal.aborted) throw new PortalTimeout(changes)
+    throw e
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 export interface MacroList {
   ok: boolean
   error?: string
@@ -157,8 +192,8 @@ export const PORTAL_MACROS = ['macro-create', 'macro-save', 'macro-delete', 'mac
 /** Print head tuning results (Tool Manager 1.9.16): kept on the Rhino; Studio applies them in prepared files. */
 export const PORTAL_TUNING = ['tuning-result', 'tuning-clear'] as const
 export const PORTAL_NETWORK = ['net-hostname', 'net-ipv4', 'net-wifi', 'net-powersave', 'net-keep', 'net-undo'] as const
-/** Settings › Host: remake the links of the Rhino's Klipper extras into klippy/extras (Tool Manager 1.9.30) */
-export const PORTAL_HOST = ['host-extras-relink'] as const
+/** Settings › Host: remake the links of the Rhino's Klipper extras into klippy/extras (Tool Manager 1.9.30); run the health check (1.9.45: it only reads) */
+export const PORTAL_HOST = ['host-extras-relink', 'health-run'] as const
 
 export type WriteKind =
   | (typeof PORTAL_WRITES)[number]
@@ -257,6 +292,7 @@ export const WRITE_ROUTES: Record<WriteKind, { method: 'POST' | 'DELETE'; path: 
   'trust-remove': { method: 'DELETE', path: /^\/api\/moonraker-trust$/ },
   'backup-now': { method: 'POST', path: /^\/api\/backup$/ },
   'host-extras-relink': { method: 'POST', path: /^\/api\/host\/extras\/relink$/ },
+  'health-run': { method: 'POST', path: /^\/api\/health\/run$/ },
   'backup-upload': { method: 'POST', path: /^\/api\/backup\/upload$/ },
   'restore-plan': { method: 'POST', path: /^\/api\/restore\/plan$/ },
   restore: { method: 'POST', path: /^\/api\/restore$/ },
@@ -281,7 +317,7 @@ export const WRITE_ROUTES: Record<WriteKind, { method: 'POST' | 'DELETE'; path: 
 const ALLOWED = new Set<string>([
   ...PORTAL_WRITES, ...PORTAL_TOOL_CHECKS, ...PORTAL_TOOL_WRITES, ...PORTAL_THEME_IMAGES, ...PORTAL_THEME_FONTS, ...PORTAL_RESTART,
   ...PORTAL_CARE_WRITES, ...PORTAL_CARE_SETUP, ...PORTAL_TOOL_SETUP, ...PORTAL_HARDWARE, ...PORTAL_HW_WIZARD, ...PORTAL_HOOKS, ...PORTAL_LABELS, ...PORTAL_NETWORK, ...PORTAL_SLICER, ...PORTAL_UPDATE, ...PORTAL_TRUST,
-  ...PORTAL_BACKUP, ...PORTAL_PROFILES, ...PORTAL_MACROS, ...PORTAL_TUNING,
+  ...PORTAL_BACKUP, ...PORTAL_PROFILES, ...PORTAL_MACROS, ...PORTAL_TUNING, ...PORTAL_HOST,
 ])
 const enc = encodeURIComponent
 
@@ -447,7 +483,7 @@ export class PortalClient {
 
   /** The pictures on the Rhino. An older Portal has none of this, and says so with a 404. */
   async themeImages(): Promise<ThemeImages> {
-    const res = await fetch(`${this.baseUrl}/api/theme-images`)
+    const res = await portalFetch(`${this.baseUrl}/api/theme-images`)
     if (res.status === 404) throw new Error('This Rhino needs a Tool Manager update before it can keep background pictures.')
     if (!res.ok) throw new Error(`Portal error (HTTP ${res.status})`)
     return (await res.json()) as ThemeImages
@@ -467,7 +503,7 @@ export class PortalClient {
 
   /** The fonts on the Rhino. An older Portal has none of this, and says so with a 404. */
   async themeFonts(): Promise<ThemeFonts> {
-    const res = await fetch(`${this.baseUrl}/api/theme-fonts`)
+    const res = await portalFetch(`${this.baseUrl}/api/theme-fonts`)
     if (res.status === 404) throw new Error('This Rhino needs a Tool Manager update before it can keep fonts.')
     if (!res.ok) throw new Error(`Portal error (HTTP ${res.status})`)
     return (await res.json()) as ThemeFonts
@@ -721,7 +757,7 @@ export class PortalClient {
     return this.getJson<SliceJobState & { ok: boolean }>(`/api/slicer/jobs/${enc(id)}`)
   }
   async sliceGcode(id: string): Promise<string> {
-    const r = await fetch(`${this.baseUrl}/api/slicer/jobs/${enc(id)}/gcode`)
+    const r = await portalFetch(`${this.baseUrl}/api/slicer/jobs/${enc(id)}/gcode`, {}, SEND_MS)
     if (!r.ok) throw new Error(`The sliced file couldn't be fetched (HTTP ${r.status})`)
     return r.text()
   }
@@ -818,7 +854,7 @@ export class PortalClient {
   /** null from a Tool Manager before 1.8 */
   async sliceProfiles(full = false): Promise<ProfileList | null> {
     try {
-      const r = await fetch(`${this.baseUrl}/api/slice-profiles${full ? '?full=1' : ''}`, { headers: { Accept: 'application/json' } })
+      const r = await portalFetch(`${this.baseUrl}/api/slice-profiles${full ? '?full=1' : ''}`, { headers: { Accept: 'application/json' } })
       if (r.status === 404) return null
       const d = (await r.json().catch(() => null)) as ProfileList | null
       if (!d) throw new Error(`Portal error (HTTP ${r.status})`)
@@ -862,7 +898,7 @@ export class PortalClient {
   /** null from a Tool Manager before 1.9.16 */
   async tuningState(): Promise<TuningState | null> {
     try {
-      const r = await fetch(`${this.baseUrl}/api/tuning`, { headers: { Accept: 'application/json' } })
+      const r = await portalFetch(`${this.baseUrl}/api/tuning`, { headers: { Accept: 'application/json' } })
       if (r.status === 404) return null
       const d = (await r.json().catch(() => null)) as TuningState | null
       if (!d) throw new Error(`Portal error (HTTP ${r.status})`)
@@ -885,7 +921,7 @@ export class PortalClient {
   /** null from a Tool Manager before 1.9.13 */
   async userMacros(): Promise<MacroList | null> {
     try {
-      const r = await fetch(`${this.baseUrl}/api/user-macros`, { headers: { Accept: 'application/json' } })
+      const r = await portalFetch(`${this.baseUrl}/api/user-macros`, { headers: { Accept: 'application/json' } })
       if (r.status === 404) return null
       const d = (await r.json().catch(() => null)) as MacroList | null
       if (!d) throw new Error(`Portal error (HTTP ${r.status})`)
@@ -932,7 +968,7 @@ export class PortalClient {
 
   /** Reads the token and version from the Portal's home page. */
   async refreshToken(): Promise<void> {
-    const res = await fetch(`${this.baseUrl}/`, { headers: { Accept: 'text/html' } })
+    const res = await portalFetch(`${this.baseUrl}/`, { headers: { Accept: 'text/html' } })
     if (!res.ok) throw new Error(`Portal not reachable (HTTP ${res.status})`)
     const html = await res.text()
     this.token = /<meta\s+name="rhino-token"\s+content="([^"]+)"/i.exec(html)?.[1] ?? null
@@ -955,14 +991,24 @@ export class PortalClient {
     return this.write('host-extras-relink', 'POST', '/api/host/extras/relink', {}) as Promise<HostExtras>
   }
 
+  /** Settings › Health check (Tool Manager 1.9.45): the last result; nothing is run. */
+  async healthState(): Promise<HealthState> {
+    return this.getJson<HealthState>('/api/health')
+  }
+
+  /** Start the check on the Rhino (it only reads); it returns at once, then ask healthState until it is done. */
+  async runHealth(): Promise<HealthState> {
+    return this.write('health-run', 'POST', '/api/health/run', {}) as Promise<HealthState>
+  }
+
   // ---- internals -------------------------------------------------------
 
   private async getJson<T>(path: string): Promise<T> {
     let res: Response
     try {
-      res = await fetch(this.baseUrl + path, { headers: { Accept: 'application/json' } })
-    } catch {
-      throw new Error("Can't reach the Rhino Portal - is it running?")
+      res = await portalFetch(this.baseUrl + path, { headers: { Accept: 'application/json' } })
+    } catch (e) {
+      throw e instanceof PortalTimeout ? e : new Error("Can't reach the Rhino Portal - is it running?")
     }
     const data = (await res.json().catch(() => null)) as (T & { ok?: boolean; error?: string }) | null
     if (!res.ok || !data || data.ok === false) throw new Error(data?.error ?? `Portal error (HTTP ${res.status})`)
@@ -984,9 +1030,9 @@ export class PortalClient {
     }
     let res: Response
     try {
-      res = await fetch(this.baseUrl + path, { method, headers, body: payload })
-    } catch {
-      throw new Error("Can't reach the Rhino Portal - is it running?")
+      res = await portalFetch(this.baseUrl + path, { method, headers, body: payload }, SLOW_WRITES.has(kind) ? LONG_MS : payload instanceof FormData ? SEND_MS : WRITE_MS, true)
+    } catch (e) {
+      throw e instanceof PortalTimeout ? e : new Error("Can't reach the Rhino Portal - is it running?")
     }
     const data = (await res.json().catch(() => null)) as (T & { ok?: boolean; error?: string }) | null
     if (res.ok && data && data.ok !== false) return data

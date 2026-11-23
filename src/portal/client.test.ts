@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
-  PORTAL_BACKUP, PORTAL_PROFILES, PORTAL_MACROS, PORTAL_TUNING, PORTAL_HOST, PORTAL_THEME_IMAGES, PORTAL_THEME_FONTS, PORTAL_CARE_SETUP, PORTAL_CARE_WRITES, PORTAL_HARDWARE, PORTAL_HOOKS, PORTAL_HW_WIZARD, PORTAL_LABELS, PORTAL_NETWORK, PORTAL_SLICER, PORTAL_UPDATE, PORTAL_TRUST, PORTAL_RESTART, PORTAL_TOOL_CHECKS, PORTAL_TOOL_SETUP, PORTAL_TOOL_WRITES, PORTAL_WRITES, PortalClient, WRITE_ROUTES,
+  PORTAL_BACKUP, PortalTimeout, PORTAL_PROFILES, PORTAL_MACROS, PORTAL_TUNING, PORTAL_HOST, PORTAL_THEME_IMAGES, PORTAL_THEME_FONTS, PORTAL_CARE_SETUP, PORTAL_CARE_WRITES, PORTAL_HARDWARE, PORTAL_HOOKS, PORTAL_HW_WIZARD, PORTAL_LABELS, PORTAL_NETWORK, PORTAL_SLICER, PORTAL_UPDATE, PORTAL_TRUST, PORTAL_RESTART, PORTAL_TOOL_CHECKS, PORTAL_TOOL_SETUP, PORTAL_TOOL_WRITES, PORTAL_WRITES, PortalClient, WRITE_ROUTES,
 } from './client'
 import type { TaskDef } from '@/maintenance/types'
 
@@ -105,6 +105,17 @@ describe('PortalClient', () => {
     expect(WRITE_ROUTES['theme-font-delete']!.path.test('/api/theme-fonts/a1b2c3d4e5f60718.woff2')).toBe(true)
     for (const bad of ['/api/theme-fonts/../x', '/api/theme-fonts/a1b2c3d4e5f60718.svg', '/api/theme-fonts/a%2Fb.ttf']) expect(WRITE_ROUTES['theme-font-delete']!.path.test(bad), bad).toBe(false)
     expect(Object.keys(WRITE_ROUTES).sort()).toEqual([...kinds].sort())
+  })
+
+  it('host: remaking the extras links and running the health check are allowed, each to its one route', async () => {
+    // PORTAL_HOST was left out of the allow-list from 0.26.0, so Studio refused the relink button until 0.36.2
+    const p = fakePortal()
+    const c = new PortalClient('/portal')
+    await c.hostExtrasRelink()
+    await c.runHealth()
+    const posts = p.calls.filter((x) => x.init?.method === 'POST')
+    expect(posts.map((x) => x.url)).toEqual(['/portal/api/host/extras/relink', '/portal/api/health/run'])
+    expect(posts.every((x) => (x.init?.headers as Record<string, string>)['X-Rhino-Token'] === 'tok-1')).toBe(true)
   })
 
   it('backups: each write goes to its one fixed request, with the token (INV-A7)', async () => {
@@ -297,5 +308,69 @@ describe('PortalClient', () => {
     expect(c.media('/media/FoamWire/a.jpg')).toBe('/portal/media/FoamWire/a.jpg')
     expect(c.media('/static/img/tools/blockone-light.png')).toBe('/portal/static/img/tools/blockone-light.png')
     expect(c.media('')).toBeNull()
+  })
+})
+
+describe('a Portal that is running but not answering', () => {
+  // fetch that never answers, and gives up (like the real one) when its signal is aborted
+  function stuckPortal() {
+    const calls: { url: string; init?: RequestInit }[] = []
+    vi.stubGlobal('fetch', vi.fn((url: string, init?: RequestInit) => {
+      calls.push({ url, init })
+      if (url.endsWith('/portal/')) return Promise.resolve(new Response('<meta name="rhino-token" content="t"><p class="version">v1</p>'))
+      return new Promise((_, reject) => init?.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError'))))
+    }))
+    return calls
+  }
+  afterEach(() => vi.useRealTimers())
+
+  it('gives up on a read after 15 seconds, with a message that says what happened', async () => {
+    vi.useFakeTimers()
+    stuckPortal()
+    const p = new PortalClient('/portal').jobsPerWeek()
+    const seen = p.catch((e: Error) => e)
+    await vi.advanceTimersByTimeAsync(14_999)
+    let settled = false
+    void seen.then(() => (settled = true))
+    await Promise.resolve()
+    expect(settled).toBe(false)
+    await vi.advanceTimersByTimeAsync(2)
+    const e = (await seen) as Error
+    expect(e).toBeInstanceOf(PortalTimeout)
+    expect(e.message).toMatch(/didn't answer in time/)
+    expect(e.message).not.toMatch(/may still have been made/)
+  })
+
+  it('says a change may still have been made, and waits 30 seconds for it', async () => {
+    vi.useFakeTimers()
+    stuckPortal()
+    const p = new PortalClient('/portal').snooze('t1', 7).catch((e: Error) => e)
+    await vi.advanceTimersByTimeAsync(29_000)
+    let settled = false
+    void p.then(() => (settled = true))
+    await Promise.resolve()
+    expect(settled).toBe(false)
+    await vi.advanceTimersByTimeAsync(1_500)
+    const e = (await p) as Error
+    expect(e).toBeInstanceOf(PortalTimeout)
+    expect(e.message).toMatch(/may still have been made/)
+  })
+
+  it('gives a backup the long wait, not 30 seconds', async () => {
+    vi.useFakeTimers()
+    stuckPortal()
+    const p = new PortalClient('/portal').backupNow().catch((e: Error) => e)
+    await vi.advanceTimersByTimeAsync(120_000)
+    let settled = false
+    void p.then(() => (settled = true))
+    await Promise.resolve()
+    expect(settled).toBe(false)
+    await vi.advanceTimersByTimeAsync(181_000)
+    expect(((await p) as Error).message).toMatch(/may still have been made/)
+  })
+
+  it('does not call a refused connection a timeout', async () => {
+    vi.stubGlobal('fetch', vi.fn(() => Promise.reject(new TypeError('Failed to fetch'))))
+    await expect(new PortalClient('/portal').jobsPerWeek()).rejects.toThrow(/Can't reach the Rhino Portal/)
   })
 })

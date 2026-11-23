@@ -48,6 +48,7 @@ const groups = computed<SectionGroup[]>(() => [
       { to: '/settings/network', label: 'Network', count: net.pending ? '!' : '', strong: !!net.pending },
       { to: '/settings/host', label: 'Host' },
       { to: '/settings/health', label: 'Host health' },
+      { to: '/settings/health-check', label: 'Health check' },
       { to: '/settings/logs', label: 'Logs' },
     ],
   },

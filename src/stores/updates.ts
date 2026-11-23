@@ -19,6 +19,7 @@ import { useMaintenanceStore } from './maintenance'
 import { brand } from '@/brand/brand'
 import type { SlicerState } from '@/slicer/prusa/portal'
 import type { UpdateState } from '@/portal/client'
+import { fetchWithin } from '@/net/fetchWithin'
 
 export interface ExtraRow {
   name: 'rhino-tool-manager' | 'rhino-studio-pc' | 'prusaslicer'
@@ -133,7 +134,7 @@ export const useUpdatesStore = defineStore('updates', () => {
     void loadEngine()
     const get = async (url: string) => {
       try {
-        const r = await fetch(url, { cache: 'no-store' })
+        const r = await fetchWithin(url, { cache: 'no-store' }, 10_000)
         return r.ok ? await r.text() : null
       } catch {
         return null // offline, or a private repo
