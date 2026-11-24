@@ -182,6 +182,8 @@ if (meshMode !== 'none') {
 // Tool Manager 1.9.47: the probe and the TMC drivers exist as objects (the probe check and motor check wizards)
 status.probe = { last_query: false, last_z_result: 0 }
 for (const [o, kind] of [['stepper_x', 'tmc2240'], ['stepper_y', 'tmc2240'], ['stepper_z', 'tmc2208'], ['stepper_z1', 'tmc2208'], ['stepper_z2', 'tmc2208'], ['extruder', 'tmc2240']] as const) status[`${kind} ${o}`] = { run_current: 1.1, hold_current: 0 }
+if (process.env.MOCK_ADXL !== '0') { status.adxl345 = {}; status.resonance_tester = {} }   // the accelerometer (MOCK_ADXL=0: not set up yet)
+if (process.env.MOCK_CHAMBER === '1') status['heater_generic chamber'] = { temperature: 24.3, target: 0, power: 0 }   // a chamber heater (the base Rhino has only the sensor)
 status.configfile = {
   save_config_pending: meshMode === 'unsaved',
   save_config_pending_items: meshMode === 'unsaved' ? { 'bed_mesh bed-60': { version: '1', points: '...' } } : {},
@@ -630,6 +632,25 @@ function runLine(raw: string) {
       respond('========== Queried registers ==========')
       respond('GSTAT: 00000000')
       respond(MOCK_TMC_HOT && stepper === 'stepper_x' ? 'DRV_STATUS: 80350000 otpw=1(Warning) cs_actual=21(21) stst=1' : 'DRV_STATUS: 80150000 cs_actual=21(21) stst=1 stealth=1')
+      return
+    }
+    case 'PID_CALIBRATE': {
+      const h = /HEATER=(\S+)/i.exec(line)?.[1] ?? '?'
+      respond(`PID parameters: pid_Kp=${h === 'extruder' ? '31.2' : h === 'heater_bed' ? '54.1' : '17.482'} pid_Ki=${h === 'extruder' ? '2.4' : '0.9'} pid_Kd=${h === 'extruder' ? '101.5' : '220.3'}`)
+      respond('The SAVE_CONFIG command will update the printer config file with these parameters and restart the printer.')
+      return
+    }
+    case 'ACCELEROMETER_QUERY': { respond('accelerometer values (x, y, z): 0.211000, -0.105000, 9.790000'); return }
+    case 'MEASURE_AXES_NOISE': { respond('Axes noise for xyz-axis accelerometer: 12.300000 (x), 11.100000 (y), 30.000000 (z)'); return }
+    case 'TEST_RESONANCES': return
+    case 'SHAPER_CALIBRATE': {
+      const ax = (/AXIS=(\w)/i.exec(line)?.[1] ?? 'X').toLowerCase()
+      respond(`Calculating the best input shaper parameters for ${ax} axis`)
+      respond("Fitted shaper 'zv' frequency = 59.4 Hz (vibrations = 14.6%, smoothing ~= 0.081)")
+      respond("To avoid too much smoothing with 'zv', suggested max_accel <= 6100 mm/sec^2")
+      respond("Fitted shaper 'mzv' frequency = 47.8 Hz (vibrations = 2.5%, smoothing ~= 0.123)")
+      respond("To avoid too much smoothing with 'mzv', suggested max_accel <= 4500 mm/sec^2")
+      respond(`Recommended shaper_type_${ax} = mzv, shaper_freq_${ax} = 47.8 Hz`)
       return
     }
     case 'STEPPER_BUZZ': return
@@ -1424,6 +1445,9 @@ function handle(method: string, params: Record<string, unknown> | undefined): un
           mcu: { last_stats: { mcu_awake: HOT ? 3.4 : 0.021, mcu_task_avg: HOT ? 0.0012 : 0.000018, mcu_task_stddev: HOT ? 0.0002 : 0.000011, bytes_retransmit: HOT ? 90 + tick : 9, bytes_invalid: 0, srtt: 0.0011, freq: 180_000_000 } },
         } }
       }
+      // a heater's live temperature (the heater tune wizard)
+      const qk = Object.keys(q).find((k) => k !== 'configfile')
+      if (qk && status[qk]) return { eventtime: Date.now() / 1000, status: { [qk]: status[qk] } }
       // only what Studio asks for: the macro definitions (configfile settings)
       const settings = Object.fromEntries(Object.entries(HW_MACROS).map(([k, v]) => [`gcode_macro ${k.toLowerCase()}`, v]))
       // and the [extruder] section the tuning wizards start from (tools/3dp.cfg); MOCK_EXTRUDE_MAX sets max_extrude_only_distance
@@ -1580,6 +1604,7 @@ function json(res: import('node:http').ServerResponse, code: number, body: unkno
 }
 
 
+const tuned: { rev: number; pid: Record<string, { kp: number; ki: number; kd: number; at: number; previous?: { kp: number; ki: number; kd: number } | null }>; restart_needed: boolean; accelerometer: { serial: string; cs_pin: string; spi_bus: string; axes_map: string; probe: { x: number; y: number; z: number } } | null; shaper: Record<string, { x: { type: string; freq: number }; y: { type: string; freq: number }; max_accel: number | null; at: number }>; shaper_active: string | null } = { accelerometer: null, shaper: {}, shaper_active: null, rev: 1, pid: { extruder: { kp: 28.729, ki: 2.176, kd: 94.807, at: Date.now() / 1000 - 86400 * 20 } }, restart_needed: false }
 // ---- the model library (Tool Manager 1.9.46): pretend Portal, in memory --------
 function cubeStl(mm: number): Buffer {
   const v = [[0, 0, 0], [1, 0, 0], [1, 1, 0], [0, 1, 0], [0, 0, 1], [1, 0, 1], [1, 1, 1], [0, 1, 1]].map((p) => p.map((c) => c * mm))
@@ -2167,6 +2192,33 @@ async function portal(req: IncomingMessage, res: import('node:http').ServerRespo
   }
   // Tool Manager 1.9.46: the model library (in memory; the real rules are in the Portal's rhino/library.py)
   if (url.startsWith('/api/library')) return libraryRoute(req, res, url), true
+  // Tool Manager 1.9.48: tuned heater values kept in myrhino/tuned.cfg
+  if (req.method === 'GET' && url === '/api/tuned') return json(res, 200, { ok: true, ...tuned }), true
+  if (req.method === 'GET' && url === '/api/resonance-data') {
+    const rows = Array.from({ length: 60 }, (_, i) => { const f = 5 + i * 2; const p = 100 / (1 + ((f - 48) / 4) ** 2) + 3; return `${f},${p},${p},${p},${p * 3},${p * 0.5},${p * 0.3}` })
+    return void res.writeHead(200, { 'content-type': 'text/plain' }).end('freq,psd_x,psd_y,psd_z,psd_xyz,zv(59.4),mzv(47.8)\n' + rows.join('\n') + '\n'), true
+  }
+  if (req.method === 'POST' && (url === '/api/tuned/accelerometer' || url === '/api/tuned/shaper' || url === '/api/tuned/shaper/clear')) {
+    if (req.headers['x-rhino-token'] !== PORTAL_TOKEN) return json(res, 400, { ok: false, error: 'This page is out of date (the portal was restarted). Reload the page and try again.' }), true
+    const b = await readBody(req)
+    if (b.rev !== tuned.rev) return json(res, 400, { ok: false, error: `Tuned values were changed on another screen (now revision ${tuned.rev}). Reload, then save again.` }), true
+    if (url.endsWith('accelerometer')) tuned.accelerometer = { serial: String(b.serial), cs_pin: String(b.cs_pin), spi_bus: String(b.spi_bus), axes_map: String(b.axes_map), probe: b.probe as { x: number; y: number; z: number } }
+    else if (url.endsWith('clear')) { delete tuned.shaper[String(b.head)]; tuned.shaper_active = Object.keys(tuned.shaper)[0] ?? null }
+    else { tuned.shaper[String(b.head)] = { x: b.x as { type: string; freq: number }, y: b.y as { type: string; freq: number }, max_accel: (b.max_accel as number | null) ?? null, at: Date.now() / 1000 }; tuned.shaper_active = String(b.head) }
+    tuned.rev++; tuned.restart_needed = true
+    return json(res, 200, { ok: true, ...tuned }), true
+  }
+  if (req.method === 'POST' && (url === '/api/tuned/pid' || url === '/api/tuned/clear')) {
+    if (req.headers['x-rhino-token'] !== PORTAL_TOKEN) return json(res, 400, { ok: false, error: 'This page is out of date (the portal was restarted). Reload the page and try again.' }), true
+    const b = await readBody(req)
+    if (b.rev !== tuned.rev) return json(res, 400, { ok: false, error: `Tuned values were changed on another screen (now revision ${tuned.rev}). Reload, then save again.` }), true
+    const h = String(b.heater)
+    if (url === '/api/tuned/clear') delete tuned.pid[h]
+    else tuned.pid[h] = { kp: Number(b.kp), ki: Number(b.ki), kd: Number(b.kd), at: Date.now() / 1000, previous: tuned.pid[h] ? { kp: tuned.pid[h]!.kp, ki: tuned.pid[h]!.ki, kd: tuned.pid[h]!.kd } : null }
+    tuned.rev++
+    tuned.restart_needed = true
+    return json(res, 200, { ok: true, ...tuned }), true
+  }
   if (req.method === 'GET' && url === '/api/hardware/devices') return json(res, 200, { ok: true, devices: wizardDevices }), true
   // Tool library, read-only, from the Portal's demo (scripts/fixtures/portal-*.json). Changes need the real
   // Portal: python3 dev/demo_server.py in Toolhead_Manager, then PORTAL=http://127.0.0.1:5055 npm run dev

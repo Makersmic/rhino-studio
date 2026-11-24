@@ -13,6 +13,6 @@ describe('wizards list', () => {
       expect(w.what.length).toBeGreaterThan(10)
       expect(w.when.length).toBeGreaterThan(5)
     }
-    expect(COMING.length).toBeGreaterThan(0)
+    expect(Array.isArray(COMING)).toBe(true)
   })
 })

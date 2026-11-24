@@ -320,6 +320,10 @@ export const useMachineStore = defineStore('machine', () => {
   /** Macro definitions, read once per Klipper start (they only change with the config). */
   let macroDefs: Promise<Record<string, { gcode: string; description: string }>> | null = null
   watch(klippyReady, () => (macroDefs = null))
+  async function heaterNow(object: string) {
+    return need().heaterNow(object)
+  }
+
   /** One configured Klipper section (read only), or null. */
   async function configSection(name: string) {
     return need().configSection(name)
@@ -433,6 +437,7 @@ export const useMachineStore = defineStore('machine', () => {
     historyTotals,
     macroDefinitions,
     configSection,
+    heaterNow,
     extruderConfig,
     bedConfig,
     listLogs,

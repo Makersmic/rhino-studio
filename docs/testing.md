@@ -970,3 +970,27 @@ Wizards now have their own section (the wand icon in the rail). The old /setting
 - [ ] **MC1 End switches.** Motor check, Watch the switches, press each end switch and the probe by hand. *Pass:* each shows Triggered while pressed and keeps a tick. *Stop if* a switch never changes.
 - [ ] **MC2 Drivers.** Read the drivers. *Pass:* every driver says Fine on a healthy machine; unplug nothing. A flagged driver is explained in a sentence. *Stop if* a driver reports too hot or a short: switch off and look.
 - [ ] **MC3 Motors.** Lower the bed and centre the head, then Buzz each motor in turn. *Pass:* each moves about 1 mm and back ten times, the right way; you mark each. *Stop if* anything touches, a motor grinds, or Z moves the wrong way far enough to touch.
+
+## Tune a heater (Studio 0.39.0, Tool Manager 1.9.48; `myrhino/tuned.cfg`)
+
+Needs 1.9.48 installed: `printer.cfg` now has `[include myrhino/tuned.cfg]` after `[include tools/3dp.cfg]`. After the install, Klipper must start normally with nothing tuned (an empty file). Stay near the machine for any tune; Stop cuts the heater.
+
+- [ ] **HT1 Klipper starts with the new include.** After the install and a restart, Klipper is Ready, and `~/printer_data/config/myrhino/tuned.cfg` exists and holds only comments. *Stop if* Klipper reports a config error mentioning tuned.cfg or "SAVE_CONFIG ... conflicts".
+- [ ] **HT2 Tune the hotend.** Wizards > Tune a heater > Hotend, your usual temperature, Start. *Pass:* it heats and cycles for 5 to 10 minutes, then shows old and new Kp, Ki, Kd with a sentence. Nothing is kept yet. *Stop if* the temperature goes more than 20 C past the target, or Klipper stops with a heater error (then nothing is changed).
+- [ ] **HT3 Keep, restart, hold.** Press Keep it, then restart Klipper from the banner. *Pass:* `tuned.cfg` has `[extruder]` with the new values; after the restart heat the hotend to the target and it holds within 1 C for 5 minutes; Klipper's own `pid_Kp` in `tools/3dp.cfg` is unchanged. *Stop if* Klipper won't start.
+- [ ] **HT4 Put back.** Press Put back what it had, restart. *Pass:* `tuned.cfg` is comments only again and the hotend uses its own values. *Stop if* the values stay.
+- [ ] **HT5 Bed, and a chamber when you have one.** Same steps for the bed (10 to 20 minutes). With no chamber heater the wizard says none is set up; once you add one (Add hardware), it appears, starts only from a cool chamber, and takes 20 to 60 minutes with the door closed.
+
+## Input shaping, material tower and tuning results (Studio 0.39.0, Tool Manager 1.9.48)
+
+USB accelerometer plugged into the Rhino's host, fixed firmly (to the hotend heatsink fan mount, cable free to move, away from fans). Needs 1.9.48 and a Klipper restart after step 1. The shaking tests move the whole machine: hand near Stop.
+
+- [ ] **SH1 Set it up.** Wizards > Input shaping, step 1: paste the serial name (`ls /dev/serial/by-id/`), check the pins against the board's maker page, Keep, restart Klipper. *Pass:* `myrhino/tuned.cfg` has `[mcu adxl]`, `[adxl345]` and `[resonance_tester]`, and Klipper is Ready after the restart. *Stop if* Klipper reports a config error: remove the accelerometer settings (they are only in tuned.cfg) and tell me the message.
+- [ ] **SH2 It answers.** Step 2, Check it. *Pass:* about one g and a low noise number. *Stop if* it doesn't answer: check the cable and the serial name.
+- [ ] **SH3 Gentle first.** Step 3, mount a print head, Shake gently. *Pass:* a quiet, brief shake; nothing rattles loose. *Stop if* anything loosens, the head unlocks or a cable catches.
+- [ ] **SH4 Measure.** Measure X, then Y. *Pass:* each takes about a minute, the shakes get louder as the frequency climbs, and Klipper gives a recommendation per axis with curves drawn. *Stop if* the machine hits an end stop or anything moves that shouldn't.
+- [ ] **SH5 Keep and restart.** Choose, Keep it, restart Klipper. *Pass:* `tuned.cfg` has `[input_shaper]` with your picks; a test print or the ringing tower shows less ringing than before. Put back removes it.
+- [ ] **SH6 Another head.** Mount a different head and run it again. *Pass:* the Results page lists a shaper for each head; Klipper loads the last one kept (switching per head at a job start waits for the macro change in `docs/proposal-per-head-shaping.md`).
+- [ ] **MT1 Temperature tower.** Wizards > Material tower, Temperature, send and print. *Pass:* the head heats to the first band, the temperature steps down every 5 mm, and the tower prints; pick the best band and record it. *Stop if* the first layer doesn't stick or the nozzle ends up above the temperature typed.
+- [ ] **MT2 Retraction tower.** Same with Retraction. *Pass:* two pillars with the length changing every band; strings between them shrink up the tower.
+- [ ] **TR1 Results.** Wizards > Tuning results. *Pass:* what you recorded is listed per head with when; Run again opens the right wizard.

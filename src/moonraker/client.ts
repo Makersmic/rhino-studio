@@ -378,6 +378,13 @@ export class MoonrakerClient {
     return r?.status?.configfile?.settings?.extruder ?? {}
   }
 
+  /** A heater's live temperature and target (printer.objects.query), for heaters Studio doesn't subscribe to (a chamber). */
+  async heaterNow(object: string): Promise<{ temperature: number | null; target: number | null }> {
+    const r = (await this.call('printer.objects.query', { objects: { [object]: ['temperature', 'target'] } })) as { status?: Record<string, { temperature?: number; target?: number }> }
+    const o = r?.status?.[object]
+    return { temperature: typeof o?.temperature === 'number' ? o.temperature : null, target: typeof o?.target === 'number' ? o.target : null }
+  }
+
   /** One configured section (configfile.settings), e.g. "probe": its x_offset and y_offset. A read. */
   async configSection(name: string): Promise<Record<string, unknown> | null> {
     const r = (await this.call('printer.objects.query', { objects: { configfile: ['settings'] } })) as

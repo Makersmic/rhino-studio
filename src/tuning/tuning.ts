@@ -10,7 +10,9 @@ import type { CutValue } from './cutTests'
 
 export type TuningTest = 'extruder_calibration' | 'first_layer' | 'pressure_advance' | 'extrusion_multiplier'
 /** What the Portal keeps: a print head test, or a laser / drag knife value (cutTests.ts) */
-export type SavedTest = TuningTest | CutValue
+/** Found by the Material tower wizard (Tool Manager 1.9.48): per head, nozzle and material. Recorded and shown; slicing doesn't read them yet. */
+export type TowerTest = 'print_temperature' | 'retraction_length'
+export type SavedTest = TuningTest | TowerTest | CutValue
 
 export interface TunedValue {
   value: number
@@ -163,7 +165,7 @@ export function tuningStatus(st: TuningState | null, tool: string, nozzle: numbe
 
 export const SQUISH = { height: 0.25, widthFactor: 1.2, size: 30, feed: 1200, travel: 6000 } as const
 /** Filament area for 1.75 mm filament (mm²) */
-const FILAMENT_AREA = Math.PI * (1.75 / 2) ** 2
+export const FILAMENT_AREA = Math.PI * (1.75 / 2) ** 2
 
 export type Rect = { x0: number; y0: number; x1: number; y1: number }
 const overlaps = (a: Rect, b: Rect) => a.x0 < b.x1 && a.x1 > b.x0 && a.y0 < b.y1 && a.y1 > b.y0

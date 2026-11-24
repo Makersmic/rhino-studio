@@ -20,7 +20,7 @@ import { COMING, GROUPS, WIZARDS } from '@/wizards/wizards'
         </li>
       </ul>
     </RsPanel>
-    <RsPanel title="Coming next" panel-id="wizards.coming">
+    <RsPanel v-if="COMING.length" title="Coming next" panel-id="wizards.coming">
       <ul class="coming"><li v-for="c in COMING" :key="c">{{ c }}</li></ul>
     </RsPanel>
   </div>

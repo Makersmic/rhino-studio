@@ -195,6 +195,8 @@ export const PORTAL_NETWORK = ['net-hostname', 'net-ipv4', 'net-wifi', 'net-powe
 /** Settings › Host: remake the links of the Rhino's Klipper extras into klippy/extras (Tool Manager 1.9.30); run the health check (1.9.45: it only reads) */
 export const PORTAL_HOST = ['host-extras-relink', 'health-run'] as const
 /** Files > Models (Tool Manager 1.9.46): the Portal's own model folder. Delete is straight away (Mike, Nov 23). */
+/** Tuned heater values kept on the Rhino in myrhino/tuned.cfg (Tool Manager 1.9.48): the Portal writes the file, never SAVE_CONFIG. */
+export const PORTAL_TUNED = ['tuned-pid', 'tuned-clear', 'tuned-accel', 'tuned-shaper', 'tuned-shaper-clear'] as const
 export const PORTAL_LIBRARY = ['library-upload', 'library-folder', 'library-rename', 'library-move', 'library-delete'] as const
 
 export type WriteKind =
@@ -221,6 +223,7 @@ export type WriteKind =
   | (typeof PORTAL_TUNING)[number]
   | (typeof PORTAL_HOST)[number]
   | (typeof PORTAL_LIBRARY)[number]
+  | (typeof PORTAL_TUNED)[number]
 
 /** The one request each write kind may make. */
 export const WRITE_ROUTES: Record<WriteKind, { method: 'POST' | 'DELETE'; path: RegExp }> = {
@@ -296,6 +299,11 @@ export const WRITE_ROUTES: Record<WriteKind, { method: 'POST' | 'DELETE'; path: 
   'backup-now': { method: 'POST', path: /^\/api\/backup$/ },
   'host-extras-relink': { method: 'POST', path: /^\/api\/host\/extras\/relink$/ },
   'health-run': { method: 'POST', path: /^\/api\/health\/run$/ },
+  'tuned-pid': { method: 'POST', path: /^\/api\/tuned\/pid$/ },
+  'tuned-clear': { method: 'POST', path: /^\/api\/tuned\/clear$/ },
+  'tuned-accel': { method: 'POST', path: /^\/api\/tuned\/accelerometer$/ },
+  'tuned-shaper': { method: 'POST', path: /^\/api\/tuned\/shaper$/ },
+  'tuned-shaper-clear': { method: 'POST', path: /^\/api\/tuned\/shaper\/clear$/ },
   'library-upload': { method: 'POST', path: /^\/api\/library\/upload$/ },
   'library-folder': { method: 'POST', path: /^\/api\/library\/folder$/ },
   'library-rename': { method: 'POST', path: /^\/api\/library\/rename$/ },
@@ -325,9 +333,44 @@ export const WRITE_ROUTES: Record<WriteKind, { method: 'POST' | 'DELETE'; path: 
 const ALLOWED = new Set<string>([
   ...PORTAL_WRITES, ...PORTAL_TOOL_CHECKS, ...PORTAL_TOOL_WRITES, ...PORTAL_THEME_IMAGES, ...PORTAL_THEME_FONTS, ...PORTAL_RESTART,
   ...PORTAL_CARE_WRITES, ...PORTAL_CARE_SETUP, ...PORTAL_TOOL_SETUP, ...PORTAL_HARDWARE, ...PORTAL_HW_WIZARD, ...PORTAL_HOOKS, ...PORTAL_LABELS, ...PORTAL_NETWORK, ...PORTAL_SLICER, ...PORTAL_UPDATE, ...PORTAL_TRUST,
-  ...PORTAL_BACKUP, ...PORTAL_PROFILES, ...PORTAL_MACROS, ...PORTAL_TUNING, ...PORTAL_HOST, ...PORTAL_LIBRARY,
+  ...PORTAL_BACKUP, ...PORTAL_PROFILES, ...PORTAL_MACROS, ...PORTAL_TUNING, ...PORTAL_HOST, ...PORTAL_LIBRARY, ...PORTAL_TUNED,
 ])
 const enc = encodeURIComponent
+
+/** GET /api/tuned (Tool Manager 1.9.48) */
+export interface TunedPid {
+  kp: number
+  ki: number
+  kd: number
+  at: number
+  /** the values before this tune, for Put back */
+  previous?: { kp: number; ki: number; kd: number } | null
+}
+export interface ShaperPick {
+  type: string
+  freq: number
+}
+export interface TunedAccel {
+  serial: string
+  cs_pin: string
+  spi_bus: string
+  axes_map: string
+  probe: { x: number; y: number; z: number }
+}
+export interface TunedState {
+  ok: boolean
+  rev: number
+  /** the accelerometer board kept for tuned.cfg, or null */
+  accelerometer?: TunedAccel | null
+  /** per print head: the shaper picked for it (the last one kept is what Klipper loads at start) */
+  shaper?: Record<string, { x: ShaperPick; y: ShaperPick; max_accel: number | null; at: number }>
+  /** the print head whose shaper tuned.cfg holds */
+  shaper_active?: string | null
+  /** keyed by the Klipper object ("extruder", "heater_bed", "heater_generic chamber") */
+  pid: Record<string, TunedPid>
+  /** tuned.cfg was written after Klipper last started: a restart applies it */
+  restart_needed?: boolean
+}
 
 /** GET /api/library (Tool Manager 1.9.46) */
 export interface LibraryEntry {
@@ -1026,6 +1069,49 @@ export class PortalClient {
   /** Start the check on the Rhino (it only reads); it returns at once, then ask healthState until it is done. */
   async runHealth(): Promise<HealthState> {
     return this.write('health-run', 'POST', '/api/health/run', {}) as Promise<HealthState>
+  }
+
+  // ---- tuned values (Wizards > Tune a heater) ---------------------------
+
+  /** What the Rhino keeps in myrhino/tuned.cfg, and whether Klipper has been restarted since it changed. */
+  async tunedState(): Promise<TunedState> {
+    return this.getJson<TunedState>('/api/tuned')
+  }
+
+  /** Keep a heater's PID values (the Portal checks them and rewrites tuned.cfg). The old ones are kept for "Put back". */
+  async tunedPid(rev: number, heater: string, pid: { kp: number; ki: number; kd: number }): Promise<TunedState> {
+    return this.write<TunedState>('tuned-pid', 'POST', '/api/tuned/pid', { rev, heater, ...pid })
+  }
+
+  /** Forget a heater's kept values: it goes back to what its own config says. */
+  async tunedClear(rev: number, heater: string): Promise<TunedState> {
+    return this.write<TunedState>('tuned-clear', 'POST', '/api/tuned/clear', { rev, heater })
+  }
+
+  /** The accelerometer's board and where it measures (written to tuned.cfg as [mcu adxl], [adxl345], [resonance_tester]). */
+  async tunedAccelerometer(rev: number, board: TunedAccel): Promise<TunedState> {
+    return this.write<TunedState>('tuned-accel', 'POST', '/api/tuned/accelerometer', { rev, ...board })
+  }
+
+  /** Keep an input shaper result for the print head that was mounted. */
+  async tunedShaper(rev: number, body: { head: string; x: ShaperPick; y: ShaperPick; max_accel?: number | null }): Promise<TunedState> {
+    return this.write<TunedState>('tuned-shaper', 'POST', '/api/tuned/shaper', { rev, ...body })
+  }
+
+  async tunedShaperClear(rev: number, head: string): Promise<TunedState> {
+    return this.write<TunedState>('tuned-shaper-clear', 'POST', '/api/tuned/shaper/clear', { rev, head })
+  }
+
+  /** The raw data SHAPER_CALIBRATE wrote for an axis (the CSV Klipper keeps in /tmp), as text, for Studio to draw. */
+  async resonanceCsv(axis: 'x' | 'y', name: string): Promise<string> {
+    let res: Response
+    try {
+      res = await portalFetch(`${this.baseUrl}/api/resonance-data?axis=${axis}&name=${enc(name)}`, {}, SEND_MS)
+    } catch (e) {
+      throw e instanceof PortalTimeout ? e : new Error("Can't reach the Rhino Portal - is it running?")
+    }
+    if (!res.ok) throw new Error(((await res.json().catch(() => null)) as { error?: string } | null)?.error ?? `Portal error (HTTP ${res.status})`)
+    return res.text()
   }
 
   // ---- model library (Files > Models) ----------------------------------

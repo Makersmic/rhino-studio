@@ -106,3 +106,30 @@ export const MOTOR_STEP_POSE: Record<'switches' | 'drivers' | 'motors' | 'done',
   motors: 'carry',
   done: 'thumbsup',
 }
+
+/** The tune a heater wizard: one pose per step */
+export const HEATER_STEP_POSE: Record<'check' | 'pick' | 'review' | 'tune' | 'keep', Pose> = {
+  check: 'wrench',
+  pick: 'meter',
+  review: 'pipewrench',
+  tune: 'meter',
+  keep: 'thumbsup',
+}
+
+/** The input shaping wizard: one pose per step */
+export const SHAPING_STEP_POSE: Record<'board' | 'test' | 'measure' | 'pick' | 'keep', Pose> = {
+  board: 'wrench',
+  test: 'meter',
+  measure: 'carry',
+  pick: 'calipers',
+  keep: 'thumbsup',
+}
+
+/** The material tower wizard: one pose per step */
+export const TOWER_STEP_POSE: Record<'pick' | 'make' | 'print' | 'judge' | 'save', Pose> = {
+  pick: 'wrench',
+  make: 'pipewrench',
+  print: 'carry',
+  judge: 'calipers',
+  save: 'thumbsup',
+}
