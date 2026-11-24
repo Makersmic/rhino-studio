@@ -144,29 +144,43 @@ export function boardLines(b: Board, probe: { x: number; y: number; z: number })
   return [...(b.ownMcu ? [`[mcu ${b.mcu}]`, `serial: ${b.serial}`, ''] : []), '[adxl345]', `cs_pin: ${b.csPin}`, `spi_bus: ${b.spiBus}`, `axes_map: ${b.axesMap}`, '', '[resonance_tester]', 'accel_chip: adxl345', `probe_points: ${probe.x},${probe.y},${probe.z}`]
 }
 
-/** What the host's USB serial list says about a possible accelerometer. A board with Klipper's firmware is named usb-Klipper_rp2040_…; one still in its bootloader is usb-Raspberry_Pi_RP2_Boot_… */
+/**
+ * What the host's USB serial list says about a possible accelerometer. The logic (Mike, Nov 23): the accelerometer is the USB board that
+ * NO config file mentions. The Portal marks each port with what uses it (a config file's [mcu], or a board added in Add hardware), so a port
+ * with nothing using it is a candidate whatever its name. A board with Klipper's firmware is named usb-Klipper_<chip>_...; one still in its
+ * bootloader (usb-Raspberry_Pi_RP2_Boot_...) needs firmware first and is never offered as ready.
+ */
 export interface Port {
   path: string
   used_by: string
 }
 export interface Found {
-  /** a ready board not used by Klipper yet: offer it */
+  /** not used by any config: the accelerometer is one of these (just plugged in ones first) */
   fresh: Port[]
-  /** a ready board already in the config: say which (e.g. "board adxl") */
+  /** already in the config under a name of its own ([mcu adxl] by hand, or a board added in Add hardware) */
   taken: Port[]
-  /** a Pico-class board that still needs Klipper's firmware */
+  /** a board waiting for Klipper's firmware */
   needsFirmware: Port[]
 }
-export function findBoards(ports: Port[]): Found {
-  const klipper = ports.filter((p) => /usb-Klipper_rp2040_/i.test(p.path))
+const BOOT = /usb-Raspberry_Pi_RP2_Boot|RP2040_Boot|DFU|_Boot_/i
+/** `before`: the ports that were there when the wizard opened, so one that appeared since (plugged in just now) is listed first. */
+export function findBoards(ports: Port[], before: string[] = []): Found {
+  const boot = ports.filter((p) => BOOT.test(p.path))
+  const ready = ports.filter((p) => !BOOT.test(p.path))
+  const newest = (p: Port) => (before.length && !before.includes(p.path) ? 0 : 1)
+  const klipper = (p: Port) => (/usb-Klipper_/i.test(p.path) ? 0 : 1)
   return {
-    fresh: klipper.filter((p) => !p.used_by),
-    taken: klipper.filter((p) => p.used_by),
-    needsFirmware: ports.filter((p) => /usb-Raspberry_Pi_RP2_Boot|RP2040_Boot/i.test(p.path)),
+    fresh: ready.filter((p) => !p.used_by).sort((a, b) => newest(a) - newest(b) || klipper(a) - klipper(b) || a.path.localeCompare(b.path)),
+    taken: ready.filter((p) => p.used_by && boardNameOf(p.used_by) !== null),
+    needsFirmware: boot.filter((p) => !p.used_by),
   }
 }
-/** "board adxl" (the Add hardware board) -> its name; anything else (a main.cfg section) -> null */
-export const boardNameOf = (usedBy: string): string | null => /^board ([a-z][a-z0-9_]{1,15})$/.exec(usedBy)?.[1] ?? null
+/** What uses a port: "board adxl" (Add hardware) or "printer.cfg [mcu adxl]" (a second [mcu] in a config file) gives the board's name; the main board's plain [mcu] gives null. */
+export function boardNameOf(usedBy: string): string | null {
+  return /^board ([a-z][a-z0-9_]{1,15})$/.exec(usedBy)?.[1] ?? /\[mcu ([a-z][a-z0-9_]{1,15})\]$/.exec(usedBy)?.[1] ?? null
+}
+/** Was this one plugged in after the wizard opened? */
+export const justPlugged = (p: Port, before: string[]) => before.length > 0 && !before.includes(p.path)
 
 /** The input_shaper section for a result. */
 export function shaperLines(x: { type: string; freq: number }, y: { type: string; freq: number }): string[] {

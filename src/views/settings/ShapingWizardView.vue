@@ -7,7 +7,7 @@
  */
 import '@/toolmgr/forms.css'
 import './settings.css'
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import RsPanel from '@/components/RsPanel.vue'
 import RsButton from '@/components/RsButton.vue'
 import StatusChip from '@/components/StatusChip.vue'
@@ -23,7 +23,7 @@ import { useMaintenanceStore } from '@/stores/maintenance'
 import { LEVEL_TONE, LEVEL_WORD } from '@/system/healthCheck'
 import type { TunedState } from '@/portal/client'
 import {
-  PRESETS, boardLines, boardNameOf, boardProblem, calibrateScript, csFor, findBoards, csvName, fitSentence, gentleScript, noiseSentence, parseCalibrate, parseCsv, parseNoise, parseQuery,
+  PRESETS, boardLines, boardNameOf, boardProblem, calibrateScript, csFor, findBoards, justPlugged, csvName, fitSentence, gentleScript, noiseSentence, parseCalibrate, parseCsv, parseNoise, parseQuery,
   pathFor, plainShaper, querySentence, scriptProblem, shaperLines, shaperStoreScript, shaperUnstoreScript, type Axis, type AxisResult, type Board, type Curves, type Fit, type Found,
 } from '@/checks/shaper'
 
@@ -53,16 +53,29 @@ async function loadTuned() {
   }
 }
 const found = ref<Found>({ fresh: [], taken: [], needsFirmware: [] })
-onMounted(async () => {
-  void loadTuned()
-  // the accelerometer is a second board on the host's USB: look for it, and if Klipper already has it go straight to the check
-  if (hasChip.value) at.value = 1
+/** the USB boards that were there when the wizard opened: one that appears later is the one just plugged in */
+const before = ref<string[]>([])
+let looking: ReturnType<typeof setInterval> | null = null
+async function look(first = false) {
   try {
     const b = await maint.portal()?.hwBoards()
-    if (b) found.value = findBoards(b.serial_ports)
-    if (found.value.fresh.length === 1 && !board.value.serial) board.value.serial = found.value.fresh[0]!.path
+    if (!b) return
+    if (first) before.value = b.serial_ports.map((p) => p.path)
+    found.value = findBoards(b.serial_ports, before.value)
+    // the accelerometer is the board no config file mentions: if there is exactly one, or one just appeared, use it
+    const cand = found.value.fresh.filter((p) => justPlugged(p, before.value))
+    const pick = cand.length === 1 ? cand[0]! : found.value.fresh.length === 1 ? found.value.fresh[0]! : null
+    if (pick && !board.value.serial) board.value.serial = pick.path
   } catch { /* the list is a convenience: the serial name can be typed */ }
+}
+onMounted(async () => {
+  void loadTuned()
+  // if Klipper already has the accelerometer go straight to the check; otherwise look for the board, and keep looking while the person plugs it in
+  if (hasChip.value) at.value = 1
+  await look(true)
+  looking = setInterval(() => step.value === 'board' && !hasChip.value && void look(), 3000)
 })
+onBeforeUnmount(() => looking && clearInterval(looking))
 function useBoard(path: string) {
   board.value = { ...board.value, serial: path, ownMcu: true, mcu: 'adxl', csPin: csFor('adxl', gpioOf(board.value.csPin)) }
 }
@@ -250,10 +263,11 @@ async function putBack() {
           <template v-else>
             <p class="plain"><b>Plug your accelerometer into the Rhino's host now.</b> This is a one-time job: you plug it in, measure each print head, then take it out of the config and unplug it when you're done. The wizard walks you through both ends.</p>
             <p class="plain">The USB accelerometer is a small second board (its own MCU) with the sensor on it. Plug it into the Rhino's host and Studio looks for it. Fix it firmly to the head (the heatsink fan mount worked before) with the cable free to move, and keep it clear of fans.</p>
-            <p v-for="p in found.fresh" :key="p.path" class="plain"><StatusChip tone="ok">Found</StatusChip> <span class="mono">{{ p.path.replace('/dev/serial/by-id/', '') }}</span> <RsButton size="sm" :variant="board.serial === p.path ? 'default' : 'primary'" @click="useBoard(p.path)">{{ board.serial === p.path ? 'Using this one' : 'Use this board' }}</RsButton></p>
+            <p v-for="p in found.fresh" :key="p.path" class="plain"><StatusChip tone="ok">{{ justPlugged(p, before) ? 'Just plugged in' : 'Not in your config' }}</StatusChip> <span class="mono">{{ p.path.replace('/dev/serial/by-id/', '') }}</span> <RsButton size="sm" :variant="board.serial === p.path ? 'default' : 'primary'" @click="useBoard(p.path)">{{ board.serial === p.path ? 'Using this one' : 'This is it' }}</RsButton></p>
             <p v-for="p in found.taken" :key="p.path" class="plain"><StatusChip tone="neutral">Added already</StatusChip> <span class="mono">{{ p.path.replace('/dev/serial/by-id/', '') }}</span> ({{ p.used_by }}) <RsButton v-if="boardNameOf(p.used_by)" size="sm" @click="useAdded(boardNameOf(p.used_by)!)">Use it as the accelerometer</RsButton></p>
             <p v-for="p in found.needsFirmware" :key="p.path" class="plain"><StatusChip tone="warn">Needs firmware</StatusChip> <span class="mono">{{ p.path.replace('/dev/serial/by-id/', '') }}</span> is a board waiting for Klipper's firmware. Flash it first (the maker's page says how), unplug and replug it, then come back.</p>
-            <p v-if="!found.fresh.length && !found.taken.length && !found.needsFirmware.length" class="plain muted">No USB accelerometer found yet. Plug it in (and give it a moment), or type its name below: <code>ls /dev/serial/by-id/</code>.</p>
+            <p v-if="found.fresh.length > 1" class="plain muted">More than one USB board isn't used by your config. The accelerometer is the one that appeared when you plugged it in; if you're not sure, check the name against the board's label.</p>
+            <p v-if="!found.fresh.length && !found.taken.length && !found.needsFirmware.length" class="plain muted">No unused USB board found yet. Plug the accelerometer in (Studio checks every few seconds), or type its name below: <code>ls /dev/serial/by-id/</code>.</p>
             <p v-if="tunedError" class="tm-err">{{ tunedError }}</p>
             <div class="grid">
               <label v-if="board.ownMcu" class="tm-lbl">Serial name<input v-model="board.serial" type="text" class="tm-inp" placeholder="/dev/serial/by-id/usb-Klipper_rp2040_…"></label>

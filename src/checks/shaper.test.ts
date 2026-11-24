@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { boardNameOf, findBoards, shaperStoreScript, shaperUnstoreScript, shaperVariable, pathFor, parseCsv, boardLines, boardProblem, calibrateScript, fitSentence, gentleScript, noiseSentence, parseCalibrate, parseNoise, parseQuery, querySentence, scriptProblem, shaperLines } from './shaper'
+import { boardNameOf, findBoards, justPlugged, shaperStoreScript, shaperUnstoreScript, shaperVariable, pathFor, parseCsv, boardLines, boardProblem, calibrateScript, fitSentence, gentleScript, noiseSentence, parseCalibrate, parseNoise, parseQuery, querySentence, scriptProblem, shaperLines } from './shaper'
 
 const CAL = [
   'Calculating the best input shaper parameters for y axis',
@@ -61,19 +61,32 @@ describe('input shaping logic', () => {
     expect(boardLines({ ...b, ownMcu: false, mcu: 'accel2', csPin: 'accel2:gpio1' }, { x: 1, y: 2, z: 3 })[0]).toBe('[adxl345]')
     expect(shaperLines({ type: 'mzv', freq: 47.8 }, { type: 'ei', freq: 40 })).toEqual(['[input_shaper]', 'shaper_type_x: mzv', 'shaper_freq_x: 47.8', 'shaper_type_y: ei', 'shaper_freq_y: 40'])
   })
-  it('finds a USB accelerometer on the host', () => {
+  it('finds the accelerometer: the USB board no config file mentions', () => {
+    const MAIN = '/dev/serial/by-id/usb-Klipper_stm32f446xx_4600-if00'
+    const ADXL = '/dev/serial/by-id/usb-Klipper_rp2040_E660-if00'
     const ports = [
-      { path: '/dev/serial/by-id/usb-Klipper_stm32f446xx_4600-if00', used_by: 'printer.cfg [mcu]' },
-      { path: '/dev/serial/by-id/usb-Klipper_rp2040_E660-if00', used_by: '' },
+      { path: MAIN, used_by: 'printer.cfg [mcu]' },
+      { path: ADXL, used_by: '' },
       { path: '/dev/serial/by-id/usb-Klipper_rp2040_AAAA-if00', used_by: 'board adxl' },
+      { path: '/dev/serial/by-id/usb-Klipper_stm32f042x6_BBBB-if00', used_by: 'printer.cfg [mcu extra]' },
       { path: '/dev/serial/by-id/usb-Raspberry_Pi_RP2_Boot_1234-if00', used_by: '' },
     ]
     const f = findBoards(ports)
-    expect(f.fresh.map((p) => p.path)).toEqual(['/dev/serial/by-id/usb-Klipper_rp2040_E660-if00'])
-    expect(f.taken.map((p) => boardNameOf(p.used_by))).toEqual(['adxl'])
+    expect(f.fresh.map((p) => p.path)).toEqual([ADXL])
+    expect(f.taken.map((p) => boardNameOf(p.used_by))).toEqual(['adxl', 'extra'])
     expect(f.needsFirmware).toHaveLength(1)
+    expect(f.fresh.some((p) => p.path === MAIN)).toBe(false)     // the main board is in the config: never offered
     expect(boardNameOf('printer.cfg [mcu]')).toBeNull()
     expect(findBoards([])).toEqual({ fresh: [], taken: [], needsFirmware: [] })
+  })
+  it('a board of any name counts if nothing uses it; the one plugged in just now comes first', () => {
+    const a = { path: '/dev/serial/by-id/usb-Klipper_stm32f042x6_OLD-if00', used_by: '' }     // an unconfigured board that was already there
+    const b = { path: '/dev/serial/by-id/usb-Something_ADXL_NEW-if00', used_by: '' }          // not named Klipper, plugged in now
+    expect(findBoards([a, b]).fresh.map((p) => p.path)).toEqual([a.path, b.path])             // no snapshot: Klipper-named first
+    expect(findBoards([a, b], [a.path]).fresh.map((p) => p.path)).toEqual([b.path, a.path])   // snapshot: the new one first
+    expect(justPlugged(b, [a.path])).toBe(true)
+    expect(justPlugged(a, [a.path])).toBe(false)
+    expect(justPlugged(b, [])).toBe(false)
   })
   it('reads the calibration csv and makes a path', () => {
     const csv = 'freq,psd_x,psd_y,psd_z,psd_xyz,zv(59.4),mzv(47.8)\n5,1,1,1,3,2,1\n10,2,2,2,6,4,2\n15,4,4,4,12,8,4\nbad,row\n'
