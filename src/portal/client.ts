@@ -196,7 +196,7 @@ export const PORTAL_NETWORK = ['net-hostname', 'net-ipv4', 'net-wifi', 'net-powe
 export const PORTAL_HOST = ['host-extras-relink', 'health-run'] as const
 /** Files > Models (Tool Manager 1.9.46): the Portal's own model folder. Delete is straight away (Mike, Nov 23). */
 /** Tuned heater values kept on the Rhino in myrhino/tuned.cfg (Tool Manager 1.9.48): the Portal writes the file, never SAVE_CONFIG. */
-export const PORTAL_TUNED = ['tuned-pid', 'tuned-clear', 'tuned-accel', 'tuned-shaper', 'tuned-shaper-clear'] as const
+export const PORTAL_TUNED = ['tuned-pid', 'tuned-clear', 'tuned-accel', 'tuned-accel-clear', 'tuned-shaper', 'tuned-shaper-clear'] as const
 export const PORTAL_LIBRARY = ['library-upload', 'library-folder', 'library-rename', 'library-move', 'library-delete'] as const
 
 export type WriteKind =
@@ -302,6 +302,7 @@ export const WRITE_ROUTES: Record<WriteKind, { method: 'POST' | 'DELETE'; path: 
   'tuned-pid': { method: 'POST', path: /^\/api\/tuned\/pid$/ },
   'tuned-clear': { method: 'POST', path: /^\/api\/tuned\/clear$/ },
   'tuned-accel': { method: 'POST', path: /^\/api\/tuned\/accelerometer$/ },
+  'tuned-accel-clear': { method: 'POST', path: /^\/api\/tuned\/accelerometer\/clear$/ },
   'tuned-shaper': { method: 'POST', path: /^\/api\/tuned\/shaper$/ },
   'tuned-shaper-clear': { method: 'POST', path: /^\/api\/tuned\/shaper\/clear$/ },
   'library-upload': { method: 'POST', path: /^\/api\/library\/upload$/ },
@@ -352,6 +353,10 @@ export interface ShaperPick {
 }
 export interface TunedAccel {
   serial: string
+  /** the board's name in Klipper (default adxl) */
+  mcu?: string
+  /** false: the board was added already (Add hardware), so its [mcu] isn't written again */
+  own_mcu?: boolean
   cs_pin: string
   spi_bus: string
   axes_map: string
@@ -362,6 +367,8 @@ export interface TunedState {
   rev: number
   /** the accelerometer board kept for tuned.cfg, or null */
   accelerometer?: TunedAccel | null
+  /** true/false: the board's USB name is/isn't on the host (a configured board that is unplugged stops Klipper starting); null: none, or added through Add hardware */
+  accelerometer_present?: boolean | null
   /** per print head: the shaper picked for it (the last one kept is what Klipper loads at start) */
   shaper?: Record<string, { x: ShaperPick; y: ShaperPick; max_accel: number | null; at: number }>
   /** the print head whose shaper tuned.cfg holds */
@@ -1091,6 +1098,11 @@ export class PortalClient {
   /** The accelerometer's board and where it measures (written to tuned.cfg as [mcu adxl], [adxl345], [resonance_tester]). */
   async tunedAccelerometer(rev: number, board: TunedAccel): Promise<TunedState> {
     return this.write<TunedState>('tuned-accel', 'POST', '/api/tuned/accelerometer', { rev, ...board })
+  }
+
+  /** Take the accelerometer out of tuned.cfg when the measuring is done. Then restart Klipper, then unplug the board. */
+  async tunedAccelerometerClear(rev: number): Promise<TunedState> {
+    return this.write<TunedState>('tuned-accel-clear', 'POST', '/api/tuned/accelerometer/clear', { rev })
   }
 
   /** Keep an input shaper result for the print head that was mounted. */

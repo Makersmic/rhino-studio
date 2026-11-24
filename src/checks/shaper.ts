@@ -118,25 +118,56 @@ export function scriptProblem(text: string): string | null {
 // ---- the accelerometer's config (for a USB board running Klipper's firmware)
 export interface Board {
   serial: string
+  /** the board's name in Klipper (the part before the colon in its pins) */
+  mcu: string
+  /** false: it was already added (Add hardware > Boards), so tuned.cfg doesn't write its [mcu] again */
+  ownMcu: boolean
   csPin: string
   spiBus: string
   axesMap: string
 }
 /** Presets are a starting point only: the maker's page has the right pins for the exact board. */
-export const PRESETS: { id: string; label: string; pins: Pick<Board, 'csPin' | 'spiBus'> }[] = [
-  { id: 'rp2040', label: 'A common RP2040 USB ADXL345 board (check the maker\'s page)', pins: { csPin: 'adxl:gpio1', spiBus: 'spi0a' } },
+export const PRESETS: { id: string; label: string; pins: { gpio: string; spiBus: string } }[] = [
+  { id: 'rp2040', label: 'A common RP2040 USB ADXL345 board (check the maker\'s page)', pins: { gpio: 'gpio1', spiBus: 'spi0a' } },
 ]
+export const csFor = (mcu: string, gpio = 'gpio1') => `${mcu}:${gpio}`
 export function boardProblem(b: Board): string | null {
-  if (!/^\/dev\/serial\/by-id\/[\w.:+-]+$/.test(b.serial)) return 'The serial name looks like /dev/serial/by-id/usb-Klipper_rp2040_… (copy it from ls /dev/serial/by-id/).'
-  if (!/^adxl:gpio\d{1,2}$/.test(b.csPin)) return 'The chip-select pin looks like adxl:gpio1.'
+  if (!/^[a-z][a-z0-9_]{1,15}$/.test(b.mcu)) return 'The board\'s name is lower case letters, digits and _ (for example adxl).'
+  if (b.ownMcu && !/^\/dev\/serial\/by-id\/[\w.:+-]+$/.test(b.serial)) return 'The serial name looks like /dev/serial/by-id/usb-Klipper_rp2040_… (pick it from the list, or copy it from ls /dev/serial/by-id/).'
+  if (!new RegExp(`^${b.mcu}:gpio\\d{1,2}$`).test(b.csPin)) return `The chip-select pin looks like ${b.mcu}:gpio1.`
   if (!/^spi\d[a-z]?$/.test(b.spiBus)) return 'The SPI bus looks like spi0a.'
   if (!/^[-]?[xyz],[-]?[xyz],[-]?[xyz]$/.test(b.axesMap)) return 'The axes map looks like x,y,z (or y,x,-z).'
   return null
 }
 /** The sections the Portal keeps in tuned.cfg for the accelerometer. */
 export function boardLines(b: Board, probe: { x: number; y: number; z: number }): string[] {
-  return ['[mcu adxl]', `serial: ${b.serial}`, '', '[adxl345]', `cs_pin: ${b.csPin}`, `spi_bus: ${b.spiBus}`, `axes_map: ${b.axesMap}`, '', '[resonance_tester]', 'accel_chip: adxl345', `probe_points: ${probe.x},${probe.y},${probe.z}`]
+  return [...(b.ownMcu ? [`[mcu ${b.mcu}]`, `serial: ${b.serial}`, ''] : []), '[adxl345]', `cs_pin: ${b.csPin}`, `spi_bus: ${b.spiBus}`, `axes_map: ${b.axesMap}`, '', '[resonance_tester]', 'accel_chip: adxl345', `probe_points: ${probe.x},${probe.y},${probe.z}`]
 }
+
+/** What the host's USB serial list says about a possible accelerometer. A board with Klipper's firmware is named usb-Klipper_rp2040_…; one still in its bootloader is usb-Raspberry_Pi_RP2_Boot_… */
+export interface Port {
+  path: string
+  used_by: string
+}
+export interface Found {
+  /** a ready board not used by Klipper yet: offer it */
+  fresh: Port[]
+  /** a ready board already in the config: say which (e.g. "board adxl") */
+  taken: Port[]
+  /** a Pico-class board that still needs Klipper's firmware */
+  needsFirmware: Port[]
+}
+export function findBoards(ports: Port[]): Found {
+  const klipper = ports.filter((p) => /usb-Klipper_rp2040_/i.test(p.path))
+  return {
+    fresh: klipper.filter((p) => !p.used_by),
+    taken: klipper.filter((p) => p.used_by),
+    needsFirmware: ports.filter((p) => /usb-Raspberry_Pi_RP2_Boot|RP2040_Boot/i.test(p.path)),
+  }
+}
+/** "board adxl" (the Add hardware board) -> its name; anything else (a main.cfg section) -> null */
+export const boardNameOf = (usedBy: string): string | null => /^board ([a-z][a-z0-9_]{1,15})$/.exec(usedBy)?.[1] ?? null
+
 /** The input_shaper section for a result. */
 export function shaperLines(x: { type: string; freq: number }, y: { type: string; freq: number }): string[] {
   return ['[input_shaper]', `shaper_type_x: ${x.type}`, `shaper_freq_x: ${x.freq}`, `shaper_type_y: ${y.type}`, `shaper_freq_y: ${y.freq}`]

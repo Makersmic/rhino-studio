@@ -1604,7 +1604,7 @@ function json(res: import('node:http').ServerResponse, code: number, body: unkno
 }
 
 
-const tuned: { rev: number; pid: Record<string, { kp: number; ki: number; kd: number; at: number; previous?: { kp: number; ki: number; kd: number } | null }>; restart_needed: boolean; accelerometer: { serial: string; cs_pin: string; spi_bus: string; axes_map: string; probe: { x: number; y: number; z: number } } | null; shaper: Record<string, { x: { type: string; freq: number }; y: { type: string; freq: number }; max_accel: number | null; at: number }>; shaper_active: string | null } = { accelerometer: null, shaper: {}, shaper_active: null, rev: 1, pid: { extruder: { kp: 28.729, ki: 2.176, kd: 94.807, at: Date.now() / 1000 - 86400 * 20 } }, restart_needed: false }
+const tuned: { rev: number; pid: Record<string, { kp: number; ki: number; kd: number; at: number; previous?: { kp: number; ki: number; kd: number } | null }>; restart_needed: boolean; accelerometer: { serial: string; cs_pin: string; spi_bus: string; axes_map: string; probe: { x: number; y: number; z: number } } | null; shaper: Record<string, { x: { type: string; freq: number }; y: { type: string; freq: number }; max_accel: number | null; at: number }>; shaper_active: string | null } = { accelerometer: process.env.MOCK_ADXL_SET === '1' ? { serial: '/dev/serial/by-id/usb-Klipper_rp2040_E66058A3-if00', cs_pin: 'adxl:gpio1', spi_bus: 'spi0a', axes_map: 'x,y,z', probe: { x: 150, y: 100, z: 20 } } : null, shaper: {}, shaper_active: null, rev: 1, pid: { extruder: { kp: 28.729, ki: 2.176, kd: 94.807, at: Date.now() / 1000 - 86400 * 20 } }, restart_needed: false }
 // ---- the model library (Tool Manager 1.9.46): pretend Portal, in memory --------
 function cubeStl(mm: number): Buffer {
   const v = [[0, 0, 0], [1, 0, 0], [1, 1, 0], [0, 1, 0], [0, 0, 1], [1, 0, 1], [1, 1, 1], [0, 1, 1]].map((p) => p.map((c) => c * mm))
@@ -2192,17 +2192,24 @@ async function portal(req: IncomingMessage, res: import('node:http').ServerRespo
   }
   // Tool Manager 1.9.46: the model library (in memory; the real rules are in the Portal's rhino/library.py)
   if (url.startsWith('/api/library')) return libraryRoute(req, res, url), true
+  // Add hardware > Boards: the host's USB serial list (a USB accelerometer shows when MOCK_ADXL=0 and it is not set up yet)
+  if (req.method === 'GET' && url === '/api/hardware/boards') {
+    const ports = [{ path: '/dev/serial/by-id/usb-Klipper_stm32f446xx_460055000951303532383235-if00', used_by: 'printer.cfg [mcu]' }]
+    if (process.env.MOCK_ADXL === '0') ports.push({ path: '/dev/serial/by-id/usb-Klipper_rp2040_E66058A3-if00', used_by: '' })
+    return json(res, 200, { ok: true, presets: [], boards: [], serial_ports: ports, max_boards: 4 }), true
+  }
   // Tool Manager 1.9.48: tuned heater values kept in myrhino/tuned.cfg
-  if (req.method === 'GET' && url === '/api/tuned') return json(res, 200, { ok: true, ...tuned }), true
+  if (req.method === 'GET' && url === '/api/tuned') return json(res, 200, { ok: true, ...tuned, accelerometer_present: tuned.accelerometer ? process.env.MOCK_ADXL_UNPLUGGED !== '1' : null }), true
   if (req.method === 'GET' && url === '/api/resonance-data') {
     const rows = Array.from({ length: 60 }, (_, i) => { const f = 5 + i * 2; const p = 100 / (1 + ((f - 48) / 4) ** 2) + 3; return `${f},${p},${p},${p},${p * 3},${p * 0.5},${p * 0.3}` })
     return void res.writeHead(200, { 'content-type': 'text/plain' }).end('freq,psd_x,psd_y,psd_z,psd_xyz,zv(59.4),mzv(47.8)\n' + rows.join('\n') + '\n'), true
   }
-  if (req.method === 'POST' && (url === '/api/tuned/accelerometer' || url === '/api/tuned/shaper' || url === '/api/tuned/shaper/clear')) {
+  if (req.method === 'POST' && (url === '/api/tuned/accelerometer' || url === '/api/tuned/accelerometer/clear' || url === '/api/tuned/shaper' || url === '/api/tuned/shaper/clear')) {
     if (req.headers['x-rhino-token'] !== PORTAL_TOKEN) return json(res, 400, { ok: false, error: 'This page is out of date (the portal was restarted). Reload the page and try again.' }), true
     const b = await readBody(req)
     if (b.rev !== tuned.rev) return json(res, 400, { ok: false, error: `Tuned values were changed on another screen (now revision ${tuned.rev}). Reload, then save again.` }), true
-    if (url.endsWith('accelerometer')) tuned.accelerometer = { serial: String(b.serial), cs_pin: String(b.cs_pin), spi_bus: String(b.spi_bus), axes_map: String(b.axes_map), probe: b.probe as { x: number; y: number; z: number } }
+    if (url.endsWith('accelerometer/clear')) tuned.accelerometer = null
+    else if (url.endsWith('accelerometer')) tuned.accelerometer = { serial: String(b.serial), cs_pin: String(b.cs_pin), spi_bus: String(b.spi_bus), axes_map: String(b.axes_map), probe: b.probe as { x: number; y: number; z: number } }
     else if (url.endsWith('clear')) { delete tuned.shaper[String(b.head)]; tuned.shaper_active = Object.keys(tuned.shaper)[0] ?? null }
     else { tuned.shaper[String(b.head)] = { x: b.x as { type: string; freq: number }, y: b.y as { type: string; freq: number }, max_accel: (b.max_accel as number | null) ?? null, at: Date.now() / 1000 }; tuned.shaper_active = String(b.head) }
     tuned.rev++; tuned.restart_needed = true

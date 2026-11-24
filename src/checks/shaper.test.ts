@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { shaperStoreScript, shaperUnstoreScript, shaperVariable, pathFor, parseCsv, boardLines, boardProblem, calibrateScript, fitSentence, gentleScript, noiseSentence, parseCalibrate, parseNoise, parseQuery, querySentence, scriptProblem, shaperLines } from './shaper'
+import { boardNameOf, findBoards, shaperStoreScript, shaperUnstoreScript, shaperVariable, pathFor, parseCsv, boardLines, boardProblem, calibrateScript, fitSentence, gentleScript, noiseSentence, parseCalibrate, parseNoise, parseQuery, querySentence, scriptProblem, shaperLines } from './shaper'
 
 const CAL = [
   'Calculating the best input shaper parameters for y axis',
@@ -48,14 +48,32 @@ describe('input shaping logic', () => {
     expect(scriptProblem('G28')).toMatch(/TEST_RESONANCES/)
   })
   it('board config', () => {
-    const b = { serial: '/dev/serial/by-id/usb-Klipper_rp2040_E66058A3-if00', csPin: 'adxl:gpio1', spiBus: 'spi0a', axesMap: 'x,y,z' }
+    const b = { serial: '/dev/serial/by-id/usb-Klipper_rp2040_E66058A3-if00', mcu: 'adxl', ownMcu: true, csPin: 'adxl:gpio1', spiBus: 'spi0a', axesMap: 'x,y,z' }
     expect(boardProblem(b)).toBeNull()
     expect(boardProblem({ ...b, serial: '/dev/ttyACM0' })).toMatch(/by-id/)
     expect(boardProblem({ ...b, csPin: 'gpio1' })).toMatch(/adxl:gpio1/)
+    expect(boardProblem({ ...b, mcu: 'accel2' })).toMatch(/accel2:gpio1/)
+    expect(boardProblem({ ...b, mcu: 'Bad' })).toMatch(/lower case/)
     expect(boardProblem({ ...b, axesMap: 'x,y' })).toMatch(/axes map/)
+    expect(boardProblem({ ...b, ownMcu: false, serial: '' })).toBeNull()
     expect(boardLines(b, { x: 150, y: 150, z: 20 })).toContain('probe_points: 150,150,20')
     expect(boardLines(b, { x: 1, y: 2, z: 3 })[0]).toBe('[mcu adxl]')
+    expect(boardLines({ ...b, ownMcu: false, mcu: 'accel2', csPin: 'accel2:gpio1' }, { x: 1, y: 2, z: 3 })[0]).toBe('[adxl345]')
     expect(shaperLines({ type: 'mzv', freq: 47.8 }, { type: 'ei', freq: 40 })).toEqual(['[input_shaper]', 'shaper_type_x: mzv', 'shaper_freq_x: 47.8', 'shaper_type_y: ei', 'shaper_freq_y: 40'])
+  })
+  it('finds a USB accelerometer on the host', () => {
+    const ports = [
+      { path: '/dev/serial/by-id/usb-Klipper_stm32f446xx_4600-if00', used_by: 'printer.cfg [mcu]' },
+      { path: '/dev/serial/by-id/usb-Klipper_rp2040_E660-if00', used_by: '' },
+      { path: '/dev/serial/by-id/usb-Klipper_rp2040_AAAA-if00', used_by: 'board adxl' },
+      { path: '/dev/serial/by-id/usb-Raspberry_Pi_RP2_Boot_1234-if00', used_by: '' },
+    ]
+    const f = findBoards(ports)
+    expect(f.fresh.map((p) => p.path)).toEqual(['/dev/serial/by-id/usb-Klipper_rp2040_E660-if00'])
+    expect(f.taken.map((p) => boardNameOf(p.used_by))).toEqual(['adxl'])
+    expect(f.needsFirmware).toHaveLength(1)
+    expect(boardNameOf('printer.cfg [mcu]')).toBeNull()
+    expect(findBoards([])).toEqual({ fresh: [], taken: [], needsFirmware: [] })
   })
   it('reads the calibration csv and makes a path', () => {
     const csv = 'freq,psd_x,psd_y,psd_z,psd_xyz,zv(59.4),mzv(47.8)\n5,1,1,1,3,2,1\n10,2,2,2,6,4,2\n15,4,4,4,12,8,4\nbad,row\n'

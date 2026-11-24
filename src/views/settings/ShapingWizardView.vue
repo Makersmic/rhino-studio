@@ -23,8 +23,8 @@ import { useMaintenanceStore } from '@/stores/maintenance'
 import { LEVEL_TONE, LEVEL_WORD } from '@/system/healthCheck'
 import type { TunedState } from '@/portal/client'
 import {
-  PRESETS, boardLines, boardProblem, calibrateScript, csvName, fitSentence, gentleScript, noiseSentence, parseCalibrate, parseCsv, parseNoise, parseQuery,
-  pathFor, plainShaper, querySentence, scriptProblem, shaperLines, shaperStoreScript, shaperUnstoreScript, type Axis, type AxisResult, type Board, type Curves, type Fit,
+  PRESETS, boardLines, boardNameOf, boardProblem, calibrateScript, csFor, findBoards, csvName, fitSentence, gentleScript, noiseSentence, parseCalibrate, parseCsv, parseNoise, parseQuery,
+  pathFor, plainShaper, querySentence, scriptProblem, shaperLines, shaperStoreScript, shaperUnstoreScript, type Axis, type AxisResult, type Board, type Curves, type Fit, type Found,
 } from '@/checks/shaper'
 
 const STEPS = [
@@ -52,12 +52,29 @@ async function loadTuned() {
     tunedError.value = `The Rhino can't keep tuned values yet (${(e as Error).message}). Install the latest release first.`
   }
 }
-onMounted(loadTuned)
+const found = ref<Found>({ fresh: [], taken: [], needsFirmware: [] })
+onMounted(async () => {
+  void loadTuned()
+  // the accelerometer is a second board on the host's USB: look for it, and if Klipper already has it go straight to the check
+  if (hasChip.value) at.value = 1
+  try {
+    const b = await maint.portal()?.hwBoards()
+    if (b) found.value = findBoards(b.serial_ports)
+    if (found.value.fresh.length === 1 && !board.value.serial) board.value.serial = found.value.fresh[0]!.path
+  } catch { /* the list is a convenience: the serial name can be typed */ }
+})
+function useBoard(path: string) {
+  board.value = { ...board.value, serial: path, ownMcu: true, mcu: 'adxl', csPin: csFor('adxl', gpioOf(board.value.csPin)) }
+}
+function useAdded(name: string) {
+  board.value = { ...board.value, mcu: name, ownMcu: false, serial: '', csPin: csFor(name, gpioOf(board.value.csPin)) }
+}
+const gpioOf = (pin: string) => /:(gpio\d{1,2})$/.exec(pin)?.[1] ?? 'gpio1'
 
 // ---- 1 accelerometer
 const hasChip = computed(() => machine.objects.has('adxl345'))
 const hasTester = computed(() => machine.objects.has('resonance_tester'))
-const board = ref<Board>({ serial: '', csPin: PRESETS[0]!.pins.csPin, spiBus: PRESETS[0]!.pins.spiBus, axesMap: 'x,y,z' })
+const board = ref<Board>({ serial: '', mcu: 'adxl', ownMcu: true, csPin: csFor('adxl', PRESETS[0]!.pins.gpio), spiBus: PRESETS[0]!.pins.spiBus, axesMap: 'x,y,z' })
 const lim = computed(() => (machine.limits.min && machine.limits.max ? { min: machine.limits.min, max: machine.limits.max } : null))
 const probe = computed(() => ({ x: Math.round(lim.value ? (lim.value.min[0]! + lim.value.max[0]!) / 2 : 150), y: Math.round(lim.value ? (lim.value.min[1]! + lim.value.max[1]!) / 2 : 150), z: 20 }))
 const bProblem = computed(() => boardProblem(board.value))
@@ -70,7 +87,7 @@ async function keepBoard() {
   savingBoard.value = true
   boardError.value = null
   try {
-    tuned.value = await p.tunedAccelerometer(tuned.value.rev, { serial: board.value.serial, cs_pin: board.value.csPin, spi_bus: board.value.spiBus, axes_map: board.value.axesMap, probe: probe.value })
+    tuned.value = await p.tunedAccelerometer(tuned.value.rev, { serial: board.value.serial, mcu: board.value.mcu, own_mcu: board.value.ownMcu, cs_pin: board.value.csPin, spi_bus: board.value.spiBus, axes_map: board.value.axesMap, probe: probe.value })
     boardKept.value = true
   } catch (e) {
     boardError.value = (e as Error).message
@@ -158,6 +175,24 @@ const have = computed(() => !!results.value.x && !!results.value.y)
 
 // ---- 5 keep
 const saving = ref(false)
+const removing = ref(false)
+const removed = ref(false)
+const removeError = ref<string | null>(null)
+/** The board is a one-time tool: take it out of the config when every head is measured, restart Klipper, then unplug it. */
+async function removeAccelerometer() {
+  const p = maint.portal()
+  if (!p || !tuned.value) return
+  removing.value = true
+  removeError.value = null
+  try {
+    tuned.value = await p.tunedAccelerometerClear(tuned.value.rev)
+    removed.value = true
+  } catch (e) {
+    removeError.value = (e as Error).message
+  } finally {
+    removing.value = false
+  }
+}
 const kept = ref(false)
 const keepError = ref<string | null>(null)
 const maxAccel = computed(() => {
@@ -201,6 +236,11 @@ async function putBack() {
   <div class="set-page">
     <WizardSteps :steps="[...STEPS]" :at="at" @go="at = $event" />
     <RestartBanner />
+    <p v-if="tuned?.accelerometer_present === false" class="warnbar" role="alert">
+      <StatusChip tone="danger">Not plugged in</StatusChip>
+      The accelerometer is set up but its board isn't connected. <b>Klipper won't start until you plug it in or remove it.</b>
+      <RsButton size="sm" variant="danger-outline" :disabled="removing" @click="removeAccelerometer">Remove it from the config</RsButton>
+    </p>
 
     <RsPanel :title="`${String(at + 1).padStart(2, '0')} · ${STEPS[at]!.label}`" panel-id="shaping.step">
       <MascotRow :pose="SHAPING_STEP_POSE[step]">
@@ -208,10 +248,16 @@ async function putBack() {
           <p class="q">Does Klipper know about the accelerometer?</p>
           <p v-if="hasChip" class="plain"><StatusChip tone="ok">Set up</StatusChip> Klipper has an accelerometer and a resonance tester. Go on to the check.</p>
           <template v-else>
-            <p class="plain">Plug the USB accelerometer into the Rhino's host, then copy its name: <code>ls /dev/serial/by-id/</code>. Fix it firmly to the head (the heatsink fan mount worked before) with the cable free to move, and keep it clear of fans.</p>
+            <p class="plain"><b>Plug your accelerometer into the Rhino's host now.</b> This is a one-time job: you plug it in, measure each print head, then take it out of the config and unplug it when you're done. The wizard walks you through both ends.</p>
+            <p class="plain">The USB accelerometer is a small second board (its own MCU) with the sensor on it. Plug it into the Rhino's host and Studio looks for it. Fix it firmly to the head (the heatsink fan mount worked before) with the cable free to move, and keep it clear of fans.</p>
+            <p v-for="p in found.fresh" :key="p.path" class="plain"><StatusChip tone="ok">Found</StatusChip> <span class="mono">{{ p.path.replace('/dev/serial/by-id/', '') }}</span> <RsButton size="sm" :variant="board.serial === p.path ? 'default' : 'primary'" @click="useBoard(p.path)">{{ board.serial === p.path ? 'Using this one' : 'Use this board' }}</RsButton></p>
+            <p v-for="p in found.taken" :key="p.path" class="plain"><StatusChip tone="neutral">Added already</StatusChip> <span class="mono">{{ p.path.replace('/dev/serial/by-id/', '') }}</span> ({{ p.used_by }}) <RsButton v-if="boardNameOf(p.used_by)" size="sm" @click="useAdded(boardNameOf(p.used_by)!)">Use it as the accelerometer</RsButton></p>
+            <p v-for="p in found.needsFirmware" :key="p.path" class="plain"><StatusChip tone="warn">Needs firmware</StatusChip> <span class="mono">{{ p.path.replace('/dev/serial/by-id/', '') }}</span> is a board waiting for Klipper's firmware. Flash it first (the maker's page says how), unplug and replug it, then come back.</p>
+            <p v-if="!found.fresh.length && !found.taken.length && !found.needsFirmware.length" class="plain muted">No USB accelerometer found yet. Plug it in (and give it a moment), or type its name below: <code>ls /dev/serial/by-id/</code>.</p>
             <p v-if="tunedError" class="tm-err">{{ tunedError }}</p>
             <div class="grid">
-              <label class="tm-lbl">Serial name<input v-model="board.serial" type="text" class="tm-inp" placeholder="/dev/serial/by-id/usb-Klipper_rp2040_…"></label>
+              <label v-if="board.ownMcu" class="tm-lbl">Serial name<input v-model="board.serial" type="text" class="tm-inp" placeholder="/dev/serial/by-id/usb-Klipper_rp2040_…"></label>
+              <label class="tm-lbl">Board name in Klipper<input v-model="board.mcu" type="text" class="tm-inp" @change="board.csPin = csFor(board.mcu, gpioOf(board.csPin))"></label>
               <label class="tm-lbl">Chip-select pin<input v-model="board.csPin" type="text" class="tm-inp"></label>
               <label class="tm-lbl">SPI bus<input v-model="board.spiBus" type="text" class="tm-inp"></label>
               <label class="tm-lbl">Axes map<input v-model="board.axesMap" type="text" class="tm-inp"></label>
@@ -278,6 +324,17 @@ async function putBack() {
             <p v-if="!kept" class="row"><RsButton variant="primary" :disabled="saving || !head" @click="keep">Keep it</RsButton><span class="plain muted">Nothing is changed unless you keep it.</span></p>
             <p v-else class="tm-ok">Kept. Restart Klipper (the banner above) to load it. <RsButton variant="quiet" :disabled="saving" @click="putBack">Put back what it had</RsButton></p>
             <p v-if="keepError" class="tm-err">{{ keepError }}</p>
+            <div v-if="tuned?.accelerometer && !removed" class="done">
+              <p class="plain"><b>Finished measuring every print head?</b> The accelerometer is a one-time tool. Take it out of the config <b>before</b> you unplug it: a board that is unplugged but still configured stops Klipper starting.</p>
+              <ol class="plain steps">
+                <li>Press <b>Remove it from the config</b>. Your kept shaper picks stay; they don't need the board.</li>
+                <li>Restart Klipper (the banner at the top offers it).</li>
+                <li>Then unplug the board and take it off the head.</li>
+              </ol>
+              <p class="row"><RsButton variant="primary" :disabled="removing" @click="removeAccelerometer">Remove it from the config</RsButton><span class="plain muted">Still have another head to measure? Leave it: mount the board on that head and run the wizard again.</span></p>
+              <p v-if="removeError" class="tm-err">{{ removeError }}</p>
+            </div>
+            <p v-if="removed" class="tm-ok">Removed from the config. Restart Klipper (the banner above), then unplug the board. The picks you kept are still there.</p>
             <WhatThisDoes><p>Keep writes this into <code>myrhino/tuned.cfg</code>:</p><pre class="dump">{{ shaperLines({ type: fitOf('x')!.name, freq: fitOf('x')!.freq }, { type: fitOf('y')!.name, freq: fitOf('y')!.freq }).join('\n') }}</pre></WhatThisDoes>
           </template>
           <p v-else class="plain muted">Choose a shaper for each axis first (step 4).</p>
@@ -318,6 +375,9 @@ async function putBack() {
 .opt.on { border-color: var(--rs-ink); box-shadow: inset 0 0 0 1px var(--rs-ink); }
 .opt input { margin-top: 3px; accent-color: var(--rs-text-strong); }
 .dump { margin: 8px 0; padding: 8px; font: 12px/1.4 var(--rs-font-code); background: var(--rs-surface-sunken, transparent); border: 1px solid var(--rs-line); border-radius: var(--rs-radius-sm, 4px); white-space: pre-wrap; overflow-wrap: anywhere; }
+.warnbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--rs-space-3); margin: 0; padding: var(--rs-space-3) var(--rs-space-4); border: 1px solid var(--rs-danger, #b3261e); border-radius: var(--rs-radius-md); background: var(--rs-surface); font-size: var(--rs-text-sm); color: var(--rs-text-strong); }
+.done { display: flex; flex-direction: column; gap: 8px; padding: var(--rs-space-3); border: 1px solid var(--rs-line); border-radius: var(--rs-radius-md); }
+.steps { margin: 0; padding-left: 1.3em; }
 .bar { position: sticky; bottom: 0; z-index: 2; display: flex; flex-wrap: wrap; align-items: center; gap: var(--rs-space-3); padding: var(--rs-space-3) var(--rs-space-4); border: 1px solid var(--rs-line-strong); border-radius: var(--rs-radius-lg); background: var(--rs-surface); }
 @media (max-width: 720px) { .bar { bottom: 84px; } .bar .tm-hint { display: none; } }
 </style>
