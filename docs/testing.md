@@ -953,3 +953,20 @@ A print head mounted, homed, standalone first (no job). Hand near Stop. Needs 1.
 - [ ] **FH1 Nothing set, nothing changes.** Leave Settings > Job hooks > "After a filament change" empty. Run `FILAMENT_CHANGE` standalone and go through it. *Pass:* it behaves exactly as before the update. *Stop if* any new message, or the head moves somewhere new.
 - [ ] **FH2 It runs after the purge.** Put `M117 Hook ran` in the slot (whole machine), save, run a standalone change. *Pass:* the message shows after the purge, before "Filament change complete". *Stop if* it shows earlier, or the head goes back before it.
 - [ ] **FH3 Mid-print.** Short job, run `FILAMENT_CHANGE` while it prints, complete it. *Pass:* the job resumes where it was; the pause and resume hooks still run. *Stop if* the head moves somewhere it wasn't. Never put an absolute Z move (`G1 Z…`) in this slot.
+
+## Models: pictures and Add to library (Studio 0.37.1)
+
+- [ ] **LB8 Pictures.** Files > Models with a few STLs in the library. *Pass:* each row shows a small grey picture of the model after a moment (first time on this screen), and it is there at once on the next visit. *Stop if* the page freezes while they draw, or a model shows a picture of another shape.
+- [ ] **LB9 Add to library.** In Job setup drop a model that isn't in the library; under the picture press **Add to library**. *Pass:* "<name> added"; it shows in Files > Models. Pressing it again says it was already in the library; a different file with the same name says so and changes nothing. A model that came from the library doesn't offer the button.
+
+## Wizards section, probe check and motor check (Studio 0.38.0)
+
+Wizards now have their own section (the wand icon in the rail). The old /settings/connect, /positions, /nozzle-cleaning and /update addresses still work (they redirect). Machine homed, a head mounted for the probe check; hand near Stop for anything that moves.
+
+- [ ] **WZ1 The section.** Open Wizards. *Pass:* every wizard is listed in its group, the Settings menu no longer lists them (Health check stays in Settings), and an old bookmark such as `#/settings/update` opens the same wizard under Wizards.
+- [ ] **PC1 Probe check, steady.** Probe check, spot in the middle of the bed, Measure. *Pass:* ten touches, a range under about 0.02 mm and a sentence saying the probe is steady; Measure again within 0.01 mm of the first. *Stop if* the probe doesn't stop at the bed, or the head moves somewhere other than the spot shown.
+- [ ] **PC2 Probe check, warm bed.** Heat the bed to your usual temperature in step 4 and measure again. *Pass:* it says how far the reading moved. Turn the bed off afterwards. *Stop if* the bed goes above the temperature typed.
+- [ ] **PC3 It refuses what it should.** Not homed, no head, or a job running: step 1 shows a Fix and Next stays greyed.
+- [ ] **MC1 End switches.** Motor check, Watch the switches, press each end switch and the probe by hand. *Pass:* each shows Triggered while pressed and keeps a tick. *Stop if* a switch never changes.
+- [ ] **MC2 Drivers.** Read the drivers. *Pass:* every driver says Fine on a healthy machine; unplug nothing. A flagged driver is explained in a sentence. *Stop if* a driver reports too hot or a short: switch off and look.
+- [ ] **MC3 Motors.** Lower the bed and centre the head, then Buzz each motor in turn. *Pass:* each moves about 1 mm and back ten times, the right way; you mark each. *Stop if* anything touches, a motor grinds, or Z moves the wrong way far enough to touch.

@@ -832,12 +832,16 @@ export const usePrepareStore = defineStore('prepare', () => {
   const loadSkipped = ref<string | null>(null)
 
   /** One more model or drawing onto the bed, beside the others. Its kind has been checked by planDrop. */
+  /** The files the parts were loaded from (not kept after a reload): so "Add to library" can keep the original bytes. */
+  const sources = shallowRef<Record<number, File>>({})
+
   async function addOne(file: File) {
     const isFlat = FLAT_TYPES.has(extOf(file.name))
     const loaded = await loadModelFile(file)
     const verts = merge(loaded.map((p) => p.vertices).filter((v) => v && v.length >= 9))
     if (verts.length < 9) throw new Error(`no triangles in ${file.name}.`)
     const p: JobPart = { id: nextPartId++, name: uniqueName(file.name), raw: verts, flat: isFlat, placement: { x: 0, y: 0, rotate: 0, scale: 1 } }
+    sources.value = { ...sources.value, [p.id]: file }
     const { info } = shapeOf(p, p.placement)
     const spot = spotFor(info.size)
     p.placement = { ...p.placement, x: spot.x, y: spot.y }
@@ -933,6 +937,7 @@ export const usePrepareStore = defineStore('prepare', () => {
       if (verts.length < 9) throw new Error('No triangles in this file.')
       const id = nextPartId++
       partsList.value = [{ id, name: file.name, raw: verts, flat: FLAT_TYPES.has(ext), placement: { x: 0, y: 0, rotate: 0, scale: 1 } }]
+      sources.value = { [id]: file }
       // a new model starts with no marks (Mike, Nov 21): they're not kept per file name, so none of the last model's come back
       supportMarks.value = null
       selectedMark.value = null
@@ -1311,6 +1316,7 @@ export const usePrepareStore = defineStore('prepare', () => {
     selectPart,
     addFiles,
     loadFiles,
+    sources,
     supportMarks,
     supportMode,
     setSupportMode,

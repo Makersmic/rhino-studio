@@ -15,6 +15,7 @@ const main: NavItem[] = [
   { to: '/assets', label: 'Assets', icon: 'toolheads' },
   { to: '/files', label: 'Files', icon: 'files' },
   { to: '/care', label: 'Care', icon: 'care' },
+  { to: '/wizards', label: 'Wizards', icon: 'wizards' },
 ]
 const secondary: NavItem[] = [
   { to: '/settings', label: 'Settings', icon: 'settings' },

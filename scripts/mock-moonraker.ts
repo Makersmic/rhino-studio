@@ -179,6 +179,9 @@ if (meshMode !== 'none') {
     profiles: meshProfiles,
   }
 }
+// Tool Manager 1.9.47: the probe and the TMC drivers exist as objects (the probe check and motor check wizards)
+status.probe = { last_query: false, last_z_result: 0 }
+for (const [o, kind] of [['stepper_x', 'tmc2240'], ['stepper_y', 'tmc2240'], ['stepper_z', 'tmc2208'], ['stepper_z1', 'tmc2208'], ['stepper_z2', 'tmc2208'], ['extruder', 'tmc2240']] as const) status[`${kind} ${o}`] = { run_current: 1.1, hold_current: 0 }
 status.configfile = {
   save_config_pending: meshMode === 'unsaved',
   save_config_pending_items: meshMode === 'unsaved' ? { 'bed_mesh bed-60': { version: '1', points: '...' } } : {},
@@ -600,6 +603,9 @@ function toolchangerCommand(cmd: string, line: string): boolean {
   return false
 }
 
+const MOCK_PROBE_RANGE = Number(process.env.MOCK_PROBE_RANGE ?? 0.0094)
+const MOCK_TMC_HOT = process.env.MOCK_TMC_HOT === '1'
+let probeCalls = 0
 function runLine(raw: string) {
   const line = raw.replace(/;.*$/, '').trim()
   if (!line) return
@@ -608,6 +614,25 @@ function runLine(raw: string) {
   const swap = status['gcode_macro SWAP_TOOL'] as { current_tool: number; pending_tool: number }
   if (scenario === 'toolchanger' && toolchangerCommand(cmd, line)) return
   switch (cmd) {
+    case 'PROBE_ACCURACY': {
+      probeCalls++
+      const base = 2.5 + (probeCalls > 1 ? 0.034 : 0)   // a second run (bed warm) reads a little different
+      respond(`probe accuracy at x:130.000 y:95.000 z:${base.toFixed(3)} (samples=10 retract=1.000 speed=5.0 lift_speed=5.0)`)
+      respond(`probe accuracy results: maximum ${(base + MOCK_PROBE_RANGE).toFixed(6)}, minimum ${base.toFixed(6)}, range ${MOCK_PROBE_RANGE.toFixed(6)}, average ${(base + MOCK_PROBE_RANGE / 2).toFixed(6)}, median ${(base + MOCK_PROBE_RANGE / 2).toFixed(6)}, standard deviation ${(MOCK_PROBE_RANGE / 3).toFixed(6)}`)
+      return
+    }
+    case 'QUERY_ENDSTOPS': {
+      respond(`x:${Date.now() % 4000 < 2000 ? 'open' : 'TRIGGERED'} y:open z:open probe:open`)
+      return
+    }
+    case 'DUMP_TMC': {
+      const stepper = /STEPPER=(\S+)/i.exec(line)?.[1] ?? '?'
+      respond('========== Queried registers ==========')
+      respond('GSTAT: 00000000')
+      respond(MOCK_TMC_HOT && stepper === 'stepper_x' ? 'DRV_STATUS: 80350000 otpw=1(Warning) cs_actual=21(21) stst=1' : 'DRV_STATUS: 80150000 cs_actual=21(21) stst=1 stealth=1')
+      return
+    }
+    case 'STEPPER_BUZZ': return
     case 'G28': {
       const axes = /[XYZ]/i.test(line.slice(3)) ? line.slice(3).toLowerCase().replace(/[^xyz]/g, '') : 'xyz'
       const homed = [...new Set((th.homed_axes + axes).split(''))].sort().join('')
@@ -1406,6 +1431,7 @@ function handle(method: string, params: Record<string, unknown> | undefined): un
       // and Bed › Configuration's lead screws: [z_tilt] and the Z steppers, as the Rhino's printer.cfg has them
       Object.assign(settings as Record<string, unknown>, {
         stepper_z: { rotation_distance: 2 }, stepper_z1: { rotation_distance: 2 }, stepper_z2: { rotation_distance: 2 },
+        probe: { x_offset: 20, y_offset: 5, z_offset: 0 },
         z_tilt: { z_positions: [[-17.454, -100.383], [357.4595, 515.09], [722.454, -100.383]], points: [[30, 30], [247.5, 350], [450, 30]], retry_tolerance: 0.05, retries: 5 },
       })
       return { eventtime: Date.now() / 1000, status: { configfile: { settings } } }

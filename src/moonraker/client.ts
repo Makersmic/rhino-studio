@@ -378,6 +378,13 @@ export class MoonrakerClient {
     return r?.status?.configfile?.settings?.extruder ?? {}
   }
 
+  /** One configured section (configfile.settings), e.g. "probe": its x_offset and y_offset. A read. */
+  async configSection(name: string): Promise<Record<string, unknown> | null> {
+    const r = (await this.call('printer.objects.query', { objects: { configfile: ['settings'] } })) as
+      { status?: { configfile?: { settings?: Record<string, Record<string, unknown>> } } }
+    return r?.status?.configfile?.settings?.[name] ?? null
+  }
+
   /**
    * Klipper's max_temp for the hotend and the bed (configfile.settings), what Studio's heater fields and file checks
    * are limited to (src/control/heatLimits.ts). A read, through printer.objects.query.

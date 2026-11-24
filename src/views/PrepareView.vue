@@ -15,6 +15,8 @@ import TunedNote from '@/prepare/TunedNote.vue'
 import { useSettingsStore } from '@/stores/settings'
 import PreviewView from '@/views/PreviewView.vue'
 import StartEndLine from '@/toolmgr/StartEndLine.vue'
+import { useMaintenanceStore } from '@/stores/maintenance'
+import { addable } from '@/library/models'
 import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue'
 import RsPanel from '@/components/RsPanel.vue'
 import RsButton from '@/components/RsButton.vue'
@@ -76,6 +78,31 @@ function onDrop(e: DragEvent) {
   // On the bed, a dropped file joins the job where it can. Elsewhere it starts one.
   adding.value = prep.step === 'setup' && prep.canAddParts
   pick(e.dataTransfer?.files ?? null)
+}
+
+// ---- keep the original file in the model library (Files > Models)
+const toKeep = computed(() => addable(prep.parts, prep.sources))
+const keeping = ref(false)
+const keptMsg = ref<string | null>(null)
+async function addToLibrary() {
+  const p = useMaintenanceStore().portal()
+  keeping.value = true
+  keptMsg.value = null
+  try {
+    if (!p) throw new Error('The Rhino Portal isn’t connected.')
+    const said: string[] = []
+    for (const f of toKeep.value) {
+      try {
+        const r = await p.libraryUpload('', f)
+        said.push(r.status === 'same' ? `${f.name} was already in the library` : `${f.name} added`)
+      } catch (e) {
+        said.push((e as { clash?: boolean }).clash ? `A different ${f.name} is already in the library (see Files > Models)` : `${f.name}: ${(e as Error).message}`)
+      }
+    }
+    keptMsg.value = said.join('. ') + '.'
+  } finally {
+    keeping.value = false
+  }
 }
 
 // ---- a part's menu
@@ -422,6 +449,10 @@ const engineNote = computed(() => {
             <span v-if="prep.parts.length > 1"><strong>{{ prep.parts.length }} {{ prep.flat ? 'drawings' : '3D models' }}</strong> · {{ prep.parts[0]!.name }} and {{ prep.parts.length - 1 }} more</span>
             <span v-else><strong>{{ prep.fileKind }}</strong> · {{ prep.part.name.split('.').pop()?.toUpperCase() }}</span>
             <span>{{ fmt(together.max[0] - together.min[0]) }} × {{ fmt(together.max[1] - together.min[1]) }}<template v-if="!prep.flat"> × {{ fmt(together.max[2]) }}</template> mm<template v-if="prep.parts.length > 1"> together</template></span>
+            <span v-if="toKeep.length" class="keep">
+              <button type="button" class="link-btn" :disabled="keeping" @click="addToLibrary">{{ keeping ? 'Adding…' : toKeep.length > 1 ? `Add these ${toKeep.length} models to the library` : 'Add to library' }}</button>
+              <span v-if="keptMsg" class="muted small" role="status">{{ keptMsg }}</span>
+            </span>
             <span class="muted small">{{ prep.flat ? 'A flat outline: it can be cut, not printed or milled.' : 'A solid: it can be printed or milled, or cut along its outline.' }}</span>
           </figcaption>
         </figure>
@@ -878,4 +909,7 @@ select { height: 38px; padding: 0 10px; border: 1px solid var(--rs-line-strong);
 .send { display: flex; align-items: center; gap: var(--rs-space-3); flex-wrap: wrap; margin-top: var(--rs-space-5); }
 .sent { display: flex; align-items: center; gap: var(--rs-space-3); flex-wrap: wrap; margin-top: var(--rs-space-3); font-size: var(--rs-text-sm); }
 .send + .muted, .sent + .muted { margin-top: var(--rs-space-3); }
+.keep { display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; }
+.link-btn { background: none; border: 0; padding: 0; font: inherit; font-size: var(--rs-text-sm); color: var(--rs-text-strong); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.link-btn:disabled { color: var(--rs-text-muted); cursor: default; }
 </style>

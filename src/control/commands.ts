@@ -80,6 +80,7 @@ const MOTION: Record<string, string> = {
   PROBE: 'probes (moves the machine)',
   PROBE_CALIBRATE: 'probes (moves the machine)',
   PROBE_ACCURACY: 'probes repeatedly (moves the machine)',
+  STEPPER_BUZZ: 'moves one motor 1 mm and back, ten times',
   SCREWS_TILT_CALCULATE: 'probes (moves the machine)',
   M84: 'turns the motors off: the bed may drop and you will have to home again',
   M18: 'turns the motors off: the bed may drop and you will have to home again',

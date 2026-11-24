@@ -80,3 +80,17 @@ export function spaceText(u: { free: number; floor: number; bytes: number; files
   const room = Math.max(0, u.free - u.floor)
   return `${u.files} model${u.files === 1 ? '' : 's'} · ${sizeText(u.bytes)} · room for ${sizeText(room)} more`
 }
+
+/** Files that came out of the library (so "Add to library" doesn't offer them back). */
+export const fromLibrary = new WeakSet<File>()
+
+/** The original files of a job's parts that could be added to the library: each file once, no library file, models only. */
+export function addable(parts: { id: number }[], sources: Record<number, File>): File[] {
+  const seen = new Set<File>()
+  const out: File[] = []
+  for (const p of parts) {
+    const f = sources[p.id]
+    if (f && !seen.has(f) && !fromLibrary.has(f) && isModelName(f.name)) (seen.add(f), out.push(f))
+  }
+  return out
+}

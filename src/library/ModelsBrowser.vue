@@ -14,7 +14,9 @@ import { useMaintenanceStore } from '@/stores/maintenance'
 import { usePrepareStore } from '@/stores/prepare'
 import { nameProblem } from '@/files/fileOps'
 import type { LibraryEntry, LibraryListing } from '@/portal/client'
-import { MAX_DEPTH, SORTS, arrange, deleteSentence, depthOf, join, parentOf, planUpload, setupPaths, sizeText, skippedText, spaceText, type SortKey } from './models'
+import { cached, draw, keep, project, thumbKey, THUMB_MAX_BYTES } from './thumb'
+import { loadModelFile } from '@/slicer/engine'
+import { MAX_DEPTH, SORTS, arrange, deleteSentence, depthOf, join, parentOf, planUpload, setupPaths, sizeText, skippedText, spaceText, fromLibrary, type SortKey } from './models'
 
 const maint = useMaintenanceStore()
 const prep = usePrepareStore()
@@ -242,7 +244,11 @@ async function setUp(list: LibraryEntry[]) {
     const paths = setupPaths(folder.value, list, folderFiles)
     if (!paths.length) throw new Error('There are no models in that folder to set up.')
     const files: File[] = []
-    for (const p of paths) files.push(await portal().libraryFile(p))
+    for (const p of paths) {
+      const f = await portal().libraryFile(p)
+      fromLibrary.add(f)
+      files.push(f)
+    }
     await prep.loadFiles(files)       // exactly as if they had been dropped on job setup
     await router.push('/setup')
   } catch (e) {
@@ -251,6 +257,39 @@ async function setUp(list: LibraryEntry[]) {
     busy.value = null
   }
 }
+
+// ---- pictures: drawn here the first time a row is seen, kept in this browser
+const pics = ref<Record<string, string>>({})
+const pending = new Set<string>()
+let chain: Promise<void> = Promise.resolve()
+const vVisible = {
+  mounted(el: HTMLElement, b: { value: () => void }) {
+    if (typeof IntersectionObserver === 'undefined') return b.value()
+    const o = new IntersectionObserver((es) => es.some((e) => e.isIntersecting) && (o.disconnect(), b.value()), { rootMargin: '120px' })
+    o.observe(el)
+  },
+}
+function wantPic(r: LibraryEntry) {
+  if (r.dir || !['stl', 'obj', '3mf'].includes(r.kind ?? '') || (r.size ?? 0) > THUMB_MAX_BYTES) return
+  const path = join(folder.value, r.name)
+  const key = thumbKey(path, r.size ?? 0, r.modified)
+  if (pics.value[key] || pending.has(key)) return
+  pending.add(key)
+  chain = chain.then(async () => {                    // one at a time: a model is downloaded and read for each
+    try {
+      let url = await cached(key)
+      if (!url) {
+        const parts = await loadModelFile(await portal().libraryFile(path))
+        const v = parts[0] && parts.length === 1 ? parts[0].vertices : new Float32Array(parts.flatMap((p) => [...p.vertices]))
+        url = draw(project(v, 56), 56)
+        if (url) await keep(key, url)
+      }
+      if (url) pics.value = { ...pics.value, [key]: url }
+    } catch { /* no picture for this one; the row works without */ }
+    pending.delete(key)
+  })
+}
+const picOf = (r: LibraryEntry) => pics.value[thumbKey(join(folder.value, r.name), r.size ?? 0, r.modified)]
 
 onMounted(load)
 </script>
@@ -316,6 +355,7 @@ onMounted(load)
           @drop="folderDrop($event, r)"
         >
           <input type="checkbox" :checked="picked.has(r.name)" :aria-label="`Select ${r.name}`" @change="toggle(r.name)" />
+ <span v-if="!r.dir" v-visible="() => wantPic(r)" class="pic" aria-hidden="true"><img v-if="picOf(r)" :src="picOf(r)" alt="" /><span v-else>{{ (r.kind ?? '').toUpperCase() }}</span></span>
           <button v-if="r.dir" type="button" class="name" @click="go(join(folder, r.name))"><span class="glyph" aria-hidden="true">▸</span> {{ r.name }}</button>
           <span v-else class="name plain">{{ r.name }}</span>
           <span class="meta">{{ r.dir ? `${r.items ?? 0} item${r.items === 1 ? '' : 's'}` : `${(r.kind ?? '').toUpperCase()} · ${sizeText(r.size ?? 0)}` }} · {{ when(r.modified) }}</span>
@@ -376,10 +416,14 @@ onMounted(load)
 .sort.on { color: var(--rs-text-strong); border-color: var(--rs-line-strong); }
 .bar { display: flex; flex-wrap: wrap; gap: var(--rs-space-2); align-items: center; padding: 8px 12px; border: 1px solid var(--rs-line-strong); border-radius: var(--rs-radius-sm, 4px); }
 .list { display: flex; flex-direction: column; border-top: 1px solid var(--rs-line); }
-.row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: 'c n a' '. m a'; gap: 2px var(--rs-space-3); align-items: center; padding: 8px 4px; border-bottom: 1px solid var(--rs-line); }
+.row { display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto; grid-template-areas: 'c p n a' 'c p m a'; gap: 2px var(--rs-space-3); align-items: center; padding: 8px 4px; border-bottom: 1px solid var(--rs-line); }
 .row.on { background: var(--rs-surface-sunken, transparent); }
 .row.drop { outline: 2px solid var(--rs-ink); outline-offset: -2px; }
 .row input { grid-area: c; }
+.row.dir { grid-template-columns: auto minmax(0, 1fr) auto; }
+.pic { grid-area: p; width: 56px; height: 56px; display: grid; place-items: center; border-radius: var(--rs-radius-sm, 4px); background: var(--rs-surface-sunken, transparent); border: 1px solid var(--rs-line); font-size: 11px; color: var(--rs-text-muted); overflow: hidden; }
+.pic img { width: 100%; height: 100%; object-fit: contain; }
+.row.dir { grid-template-areas: 'c n n a' 'c m m a'; }
 .name { grid-area: n; text-align: left; overflow-wrap: anywhere; font: inherit; color: var(--rs-text-strong); background: none; border: 0; padding: 0; }
 button.name { cursor: pointer; font-weight: var(--rs-weight-medium); }
 .meta { grid-area: m; font-size: var(--rs-text-sm); color: var(--rs-text-muted); }
@@ -391,5 +435,5 @@ button.name { cursor: pointer; font-weight: var(--rs-weight-medium); }
 .ask label { display: flex; flex-direction: column; gap: 4px; }
 .ask input[type='text'] { padding: 8px 10px; font: inherit; border: 1px solid var(--rs-line-strong); border-radius: var(--rs-radius-sm, 4px); background: var(--rs-surface); color: var(--rs-text); }
 .btns { display: flex; flex-wrap: wrap; gap: var(--rs-space-2); justify-content: flex-end; margin-top: var(--rs-space-3); }
-@media (max-width: 760px) { .row { grid-template-areas: 'c n n' '. m m' '. a a'; } .acts { justify-content: flex-start; } }
+@media (max-width: 760px) { .row { grid-template-areas: 'c p n' 'c p m' '. a a'; } .row.dir { grid-template-areas: 'c n n' 'c m m' '. a a'; } .acts { justify-content: flex-start; } }
 </style>

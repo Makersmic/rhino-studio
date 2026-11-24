@@ -60,8 +60,11 @@ export const useControlStore = defineStore('control', () => {
   const prompt = shallowRef<Prompt | null>(null)
   const promptBusy = ref(false)
 
+  /** While a wizard runs a command and reads what Klipper says back (see runCapture). */
+  let sink: string[] | null = null
   function onResponse(line: string, time?: number) {
     const isAction = /^\s*(\/\/\s*)?action:/.test(line)
+    if (sink && !isAction) sink.push(line.replace(/^\/\/\s?/, ''))
     if (isAction) tracker.feed(line, time)
     else log(line.startsWith('!!') ? 'error' : 'response', line.replace(/^\/\/\s?/, ''), time)
     prompt.value = tracker.current()
@@ -207,6 +210,22 @@ export const useControlStore = defineStore('control', () => {
       return false
     } finally {
       running.value = null
+    }
+  }
+
+  /**
+   * send(), and the lines Klipper answered while it ran (a wizard reads results from them: PROBE_ACCURACY, DUMP_TMC, PID_CALIBRATE).
+   * The answers come over the websocket and can trail the command's own reply, so the capture stays open a moment longer.
+   */
+  async function runCapture(script: string, opts: Parameters<typeof send>[1] = {}, settleMs = 600): Promise<{ ok: boolean; lines: string[] }> {
+    const lines: string[] = []
+    sink = lines
+    try {
+      const ok = await send(script, opts)
+      await new Promise((r) => setTimeout(r, settleMs))
+      return { ok, lines: [...lines] }
+    } finally {
+      sink = null
     }
   }
 
@@ -743,6 +762,7 @@ export const useControlStore = defineStore('control', () => {
     pressPromptButton,
     confirm,
     send,
+    runCapture,
     unlockMotion,
     lockMotion,
     jog,

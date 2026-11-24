@@ -3,7 +3,7 @@
  * toolhead emblems (see toolheads.ts for the class names).
  */
 
-export type NavIconId = 'dashboard' | 'camera' | 'prepare' | 'preview' | 'control' | 'pendant' | 'toolheads' | 'files' | 'mesh' | 'care' | 'style' | 'settings'
+export type NavIconId = 'dashboard' | 'camera' | 'prepare' | 'preview' | 'control' | 'pendant' | 'toolheads' | 'files' | 'mesh' | 'care' | 'wizards' | 'style' | 'settings'
 
 export const NAV_ICONS: Record<NavIconId, { title: string; body: string }> = {
   // A landscape screen with a status line along the top: the lock-screen dashboard
@@ -86,6 +86,14 @@ export const NAV_ICONS: Record<NavIconId, { title: string; body: string }> = {
     body: `
       <path d="M14.8 3.2a4.8 4.8 0 0 0-4.5 6.4l-6.6 6.6a1.9 1.9 0 0 0 2.7 2.7l6.6-6.6a4.8 4.8 0 0 0 6.4-4.5l-2.9 2.9-2.7-.6-.6-2.7z"/>
       <path class="c" d="M16 17.5l1.8 1.8 3.4-3.6"/>`,
+  },
+  // A magic wand with a spark: the guided wizards
+  wizards: {
+    title: 'Wizards',
+    body: `
+      <path d="M4.5 19.5l9.6-9.6"/>
+      <path d="M13 8.4l2.6 2.6"/>
+      <path class="c" d="M17.5 3.5v3M16 5h3M20.5 10.5v2.4M19.3 11.7h2.4"/>`,
   },
   // Three overlapping circles: colour and type
   style: {

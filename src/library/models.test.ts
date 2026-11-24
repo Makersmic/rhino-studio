@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { arrange, deleteSentence, depthOf, isModelName, join, parentOf, planUpload, setupPaths, sizeText, skippedText, spaceText } from './models'
+import { addable, fromLibrary, arrange, deleteSentence, depthOf, isModelName, join, parentOf, planUpload, setupPaths, sizeText, skippedText, spaceText } from './models'
 import type { LibraryEntry } from '@/portal/client'
 
 const f = (name: string, size: number, modified: number): LibraryEntry => ({ name, dir: false, size, modified, kind: 'stl' })
@@ -53,5 +53,14 @@ describe('models', () => {
   it('space', () => {
     expect(spaceText({ files: 1, bytes: 2048, free: 10 * 1073741824, floor: 2 * 1073741824 })).toBe('1 model · 2 kB · room for 8.0 GB more')
     expect(spaceText({ files: 2, bytes: 0, free: 1, floor: 5 })).toContain('room for 0 B')
+  })
+  it('add to library: each original once, never a library file or a non-model', () => {
+    const a = new File([new Uint8Array(1)], 'a.stl')
+    const b = new File([new Uint8Array(1)], 'b.stl')
+    const g = new File([new Uint8Array(1)], 'c.gcode')
+    fromLibrary.add(b)
+    const parts = [{ id: 1 }, { id: 2 }, { id: 3 }, { id: 4 }, { id: 5 }]
+    expect(addable(parts, { 1: a, 2: a, 3: b, 4: g })).toEqual([a])
+    expect(addable([], {})).toEqual([])
   })
 })

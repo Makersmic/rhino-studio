@@ -89,3 +89,20 @@ const URLS = import.meta.glob('@/assets/wizard/rhino-*.png', { eager: true, quer
 export function poseUrl(p: Pose): string {
   return Object.entries(URLS).find(([k]) => k.endsWith(`/rhino-${p}.png`))?.[1] ?? ''
 }
+
+/** The probe check wizard: one pose per step */
+export const PROBE_STEP_POSE: Record<'check' | 'spot' | 'run' | 'warm' | 'done', Pose> = {
+  check: 'wrench',
+  spot: 'calipers',
+  run: 'meter',
+  warm: 'meter',
+  done: 'thumbsup',
+}
+
+/** The motor check wizard: one pose per step */
+export const MOTOR_STEP_POSE: Record<'switches' | 'drivers' | 'motors' | 'done', Pose> = {
+  switches: 'wrench',
+  drivers: 'meter',
+  motors: 'carry',
+  done: 'thumbsup',
+}
