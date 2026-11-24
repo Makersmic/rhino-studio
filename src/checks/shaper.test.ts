@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { pathFor, parseCsv, boardLines, boardProblem, calibrateScript, fitSentence, gentleScript, noiseSentence, parseCalibrate, parseNoise, parseQuery, querySentence, scriptProblem, shaperLines } from './shaper'
+import { shaperStoreScript, shaperUnstoreScript, shaperVariable, pathFor, parseCsv, boardLines, boardProblem, calibrateScript, fitSentence, gentleScript, noiseSentence, parseCalibrate, parseNoise, parseQuery, querySentence, scriptProblem, shaperLines } from './shaper'
 
 const CAL = [
   'Calculating the best input shaper parameters for y axis',
@@ -66,5 +66,10 @@ describe('input shaping logic', () => {
     expect(parseCsv('nonsense')).toBeNull()
     expect(pathFor(c.psd, c.freq, 100, 50, 12)).toBe('M0.0 37.5L50.0 25.0L100.0 0.0')
     expect(pathFor([], [], 1, 1, 1)).toBe('')
+  })
+  it('the per-head variable', () => {
+    expect(shaperVariable('Block One')).toBe('rhino_shaper_block_one')
+    expect(shaperStoreScript('BlockOne', { type: 'mzv', freq: 47.8 }, { type: 'ei', freq: 40 })).toBe('SAVE_VARIABLE VARIABLE=rhino_shaper_blockone VALUE="\'mzv,47.8,ei,40\'"')
+    expect(shaperUnstoreScript('SwitchFly')).toBe('SAVE_VARIABLE VARIABLE=rhino_shaper_switchfly VALUE=None')
   })
 })

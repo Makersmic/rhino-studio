@@ -172,3 +172,13 @@ export function pathFor(values: number[], freq: number[], w: number, h: number, 
   const f0 = freq[0]!, f1 = freq[freq.length - 1]! || f0 + 1
   return values.map((v, i) => `${i ? 'L' : 'M'}${(((freq[i]! - f0) / (f1 - f0)) * w).toFixed(1)} ${(h - (Math.max(0, v) / ymax) * h).toFixed(1)}`).join('')
 }
+
+// ---- the per-head save variable the job-start macro reads (Tool Manager 1.9.49, docs/proposal-per-head-shaping.md)
+/** rhino_shaper_<head>, lower case, as Klipper keeps the other rhino_* variables */
+export const shaperVariable = (head: string) => `rhino_shaper_${head}`.toLowerCase().replace(/[^a-z0-9_]/g, '_')
+/** One text value: "mzv,47.8,ei,40" (type X, freq X, type Y, freq Y). Klipper's save_variables reads a string with its quotes. */
+export function shaperStoreScript(head: string, x: { type: string; freq: number }, y: { type: string; freq: number }): string {
+  return `SAVE_VARIABLE VARIABLE=${shaperVariable(head)} VALUE="'${x.type},${x.freq},${y.type},${y.freq}'"`
+}
+/** None reads as "nothing stored" in the macro */
+export const shaperUnstoreScript = (head: string) => `SAVE_VARIABLE VARIABLE=${shaperVariable(head)} VALUE=None`

@@ -24,7 +24,7 @@ import { LEVEL_TONE, LEVEL_WORD } from '@/system/healthCheck'
 import type { TunedState } from '@/portal/client'
 import {
   PRESETS, boardLines, boardProblem, calibrateScript, csvName, fitSentence, gentleScript, noiseSentence, parseCalibrate, parseCsv, parseNoise, parseQuery,
-  pathFor, plainShaper, querySentence, scriptProblem, shaperLines, type Axis, type AxisResult, type Board, type Curves, type Fit,
+  pathFor, plainShaper, querySentence, scriptProblem, shaperLines, shaperStoreScript, shaperUnstoreScript, type Axis, type AxisResult, type Board, type Curves, type Fit,
 } from '@/checks/shaper'
 
 const STEPS = [
@@ -172,6 +172,9 @@ async function keep() {
   try {
     tuned.value = await p.tunedShaper(tuned.value.rev, { head: head.value, x: { type: fx.name, freq: fx.freq }, y: { type: fy.name, freq: fy.freq }, max_accel: maxAccel.value })
     kept.value = true
+    // what the job-start macro reads, so each print head gets its own pick (Tool Manager 1.9.49)
+    if (!(await control.send(shaperStoreScript(head.value, { type: fx.name, freq: fx.freq }, { type: fy.name, freq: fy.freq }), { label: `Store the input shaper for ${head.value} on the Rhino` })))
+      keepError.value = 'Kept in tuned.cfg, but Klipper didn\'t store the per-head value, so jobs will use the last shaper loaded. Keep it again.'
   } catch (e) {
     keepError.value = (e as Error).message
   } finally {
@@ -184,6 +187,7 @@ async function putBack() {
   saving.value = true
   try {
     tuned.value = await p.tunedShaperClear(tuned.value.rev, head.value)
+    await control.send(shaperUnstoreScript(head.value), { label: `Forget the input shaper for ${head.value}` })
     kept.value = false
   } catch (e) {
     keepError.value = (e as Error).message
@@ -270,7 +274,7 @@ async function putBack() {
           <p class="q">Keep these for {{ head ?? 'this print head' }}?</p>
           <template v-if="fitOf('x') && fitOf('y')">
             <ul class="list mono"><li>X: {{ fitOf('x')!.name.toUpperCase() }} at {{ fitOf('x')!.freq }} Hz</li><li>Y: {{ fitOf('y')!.name.toUpperCase() }} at {{ fitOf('y')!.freq }} Hz</li><li v-if="maxAccel">Keep print acceleration at or under {{ maxAccel }} mm/s²</li></ul>
-            <p class="plain">The result is kept for <b>{{ head }}</b>: every head weighs something different, so measure each one with it mounted. Klipper loads the last one you keep after a restart. Switching shapers per head at a tool change is a separate step, written up for your approval.</p>
+            <p class="plain">The result is kept for <b>{{ head }}</b>: every head weighs something different, so measure each one with it mounted. At the start of each job Klipper sets this head's pick (a head with none keeps what was loaded). After a restart it loads the last one you kept.</p>
             <p v-if="!kept" class="row"><RsButton variant="primary" :disabled="saving || !head" @click="keep">Keep it</RsButton><span class="plain muted">Nothing is changed unless you keep it.</span></p>
             <p v-else class="tm-ok">Kept. Restart Klipper (the banner above) to load it. <RsButton variant="quiet" :disabled="saving" @click="putBack">Put back what it had</RsButton></p>
             <p v-if="keepError" class="tm-err">{{ keepError }}</p>
