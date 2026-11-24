@@ -73,6 +73,10 @@ const builtWith = [
  *   MOONRAKER=http://localhost:7125 npm run dev
  */
 const target = process.env.MOONRAKER ?? 'http://rhino.local'
+if (!/localhost|127\.0\.0\.1/.test(target)) {
+  // `npm run dev` without MOONRAKER forwards to the REAL Rhino. Use `npm run mock` and `npm run dev:mock` to work against the mock.
+  console.warn(`\n  !! Studio's dev server is forwarding Moonraker to ${target} (a real machine, if that is the Rhino). For the mock: npm run mock, then npm run dev:mock.\n`)
+}
 
 /**
  * The Rhino Portal (maintenance engine) runs on the same Pi, port 5000.

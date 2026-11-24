@@ -33,8 +33,11 @@ const groups = computed<SectionGroup[]>(() => [
     label: 'Machine',
     items: [
       { to: '/settings/connection', label: 'Connection' },
+      { to: '/settings/connect', label: 'Connect wizard' },
       { to: '/settings/trust', label: 'Trusted addresses' },
       { to: '/settings/tools', label: 'Tool changing' },
+      { to: '/settings/positions', label: 'Park and positions' },
+      { to: '/settings/nozzle-cleaning', label: 'Nozzle cleaning' },
       { to: '/settings/cameras', label: 'Cameras' },
       { to: '/settings/profiles', label: 'Slice profiles' },
       { to: '/settings/macros', label: 'Your macros' },
@@ -44,6 +47,7 @@ const groups = computed<SectionGroup[]>(() => [
     id: 'system',
     label: 'System',
     items: [
+      { to: '/settings/update', label: 'Update the Rhino' },
       { to: '/settings/software', label: 'Software', count: updates.readyCount, strong: updates.readyCount > 0 },
       { to: '/settings/network', label: 'Network', count: net.pending ? '!' : '', strong: !!net.pending },
       { to: '/settings/host', label: 'Host' },

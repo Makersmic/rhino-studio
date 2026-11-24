@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
-  PORTAL_BACKUP, PortalTimeout, PORTAL_PROFILES, PORTAL_MACROS, PORTAL_TUNING, PORTAL_HOST, PORTAL_THEME_IMAGES, PORTAL_THEME_FONTS, PORTAL_CARE_SETUP, PORTAL_CARE_WRITES, PORTAL_HARDWARE, PORTAL_HOOKS, PORTAL_HW_WIZARD, PORTAL_LABELS, PORTAL_NETWORK, PORTAL_SLICER, PORTAL_UPDATE, PORTAL_TRUST, PORTAL_RESTART, PORTAL_TOOL_CHECKS, PORTAL_TOOL_SETUP, PORTAL_TOOL_WRITES, PORTAL_WRITES, PortalClient, WRITE_ROUTES,
+  PORTAL_BACKUP, PortalTimeout, PORTAL_PROFILES, PORTAL_MACROS, PORTAL_TUNING, PORTAL_HOST, PORTAL_LIBRARY, PORTAL_THEME_IMAGES, PORTAL_THEME_FONTS, PORTAL_CARE_SETUP, PORTAL_CARE_WRITES, PORTAL_HARDWARE, PORTAL_HOOKS, PORTAL_HW_WIZARD, PORTAL_LABELS, PORTAL_NETWORK, PORTAL_SLICER, PORTAL_UPDATE, PORTAL_TRUST, PORTAL_RESTART, PORTAL_TOOL_CHECKS, PORTAL_TOOL_SETUP, PORTAL_TOOL_WRITES, PORTAL_WRITES, PortalClient, WRITE_ROUTES,
 } from './client'
 import type { TaskDef } from '@/maintenance/types'
 
@@ -98,7 +98,7 @@ describe('PortalClient', () => {
     const kinds = [
       ...PORTAL_WRITES, ...PORTAL_TOOL_CHECKS, ...PORTAL_TOOL_WRITES, ...PORTAL_THEME_IMAGES, ...PORTAL_THEME_FONTS, ...PORTAL_RESTART,
       ...PORTAL_CARE_WRITES, ...PORTAL_CARE_SETUP, ...PORTAL_TOOL_SETUP, ...PORTAL_HARDWARE, ...PORTAL_HOOKS, ...PORTAL_HW_WIZARD, ...PORTAL_LABELS, ...PORTAL_NETWORK, ...PORTAL_SLICER, ...PORTAL_UPDATE, ...PORTAL_TRUST,
-      ...PORTAL_BACKUP, ...PORTAL_PROFILES, ...PORTAL_MACROS, ...PORTAL_TUNING, ...PORTAL_HOST,
+      ...PORTAL_BACKUP, ...PORTAL_PROFILES, ...PORTAL_MACROS, ...PORTAL_TUNING, ...PORTAL_HOST, ...PORTAL_LIBRARY,
     ]
     expect(new Set(kinds).size).toBe(kinds.length)
     expect(WRITE_ROUTES['theme-font-add']).toEqual({ method: 'POST', path: /^\/api\/theme-fonts$/ })
@@ -116,6 +116,21 @@ describe('PortalClient', () => {
     const posts = p.calls.filter((x) => x.init?.method === 'POST')
     expect(posts.map((x) => x.url)).toEqual(['/portal/api/host/extras/relink', '/portal/api/health/run'])
     expect(posts.every((x) => (x.init?.headers as Record<string, string>)['X-Rhino-Token'] === 'tok-1')).toBe(true)
+  })
+
+  it('library: each write goes to its one route, with the token; paths are encoded', async () => {
+    const p = fakePortal()
+    const c = new PortalClient('/portal')
+    await c.libraryUpload('Box', new File([new Uint8Array(4)], 'a.stl'), 'both')
+    await c.libraryFolder('', 'Box')
+    await c.libraryRename('Box/a.stl', 'b.stl')
+    await c.libraryMove('Box/b.stl', '')
+    await c.libraryDelete('Box')
+    await c.libraryList('a b/ü', 0)
+    const posts = p.calls.filter((x) => x.init?.method === 'POST')
+    expect(posts.map((x) => x.url)).toEqual(['/portal/api/library/upload', '/portal/api/library/folder', '/portal/api/library/rename', '/portal/api/library/move', '/portal/api/library/delete'])
+    expect(posts.every((x) => (x.init?.headers as Record<string, string>)['X-Rhino-Token'] === 'tok-1')).toBe(true)
+    expect(p.calls.some((x) => x.url.includes('/api/library?path=a%20b%2F%C3%BC&offset=0'))).toBe(true)
   })
 
   it('backups: each write goes to its one fixed request, with the token (INV-A7)', async () => {

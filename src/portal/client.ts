@@ -78,7 +78,7 @@ export const READ_MS = 15_000
 export const WRITE_MS = 30_000
 export const SEND_MS = 60_000
 export const LONG_MS = 300_000
-const SLOW_WRITES = new Set<string>(['update-upload', 'update-install', 'update-github', 'backup-now', 'backup-upload', 'restore-plan', 'restore'])
+const SLOW_WRITES = new Set<string>(['library-upload', 'update-upload', 'update-install', 'update-github', 'backup-now', 'backup-upload', 'restore-plan', 'restore'])
 
 /** The Portal didn't answer in time. For a change that is not the same as "it didn't happen". */
 export class PortalTimeout extends Error {
@@ -194,6 +194,8 @@ export const PORTAL_TUNING = ['tuning-result', 'tuning-clear'] as const
 export const PORTAL_NETWORK = ['net-hostname', 'net-ipv4', 'net-wifi', 'net-powersave', 'net-keep', 'net-undo'] as const
 /** Settings › Host: remake the links of the Rhino's Klipper extras into klippy/extras (Tool Manager 1.9.30); run the health check (1.9.45: it only reads) */
 export const PORTAL_HOST = ['host-extras-relink', 'health-run'] as const
+/** Files > Models (Tool Manager 1.9.46): the Portal's own model folder. Delete is straight away (Mike, Nov 23). */
+export const PORTAL_LIBRARY = ['library-upload', 'library-folder', 'library-rename', 'library-move', 'library-delete'] as const
 
 export type WriteKind =
   | (typeof PORTAL_WRITES)[number]
@@ -218,6 +220,7 @@ export type WriteKind =
   | (typeof PORTAL_MACROS)[number]
   | (typeof PORTAL_TUNING)[number]
   | (typeof PORTAL_HOST)[number]
+  | (typeof PORTAL_LIBRARY)[number]
 
 /** The one request each write kind may make. */
 export const WRITE_ROUTES: Record<WriteKind, { method: 'POST' | 'DELETE'; path: RegExp }> = {
@@ -293,6 +296,11 @@ export const WRITE_ROUTES: Record<WriteKind, { method: 'POST' | 'DELETE'; path: 
   'backup-now': { method: 'POST', path: /^\/api\/backup$/ },
   'host-extras-relink': { method: 'POST', path: /^\/api\/host\/extras\/relink$/ },
   'health-run': { method: 'POST', path: /^\/api\/health\/run$/ },
+  'library-upload': { method: 'POST', path: /^\/api\/library\/upload$/ },
+  'library-folder': { method: 'POST', path: /^\/api\/library\/folder$/ },
+  'library-rename': { method: 'POST', path: /^\/api\/library\/rename$/ },
+  'library-move': { method: 'POST', path: /^\/api\/library\/move$/ },
+  'library-delete': { method: 'POST', path: /^\/api\/library\/delete$/ },
   'backup-upload': { method: 'POST', path: /^\/api\/backup\/upload$/ },
   'restore-plan': { method: 'POST', path: /^\/api\/restore\/plan$/ },
   restore: { method: 'POST', path: /^\/api\/restore$/ },
@@ -317,9 +325,26 @@ export const WRITE_ROUTES: Record<WriteKind, { method: 'POST' | 'DELETE'; path: 
 const ALLOWED = new Set<string>([
   ...PORTAL_WRITES, ...PORTAL_TOOL_CHECKS, ...PORTAL_TOOL_WRITES, ...PORTAL_THEME_IMAGES, ...PORTAL_THEME_FONTS, ...PORTAL_RESTART,
   ...PORTAL_CARE_WRITES, ...PORTAL_CARE_SETUP, ...PORTAL_TOOL_SETUP, ...PORTAL_HARDWARE, ...PORTAL_HW_WIZARD, ...PORTAL_HOOKS, ...PORTAL_LABELS, ...PORTAL_NETWORK, ...PORTAL_SLICER, ...PORTAL_UPDATE, ...PORTAL_TRUST,
-  ...PORTAL_BACKUP, ...PORTAL_PROFILES, ...PORTAL_MACROS, ...PORTAL_TUNING, ...PORTAL_HOST,
+  ...PORTAL_BACKUP, ...PORTAL_PROFILES, ...PORTAL_MACROS, ...PORTAL_TUNING, ...PORTAL_HOST, ...PORTAL_LIBRARY,
 ])
 const enc = encodeURIComponent
+
+/** GET /api/library (Tool Manager 1.9.46) */
+export interface LibraryEntry {
+  name: string
+  dir: boolean
+  modified: number
+  items?: number
+  size?: number
+  kind?: string
+}
+export interface LibraryListing {
+  path: string
+  total: number
+  offset: number
+  entries: LibraryEntry[]
+  usage: { files: number; bytes: number; free: number; floor: number; max_file: number; types: string[]; root: string }
+}
 
 /** GET /api/moonraker-trust (Tool Manager 1.5.4) */
 export interface TrustState {
@@ -331,6 +356,8 @@ export interface TrustState {
   address: string
   covered: boolean
   suggestions: { entry: string; why: string }[]
+  /** This host has a Tailscale address (Tool Manager 1.9.45+; absent before) */
+  tailscale?: boolean
 }
 
 /** One archive in ~/rhino-backups (GET /api/backup, Tool Manager 1.7) */
@@ -1001,6 +1028,53 @@ export class PortalClient {
     return this.write('health-run', 'POST', '/api/health/run', {}) as Promise<HealthState>
   }
 
+  // ---- model library (Files > Models) ----------------------------------
+
+  async libraryList(path = '', offset = 0): Promise<LibraryListing> {
+    return this.getJson<LibraryListing>(`/api/library?path=${enc(path)}&offset=${offset}`)
+  }
+
+  /** The file's bytes, as a File, for job setup to take exactly as if it had been dropped. */
+  async libraryFile(path: string): Promise<File> {
+    let res: Response
+    try {
+      res = await portalFetch(`${this.baseUrl}/api/library/file?path=${enc(path)}`, {}, SEND_MS)
+    } catch (e) {
+      throw e instanceof PortalTimeout ? e : new Error("Can't reach the Rhino Portal - is it running?")
+    }
+    if (!res.ok) throw new Error(((await res.json().catch(() => null)) as { error?: string } | null)?.error ?? `Portal error (HTTP ${res.status})`)
+    return new File([await res.blob()], path.slice(path.lastIndexOf('/') + 1))
+  }
+
+  async libraryCount(path: string): Promise<{ files: number; folders: number }> {
+    return this.getJson(`/api/library/count?path=${enc(path)}`)
+  }
+
+  /** One file. A name taken by a different file throws an Error with clash: true, and the caller asks. */
+  async libraryUpload(folder: string, file: File, mode: '' | 'replace' | 'both' = ''): Promise<{ name: string; status: 'added' | 'same' | 'replaced' | 'renamed' }> {
+    const f = new FormData()
+    f.append('path', folder)
+    f.append('mode', mode)
+    f.append('file', file, file.name)
+    return this.write('library-upload', 'POST', '/api/library/upload', f) as Promise<{ name: string; status: 'added' | 'same' | 'replaced' | 'renamed' }>
+  }
+
+  async libraryFolder(path: string, name: string) {
+    return this.write('library-folder', 'POST', '/api/library/folder', { path, name })
+  }
+
+  async libraryRename(path: string, name: string) {
+    return this.write('library-rename', 'POST', '/api/library/rename', { path, name })
+  }
+
+  async libraryMove(path: string, to: string) {
+    return this.write('library-move', 'POST', '/api/library/move', { path, to })
+  }
+
+  async libraryDelete(path: string): Promise<{ files: number; folders: number }> {
+    return this.write('library-delete', 'POST', '/api/library/delete', { path }) as Promise<{ files: number; folders: number }>
+  }
+
   // ---- internals -------------------------------------------------------
 
   private async getJson<T>(path: string): Promise<T> {
@@ -1041,6 +1115,6 @@ export class PortalClient {
       this.token = null
       return this.write<T>(kind, method, path, body, true)
     }
-    throw new Error(data?.error ?? `Portal error (HTTP ${res.status})`)
+    throw Object.assign(new Error(data?.error ?? `Portal error (HTTP ${res.status})`), { clash: (data as { clash?: boolean } | null)?.clash === true })
   }
 }

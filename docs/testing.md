@@ -887,3 +887,69 @@ Nothing here moves the machine. The check only looks.
 - [ ] **HC3 It notices an old Portal service file.** Before updating the Rhino to 1.9.45, run the check. *Pass:* it says the Portal's service file is from before 1.9.45 (Look), with what to do. After installing 1.9.45 and running it again, it says "The Portal restarts itself if it hangs" (Good).
 - [ ] **HC4 It's remembered, and Copy report works.** Leave the page and come back. *Pass:* the last result is still there, with when it was checked. **Copy report**, paste into a note: plain text, every line, the summary and the facts.
 - [ ] **HC5 During a job.** Start a short print, run the check. *Pass:* the print is not disturbed (no stutter, no error in the console) and the check finishes. *Stop if* the print stutters: press Pause and tell me.
+
+## Settings > Connect (Studio 0.37.0; the Tailscale line needs Tool Manager 1.9.46)
+
+Nothing here moves the machine. Only the Add buttons change anything (a trusted_clients line, through the Portal, with a Moonraker restart).
+
+- [ ] **CW1 Where am I.** Settings > Connect, step 1. *Pass:* it shows the address you opened Studio from, says whether it is a name, a number or Tailscale, and "The Rhino sees this screen as <your address>" matching `ip addr` on your PC. *Stop if* the Rhino's view of your address is wrong.
+- [ ] **CW2 How it connects.** Step 2. *Pass:* Ethernet or Wi-Fi (with signal) as the Rhino is really connected; the address matches `ip addr` over SSH. On a host without NetworkManager it says so instead.
+- [ ] **CW3 Refusals.** Step 3, type `0.0.0.0/0`, then `10.0.0.0/7`, then `rhino.local`. *Pass:* each is refused with a plain reason and Add stays greyed. *Stop if* any can be added.
+- [ ] **CW4 Add a range.** Machine idle. Add a range you don't use (like `192.168.77.0/24`). *Pass:* about 10 seconds, "is trusted now", Studio reconnects by itself, and the line is in `moonraker.conf` with a copy in `rhino_data/config_backups`. Then remove it in Settings > Trusted addresses. *Stop if* Moonraker doesn't come back in a minute: `sudo systemctl restart moonraker`.
+- [ ] **CW5 Tailscale.** Step 4 on a Rhino with Tailscale up. *Pass:* "Found", the warning about shared devices, and Trust my tailnet greyed until the box is ticked; nothing is added unless pressed. Without Tailscale: "Not found" and a link, no button.
+- [ ] **CW6 Check.** Step 5. *Pass:* Good lines for Moonraker, Klipper and the Portal. Then `sudo systemctl stop rhino-portal` (machine idle) and Check again: *Pass:* "The Rhino Portal doesn't answer" as a Fix. Start it again.
+
+## Settings > Update the Rhino (Studio 0.37.0)
+
+Do the first one on a spare host or when you can afford a restart. Keep a hand near Stop after any release that says Klipper macros change.
+
+- [ ] **UW1 Before.** Step 1 with a newer release on GitHub. *Pass:* it says which version is available, that no job is running, the free space, the last backup's age, and a link to the release notes. With a job running: "A job is running" as a Fix and Install stays greyed.
+- [ ] **UW2 Back up.** Step 2, Back up now. *Pass:* "Done" with the archive name, and the zip is in `~/rhino-backups`. Install stays greyed until it is done (or "go without" is ticked).
+- [ ] **UW3 Install.** Step 3, Install. *Pass:* the steps tick off, "Reconnecting" shows while the Portal restarts, Studio reloads by itself and opens at step 4 saying "Updated from X to Y". *Stop if* it sits on Reconnecting for over 5 minutes: see step 5 and Settings > Software's log.
+- [ ] **UW4 Check.** Step 4. *Pass:* the Health check runs and its Fix/Look counts are shown next to the "before" counts; Klipper ready. *Stop if* it reports a Fix that wasn't there before: Copy report from the Health check and use Undo (`rhino.sh` option 4).
+- [ ] **UW5 If it's wrong.** Step 5 shows the Undo command. *Pass:* `bash ~/rhino-manager/rhino.sh` exists on the host and option 4 is Undo.
+
+## Settings > Park and positions (Studio 0.37.0)
+
+Machine idle, bed clear, hand near Stop for the moves. Undo for a saved change: copy the file from `config/studio_backups` over `myrhino/positions.cfg`.
+
+- [ ] **PW1 What is there.** Step 1. *Pass:* the numbers match `RHINO_POSITIONS` in the Console, and "All positions are inside the travel limits". *Stop if* they differ.
+- [ ] **PW2 Jog and review.** Pick Park, jog to a spot clear of the frame, Use this spot, Next. *Pass:* the lines show `variable_park_x` and `variable_park_y` with the new numbers and the sentence "was X… Y…". Type a number outside the limits in the box: refused with the reason; Reset puts the wizard's lines back.
+- [ ] **PW3 Try it.** Move there slowly. *Pass:* the console asks, the bed lowers 10 mm, the head goes there slowly, nothing hits anything. *Stop if* it heads anywhere else: press Stop.
+- [ ] **PW4 Keep it.** Keep it and restart Klipper. *Pass:* a copy appears in `studio_backups`; comparing it with the new file (`diff`) shows only the changed `variable_*` lines; after the restart and homing, `RHINO_POSITIONS` shows the new numbers.
+- [ ] **PW5 It takes effect.** Pause a short print (check OP2). *Pass:* the head parks at the new spot.
+- [ ] **PW6 A job blocks it.** During a print. *Pass:* Try and Keep are refused with "A job is running".
+
+## Settings > Nozzle cleaning (Studio 0.37.0; needs a wipe brush)
+
+Machine idle, a print head mounted and homed, **hotend cold** for every test here, bed clear, hand near Stop. The G-code is the wizard's own; read it in step 5 before running anything. Undo for the start G-code: Settings > Toolheads > the head > Start G-code > Clear (then restart Klipper).
+
+- [ ] **NW1 It refuses what it should.** With a laser, knife or CNC head mounted, or the machine not homed, or a job running: step 1 shows a Fix and Next stays greyed.
+- [ ] **NW2 Measure.** Jog the nozzle to each end of the bristles (a bed-mounted brush: just touching), Use this spot at each. *Pass:* the two spots show in machine coordinates (compare with the Console's `GET_POSITION`, "toolhead" line). Two spots under 5 mm apart are refused.
+- [ ] **NW3 Read the G-code.** Step 5 shows the lines. *Pass:* the first lines save the move state and zero the offsets (`SAVE_GCODE_STATE`, `SET_GCODE_OFFSET X=0 Y=0 Z=0`), the last put it back (`RESTORE_GCODE_STATE`); the bed lowers clear (bigger Z) before and after the wipe. Add `M112` to the box: refused, and Reset puts the lines back.
+- [ ] **NW4 Slow and cold.** Run it slowly. *Pass:* the console asks; the bed lowers, the head goes over the brush and wipes slowly; the nozzle touches the bristles (a bed-mounted brush) and nothing else is touched; afterwards a plain `G1 X Y` shows the paper-test nozzle height still applies (the offsets are back). *Stop if* it heads anywhere unexpected: press Stop, then measure again.
+- [ ] **NW5 Full speed, cold.** Run it at full speed. *Pass:* the same motion at the chosen speed.
+- [ ] **NW6 Save and attach.** Step 7, Add after what is there. *Pass:* "Clean nozzle (<head>)" is in Control > Macros and the head's Start G-code shows the lines; Klipper restart banner appears. After restarting, a short print runs the wipe after the heat-up, the mesh and the prime line, before the first layer, with the nozzle hot. *Stop if* it wipes before homing or with the head over the part: press Stop and tell me.
+- [ ] **NW7 It can be taken out again.** Clear the head's Start G-code (Settings > Toolheads) and restart: the next job doesn't wipe.
+
+## Files > Models (Studio 0.37.0, Tool Manager 1.9.46)
+
+Needs Tool Manager 1.9.46 installed (the Portal's library routes). Nothing here touches Klipper or moves the machine. The folder is `~/printer_data/models` on the Rhino.
+
+- [ ] **LB1 Drop files in.** Files > Models, drag two or three STL files (and one `.gcode`) from your computer onto the tab. *Pass:* a line says how many were kept and names the `.gcode` as left out; the files are listed with their size. *Stop if* a `.gcode` is kept, or the page shows an error for a normal STL.
+- [ ] **LB2 The same file twice.** Drop the same STL again, then a different file with the same name. *Pass:* the first says it was already here; the second asks Replace, Keep both or Leave it out, and Keep both gives "name (2).stl". *Stop if* a file is silently overwritten.
+- [ ] **LB3 Set up a job from a row.** Press Set up a job on one STL. *Pass:* job setup opens with that part on the bed, the same as dropping the same file there. Then press Set up as one job on a folder holding two parts: both parts load as one assembly. *Stop if* job setup shows another file or nothing.
+- [ ] **LB4 Folders, rename, move, delete.** Make a folder, drag a row onto it, rename a file, then Delete a folder. *Pass:* Delete names how many files and folders go and says there is no trash; Cancel keeps everything; Delete now removes them. *Stop if* a delete happens without the question.
+- [ ] **LB5 It survives a reload and another screen.** Reload the page and open Studio on a phone. *Pass:* the same models are listed on both (they are on the Rhino, not in the browser).
+- [ ] **LB6 A full disk is refused.** Not for the machine: Tool Manager's `dev/test_library.py` covers it (an upload that would leave under 2 GB free is refused). On the Rhino, check "room for … more" matches `df -h ~/printer_data`.
+- [ ] **LB7 Not in the config backup.** After a Backup now (Settings > Host), the backup zip is not much bigger than before and `~/printer_data/models` is not inside it. *Stop if* the backup grows by the size of the library.
+- *Later, with an external drive:* the fstab `nofail` setup and the unplug tests (LB-drive) are in the proposal, not built.
+
+
+## Job hook after a filament change (Tool Manager 1.9.46; Klipper macro change in `_FC_FINISH`)
+
+A print head mounted, homed, standalone first (no job). Hand near Stop. Needs 1.9.46 installed and Klipper restarted.
+
+- [ ] **FH1 Nothing set, nothing changes.** Leave Settings > Job hooks > "After a filament change" empty. Run `FILAMENT_CHANGE` standalone and go through it. *Pass:* it behaves exactly as before the update. *Stop if* any new message, or the head moves somewhere new.
+- [ ] **FH2 It runs after the purge.** Put `M117 Hook ran` in the slot (whole machine), save, run a standalone change. *Pass:* the message shows after the purge, before "Filament change complete". *Stop if* it shows earlier, or the head goes back before it.
+- [ ] **FH3 Mid-print.** Short job, run `FILAMENT_CHANGE` while it prints, complete it. *Pass:* the job resumes where it was; the pause and resume hooks still run. *Stop if* the head moves somewhere it wasn't. Never put an absolute Z move (`G1 Z…`) in this slot.

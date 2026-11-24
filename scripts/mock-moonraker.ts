@@ -275,7 +275,7 @@ const cfgFiles: Record<string, string> = {
   'moonraker.conf': '[server]\nhost: 0.0.0.0\nport: 7125\n\n[authorization]\ncors_domains:\n    *.local\n',
   'crowsnest.conf': '[cam 1]\nmode: ustreamer\ndevice: /dev/video0\n',
   'toolchanger.cfg': '[gcode_macro SWAP_TOOL]\nvariable_current_tool: 0\ngcode:\n    RESPOND MSG="swap"\n',
-  'myrhino/positions.cfg': '[gcode_macro RHINO_POSITIONS]\nvariable_park_x: 551.0\ngcode:\n',
+  'myrhino/positions.cfg': '# THE RHINO\'S POSITIONS - the one place to change them\n[gcode_macro RHINO_POSITIONS]\n# Park - where the head waits after a cancel, a pause and a canceled job.\nvariable_park_x: 551.0\nvariable_park_y: 381.0\n\n# Tool swap\nvariable_swap_x: 100.0\nvariable_swap_y: 100.0\n\n# Safe height (measured: 150)\nvariable_safe_z: 150.0\nvariable_zero_max_z: 290.0\nvariable_prime_x: 5.0\nvariable_prime_y: 10.0\nvariable_prime_length: 120.0\n\ngcode:\n  RHINO_POSITIONS QUIET=1\n',
   'myrhino/custom_tools.cfg': '# tools added in the Portal\n',
   'notes.txt': 'Rhino notes\n',
 }
@@ -1554,6 +1554,128 @@ function json(res: import('node:http').ServerResponse, code: number, body: unkno
 }
 
 
+// ---- the model library (Tool Manager 1.9.46): pretend Portal, in memory --------
+function cubeStl(mm: number): Buffer {
+  const v = [[0, 0, 0], [1, 0, 0], [1, 1, 0], [0, 1, 0], [0, 0, 1], [1, 0, 1], [1, 1, 1], [0, 1, 1]].map((p) => p.map((c) => c * mm))
+  const f = [[0, 2, 1], [0, 3, 2], [4, 5, 6], [4, 6, 7], [0, 1, 5], [0, 5, 4], [1, 2, 6], [1, 6, 5], [2, 3, 7], [2, 7, 6], [3, 0, 4], [3, 4, 7]]
+  const b = Buffer.alloc(84 + 50 * f.length)
+  b.writeUInt32LE(f.length, 80)
+  f.forEach((t, i) => t.forEach((vi, k) => v[vi]!.forEach((c, a) => b.writeFloatLE(c, 84 + 50 * i + 12 + 12 * k + 4 * a))))
+  return b
+}
+type LibNode = { dir: boolean; data?: Buffer; modified: number }
+const lib = new Map<string, LibNode>()
+{
+  const now = Date.now() / 1000
+  lib.set('Bracket', { dir: true, modified: now - 86400 * 3 })
+  lib.set('Bracket/base.stl', { dir: false, data: cubeStl(30), modified: now - 86400 * 3 })
+  lib.set('Bracket/lid.stl', { dir: false, data: cubeStl(20), modified: now - 86400 * 3 })
+  lib.set('cube-20.stl', { dir: false, data: cubeStl(20), modified: now - 86400 })
+  lib.set('cube-40.stl', { dir: false, data: cubeStl(40), modified: now - 3600 })
+}
+const LIB_FREE = Number(process.env.MOCK_LIBRARY_FREE_GB ?? 40) * 1024 ** 3
+const libErr = (res: import('node:http').ServerResponse, msg: string, code = 400, extra: object = {}) => json(res, code, { ok: false, error: msg, ...extra })
+const libBad = (p: string) => p.split('/').filter(Boolean).some((x) => x === '..' || x.startsWith('.') || /[\\:*?"<>|]/.test(x))
+const libKind = (n: string) => /\.(stl|obj|3mf|svg|dxf)$/i.exec(n)?.[1]?.toLowerCase() ?? ''
+async function libraryRoute(req: IncomingMessage, res: import('node:http').ServerResponse, url: string) {
+  const q = new URL(req.url ?? '', 'http://x').searchParams
+  const clean = (p: string | null) => (p ?? '').split('/').filter(Boolean).join('/')
+  const kids = (dir: string) => [...lib.keys()].filter((k) => (dir ? k.startsWith(dir + '/') : true) && !k.slice(dir ? dir.length + 1 : 0).includes('/') && k !== dir)
+  if (req.method === 'GET' && url === '/api/library') {
+    const path = clean(q.get('path'))
+    if (libBad(path)) return libErr(res, 'That path is outside the library.')
+    if (path && !lib.get(path)?.dir) return libErr(res, 'That isn’t in the library (it may have been moved or deleted).')
+    const entries = kids(path).map((k) => {
+      const n = lib.get(k)!
+      const name = k.slice(path ? path.length + 1 : 0)
+      return n.dir ? { name, dir: true, modified: n.modified, items: kids(k).length } : { name, dir: false, size: n.data!.length, modified: n.modified, kind: libKind(name) }
+    })
+    const bytes = [...lib.values()].reduce((a, n) => a + (n.data?.length ?? 0), 0)
+    return json(res, 200, { ok: true, path, total: entries.length, offset: 0, entries,
+      usage: { files: [...lib.values()].filter((n) => !n.dir).length, bytes, free: LIB_FREE, floor: 2 * 1024 ** 3, max_file: 210 * 1048576, types: ['stl', 'obj', '3mf', 'svg', 'dxf'], root: '/home/pi/printer_data/models' } })
+  }
+  if (req.method === 'GET' && url === '/api/library/file') {
+    const n = lib.get(clean(q.get('path')))
+    if (!n || n.dir) return libErr(res, 'That isn’t a model file in the library.')
+    return void res.writeHead(200, { 'content-type': 'application/octet-stream' }).end(n.data)
+  }
+  if (req.method === 'GET' && url === '/api/library/count') {
+    const p = clean(q.get('path'))
+    const under = [...lib.keys()].filter((k) => k === p || k.startsWith(p + '/'))
+    return json(res, 200, { ok: true, files: under.filter((k) => !lib.get(k)!.dir).length, folders: under.filter((k) => lib.get(k)!.dir).length })
+  }
+  if (req.method !== 'POST') return libErr(res, 'Not found', 404)
+  if (req.headers['x-rhino-token'] !== PORTAL_TOKEN) return libErr(res, 'This page is out of date (the portal was restarted). Reload the page and try again.')
+  if (url === '/api/library/upload') {
+    const { fields: f, filename: name } = await libMultipart(req)
+    const folder = clean(f['path'] ?? '')
+    const mode = f['mode'] ?? ''
+    const data = Buffer.from(f['file'] ?? '', 'latin1')
+    if (!libKind(name)) return libErr(res, `'${name}' isn't a kind of model the library keeps (stl, obj, 3mf, svg, dxf).`)
+    if (folder && !lib.get(folder)?.dir) return libErr(res, 'That folder isn’t in the library.')
+    if (libKind(name) === 'stl' && 84 + 50 * data.readUInt32LE(80) !== data.length) return libErr(res, 'That isn’t an STL file: it is neither a whole binary STL nor a text STL (it may be cut short).')
+    let key = folder ? `${folder}/${name}` : name
+    const old = lib.get(key)
+    let status = 'added'
+    if (old) {
+      if (old.data?.equals(data)) return json(res, 200, { ok: true, name, status: 'same' })
+      if (mode === 'replace') status = 'replaced'
+      else if (mode === 'both') { let i = 2; const stem = name.replace(/\.[^.]+$/, ''); const ext = name.slice(stem.length); while (lib.has(`${folder ? folder + '/' : ''}${stem} (${i})${ext}`)) i++; key = `${folder ? folder + '/' : ''}${stem} (${i})${ext}`; status = 'renamed' }
+      else return libErr(res, `'${name}' is already here with different contents.`, 409, { clash: true, name })
+    }
+    lib.set(key, { dir: false, data, modified: Date.now() / 1000 })
+    return json(res, 200, { ok: true, name: key.slice(key.lastIndexOf('/') + 1), status })
+  }
+  const b = await readBody(req)
+  const p = clean(String(b.path ?? ''))
+  if (libBad(p) || libBad(String(b.name ?? '')) || libBad(String(b.to ?? ''))) return libErr(res, 'That path is outside the library.')
+  if (url === '/api/library/folder') {
+    if (lib.has(join2(p, String(b.name)))) return libErr(res, `'${b.name}' is already here.`)
+    lib.set(join2(p, String(b.name)), { dir: true, modified: Date.now() / 1000 })
+    return json(res, 200, { ok: true })
+  }
+  if (!lib.has(p)) return libErr(res, 'That isn’t in the library (it may have been moved or deleted).')
+  const moveKeys = (from: string, to: string) => {
+    if (lib.has(to)) throw new Error(`'${to.slice(to.lastIndexOf('/') + 1)}' is already there.`)
+    for (const k of [...lib.keys()].filter((k) => k === from || k.startsWith(from + '/'))) { lib.set(to + k.slice(from.length), lib.get(k)!); lib.delete(k) }
+  }
+  try {
+    if (url === '/api/library/rename') moveKeys(p, join2(p.includes('/') ? p.slice(0, p.lastIndexOf('/')) : '', String(b.name)))
+    else if (url === '/api/library/move') {
+      const to = clean(String(b.to ?? ''))
+      if (to && !lib.get(to)?.dir) return libErr(res, 'That folder isn’t in the library.')
+      if (to === p || to.startsWith(p + '/')) return libErr(res, 'A folder can’t go inside itself.')
+      moveKeys(p, join2(to, p.slice(p.lastIndexOf('/') + 1)))
+    } else if (url === '/api/library/delete') {
+      const under = [...lib.keys()].filter((k) => k === p || k.startsWith(p + '/'))
+      const out = { files: under.filter((k) => !lib.get(k)!.dir).length, folders: under.filter((k) => lib.get(k)!.dir).length }
+      under.forEach((k) => lib.delete(k))
+      return json(res, 200, { ok: true, ...out })
+    } else return libErr(res, 'Not found', 404)
+  } catch (e) { return libErr(res, (e as Error).message) }
+  return json(res, 200, { ok: true })
+}
+/** multipart/form-data with the file's name kept (the older multipart() above drops it) */
+function libMultipart(req: IncomingMessage): Promise<{ fields: Record<string, string>; filename: string }> {
+  return new Promise((resolve) => {
+    const chunks: Buffer[] = []
+    req.on('data', (d) => chunks.push(d))
+    req.on('end', () => {
+      const fields: Record<string, string> = {}
+      let filename = ''
+      for (const part of Buffer.concat(chunks).toString('latin1').split(/\r\n--[^\r\n]+/)) {
+        const head = part.split('\r\n\r\n')[0] ?? ''
+        const name = /name="([^"]+)"/.exec(head)?.[1]
+        if (!name) continue
+        filename = /filename="([^"]*)"/.exec(head)?.[1] ?? filename
+        fields[name] = part.slice(head.length + 4)
+      }
+      resolve({ fields, filename })
+    })
+  })
+}
+const join2 = (a: string, b: string) => (a ? `${a}/${b}` : b)
+
 // ---- PrusaSlicer on the Rhino (Portal 1.5.0): pretend engine -----------------
 const prusaSchema = JSON.parse(readFileSync(new URL('../src/slicer/prusa/schema.json', import.meta.url), 'utf8')) as { options: Record<string, unknown> }
 const prusaKeys = [...Object.keys(prusaSchema.options), 'bed_shape', 'autoemit_temperature_commands', 'start_gcode', 'end_gcode', 'post_process', 'gcode_substitutions']
@@ -1756,7 +1878,7 @@ async function themeFontRoutes(req: IncomingMessage, res: import('node:http').Se
 const trusted = ['127.0.0.0/8', '192.168.86.0/24']
 async function trustRoutes(req: IncomingMessage, res: import('node:http').ServerResponse, url: string): Promise<boolean> {
   if (url !== '/api/moonraker-trust') return false
-  const state = () => ({ ok: true, configured: true, force_logins: false, include: false, entries: trusted, address: '192.168.86.31', covered: true,
+  const state = () => ({ ok: true, configured: true, force_logins: false, include: false, entries: trusted, address: '192.168.86.31', covered: true, tailscale: process.env.MOCK_TAILSCALE === '1',
     suggestions: trusted.includes('100.64.0.0/10') ? [] : [{ entry: '100.64.0.0/10', why: 'Tailscale (any device on your tailnet)' }] })
   if (req.method === 'GET') return (json(res, 200, state()), true)
   const entry = String((await readBody(req)).entry ?? '').trim()
@@ -2017,6 +2139,8 @@ async function portal(req: IncomingMessage, res: import('node:http').ServerRespo
     if (!healthState().running) { healthRunning = Date.now() }
     return json(res, 200, { ok: true, ...healthState() }), true
   }
+  // Tool Manager 1.9.46: the model library (in memory; the real rules are in the Portal's rhino/library.py)
+  if (url.startsWith('/api/library')) return libraryRoute(req, res, url), true
   if (req.method === 'GET' && url === '/api/hardware/devices') return json(res, 200, { ok: true, devices: wizardDevices }), true
   // Tool library, read-only, from the Portal's demo (scripts/fixtures/portal-*.json). Changes need the real
   // Portal: python3 dev/demo_server.py in Toolhead_Manager, then PORTAL=http://127.0.0.1:5055 npm run dev

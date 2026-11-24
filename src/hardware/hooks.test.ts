@@ -2,10 +2,11 @@ import { describe, expect, it } from 'vitest'
 import { MAX_LINES, copyMacroTo, SLOT_HELP, SLOT_LABEL, lineCount, linesOf, sameHooks, scopeList, setSlot, type Hooks } from './hooks'
 
 describe('job hooks editor', () => {
-  it('names and explains all seven moments', () => {
-    const slots = ['before_start', 'after_start', 'before_end', 'after_end', 'on_cancel', 'on_pause', 'on_resume'] as const
+  it('names and explains all eight moments', () => {
+    const slots = ['before_start', 'after_start', 'before_end', 'after_end', 'on_cancel', 'on_pause', 'on_resume', 'after_filament_change'] as const
     for (const s of slots) expect(SLOT_LABEL[s] && SLOT_HELP[s]).toBeTruthy()
     expect(SLOT_HELP.before_start).toMatch(/Nothing may move/)
+    expect(SLOT_HELP.after_filament_change).toMatch(/no absolute Z/)
     expect(MAX_LINES).toBe(20)
   })
 

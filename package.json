@@ -1,12 +1,13 @@
 {
   "name": "rhino-studio",
   "private": true,
-  "version": "0.36.2",
+  "version": "0.37.0",
   "description": "One interface for every Rhino Multi Motion System process: prepare, preview, send, monitor.",
   "license": "GPL-3.0-or-later",
   "type": "module",
   "scripts": {
     "dev": "vite --host",
+    "dev:mock": "MOONRAKER=http://localhost:7125 PORTAL=http://localhost:7125 vite --host",
     "build": "vue-tsc --noEmit && vite build",
     "preview": "vite preview --host",
     "typecheck": "vue-tsc --noEmit",

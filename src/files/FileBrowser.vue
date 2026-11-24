@@ -35,9 +35,6 @@ import { POWER_ACTIONS } from '@/system/power'
 import FileMenu, { type MenuItem } from './FileMenu.vue'
 import FileAsk from './FileAsk.vue'
 import {
-  BACKUP_DIR,
-  backupPath,
-  backupsToPrune,
   baseName,
   isGcode,
   join,
@@ -53,6 +50,7 @@ import {
   type SortBy,
 } from './fileOps'
 
+import { backupConfigFile } from './configBackup'
 const FileEditor = defineAsyncComponent(() => import('./FileEditor.vue'))
 
 const props = defineProps<{ root: Root }>()
@@ -437,26 +435,8 @@ function alertEditor(text: string) {
   // the editor covers the page: say it there too
   window.setTimeout(() => window.alert(text), 0)
 }
-/** Copy a config file into studio_backups (made if missing), keep the newest ten copies. */
-async function backupConfig(rp: string): Promise<string | null> {
-  const dirs = await machine.getDirectory('config')
-  if (!dirs.dirs.some((d) => d.dirname === 'studio_backups')) await machine.fileChange('server.files.post_directory', { path: BACKUP_DIR })
-  const dest = backupPath(rp, new Date())
-  try {
-    await machine.fileChange('server.files.copy', { source: rp, dest })
-  } catch (e) {
-    // a brand-new file has nothing to back up yet
-    if (/not exist|not found|404/i.test((e as Error).message)) return null
-    throw e
-  }
-  try {
-    const l = await machine.getDirectory(BACKUP_DIR)
-    for (const n of backupsToPrune(l.files.map((f) => f.filename), rp)) await machine.fileChange('server.files.delete_file', { path: join(BACKUP_DIR, n) })
-  } catch {
-    /* pruning is tidy-up only */
-  }
-  return dest
-}
+/** Copy a config file into studio_backups (made if missing), keep the newest ten copies (src/files/configBackup.ts). */
+const backupConfig = (rp: string) => backupConfigFile(machine, rp)
 
 const restart = computed(() => (editing.value ? restartFor(editing.value.rp) : null))
 const restartBlock = computed(() => (control.jobActive ? 'A job is running: restart once it ends' : !machine.online ? 'Not connected' : null))

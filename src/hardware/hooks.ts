@@ -1,5 +1,5 @@
 /**
- * Job hooks (Tool Manager 1.9+): G-code lines Klipper runs at seven moments of every job, for the whole machine,
+ * Job hooks (Tool Manager 1.9+): G-code lines Klipper runs at eight moments of a job, for the whole machine,
  * a kind of tool or one tool. The Portal owns every rule (no axis moves before the job starts, only macros and
  * commands that exist, heaters under their limit, at most 20 lines) and writes them into job_hooks.cfg as
  * _RHINO_HOOKS, which START_JOB, END_PRINT, cancel, pause and resume call. This module only shapes the editor.
@@ -7,7 +7,7 @@
 
 import { hookLines, type MacroDraft } from '@/control/userMacros'
 
-export type Slot = 'before_start' | 'after_start' | 'before_end' | 'after_end' | 'on_cancel' | 'on_pause' | 'on_resume'
+export type Slot = 'before_start' | 'after_start' | 'before_end' | 'after_end' | 'on_cancel' | 'on_pause' | 'on_resume' | 'after_filament_change'
 /** scope ("machine", "category:subtractive", "tool:HotJoe") -> slot -> lines */
 export type Hooks = Record<string, Partial<Record<Slot, string[]>>>
 
@@ -34,6 +34,7 @@ export const SLOT_LABEL: Record<Slot, string> = {
   on_cancel: 'If it is cancelled',
   on_pause: 'When it pauses',
   on_resume: 'When it resumes',
+  after_filament_change: 'After a filament change',
 }
 
 export const SLOT_HELP: Record<Slot, string> = {
@@ -44,6 +45,7 @@ export const SLOT_HELP: Record<Slot, string> = {
   on_cancel: 'Runs on cancel. Anything a start hook switched on is also switched off here by itself.',
   on_pause: 'When the job pauses (button, filament runout, an open interlock).',
   on_resume: 'Before the job carries on after a pause.',
+  after_filament_change: 'After the purge, hot, at the swap spot, before the head goes back. Mid-print the bed is already lowered: no absolute Z moves here (the bed would rise into the part). Keep it short.',
 }
 
 export const MAX_LINES = 20

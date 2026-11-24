@@ -42,6 +42,44 @@ export const TUNING_POSE: Record<string, Pose> = {
   cnc_depth: 'spindle',
 }
 
+/** The connect wizard: one pose per step */
+export const CONNECT_STEP_POSE: Record<'where' | 'link' | 'trust' | 'outside' | 'check', Pose> = {
+  where: 'meter',
+  link: 'cable',
+  trust: 'connect',
+  outside: 'carry',
+  check: 'thumbsup',
+}
+
+/** The update wizard: one pose per step */
+export const UPDATE_STEP_POSE: Record<'before' | 'backup' | 'install' | 'check' | 'wrong', Pose> = {
+  before: 'meter',
+  backup: 'carry',
+  install: 'wrench',
+  check: 'thumbsup',
+  wrong: 'pipewrench',
+}
+
+/** The positions wizard: one pose per step */
+export const POSITIONS_STEP_POSE: Record<'now' | 'pick' | 'jog' | 'review' | 'try', Pose> = {
+  now: 'meter',
+  pick: 'pendant',
+  jog: 'carry',
+  review: 'calipers',
+  try: 'thumbsup',
+}
+
+/** The nozzle cleaning wizard: one pose per step */
+export const WIPE_STEP_POSE: Record<'check' | 'start' | 'end' | 'how' | 'review' | 'try' | 'save', Pose> = {
+  check: 'wrench',
+  start: 'calipers',
+  end: 'calipers',
+  how: 'meter',
+  review: 'pipewrench',
+  try: 'carry',
+  save: 'thumbsup',
+}
+
 /** Done, and something went wrong (a refused save, a failed check) */
 export const DONE_POSE: Pose = 'thumbsup'
 export const TROUBLE_POSE: Pose = 'zapped'

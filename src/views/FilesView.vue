@@ -12,15 +12,17 @@ import RsPanel from '@/components/RsPanel.vue'
 import Icon from '@/icons/Icon.vue'
 import FileBrowser from '@/files/FileBrowser.vue'
 import JobHistory from '@/files/JobHistory.vue'
+import ModelsBrowser from '@/library/ModelsBrowser.vue'
 import { useMachineStore } from '@/stores/machine'
 import type { Root } from '@/files/fileOps'
 
-type Tab = Root | 'history'
-const TABS: [Tab, string][] = [['gcodes', 'Gcode files'], ['config', 'Config'], ['logs', 'Logs'], ['history', 'Job history']]
+type Tab = Root | 'models' | 'history'
+const TABS: [Tab, string][] = [['gcodes', 'Gcode files'], ['config', 'Config'], ['logs', 'Logs'], ['models', 'Models'], ['history', 'Job history']]
 const LEAD: Record<Tab, string> = {
   gcodes: 'Jobs on the Rhino: the toolhead each one asks for (green when it’s the mounted one), how it last ran, and a ring on the ones never run. Press a file’s toolhead to start it: Studio checks it against the mounted one first, or offers the swap.',
   config: 'Klipper’s config folder. Saving keeps a copy of the file as it was (in studio_backups) and never restarts Klipper by itself.',
   logs: 'Klipper and Moonraker logs, read-only. Settings › Logs finds the last error in them.',
+  models: 'STL, 3MF, OBJ, SVG and DXF files kept on the Rhino, in a folder of the Portal’s own. Drop files here to keep them; press Set up a job to open one in job setup, as if you had dropped it there. A folder goes as one job.',
   history: 'Every job Moonraker has kept, newest first. Reprint checks the toolhead first, the same as starting from Gcode files.',
 }
 
@@ -29,7 +31,7 @@ const route = useRoute()
 const router = useRouter()
 const tab = computed<Tab>(() => {
   const t = route.query.tab
-  return t === 'config' || t === 'logs' || t === 'history' ? t : 'gcodes'
+  return t === 'config' || t === 'logs' || t === 'models' || t === 'history' ? t : 'gcodes'
 })
 function pick(t: Tab) {
   if (t !== tab.value) void router.push({ query: { tab: t === 'gcodes' ? undefined : t } })
@@ -57,6 +59,7 @@ function pick(t: Tab) {
         <RouterLink to="/settings/logs" class="link">Last error in Settings › Logs</RouterLink>
       </template>
       <JobHistory v-if="tab === 'history'" />
+      <ModelsBrowser v-else-if="tab === 'models'" />
       <FileBrowser v-else :key="tab" :root="tab" />
     </RsPanel>
   </div>
