@@ -42,6 +42,8 @@ import { rhinoBase, firstOf, valueOf } from '@/slicer/prusa/config'
 import CncOps from '@/prepare/CncOps.vue'
 import CncBitField from '@/prepare/CncBitField.vue'
 import LaserOps from '@/prepare/LaserOps.vue'
+import { useTuningStore } from '@/stores/tuning'
+import { lastCut } from '@/tuning/cutTests'
 import ToolCard from '@/prepare/ToolCard.vue'
 import { PROCESS_ACTION, PROCESS_LABEL, prettyMaterial, toolFacts } from '@/prepare/facts'
 import { usePrepareStore } from '@/stores/prepare'
@@ -135,6 +137,21 @@ function selectForMenu(id: number, x: number, y: number, normal: [number, number
 }
 
 const job = computed(() => prep.job)
+const tuningStore = useTuningStore()
+const laserOps = computed({
+  get: () => prep.job?.laser.ops ?? [],
+  set: (v) => {
+    if (prep.job) prep.job.laser.ops = v
+  },
+})
+/** the engraving power and speed last tuned for this head and material, to start a new operation from */
+const laserDefaults = computed(() => {
+  const j = prep.job
+  if (!j) return undefined
+  const mat = prep.materialsOf(j.toolhead).find((m) => m.key === j.material)?.name
+  const t = (v: 'laser_engrave_power' | 'laser_engrave_speed') => lastCut(tuningStore.state?.runs, j.toolhead, v, mat)?.value
+  return { power: t('laser_engrave_power'), feed: t('laser_engrave_speed') }
+})
 const proc = computed(() => prep.job?.process ?? null)
 // on a tool with several lanes, the material shown is the selected lane's
 const laneKeys = computed(() => (prep.job?.lanes ? prep.job.lanes.materials.map((m) => ({ material: m, runoutSensor: false })) : []))
@@ -669,7 +686,7 @@ const engineNote = computed(() => {
             <NumField v-model="job.laser.kerf" setting="kerf" label="Kerf" unit="mm" :min="0" :max="1" :step="0.05" hint="Beam width allowance" />
             <NumField v-if="!prep.flat" v-model="job.laser.cutHeight" label="Cut outline at" unit="mm" :min="0.01" :max="prep.part?.size.z ?? 1000" :step="0.5" hint="Height above the bed" />
             <TunedNote />
-            <LaserOps />
+            <LaserOps v-model="laserOps" :settings="job.laser" :loops="prep.laserLoops" :finding="prep.findingLoops" :error="prep.loopsError" :defaults="laserDefaults" @find="prep.findLoops()" />
           </div>
           <div v-if="proc === 'laser'" class="adv">
             <FoldGroup title="Advanced" note="smoothing, outer outline only">

@@ -5,12 +5,16 @@
  * (stores/chains.ts). This build: the stages, the sheet and its place on the bed, the checks. The design, the fixtures, the
  * job files and the run wizard come next (docs/design-process-chain.md).
  */
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, shallowRef, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import ChainBed from '@/chain/ChainBed.vue'
 import ChainNum from '@/chain/ChainNum.vue'
 import { DESIGN_FOLDER, ROLE_LABEL, applyRoles, bodiesFrom, designChecks, designRef, libraryPath, place, rolesAvailable, setRole, sheetFrom, type Body, type BodyRole } from '@/chain/design'
 import { loadModelFile } from '@/slicer/engine'
+import LaserOps from '@/prepare/LaserOps.vue'
+import { LASER_TYPES, drawingLoops, laserChecks, laserJobFor, placeLoops } from '@/chain/laser'
+import type { Loop } from '@/slicer/laserOps'
+import type { LaserOp } from '@/slicer/types'
 import { MODEL_TYPES, extOf } from '@/slicer/model'
 import {
   PRESETS,
@@ -127,6 +131,84 @@ async function restoreDesign(c: Chain) {
     loading.value = false
   }
 }
+// ---- the laser stage's drawing (an SVG or DXF), kept in the model library like the design
+const laserName = ref('')
+const laserPath = ref<string | null>(null)
+const laserPending = ref<File | null>(null)
+const laserSrc = shallowRef<File | null>(null)
+const laserFound = shallowRef<Loop[] | null>(null)
+const laserFinding = ref(false)
+const laserError = ref<string | null>(null)
+const laserTried = ref(false)
+const hasLaser = computed(() => !!draft.value?.stages.some((s) => s.kind === 'laser'))
+const laserTool = computed(() => draft.value?.stages.find((s) => s.kind === 'laser')?.tool ?? toolsOf('laser')[0] ?? '')
+const laserJob = computed(() => laserJobFor(laserTool.value, prep.materialsOf(laserTool.value), anchor.value))
+const laserOps = computed<LaserOp[]>({
+  get: () => draft.value?.laser?.ops ?? [],
+  set: (v) => {
+    if (draft.value?.laser) draft.value.laser = { ...draft.value.laser, ops: v }
+  },
+})
+const laserPlaced = computed(() => (laserFound.value ? placeLoops(laserFound.value, anchor.value) : null))
+function resetLaser() {
+  laserName.value = ''
+  laserPath.value = null
+  laserPending.value = null
+  laserSrc.value = null
+  laserFound.value = null
+  laserError.value = null
+  laserTried.value = false
+}
+async function findLaserLoops() {
+  const f = laserSrc.value
+  if (!f || laserFinding.value) return
+  laserFinding.value = true
+  laserError.value = null
+  try {
+    laserFound.value = await drawingLoops(f, laserJob.value, prep.machineInfo)
+  } catch (e) {
+    laserFound.value = null
+    laserError.value = `Couldn’t read ${f.name}: ${e instanceof Error ? e.message : String(e)}.`
+  } finally {
+    laserTried.value = true
+    laserFinding.value = false
+  }
+}
+async function loadLaser(file: File | undefined) {
+  if (!file || !draft.value) return
+  laserError.value = null
+  if (!(LASER_TYPES as readonly string[]).includes(extOf(file.name))) return void (laserError.value = `${file.name} isn’t a flat drawing. Use an SVG or DXF file.`)
+  laserSrc.value = file
+  laserName.value = file.name
+  laserPending.value = file
+  laserPath.value = libraryPath(draft.value.name, file.name)
+  draft.value.laser = { file: laserPath.value, ops: [] }
+  await findLaserLoops()
+}
+function pickLaser(e: Event) {
+  const input = e.target as HTMLInputElement
+  void loadLaser(input.files?.[0])
+  input.value = ''
+}
+function clearLaser() {
+  resetLaser()
+  if (draft.value) draft.value.laser = null
+}
+async function restoreLaser(c: Chain) {
+  if (!c.laser) return
+  const ref = c.laser
+  try {
+    laserSrc.value = await tm.client().libraryFile(ref.file)
+    laserName.value = ref.file.slice(ref.file.lastIndexOf('/') + 1)
+    laserPath.value = ref.file
+  } catch (e) {
+    laserError.value = `The laser drawing isn’t in the model library any more (${ref.file}). Load it again. ${e instanceof Error ? e.message : ''}`.trim()
+    laserTried.value = true
+    return
+  }
+  if (draft.value === c) await findLaserLoops()
+}
+
 const rolesHere = computed(() => (draft.value ? rolesAvailable(draft.value) : []))
 const anchor = computed(() => (draft.value?.sheet ? { x: draft.value.sheet.x, y: draft.value.sheet.y } : { x: prep.machineInfo.workArea.x / 2, y: prep.machineInfo.workArea.y / 2 }))
 const placed = computed(() => place(bodies.value, anchor.value))
@@ -162,7 +244,7 @@ const PROCESS_OF: Record<Stage['kind'], string | null> = { print: 'fdm', laser: 
 const optionsFor = (s: Stage) => (PROCESS_OF[s.kind] ? toolsOf(PROCESS_OF[s.kind]!) : [])
 
 const ctx = computed(() => ({ tools: new Set(prep.tools.map((t) => t.name)), workArea: prep.machineInfo.workArea, keepOut: prep.machineInfo.keepOut }))
-const checks = computed(() => (draft.value ? [...chainChecks(draft.value, ctx.value), ...(bodies.value.length ? designChecks(placed.value, draft.value, ctx.value.workArea, ctx.value.keepOut) : [])] : []))
+const checks = computed(() => (draft.value ? [...chainChecks(draft.value, ctx.value), ...(bodies.value.length ? designChecks(placed.value, draft.value, ctx.value.workArea, ctx.value.keepOut) : []), ...laserChecks(draft.value, laserPlaced.value, laserTried.value)] : []))
 const stageRole = computed(() => (selected.value != null ? (byId.value.get(selected.value)?.role ?? null) : null))
 const steps = computed(() => (draft.value ? planSteps(draft.value.stages) : []))
 const chips = computed(() => (draft.value ? chipsFor(draft.value.stages) : []))
@@ -227,7 +309,9 @@ function adopt(c: Chain, id: string | null, rev: number, keepDesign = false) {
   tab.value = 'stages'
   if (!keepDesign) {
     resetDesign()
+    resetLaser()
     void restoreDesign(draft.value)
+    void restoreLaser(draft.value)
   }
 }
 
@@ -248,18 +332,21 @@ function closeChain() {
 
 /** The design file goes into the model library before the chain says it is there (a chain must never name a file that isn't) */
 async function keepDesignFile() {
-  const f = pendingFile.value
-  const path = designPath.value
-  if (!f || !path) return
+  const todo = [
+    { f: pendingFile.value, path: designPath.value, done: () => (pendingFile.value = null) },
+    { f: laserPending.value, path: laserPath.value, done: () => (laserPending.value = null) },
+  ].filter((t) => t.f && t.path)
+  if (!todo.length) return
   const portal = tm.client()
   try {
     await portal.libraryFolder('', DESIGN_FOLDER)
   } catch {
     /* it is already there */
   }
-  const name = path.slice(path.lastIndexOf('/') + 1)
-  await portal.libraryUpload(DESIGN_FOLDER, new File([f], name), 'replace')
-  pendingFile.value = null
+  for (const t of todo) {
+    await portal.libraryUpload(DESIGN_FOLDER, new File([t.f!], t.path!.slice(t.path!.lastIndexOf('/') + 1)), 'replace')
+    t.done()
+  }
 }
 
 async function save() {
@@ -416,6 +503,21 @@ onMounted(async () => {
             </ul>
           </section>
 
+          <section v-if="hasLaser" class="design" aria-label="Laser work">
+            <div class="dhead">
+              <h2 class="section">Laser work</h2>
+              <span v-if="laserName" class="muted dfile">{{ laserName }}</span>
+              <label class="filebtn">
+                <input type="file" class="visually-hidden" accept=".svg,.dxf" :disabled="laserFinding" @change="pickLaser" />
+                <span class="btn">{{ laserFinding ? 'Reading…' : laserName ? 'Load another' : 'Load a drawing' }}</span>
+              </label>
+              <RsButton v-if="laserName" variant="quiet" @click="clearLaser">Clear</RsButton>
+            </div>
+            <p v-if="laserError" class="banner" role="alert">{{ laserError }}</p>
+            <p v-if="!laserName && !laserError" class="muted">An SVG or DXF drawing for the laser, placed at the sheet’s centre. Pick what to mark: a score or an engrave fill. Loops you don’t pick are not lasered.</p>
+            <LaserOps v-if="draft.laser" v-model="laserOps" :settings="laserJob.laser" :loops="laserFound" :finding="laserFinding" :error="null" leave-rest @find="findLaserLoops" />
+          </section>
+
           <template v-for="(st, i) in steps" :key="i">
             <div v-if="st.type === 'job'" class="job">
               <div class="jhead">
@@ -470,7 +572,7 @@ onMounted(async () => {
               <button type="button" :class="{ on: zoom }" :aria-pressed="zoom" :disabled="!sheet && !bodies.length" @click="zoom = true">Zoom to part</button>
             </span>
           </header>
-          <ChainBed :bed="prep.machineInfo.workArea" :keep-out="prep.machineInfo.keepOut" :prime="prep.machineInfo.prime" :sheet="sheet" :sheet-shown="sheetShown" :zoom="zoom" :sheet-bad="sheetBad" :bodies="placed" :stage-role="stageRole" />
+          <ChainBed :bed="prep.machineInfo.workArea" :keep-out="prep.machineInfo.keepOut" :prime="prep.machineInfo.prime" :sheet="sheet" :sheet-shown="sheetShown" :zoom="zoom" :sheet-bad="sheetBad" :bodies="placed" :stage-role="stageRole" :marks="laserPlaced ?? undefined" />
           <ul class="legend">
             <li v-if="sheet"><i class="l sheetl" />Sheet{{ draft.thickness ? `, ${draft.thickness} mm` : '' }}</li>
             <li><i class="l keepl" />Keep clear</li>

@@ -8,6 +8,7 @@ import { computed, useId } from 'vue'
 import { flipY, viewBoxText, viewFor } from './bedView'
 import { sheetBox, type Sheet, type StageRole } from './chain'
 import type { Placed } from './design'
+import type { Loop } from '@/slicer/laserOps'
 import type { KeepOut } from '@/slicer/types'
 
 const props = defineProps<{
@@ -24,6 +25,8 @@ const props = defineProps<{
   bodies?: readonly Placed[]
   /** the selected stage's role: its bodies are drawn solid, earlier ones faint, later ones not at all */
   stageRole?: StageRole | null
+  /** the laser drawing's loops where they will be cut, drawn at the laser stage */
+  marks?: readonly Loop[]
 }>()
 const hatch = `hatch-${useId()}`
 const box = computed(() => (props.sheet ? sheetBox(props.sheet) : null))
@@ -46,6 +49,9 @@ const drawn = computed(() => {
     .map((b) => ({ b, how: RANK[b.role]! === at ? 'now' : RANK[b.role]! < at ? 'before' : null, d: b.outline.map(([x, y]) => `${x},${fy(y)}`).join(' ') }))
     .filter((k) => k.how)
 })
+const markPaths = computed(() =>
+  props.stageRole === 'work' || props.stageRole == null ? (props.marks ?? []).map((l) => 'M' + l.pts.map(([x, y]) => `${x.toFixed(2)} ${fy(y).toFixed(2)}`).join('L') + (l.closed ? 'Z' : '')) : [],
+)
 const label = computed(() => (zoomed.value ? 9 : 12))
 </script>
 
@@ -70,6 +76,7 @@ const label = computed(() => (zoomed.value ? 9 : 12))
       <line :x1="box![0]" :y1="fy(box![1]) + label * 1.4" :x2="box![2]" :y2="fy(box![1]) + label * 1.4" class="dim" />
       <text :x="sheet.x" :y="fy(box![1]) + label * 2.7" text-anchor="middle" :font-size="label" class="dimt">{{ sheet.width }}</text>
     </g>
+    <g v-if="markPaths.length" class="marks"><path v-for="(d, i) in markPaths" :key="i" :d="d" /></g>
     <g v-for="k in drawn" :key="k.b.id" class="body" :class="[k.how, k.b.role]">
       <polygon :points="k.d" />
       <text v-if="k.how === 'now'" :x="(k.b.box[0] + k.b.box[2]) / 2" :y="fy((k.b.box[1] + k.b.box[3]) / 2)" text-anchor="middle" :font-size="label * 0.85">{{ k.b.name }}</text>
@@ -91,6 +98,7 @@ const label = computed(() => (zoomed.value ? 9 : 12))
 .body.now.fixture polygon { fill-opacity: 0.45; }
 .body.before polygon { fill: var(--rs-ink); fill-opacity: 0.16; stroke-opacity: 0.5; }
 .body text { font-family: var(--rs-font-ui); fill: var(--rs-bg, #fff); paint-order: stroke; stroke: var(--rs-ink); stroke-width: 1.2px; stroke-linejoin: round; }
+.marks path { fill: none; stroke: var(--rs-ink); stroke-width: 1.3; vector-effect: non-scaling-stroke; }
 .dim { stroke: var(--rs-text-muted); stroke-width: 1; }
 .dimt { font-family: var(--rs-font-code); fill: var(--rs-text-muted); }
 </style>

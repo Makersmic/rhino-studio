@@ -8,7 +8,7 @@
  * needs the machine to keep Z homed and a touch check (the proposal's order B), so it is refused with that reason.
  */
 import type { Check } from '@/slicer/check'
-import type { KeepOut } from '@/slicer/types'
+import type { KeepOut, LaserOp } from '@/slicer/types'
 
 export type StageKind = 'print' | 'manual' | 'laser' | 'knife' | 'cnc'
 /** fixtures and place are pinned; features is the print that goes on the placed material; work is any other tool stage */
@@ -47,6 +47,12 @@ export interface DesignRef {
   roles: Array<{ name: string; role: 'sheet' | 'fixture' | 'feature' | 'skip' }>
 }
 
+/** The laser stage's work: a drawing (SVG or DXF in the model library) and the operations picked on its loops */
+export interface LaserWork {
+  file: string
+  ops: LaserOp[]
+}
+
 /** What Studio builds and the Portal stores (rhino/chains.py checks it again) */
 export interface Chain {
   name: string
@@ -57,6 +63,8 @@ export interface Chain {
   sheet: Sheet | null
   /** the design file, once there is one (chains saved before 1.9.52's design step have none) */
   design?: DesignRef | null
+  /** the laser stage's drawing and operations (none until a drawing is loaded) */
+  laser?: LaserWork | null
   stages: Stage[]
   /** the job files, once Studio has written them */
   jobs: ChainJob[]
@@ -98,6 +106,7 @@ export const newChain = (name: string, preset: PresetId, tools: { print: string;
   thickness: null,
   sheet: null,
   design: null,
+  laser: null,
   stages: presetStages(preset, tools),
   jobs: [],
 })

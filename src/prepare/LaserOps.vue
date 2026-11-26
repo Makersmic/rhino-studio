@@ -7,48 +7,54 @@
 import { computed, ref } from 'vue'
 import RsButton from '@/components/RsButton.vue'
 import NumField from './NumField.vue'
-import { usePrepareStore } from '@/stores/prepare'
-import { useTuningStore } from '@/stores/tuning'
-import { lastCut } from '@/tuning/cutTests'
 import { assign, drawingBox, newOp, opTitle, opsWarnings, toggleLoop, within, type Loop } from '@/slicer/laserOps'
-import type { LaserOp } from '@/slicer/types'
+import type { LaserOp, LaserSettings } from '@/slicer/types'
 
-const prep = usePrepareStore()
-const tuning = useTuningStore()
-const job = computed(() => prep.job!)
-const ops = computed(() => job.value.laser.ops ?? [])
-const loops = computed(() => prep.laserLoops)
+/**
+ * The list is the caller's (Job setup keeps it in the job, a chain in the chain), so this takes it as v-model and the loops
+ * as props. `settings` gives a new operation its starting power, speed and passes; `defaults` are tuned values to prefer.
+ */
+const props = defineProps<{
+  modelValue: LaserOp[]
+  settings: LaserSettings
+  loops: Loop[] | null
+  finding: boolean
+  error: string | null
+  defaults?: { power?: number; feed?: number }
+  /** a chain: loops no operation picked are left alone, not cut */
+  leaveRest?: boolean
+}>()
+const emit = defineEmits<{ 'update:modelValue': [LaserOp[]]; find: [] }>()
+const ops = computed(() => props.modelValue)
+const loops = computed(() => props.loops)
 const picking = ref<string | null>(null)
 
 const KINDS: { value: LaserOp['kind']; label: string }[] = [
   { value: 'cut', label: 'Cut' }, { value: 'score', label: 'Score' }, { value: 'fill', label: 'Engrave fill' },
 ]
 function add(kind: LaserOp['kind']) {
-  const l = job.value.laser
-  const mat = prep.materialsOf(job.value.toolhead).find((m) => m.key === job.value.material)?.name
-  const t = (v: 'laser_engrave_power' | 'laser_engrave_speed') => lastCut(tuning.state?.runs, job.value.toolhead, v, mat)?.value
-  const o = newOp(kind, l, { power: t('laser_engrave_power'), feed: t('laser_engrave_speed') })
-  l.ops = [...ops.value, o]
+  const o = newOp(kind, props.settings, { power: props.defaults?.power, feed: props.defaults?.feed })
+  emit('update:modelValue', [...ops.value, o])
   picking.value = o.id
-  if (!loops.value) void prep.findLoops()
+  if (!loops.value) emit('find')
 }
 function move(i: number, d: -1 | 1) {
   const a = [...ops.value]
   ;[a[i], a[i + d]] = [a[i + d]!, a[i]!]
-  job.value.laser.ops = a
+  emit('update:modelValue', a)
 }
 function remove(i: number) {
   const a = [...ops.value]
   if (a[i]?.id === picking.value) picking.value = null
   a.splice(i, 1)
-  job.value.laser.ops = a
+  emit('update:modelValue', a)
 }
 function click(l: Loop) {
   const k = ops.value.findIndex((o) => o.id === picking.value)
   if (k < 0 || !loops.value) return
   const a = ops.value.map((o) => ({ ...o, loops: [...o.loops] }))
   toggleLoop(a, k, l, loops.value)
-  job.value.laser.ops = a
+  emit('update:modelValue', a)
 }
 
 // ---- the drawing
@@ -84,7 +90,7 @@ const picked = (i: number) => got.value?.picked[i]?.length ?? 0
   <section class="ops wide">
     <header class="ops-head">
       <h3>Operations</h3>
-      <span class="muted small">Different settings for parts of the drawing. They run top to bottom, then everything else.</span>
+      <span class="muted small">Different settings for parts of the drawing. They run top to bottom{{ leaveRest ? '; loops you don’t pick are not lasered.' : ', then everything else.' }}</span>
     </header>
 
     <ol v-if="ops.length" class="list">
@@ -117,7 +123,7 @@ const picked = (i: number) => got.value?.picked[i]?.length ?? 0
       </li>
       <li class="op rest">
         <span class="n">{{ ops.length + 1 }}</span>
-        <span><strong>Everything else</strong> <span class="muted small">· cut with the settings above{{ got ? ` · ${got.rest.length} loop${got.rest.length === 1 ? '' : 's'}` : '' }}</span></span>
+        <span><strong>Everything else</strong> <span class="muted small">· {{ leaveRest ? 'left alone' : 'cut with the settings above' }}{{ got ? ` · ${got.rest.length} loop${got.rest.length === 1 ? '' : 's'}` : '' }}</span></span>
       </li>
     </ol>
 
@@ -134,10 +140,10 @@ const picked = (i: number) => got.value?.picked[i]?.length ?? 0
 
     <!-- the drawing's loops: click to pick for the operation being picked -->
     <div v-if="ops.length" class="draw" :class="{ armed: !!picking }">
-      <p v-if="prep.loopsError" class="warn-text">{{ prep.loopsError }}</p>
+      <p v-if="error" class="warn-text">{{ error }}</p>
       <p v-else-if="!loops" class="muted small">
-        <template v-if="prep.findingLoops">Finding the loops…</template>
-        <template v-else>The loops show once the drawing is sliced. <RsButton size="sm" @click="prep.findLoops()">Find the loops</RsButton></template>
+        <template v-if="finding">Finding the loops…</template>
+        <template v-else>The loops show once the drawing is sliced. <RsButton size="sm" @click="emit('find')">Find the loops</RsButton></template>
       </p>
       <template v-else>
         <p class="muted small">{{ picking ? `Click loops for ${opTitle(ops.find((o) => o.id === picking)!, ops.findIndex((o) => o.id === picking))}; click again to take one off.` : 'Press Pick loops on an operation, then click loops here.' }}</p>

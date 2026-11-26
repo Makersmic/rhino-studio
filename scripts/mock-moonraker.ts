@@ -1578,7 +1578,7 @@ const um = {
   sources: {} as Record<string, Record<string, { macro: string; rev: number; name: string }>>,
 }
 // Process chains (Tool Manager 1.9.52). MOCK_CHAINS=old (Portal before 1.9.52) | seed (one saved chain)
-type MockChain = { id: string; name: string; preset: string; thickness: number | null; sheet: unknown; design?: unknown; stages: unknown[]; jobs: unknown[]; rev: number; created: number; updated: number }
+type MockChain = { id: string; name: string; preset: string; thickness: number | null; sheet: unknown; design?: unknown; laser?: unknown; stages: unknown[]; jobs: unknown[]; rev: number; created: number; updated: number }
 const ch = { chains: [] as MockChain[], deleted: [] as Array<MockChain & { deleted_at: number }> }
 if (process.env.MOCK_CHAINS === 'seed') {
   const t = Math.floor(Date.now() / 1000) - 86400
@@ -2061,7 +2061,7 @@ async function portal(req: IncomingMessage, res: import('node:http').ServerRespo
     if (req.headers['x-rhino-token'] !== PORTAL_TOKEN) return json(res, 400, { ok: false, error: 'This page is out of date (the portal was restarted). Reload the page and try again.' }), true
     const body = req.method === 'POST' || req.method === 'DELETE' ? await readBody(req) : {}
     const now = Math.floor(Date.now() / 1000)
-    const pick = (b: Record<string, unknown>) => ({ name: b.name, preset: b.preset, thickness: b.thickness ?? null, sheet: b.sheet ?? null, design: b.design ?? null, stages: b.stages, jobs: b.jobs ?? [] })
+    const pick = (b: Record<string, unknown>) => ({ name: b.name, preset: b.preset, thickness: b.thickness ?? null, sheet: b.sheet ?? null, design: b.design ?? null, laser: b.laser ?? null, stages: b.stages, jobs: b.jobs ?? [] })
     if (req.method === 'POST' && path === '/api/chains') {
       const c = { ...pick(body as Record<string, unknown>), id: `c_${Math.random().toString(36).slice(2, 8)}`, rev: 1, created: now, updated: now } as MockChain
       ch.chains.push(c)

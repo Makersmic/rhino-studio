@@ -50,6 +50,14 @@ describe('engrave fill', () => {
 })
 
 describe('the file by operation', () => {
+  it('leaveRest (a chain): nothing is lasered unless an operation picked it', () => {
+    expect(assembleLaser(CUT, L, 1000, true)).toEqual([])
+    expect(assembleLaser(CUT, { ...L, ops: [op('cut', [])] }, 1000, true)).toEqual([])
+    const mark = assembleLaser(CUT, { ...L, ops: [op('score', [loops[square]!], { name: 'Mark' })] }, 1000, true)
+    expect(mark.some((l) => l.startsWith('; operation: Mark'))).toBe(true)
+    expect(mark.some((l) => l.includes('Everything else'))).toBe(false)
+    expect(mark.filter((l) => l.startsWith('M3')).length).toBe(1)
+  })
   it('without operations, the cut is unchanged and repeated per pass', () => {
     expect(assembleLaser(CUT, L, 1000)).toEqual(CUT)
     const two = assembleLaser(CUT, { ...L, passes: 2 }, 1000)

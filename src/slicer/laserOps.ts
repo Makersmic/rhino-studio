@@ -196,9 +196,10 @@ const pathLines = (l: Loop, s: string, feed: number): string[] => [
 
 /**
  * The cut again, by operation. Without operations (or with none picking anything) the cut is left as Kiri wrote it,
- * repeated for the job's passes, exactly as before.
+ * repeated for the job's passes, exactly as before. `leaveRest` (a chain's laser stage, which marks a sheet that is
+ * meant to stay whole): loops no operation picked are not lasered, and with no operations nothing is.
  */
-export function assembleLaser(cut: string[], l: LaserSettings, sMax: number): string[] {
+export function assembleLaser(cut: string[], l: LaserSettings, sMax: number, leaveRest = false): string[] {
   const passes = Math.max(1, Math.round(l.passes))
   const ops = l.ops ?? []
   const plain = () => {
@@ -209,10 +210,10 @@ export function assembleLaser(cut: string[], l: LaserSettings, sMax: number): st
     }
     return out
   }
-  if (!ops.some((o) => o.loops.length)) return plain()
+  if (!ops.some((o) => o.loops.length)) return leaveRest ? [] : plain()
   const loops = laserLoops(cut)
   const { picked, rest } = assign(ops, loops)
-  if (!picked.some((p) => p.length)) return plain()
+  if (!picked.some((p) => p.length)) return leaveRest ? [] : plain()
   const out: string[] = []
   const S = (power: number) => fmt(Math.max(0, Math.min(1, power)) * sMax)
   const run = (title: string, kind: LaserOp['kind'], idx: number[], power: number, feed: number, n: number, spacing = 0.2, angle = 0) => {
@@ -229,7 +230,7 @@ export function assembleLaser(cut: string[], l: LaserSettings, sMax: number): st
     }
   }
   ops.forEach((o, i) => run(opTitle(o, i), o.kind, picked[i]!, o.power, o.feed, o.passes, o.spacing, o.angle))
-  run('Everything else', 'cut', rest, l.power, l.feed, passes)
+  if (!leaveRest) run('Everything else', 'cut', rest, l.power, l.feed, passes)
   return out
 }
 
