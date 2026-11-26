@@ -1,6 +1,6 @@
 # Design: process chains (Studio side)
 
-Status: **started Nov 26 2026. Test slice done; nothing built yet.** Source: Mike's "Proposed Process Chain" (`~/Downloads/proposal-process-chain.md`). Order A (print, then laser) first;
+Status: **started Nov 26 2026. Test slice done; the model is built (`src/chain/`, 30 tests); no screen, store or run wizard yet.** Source: Mike's "Proposed Process Chain" (`~/Downloads/proposal-process-chain.md`). Order A (print, then laser) first;
 order B (laser, then print) waits for the machine's swap-repeatability test and the motors-on macro changes in that proposal (sections 4 to 5).
 
 ## 1. Decisions (Mike, Nov 26)
@@ -35,6 +35,10 @@ order B (laser, then print) waits for the machine's swap-repeatability test and 
 ## 4. Still to prove
 - **On the machine:** the nozzle clears the fixtures on resume, the first feature layer lands on the sheet top, `Z_ADJUST` survives the resume, and `END_PRINT` clears it (it sets `Z=0`). (Check on the machine; goes in `docs/testing.md` with the build.)
 - **PrusaSlicer 2.9.7:** a bodies-from-the-bed slice and the stitched file. Needs `prusa-slicer` installed on this PC (Mike runs the install), or a run on the Rhino.
+
+## 4b. Built: the model (`src/chain/chain.ts`, `stitch.ts`)
+Stages and presets, the order rules (a refused move gives its reason), `planSteps` (a new job wherever the tool changes; a manual stage with the same tool on both sides is a pause), the chips between cards, the checks, job file names, and `stitchPrint`.
+**One change to the file check:** it forbids `SET_GCODE_OFFSET` everywhere ("changes the work zero"). `chainRaise` is the single exception: the exact line `SET_GCODE_OFFSET Z_ADJUST=<0.2 to 20> MOVE=0`, straight after `PAUSE`, once. Anywhere else, or in any other form, it is still an error, and the check adds the raise to the file's Z range. Order B (a print after a laser) is refused with its reason.
 
 ## 5. Build order
 1. Chain model in plain TypeScript with tests: stages, tool-change grouping into jobs, reorder rules, handoff chips, the stitched print file.

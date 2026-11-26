@@ -26,6 +26,7 @@ import { CHANGES_LOTS, CHANGES_MANY } from '@/prepare/lanesJob'
 import { HEAT_LIMITS } from '@/control/heatLimits'
 import type { MachineInfo, PartInfo, PrepareJob } from './types'
 import { cncStock } from './kiriSettings'
+import { chainRaise } from '@/chain/stitch'
 
 export interface Check {
   id: string
@@ -109,6 +110,8 @@ export function checkFile(text: string, job: PrepareJob, part: PartInfo | null, 
   let laserOnAtEnd = false
   let zMoves = 0
   let relMoves = 0
+  /** the chain's raise for everything printed after the pause (0 when there is none) */
+  let zAdjust = 0
   let startJob: string | null = null
   let lastCommand = ''
   let endPrint = false
@@ -126,7 +129,14 @@ export function checkFile(text: string, job: PrepareJob, part: PartInfo | null, 
       continue
     }
     const cmd = l.split(/\s+/)[0]!.toUpperCase()
+    const prevCommand = lastCommand
     lastCommand = cmd
+    // a process chain's one Z raise, straight after the pause that placed the sheet (chain/stitch.ts); any other offset stays forbidden
+    const raise = chainRaise(l, prevCommand, zAdjust)
+    if (raise !== null) {
+      zAdjust = raise
+      continue
+    }
     for (const [re, why] of FORBIDDEN) if (re.test(l.toUpperCase())) forbidden.push(`${cmd} (${why})`)
 
     if (cmd === 'END_PRINT') endPrint = true
@@ -166,8 +176,9 @@ export function checkFile(text: string, job: PrepareJob, part: PartInfo | null, 
         ;(['x', 'y', 'z'] as const).forEach((a, i) => {
           const v = next[a]
           if (v !== null && word(l, a.toUpperCase()) !== null) {
-            min[i] = Math.min(min[i]!, v)
-            max[i] = Math.max(max[i]!, v)
+            const at = a === 'z' ? v + zAdjust : v
+            min[i] = Math.min(min[i]!, at)
+            max[i] = Math.max(max[i]!, at)
           }
         })
       }
@@ -180,7 +191,7 @@ export function checkFile(text: string, job: PrepareJob, part: PartInfo | null, 
         work.x1 = Math.max(work.x1, next.x)
         work.y0 = Math.min(work.y0, next.y)
         work.y1 = Math.max(work.y1, next.y)
-        if (next.z !== null) work.z1 = Math.max(work.z1, next.z)
+        if (next.z !== null) work.z1 = Math.max(work.z1, next.z + zAdjust)
       }
       // Printing or cutting over a keep-out area (checked every 1 mm along the move)
       if (working && started && job.process !== 'cnc' && m.keepOut.length && pos.x !== null && pos.y !== null && next.x !== null && next.y !== null) {
