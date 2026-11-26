@@ -6,7 +6,8 @@
  */
 import { computed, useId } from 'vue'
 import { flipY, viewBoxText, viewFor } from './bedView'
-import { sheetBox, type Sheet } from './chain'
+import { sheetBox, type Sheet, type StageRole } from './chain'
+import type { Placed } from './design'
 import type { KeepOut } from '@/slicer/types'
 
 const props = defineProps<{
@@ -19,14 +20,32 @@ const props = defineProps<{
   zoom: boolean
   /** the sheet doesn't fit: draw it as a problem (an outline, not red) */
   sheetBad: boolean
+  /** the design's bodies on the bed */
+  bodies?: readonly Placed[]
+  /** the selected stage's role: its bodies are drawn solid, earlier ones faint, later ones not at all */
+  stageRole?: StageRole | null
 }>()
 const hatch = `hatch-${useId()}`
 const box = computed(() => (props.sheet ? sheetBox(props.sheet) : null))
-const view = computed(() =>
-  viewBoxText(viewFor(props.bed, box.value ? { x0: box.value[0], y0: box.value[1], x1: box.value[2], y1: box.value[3] } : null, props.zoom)),
-)
+/** what "Zoom to part" frames: the sheet and every body of the design */
+const focus = computed(() => {
+  const boxes: Array<[number, number, number, number]> = [...(box.value ? [box.value] : []), ...(props.bodies ?? []).filter((b) => b.role === 'fixture' || b.role === 'feature').map((b) => b.box)]
+  if (!boxes.length) return null
+  return { x0: Math.min(...boxes.map((b) => b[0])), y0: Math.min(...boxes.map((b) => b[1])), x1: Math.max(...boxes.map((b) => b[2])), y1: Math.max(...boxes.map((b) => b[3])) }
+})
+const view = computed(() => viewBoxText(viewFor(props.bed, focus.value, props.zoom)))
 const fy = (y: number) => flipY(props.bed.y, y)
-const zoomed = computed(() => props.zoom && !!box.value)
+const zoomed = computed(() => props.zoom && !!focus.value)
+const RANK: Record<string, number> = { fixture: 1, feature: 3 }
+const ROLE_RANK: Record<string, number> = { fixtures: 1, place: 2, features: 3, work: 4 }
+/** each body with how to draw it: 'now' (this stage's), 'before' (made by an earlier stage) or hidden */
+const drawn = computed(() => {
+  const at = props.stageRole ? ROLE_RANK[props.stageRole]! : 9
+  return (props.bodies ?? [])
+    .filter((b) => b.role === 'fixture' || b.role === 'feature')
+    .map((b) => ({ b, how: RANK[b.role]! === at ? 'now' : RANK[b.role]! < at ? 'before' : null, d: b.outline.map(([x, y]) => `${x},${fy(y)}`).join(' ') }))
+    .filter((k) => k.how)
+})
 const label = computed(() => (zoomed.value ? 9 : 12))
 </script>
 
@@ -51,6 +70,10 @@ const label = computed(() => (zoomed.value ? 9 : 12))
       <line :x1="box![0]" :y1="fy(box![1]) + label * 1.4" :x2="box![2]" :y2="fy(box![1]) + label * 1.4" class="dim" />
       <text :x="sheet.x" :y="fy(box![1]) + label * 2.7" text-anchor="middle" :font-size="label" class="dimt">{{ sheet.width }}</text>
     </g>
+    <g v-for="k in drawn" :key="k.b.id" class="body" :class="[k.how, k.b.role]">
+      <polygon :points="k.d" />
+      <text v-if="k.how === 'now'" :x="(k.b.box[0] + k.b.box[2]) / 2" :y="fy((k.b.box[1] + k.b.box[3]) / 2)" text-anchor="middle" :font-size="label * 0.85">{{ k.b.name }}</text>
+    </g>
   </svg>
 </template>
 
@@ -63,6 +86,11 @@ const label = computed(() => (zoomed.value ? 9 : 12))
 .prime line { stroke: var(--rs-text-muted); stroke-width: 1.5; stroke-dasharray: 2 3; }
 .sheet { fill: var(--rs-surface-2); stroke: var(--rs-ink); stroke-width: 1.8; }
 .sheet.bad { stroke-dasharray: 5 3; stroke-width: 2.4; }
+.body polygon { stroke: var(--rs-ink); stroke-width: 1.4; }
+.body.now polygon { fill: var(--rs-ink); fill-opacity: 0.78; }
+.body.now.fixture polygon { fill-opacity: 0.45; }
+.body.before polygon { fill: var(--rs-ink); fill-opacity: 0.16; stroke-opacity: 0.5; }
+.body text { font-family: var(--rs-font-ui); fill: var(--rs-bg, #fff); paint-order: stroke; stroke: var(--rs-ink); stroke-width: 1.2px; stroke-linejoin: round; }
 .dim { stroke: var(--rs-text-muted); stroke-width: 1; }
 .dimt { font-family: var(--rs-font-code); fill: var(--rs-text-muted); }
 </style>

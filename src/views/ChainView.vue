@@ -9,6 +9,9 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import ChainBed from '@/chain/ChainBed.vue'
 import ChainNum from '@/chain/ChainNum.vue'
+import { ROLE_LABEL, bodiesFrom, designChecks, place, rolesAvailable, setRole, sheetFrom, type Body, type BodyRole } from '@/chain/design'
+import { loadModelFile } from '@/slicer/engine'
+import { MODEL_TYPES, extOf } from '@/slicer/model'
 import {
   PRESETS,
   SHEET_MAX,
@@ -49,6 +52,52 @@ const startError = ref<string | null>(null)
 const askDelete = ref(false)
 const tab = ref<'stages' | 'bed'>('stages')
 
+// ---- the design: one 3D file's bodies, kept in the browser only (the chain keeps just the sheet it sets)
+const bodies = ref<Body[]>([])
+const designFile = ref('')
+const designError = ref<string | null>(null)
+const loading = ref(false)
+async function loadDesign(file: File | undefined) {
+  if (!file || !draft.value) return
+  designError.value = null
+  if (!(MODEL_TYPES as readonly string[]).includes(extOf(file.name)) || ['svg', 'dxf'].includes(extOf(file.name)))
+    return void (designError.value = `${file.name} isn’t a 3D model. Use a 3MF, STL or OBJ file; laser artwork comes in a later step.`)
+  loading.value = true
+  try {
+    const parts = await loadModelFile(file)
+    const next = bodiesFrom(parts, draft.value)
+    if (!next.length) throw new Error('no solid bodies in it')
+    bodies.value = next
+    designFile.value = file.name
+  } catch (e) {
+    designError.value = `Couldn’t read ${file.name}: ${e instanceof Error ? e.message : String(e)}.`
+  } finally {
+    loading.value = false
+  }
+}
+function pickDesign(e: Event) {
+  const input = e.target as HTMLInputElement
+  void loadDesign(input.files?.[0])
+  input.value = ''
+}
+function clearDesign() {
+  bodies.value = []
+  designFile.value = ''
+  designError.value = null
+}
+const rolesHere = computed(() => (draft.value ? rolesAvailable(draft.value) : []))
+const anchor = computed(() => (draft.value?.sheet ? { x: draft.value.sheet.x, y: draft.value.sheet.y } : { x: prep.machineInfo.workArea.x / 2, y: prep.machineInfo.workArea.y / 2 }))
+const placed = computed(() => place(bodies.value, anchor.value))
+const sheetBody = computed(() => placed.value.find((p) => p.role === 'sheet') ?? null)
+function useAsSheet() {
+  if (!draft.value || !sheetBody.value) return
+  const f = sheetFrom(sheetBody.value)
+  draft.value.sheet = f.sheet
+  draft.value.thickness = f.thickness
+}
+const bodyTall = (b: Body) => placed.value.find((p) => p.id === b.id)?.height
+
+
 const ZOOM_KEY = 'rs.chain.zoom'
 const zoom = ref(readZoom())
 function readZoom(): boolean {
@@ -71,7 +120,8 @@ const PROCESS_OF: Record<Stage['kind'], string | null> = { print: 'fdm', laser: 
 const optionsFor = (s: Stage) => (PROCESS_OF[s.kind] ? toolsOf(PROCESS_OF[s.kind]!) : [])
 
 const ctx = computed(() => ({ tools: new Set(prep.tools.map((t) => t.name)), workArea: prep.machineInfo.workArea, keepOut: prep.machineInfo.keepOut }))
-const checks = computed(() => (draft.value ? chainChecks(draft.value, ctx.value) : []))
+const checks = computed(() => (draft.value ? [...chainChecks(draft.value, ctx.value), ...(bodies.value.length ? designChecks(placed.value, draft.value, ctx.value.workArea, ctx.value.keepOut) : [])] : []))
+const stageRole = computed(() => (selected.value != null ? (byId.value.get(selected.value)?.role ?? null) : null))
 const steps = computed(() => (draft.value ? planSteps(draft.value.stages) : []))
 const chips = computed(() => (draft.value ? chipsFor(draft.value.stages) : []))
 const dirty = computed(() => !!draft.value && JSON.stringify(draft.value) !== baseline.value)
@@ -88,7 +138,7 @@ const selectedName = computed(() => {
   const s = selected.value != null ? byId.value.get(selected.value) : null
   return s ? `${String(draft.value!.stages.indexOf(s) + 1).padStart(2, '0')} ${s.what}` : 'Placement'
 })
-const bedNote = computed(() => (placeIndex.value >= 0 ? 'The sheet is drawn to scale. Fixtures, features and laser marks appear here once the design is loaded into the chain.' : 'The design appears here once it is loaded into the chain.'))
+const bedNote = computed(() => (bodies.value.length ? 'The design is drawn from above, to scale, where it will print. Pick a stage to see what it makes; earlier stages show faint. Laser marks come in a later step.' : 'Load a design to see it here.'))
 
 const num = (s: Stage) => String((draft.value?.stages.findIndex((x) => x.id === s.id) ?? 0) + 1).padStart(2, '0')
 const chipsAfter = (id: number, kinds: Chip['kind'][]) => chips.value.filter((c) => c.after === id && kinds.includes(c.kind))
@@ -133,6 +183,7 @@ function adopt(c: Chain, id: string | null, rev: number) {
   selected.value = draft.value.stages.find((s) => s.role === 'features')?.id ?? draft.value.stages[0]?.id ?? null
   saveError.value = null
   tab.value = 'stages'
+  clearDesign()
 }
 
 function open(s: SavedChain) {
@@ -277,6 +328,32 @@ onMounted(async () => {
             </template>
           </div>
 
+          <section class="design" aria-label="Design">
+            <div class="dhead">
+              <h2 class="section">Design</h2>
+              <span v-if="designFile" class="muted dfile">{{ designFile }}</span>
+              <label class="filebtn">
+                <input type="file" class="visually-hidden" accept=".3mf,.stl,.obj" :disabled="loading" @change="pickDesign" />
+                <span class="btn">{{ loading ? 'Reading…' : designFile ? 'Load another' : 'Load a 3D file' }}</span>
+              </label>
+              <RsButton v-if="designFile" variant="quiet" @click="clearDesign">Clear</RsButton>
+            </div>
+            <p v-if="designError" class="banner" role="alert">{{ designError }}</p>
+            <p v-if="!bodies.length" class="muted">A 3MF, STL or OBJ. Each body in it gets a part to play: the sheet, a fixture, a feature. Studio keeps them where the file puts them, around the sheet’s centre.</p>
+            <ul v-if="bodies.length" class="bodies">
+              <li v-for="b in bodies" :key="b.id">
+                <span class="bn">{{ b.name }}<small class="muted"> · {{ bodyTall(b) ?? '' }} mm tall</small></span>
+                <select :value="b.role" :aria-label="`Part for ${b.name}`" @change="bodies = setRole(bodies, b.id, ($event.target as HTMLSelectElement).value as BodyRole)">
+                  <option v-for="r in rolesHere" :key="r" :value="r">{{ ROLE_LABEL[r] }}</option>
+                </select>
+              </li>
+              <li v-if="sheetBody" class="usesheet">
+                <span class="muted">The sheet body is {{ sheetFrom(sheetBody).sheet.width }} × {{ sheetFrom(sheetBody).sheet.depth }} mm, {{ sheetFrom(sheetBody).thickness }} mm thick.</span>
+                <RsButton @click="useAsSheet">Use as the sheet</RsButton>
+              </li>
+            </ul>
+          </section>
+
           <template v-for="(st, i) in steps" :key="i">
             <div v-if="st.type === 'job'" class="job">
               <div class="jhead">
@@ -328,10 +405,10 @@ onMounted(async () => {
             <h2>Bed · {{ selectedName }}</h2>
             <span class="seg" role="group" aria-label="Bed view">
               <button type="button" :class="{ on: !zoom }" :aria-pressed="!zoom" @click="zoom = false">Whole bed</button>
-              <button type="button" :class="{ on: zoom }" :aria-pressed="zoom" :disabled="!sheet" @click="zoom = true">Zoom to part</button>
+              <button type="button" :class="{ on: zoom }" :aria-pressed="zoom" :disabled="!sheet && !bodies.length" @click="zoom = true">Zoom to part</button>
             </span>
           </header>
-          <ChainBed :bed="prep.machineInfo.workArea" :keep-out="prep.machineInfo.keepOut" :prime="prep.machineInfo.prime" :sheet="sheet" :sheet-shown="sheetShown" :zoom="zoom" :sheet-bad="sheetBad" />
+          <ChainBed :bed="prep.machineInfo.workArea" :keep-out="prep.machineInfo.keepOut" :prime="prep.machineInfo.prime" :sheet="sheet" :sheet-shown="sheetShown" :zoom="zoom" :sheet-bad="sheetBad" :bodies="placed" :stage-role="stageRole" />
           <ul class="legend">
             <li v-if="sheet"><i class="l sheetl" />Sheet{{ draft.thickness ? `, ${draft.thickness} mm` : '' }}</li>
             <li><i class="l keepl" />Keep clear</li>
@@ -421,6 +498,16 @@ h2 { margin: 0; font-size: var(--rs-text-lg); font-weight: var(--rs-weight-mediu
 .legend { list-style: none; margin: var(--rs-space-3) 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: var(--rs-text-xs); color: var(--rs-text-muted); }
 .legend li { display: flex; align-items: center; gap: 6px; }
 .l { width: 14px; height: 10px; display: inline-block; border-radius: 2px; }
+.design { display: grid; gap: 8px; padding: 12px 0; border-top: 1px dotted var(--rs-line-strong); }
+.dhead { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.dhead .section { margin: 0; flex: 1 1 auto; }
+.dfile { font-family: var(--rs-font-code); font-size: 12px; overflow-wrap: anywhere; }
+.filebtn .btn { display: inline-block; padding: 6px 14px; border: 1px solid var(--rs-ink); border-radius: var(--rs-radius-md); cursor: pointer; }
+.filebtn:focus-within .btn { outline: 2px solid var(--rs-ink); outline-offset: 2px; }
+.bodies { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.bodies li { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; min-width: 0; }
+.bn { min-width: 0; overflow-wrap: anywhere; }
+.bodies select { background: var(--rs-field-bg); color: var(--rs-field-text); border: 1px solid var(--rs-line-strong); border-radius: var(--rs-radius-sm); padding: 4px 8px; }
 .sheetl { border: 1.6px solid var(--rs-ink); }
 .keepl { border: 1px dashed var(--rs-line-strong); }
 .note2 { margin: var(--rs-space-3) 0 0; font-size: var(--rs-text-xs); color: var(--rs-text-muted); }
