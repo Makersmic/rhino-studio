@@ -41,6 +41,12 @@ export interface ChainJob {
   stages: number[]
 }
 
+/** The design a chain was made from: a file in the Portal's model library and the part each body plays (matched by position and name) */
+export interface DesignRef {
+  file: string
+  roles: Array<{ name: string; role: 'sheet' | 'fixture' | 'feature' | 'skip' }>
+}
+
 /** What Studio builds and the Portal stores (rhino/chains.py checks it again) */
 export interface Chain {
   name: string
@@ -49,6 +55,8 @@ export interface Chain {
   thickness: number | null
   /** null until it is set */
   sheet: Sheet | null
+  /** the design file, once there is one (chains saved before 1.9.52's design step have none) */
+  design?: DesignRef | null
   stages: Stage[]
   /** the job files, once Studio has written them */
   jobs: ChainJob[]
@@ -89,6 +97,7 @@ export const newChain = (name: string, preset: PresetId, tools: { print: string;
   preset,
   thickness: null,
   sheet: null,
+  design: null,
   stages: presetStages(preset, tools),
   jobs: [],
 })

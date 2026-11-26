@@ -11,7 +11,7 @@
 import type { Check } from '@/slicer/check'
 import type { KeepOut } from '@/slicer/types'
 import { bounds, footprint } from '@/slicer/model'
-import { sheetBox, type Chain, type Sheet } from './chain'
+import { sheetBox, type Chain, type DesignRef, type Sheet } from './chain'
 
 export type BodyRole = 'sheet' | 'fixture' | 'feature' | 'skip'
 
@@ -146,4 +146,31 @@ export function designChecks(placed: readonly Placed[], chain: Pick<Chain, 'stag
     if (touch) warn('design-clash', 'The fixtures clear the sheet', `${touch.name}’s outline box overlaps the sheet. That is fine for an L or a frame that holds the sheet; check the picture.`)
   }
   return out
+}
+
+// ---- remembering the design (the file lives in the Portal's model library; the chain keeps its path and the parts)
+
+export const DESIGN_FOLDER = 'Chains'
+
+/** Where a chain's design file goes in the model library: its own folder, named by the chain so two chains never share a file */
+export function libraryPath(chainName: string, fileName: string): string {
+  const clean = (t: string) => t.trim().replace(/[^A-Za-z0-9._-]+/g, '-').replace(/^[-.]+|-+$/g, '')
+  const dot = fileName.lastIndexOf('.')
+  const stem = clean(dot >= 0 ? fileName.slice(0, dot) : fileName) || 'design'
+  const ext = dot >= 0 ? clean(fileName.slice(dot + 1)).toLowerCase() : 'stl'
+  return `${DESIGN_FOLDER}/${(clean(chainName) || 'chain').toLowerCase()}__${stem}.${ext}`
+}
+
+export const designRef = (file: string, bodies: readonly Body[]): DesignRef => ({ file, roles: bodies.map((b) => ({ name: b.name, role: b.role })) })
+
+/** Put the remembered parts back on freshly loaded bodies: a part is only taken where the body at that position has the same name */
+export function applyRoles(bodies: readonly Body[], roles: DesignRef['roles'], chain: Pick<Chain, 'stages'>): Body[] {
+  const allowed = rolesAvailable(chain)
+  let sheetTaken = false
+  return bodies.map((b, i) => {
+    const r = roles[i]
+    if (!r || r.name !== b.name || !allowed.includes(r.role) || (r.role === 'sheet' && sheetTaken)) return b
+    if (r.role === 'sheet') sheetTaken = true
+    return { ...b, role: r.role }
+  })
 }

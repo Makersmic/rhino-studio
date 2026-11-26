@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { PRESETS, presetStages, type Chain } from './chain'
-import { bodiesFrom, designChecks, guessRole, place, rolesAvailable, setRole, sheetFrom, type Body } from './design'
+import { applyRoles, bodiesFrom, designChecks, designRef, libraryPath, guessRole, place, rolesAvailable, setRole, sheetFrom, type Body } from './design'
 
 /** a box as 12 triangles: x0..x1, y0..y1, z0..z1 */
 function box(x0: number, y0: number, z0: number, x1: number, y1: number, z1: number): Float32Array {
@@ -96,4 +96,24 @@ describe('designChecks', () => {
     expect(c.some((x) => x.level === 'error')).toBe(false)
   })
   it('PRESETS still lists both', () => expect(PRESETS).toHaveLength(2))
+})
+
+describe('remembering the design', () => {
+  it('names the library file after the chain, safely', () => {
+    expect(libraryPath('Front plate 001', 'front plate.3MF')).toBe('Chains/front-plate-001__front-plate.3mf')
+    expect(libraryPath('../..', 'a/b.stl')).toBe('Chains/chain__a-b.stl')
+    expect(libraryPath('', '.3mf')).toBe('Chains/chain__design.3mf')
+  })
+  it('keeps the parts and puts them back by position and name', () => {
+    const bs = bodiesFrom([{ name: 'a', vertices: box(0, 0, 0, 1, 1, 1) }, { name: 'jig', vertices: box(0, 0, 0, 1, 1, 1) }, { name: 'c', vertices: box(0, 0, 0, 1, 1, 1) }], full())
+    const ref = designRef('Chains/x__y.3mf', setRole(bs, 1, 'sheet'))
+    expect(ref.roles.map((r) => r.role)).toEqual(['sheet', 'fixture', 'feature'])
+    expect(applyRoles(bs, ref.roles, full()).map((b) => b.role)).toEqual(['sheet', 'fixture', 'feature'])
+  })
+  it('ignores a part whose body changed name or that the chain can no longer use', () => {
+    const bs = bodiesFrom([{ name: 'a', vertices: box(0, 0, 0, 1, 1, 1) }, { name: 'b', vertices: box(0, 0, 0, 1, 1, 1) }], full())
+    const roles = [{ name: 'renamed', role: 'skip' as const }, { name: 'b', role: 'fixture' as const }]
+    expect(applyRoles(bs, roles, full()).map((b) => b.role)).toEqual(['feature', 'fixture'])
+    expect(applyRoles(bs, roles, { stages: presetStages('print-laser', tools) }).map((b) => b.role)).toEqual(['feature', 'feature'])
+  })
 })

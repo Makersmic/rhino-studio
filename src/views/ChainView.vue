@@ -9,7 +9,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import ChainBed from '@/chain/ChainBed.vue'
 import ChainNum from '@/chain/ChainNum.vue'
-import { ROLE_LABEL, bodiesFrom, designChecks, place, rolesAvailable, setRole, sheetFrom, type Body, type BodyRole } from '@/chain/design'
+import { DESIGN_FOLDER, ROLE_LABEL, applyRoles, bodiesFrom, designChecks, designRef, libraryPath, place, rolesAvailable, setRole, sheetFrom, type Body, type BodyRole } from '@/chain/design'
 import { loadModelFile } from '@/slicer/engine'
 import { MODEL_TYPES, extOf } from '@/slicer/model'
 import {
@@ -34,10 +34,12 @@ import {
 import RsButton from '@/components/RsButton.vue'
 import RsDialog from '@/components/RsDialog.vue'
 import { useChainsStore } from '@/stores/chains'
+import { useToolMgrStore } from '@/stores/toolmgr'
 import { usePrepareStore } from '@/stores/prepare'
 
 const chains = useChainsStore()
 const prep = usePrepareStore()
+const tm = useToolMgrStore()
 const route = useRoute()
 const router = useRouter()
 
@@ -57,6 +59,9 @@ const bodies = ref<Body[]>([])
 const designFile = ref('')
 const designError = ref<string | null>(null)
 const loading = ref(false)
+/** where the file goes in the model library, and the file itself until a save has put it there */
+const designPath = ref<string | null>(null)
+const pendingFile = ref<File | null>(null)
 async function loadDesign(file: File | undefined) {
   if (!file || !draft.value) return
   designError.value = null
@@ -69,6 +74,9 @@ async function loadDesign(file: File | undefined) {
     if (!next.length) throw new Error('no solid bodies in it')
     bodies.value = next
     designFile.value = file.name
+    pendingFile.value = file
+    designPath.value = libraryPath(draft.value.name, file.name)
+    syncDesign()
   } catch (e) {
     designError.value = `Couldn’t read ${file.name}: ${e instanceof Error ? e.message : String(e)}.`
   } finally {
@@ -80,10 +88,44 @@ function pickDesign(e: Event) {
   void loadDesign(input.files?.[0])
   input.value = ''
 }
-function clearDesign() {
+/** forget the design on screen only (a chain being opened); the chain's own design is left alone */
+function resetDesign() {
   bodies.value = []
   designFile.value = ''
   designError.value = null
+  designPath.value = null
+  pendingFile.value = null
+}
+/** the person's Clear: the chain forgets its design too */
+function clearDesign() {
+  resetDesign()
+  if (draft.value) draft.value.design = null
+}
+/** keep the chain's design (file and the part of each body) in step with what is on screen */
+function syncDesign() {
+  if (draft.value && designPath.value) draft.value.design = designRef(designPath.value, bodies.value)
+}
+function changeRole(id: number, role: BodyRole) {
+  bodies.value = setRole(bodies.value, id, role)
+  syncDesign()
+}
+/** read a reopened chain's design back from the model library */
+async function restoreDesign(c: Chain) {
+  if (!c.design) return
+  const ref = c.design
+  loading.value = true
+  try {
+    const file = await tm.client().libraryFile(ref.file)
+    const parts = await loadModelFile(file)
+    if (draft.value !== c && draft.value?.design?.file !== ref.file) return
+    bodies.value = applyRoles(bodiesFrom(parts, c), ref.roles, c)
+    designFile.value = ref.file.slice(ref.file.lastIndexOf('/') + 1)
+    designPath.value = ref.file
+  } catch (e) {
+    designError.value = `The design file isn’t in the model library any more (${ref.file}). Load it again. ${e instanceof Error ? e.message : ''}`.trim()
+  } finally {
+    loading.value = false
+  }
 }
 const rolesHere = computed(() => (draft.value ? rolesAvailable(draft.value) : []))
 const anchor = computed(() => (draft.value?.sheet ? { x: draft.value.sheet.x, y: draft.value.sheet.y } : { x: prep.machineInfo.workArea.x / 2, y: prep.machineInfo.workArea.y / 2 }))
@@ -175,7 +217,7 @@ function startNew(preset: PresetId) {
   router.replace({ query: {} })
 }
 
-function adopt(c: Chain, id: string | null, rev: number) {
+function adopt(c: Chain, id: string | null, rev: number, keepDesign = false) {
   draft.value = JSON.parse(JSON.stringify(c)) as Chain
   openId.value = id
   openRev.value = rev
@@ -183,15 +225,18 @@ function adopt(c: Chain, id: string | null, rev: number) {
   selected.value = draft.value.stages.find((s) => s.role === 'features')?.id ?? draft.value.stages[0]?.id ?? null
   saveError.value = null
   tab.value = 'stages'
-  clearDesign()
+  if (!keepDesign) {
+    resetDesign()
+    void restoreDesign(draft.value)
+  }
 }
 
-function open(s: SavedChain) {
+function open(s: SavedChain, keepDesign = false) {
   const { id, rev, ...rest } = s
   const { created: _c, updated: _u, ...chain } = rest
   void _c
   void _u
-  adopt(chain as Chain, id, rev)
+  adopt(chain as Chain, id, rev, keepDesign)
   router.replace({ query: { id } })
 }
 
@@ -201,13 +246,30 @@ function closeChain() {
   router.replace({ query: {} })
 }
 
+/** The design file goes into the model library before the chain says it is there (a chain must never name a file that isn't) */
+async function keepDesignFile() {
+  const f = pendingFile.value
+  const path = designPath.value
+  if (!f || !path) return
+  const portal = tm.client()
+  try {
+    await portal.libraryFolder('', DESIGN_FOLDER)
+  } catch {
+    /* it is already there */
+  }
+  const name = path.slice(path.lastIndexOf('/') + 1)
+  await portal.libraryUpload(DESIGN_FOLDER, new File([f], name), 'replace')
+  pendingFile.value = null
+}
+
 async function save() {
   if (!draft.value) return
   saving.value = true
   saveError.value = null
   try {
+    await keepDesignFile()
     const s = await chains.save(openId.value, draft.value, openRev.value)
-    open(s)
+    open(s, true)
   } catch (e) {
     saveError.value = (e as Error).message
   } finally {
@@ -339,11 +401,11 @@ onMounted(async () => {
               <RsButton v-if="designFile" variant="quiet" @click="clearDesign">Clear</RsButton>
             </div>
             <p v-if="designError" class="banner" role="alert">{{ designError }}</p>
-            <p v-if="!bodies.length" class="muted">A 3MF, STL or OBJ. Each body in it gets a part to play: the sheet, a fixture, a feature. Studio keeps them where the file puts them, around the sheet’s centre.</p>
+            <p v-if="!bodies.length" class="muted">A 3MF, STL or OBJ. Each body in it gets a part to play: the sheet, a fixture, a feature. Studio keeps them where the file puts them, around the sheet’s centre, and saves the file with the chain.</p>
             <ul v-if="bodies.length" class="bodies">
               <li v-for="b in bodies" :key="b.id">
                 <span class="bn">{{ b.name }}<small class="muted"> · {{ bodyTall(b) ?? '' }} mm tall</small></span>
-                <select :value="b.role" :aria-label="`Part for ${b.name}`" @change="bodies = setRole(bodies, b.id, ($event.target as HTMLSelectElement).value as BodyRole)">
+                <select :value="b.role" :aria-label="`Part for ${b.name}`" @change="changeRole(b.id, ($event.target as HTMLSelectElement).value as BodyRole)">
                   <option v-for="r in rolesHere" :key="r" :value="r">{{ ROLE_LABEL[r] }}</option>
                 </select>
               </li>
