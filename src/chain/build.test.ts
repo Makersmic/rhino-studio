@@ -40,12 +40,13 @@ function chain(over: Partial<Chain> = {}): Chain {
   return { ...c, ...over }
 }
 const LOOPS = laserLoops(CUT.split('\n').filter(Boolean))
-const SQUARE = loopRef(LOOPS.find((l) => Math.abs(l.box.x1 - l.box.x0 - 15) < 0.5)!, drawingBox(LOOPS))
+const SQUARE = loopRef(LOOPS.find((l) => Math.abs(l.box.x1 - l.box.x0 - 15) < 0.5 && Math.abs(l.box.y1 - l.box.y0 - 16) < 0.5)!, drawingBox(LOOPS))
+const CIRCLE = loopRef(LOOPS.find((l) => Math.abs(l.box.x1 - l.box.x0 - 16) < 0.5 && Math.abs(l.box.y1 - l.box.y0 - 16) < 0.5)!, drawingBox(LOOPS))
 const lz: LaserWork = { file: 'Chains/a__logo.svg', ops: [{ id: 'a', kind: 'score', name: 'Mark', power: 0.2, feed: 1500, passes: 1, spacing: 0.2, angle: 0, loops: [SQUARE] }] }
 const input = (c: Chain, b: Body[] = bodies) => ({
   chain: c, bodies: b, placed: place(b, { x: 150, y: 150 }),
   printJob: { ...newJob('BlockOne', 'fdm', [PLA]), engine: 'kiri' as const },
-  laserJob: newJob('LightSaber', 'laser', [{ key: 'PLYWOOD', name: 'PLYWOOD', laserPower: 0.6, feed: 600 }]),
+  laserJob: { ...newJob('LightSaber', 'laser', [{ key: 'PLYWOOD', name: 'PLYWOOD', laserPower: 0.6, feed: 600 }]), placement: { x: 150, y: 150, rotate: 0, scale: 1 } },
   laserSrc: new File(['x'], 'logo.svg'), machine: DEFAULT_MACHINE, studioVersion: 'test',
 })
 
@@ -94,11 +95,50 @@ describe('building the print job', () => {
 })
 
 describe('building the laser job', () => {
-  it('is refused while features are printed on the sheet, with the reason', async () => {
-    const jobs = await buildJobs(input(chain({ laser: lz })), slicer)
-    expect(jobs).toHaveLength(2)
-    expect(jobs[1]!.text).toBeNull()
-    expect(jobs[1]!.problem).toMatch(/focus height across the printed features/)
+  // the stand-in cut's loops sit at X 127-143 (circle) and X 155-170 (square); a feature at X 145-152 is between them
+  const between = [body(1, 'sheet', 'sheet', 0, 0, 100, 60, 3), body(2, 'jig', 'fixture', -12, 0, -2, 60, 4), body(3, 'bar', 'feature', 45, 20, 52, 40, 2)]
+  const both: LaserWork = { ...lz, ops: [{ ...lz.ops[0]!, loops: [SQUARE, CIRCLE] }] }
+  it('with features on the sheet: builds the laser file with lifts, the header, and passes the check', async () => {
+    const jobs = await buildJobs(input(chain({ laser: both }), between), slicer)
+    const j = jobs[1]!
+    expect(j.problem).toBeNull()
+    expect(j.lifts).toBeGreaterThanOrEqual(2)
+    const t = j.text!
+    expect(t).toContain('; rhino_chain_features = 2')
+    expect(t).toContain('; rhino_chain_lift = 4')
+    const lines = t.split('\n')
+    expect(lines.filter((l) => l === 'G1 Z4 F600 ;RHINO_CHAIN lift').length).toBe(j.lifts)
+    expect(lines.filter((l) => l === 'G1 Z0 F600 ;RHINO_CHAIN drop').length).toBe(j.lifts)
+    expect(lines.some((l) => /^G[01]\b.*\bZ/.test(l) && !/RHINO_CHAIN (lift|drop)$/.test(l))).toBe(false)
+    expect(j.checks.filter((c) => c.level === 'error')).toEqual([])
+    expect(j.checks.find((c) => c.id === 'laserz')!.label).toMatch(/lift over the printed features/)
+  })
+  it('the tallest printed body sets the lift, a fixture counting by how far it stands above the sheet top', async () => {
+    const tall = [body(1, 'sheet', 'sheet', 0, 0, 100, 60, 3), body(2, 'jig', 'fixture', -12, 0, -2, 60, 8), body(3, 'bar', 'feature', 45, 20, 52, 40, 2)]
+    const j = (await buildJobs(input(chain({ laser: both }), tall), slicer))[1]!
+    expect(j.text).toContain('; rhino_chain_features = 5')
+    expect(j.text).toContain('; rhino_chain_lift = 7')
+  })
+  it('is refused when a picked loop lies over a printed feature, naming it', async () => {
+    const j = (await buildJobs(input(chain({ laser: lz })), slicer))[1]!
+    expect(j.text).toBeNull()
+    expect(j.problem).toMatch(/lies over logo/)
+  })
+  it('a score around a feature is allowed (only its line matters), an engrave fill over it is not', async () => {
+    const outline = loopRef(LOOPS.find((l) => l.box.x1 - l.box.x0 > 55)!, drawingBox(LOOPS))
+    const around: LaserWork = { ...lz, ops: [{ ...lz.ops[0]!, loops: [outline] }] }
+    const j = (await buildJobs(input(chain({ laser: around }), between), slicer))[1]!
+    expect(j.problem).toBeNull()
+    expect(j.lifts).toBeGreaterThanOrEqual(1)
+    const fill: LaserWork = { ...lz, ops: [{ ...lz.ops[0]!, kind: 'fill', loops: [outline] }] }
+    expect((await buildJobs(input(chain({ laser: fill }), between), slicer))[1]!.problem).toMatch(/lies over bar/)
+  })
+  it('is refused above the 20 mm a lift may clear', async () => {
+    const huge = [body(1, 'sheet', 'sheet', 0, 0, 100, 60, 3), body(3, 'tower', 'feature', 45, 20, 52, 40, 25)]
+    const c = chain({ laser: both })
+    c.stages = c.stages.filter((s) => s.role !== 'fixtures')
+    const j = (await buildJobs(input(c, huge), slicer)).at(-1)!
+    expect(j.problem).toMatch(/more than the 20 mm/)
   })
   it('is built for a chain with nothing printed on the sheet: only the picked loop is lasered, no Z moves', async () => {
     const c = newChain('Marks', 'print-laser', tools)

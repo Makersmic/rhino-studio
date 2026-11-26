@@ -1,6 +1,6 @@
 # Proposal: laser travel lifts in a chain's laser file
 
-Status: **written for Mike's approval; nothing below is built.** Mike chose option (a) on Nov 26: a narrow file-check exception. This
+Status: **approved by Mike (Nov 26, with the three confirmations at the end), built, and NOT to be used on a real job until machine check CH14 passes.** Mike's decision: a chain laser file may carry travel lifts only as the two fixed lines below. This
 is a change to the file check (`src/slicer/check.ts`), not to any Klipper macro, and nothing changes on the machine itself. It still
 makes the laser head move in Z during a laser job, so it is written up first.
 
@@ -70,7 +70,11 @@ The exception is one function (`chainLifts` in `src/chain/stitch.ts`, beside `ch
 Removing both puts a chain's laser file back to "refused while features are printed on the sheet". No macro, config or
 Portal change is involved.
 
-## For Mike to confirm
+## Built as written, with two clarifications
+- "Tallest feature" is the tallest printed body above the sheet top: the features, and any fixture that stands higher than the sheet (its height minus the sheet's thickness). A fixture next to the sheet can be struck too.
+- A lift is written for the file's first move (the head's start position is unknown) and for each travel passing within 2 mm of a printed body's outline box. Code: `chainLifts` and `liftTravels` in `src/chain/stitch.ts`, the `laserz` branch in `src/slicer/check.ts`, the writer in `src/chain/build.ts`; tests in `src/chain/lifts.test.ts` (every failing case in the list above, plus the passing ones) and `build.test.ts`.
+
+## Confirmed by Mike
 1. Z above the zero moves the bed away from the laser on this machine (CH14 step 1 proves it with the laser off).
 2. 2 mm clearance over the tallest feature, and 600 mm/min for the lift and drop.
 3. Operations over a printed feature are refused (focus stays on the sheet top).

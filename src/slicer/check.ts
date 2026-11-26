@@ -26,7 +26,7 @@ import { CHANGES_LOTS, CHANGES_MANY } from '@/prepare/lanesJob'
 import { HEAT_LIMITS } from '@/control/heatLimits'
 import type { MachineInfo, PartInfo, PrepareJob } from './types'
 import { cncStock } from './kiriSettings'
-import { chainRaise } from '@/chain/stitch'
+import { chainLifts, chainRaise } from '@/chain/stitch'
 
 export interface Check {
   id: string
@@ -274,7 +274,11 @@ export function checkFile(text: string, job: PrepareJob, part: PartInfo | null, 
   if (job.process === 'laser') {
     add('laserpower', laserMaxS > 0 && laserMaxS <= m.laserSMax + 1e-6, `Laser power at most ${Math.round((laserMaxS / m.laserSMax) * 100)}% (S${fmt(laserMaxS)} of ${fmt(m.laserSMax)})`, laserMaxS === 0 ? 'The laser never switches on.' : `S${fmt(laserMaxS)} is above laser_s_max ${fmt(m.laserSMax)}.`)
     add('laseroff', !laserOnAtEnd, 'Laser off at the end', 'The file ends with the laser on.')
-    add('laserz', zMoves === 0, 'No Z moves (cuts at the focus height)', `${zMoves} Z moves in the file.`)
+    // the one exception (docs/proposal-chain-laser-lifts.md): a chain laser file's travel lifts, the two exact lines and nothing else
+    const lifts = chainLifts(raw)
+    if (lifts && lifts.problem === null && zMoves === lifts.moves) add('laserz', true, `Z moves only to lift over the printed features (${lifts.moves / 2} lift${lifts.moves === 2 ? '' : 's'}, back to the focus height each time)`)
+    else if (lifts) add('laserz', false, 'Z moves only to lift over the printed features', lifts.problem ?? `${zMoves - lifts.moves} Z moves that are not the chain's lifts.`)
+    else add('laserz', zMoves === 0, 'No Z moves (cuts at the focus height)', `${zMoves} Z moves in the file.`)
   }
 
   if (job.process === 'dragknife' && has) {

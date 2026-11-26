@@ -630,11 +630,14 @@ onMounted(async () => {
             <p v-if="blocked > 0" class="muted">Fix the red items above first.</p>
             <p v-else-if="!built" class="muted">Slices the design and writes one file per job, checked like any Job setup file. Nothing is started: you run them from Control, one after the other.</p>
             <p v-if="buildError" class="banner" role="alert">{{ buildError }}</p>
+            <p v-if="built?.some((f) => f.lifts)" class="banner" role="alert">
+              <b>Travel lifts are not proven on the machine.</b> The laser file lifts the head over the printed features, which a laser file has never done. Don’t run it on a real job until machine check CH14 has passed. Download or send it only for that check.
+            </p>
             <ul v-if="built" class="bodies filelist">
               <li v-for="f in built" :key="f.file" :class="{ bad: !!f.problem }">
                 <span class="bn"><b>{{ f.file }}</b><small class="muted"> · {{ f.tool }}</small>
                   <small v-if="f.problem" class="prob">{{ f.problem }}</small>
-                  <small v-else class="muted">Checked: passes. {{ sentFiles[f.file] ? `On the Rhino as ${sentFiles[f.file]}.` : '' }}</small>
+                  <small v-else class="muted">Checked: passes. {{ f.lifts ? `${f.lifts} travel lift${f.lifts === 1 ? '' : 's'}: waits for CH14. ` : '' }}{{ sentFiles[f.file] ? `On the Rhino as ${sentFiles[f.file]}.` : '' }}</small>
                 </span>
                 <span class="fileact">
                   <RsButton :disabled="!f.text || !!f.problem" @click="downloadFile(f)">Download</RsButton>
