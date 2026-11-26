@@ -1,6 +1,7 @@
+import { newChain } from '@/chain/chain'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
-  PORTAL_BACKUP, PortalTimeout, PORTAL_PROFILES, PORTAL_MACROS, PORTAL_TUNING, PORTAL_HOST, PORTAL_LIBRARY, PORTAL_TUNED, PORTAL_THEME_IMAGES, PORTAL_THEME_FONTS, PORTAL_CARE_SETUP, PORTAL_CARE_WRITES, PORTAL_HARDWARE, PORTAL_HOOKS, PORTAL_HW_WIZARD, PORTAL_LABELS, PORTAL_NETWORK, PORTAL_SLICER, PORTAL_UPDATE, PORTAL_TRUST, PORTAL_RESTART, PORTAL_TOOL_CHECKS, PORTAL_TOOL_SETUP, PORTAL_TOOL_WRITES, PORTAL_WRITES, PortalClient, WRITE_ROUTES,
+  PORTAL_BACKUP, PortalTimeout, PORTAL_PROFILES, PORTAL_MACROS, PORTAL_CHAINS, PORTAL_TUNING, PORTAL_HOST, PORTAL_LIBRARY, PORTAL_TUNED, PORTAL_THEME_IMAGES, PORTAL_THEME_FONTS, PORTAL_CARE_SETUP, PORTAL_CARE_WRITES, PORTAL_HARDWARE, PORTAL_HOOKS, PORTAL_HW_WIZARD, PORTAL_LABELS, PORTAL_NETWORK, PORTAL_SLICER, PORTAL_UPDATE, PORTAL_TRUST, PORTAL_RESTART, PORTAL_TOOL_CHECKS, PORTAL_TOOL_SETUP, PORTAL_TOOL_WRITES, PORTAL_WRITES, PortalClient, WRITE_ROUTES,
 } from './client'
 import type { TaskDef } from '@/maintenance/types'
 
@@ -98,7 +99,7 @@ describe('PortalClient', () => {
     const kinds = [
       ...PORTAL_WRITES, ...PORTAL_TOOL_CHECKS, ...PORTAL_TOOL_WRITES, ...PORTAL_THEME_IMAGES, ...PORTAL_THEME_FONTS, ...PORTAL_RESTART,
       ...PORTAL_CARE_WRITES, ...PORTAL_CARE_SETUP, ...PORTAL_TOOL_SETUP, ...PORTAL_HARDWARE, ...PORTAL_HOOKS, ...PORTAL_HW_WIZARD, ...PORTAL_LABELS, ...PORTAL_NETWORK, ...PORTAL_SLICER, ...PORTAL_UPDATE, ...PORTAL_TRUST,
-      ...PORTAL_BACKUP, ...PORTAL_PROFILES, ...PORTAL_MACROS, ...PORTAL_TUNING, ...PORTAL_HOST, ...PORTAL_LIBRARY, ...PORTAL_TUNED,
+      ...PORTAL_BACKUP, ...PORTAL_PROFILES, ...PORTAL_MACROS, ...PORTAL_CHAINS, ...PORTAL_TUNING, ...PORTAL_HOST, ...PORTAL_LIBRARY, ...PORTAL_TUNED,
     ]
     expect(new Set(kinds).size).toBe(kinds.length)
     expect(WRITE_ROUTES['theme-font-add']).toEqual({ method: 'POST', path: /^\/api\/theme-fonts$/ })
@@ -173,6 +174,41 @@ describe('PortalClient', () => {
       expect(WRITE_ROUTES['macro-save']!.path.test(bad), bad).toBe(false)
       expect(WRITE_ROUTES['macro-delete']!.path.test(bad), bad).toBe(false)
     }
+  })
+
+  it('process chains: ids are c_ plus letters and digits only, and nothing else reaches the routes', () => {
+    expect(WRITE_ROUTES['chain-save']!.path.test('/api/chains/c_8f3k2a')).toBe(true)
+    for (const bad of ['/api/chains/../backup', '/api/chains/c_a%2Fb', '/api/chains/m_8f3k2a', '/api/chains/']) {
+      expect(WRITE_ROUTES['chain-save']!.path.test(bad), bad).toBe(false)
+      expect(WRITE_ROUTES['chain-delete']!.path.test(bad), bad).toBe(false)
+    }
+    expect(WRITE_ROUTES['chain-create']).toEqual({ method: 'POST', path: /^\/api\/chains$/ })
+  })
+
+  it('chain writes go to their fixed requests, with the token and the revision', async () => {
+    const p = fakePortal()
+    const c = new PortalClient('/portal')
+    const ch = newChain('Front plate', 'print-laser', { print: 'BlockOne', laser: 'LightSaber' })
+    await c.createChain(ch)
+    await c.saveChain('c_1a2b3c', ch, 4)
+    await c.deleteChain('c_1a2b3c')
+    await c.revertChain('c_1a2b3c', 2)
+    const sent = p.calls.filter((x) => x.init?.method === 'POST' || x.init?.method === 'DELETE')
+    expect(sent.map((x) => `${x.init?.method} ${x.url}`)).toEqual([
+      'POST /portal/api/chains',
+      'POST /portal/api/chains/c_1a2b3c',
+      'DELETE /portal/api/chains/c_1a2b3c',
+      'POST /portal/api/chains/c_1a2b3c/revert',
+    ])
+    expect(sent.every((x) => (x.init?.headers as Record<string, string>)['X-Rhino-Token'] === 'tok-1')).toBe(true)
+    expect(JSON.parse(String(sent[1]?.init?.body))).toEqual({ chain: ch, rev: 4 })
+  })
+
+  it('a write kind outside the allowlist is refused before it leaves the browser (chains)', async () => {
+    fakePortal()
+    const c = new PortalClient('/portal')
+    // @ts-expect-error a private method, called with a kind that does not exist
+    await expect(c.write('chain-run', 'POST', '/api/chains/c_1/run')).rejects.toThrow(/doesn't send/)
   })
 
   it('tuning writes go to their two fixed requests, with the token and the revision', async () => {

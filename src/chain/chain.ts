@@ -25,13 +25,31 @@ export interface Stage {
 
 export type PresetId = 'sheet-print-laser' | 'print-laser'
 
+/** A job file the chain made: its plain file name, the tool it needs and the stages it covers */
+export interface ChainJob {
+  file: string
+  tool: string
+  stages: number[]
+}
+
+/** What Studio builds and the Portal stores (rhino/chains.py checks it again) */
 export interface Chain {
-  schema: 1
   name: string
   preset: PresetId
   /** the sheet's measured thickness in mm (null until measured; only chains with a place stage need it) */
   thickness: number | null
   stages: Stage[]
+  /** the job files, once Studio has written them */
+  jobs: ChainJob[]
+}
+
+/** A chain as the Portal keeps it */
+export interface SavedChain extends Chain {
+  id: string
+  created: number
+  updated: number
+  /** the revision a save must start from */
+  rev: number
 }
 
 export const PRESETS: { id: PresetId; label: string; blurb: string }[] = [
@@ -56,11 +74,11 @@ export function presetStages(preset: PresetId, tools: { print: string; laser: st
 }
 
 export const newChain = (name: string, preset: PresetId, tools: { print: string; laser: string }): Chain => ({
-  schema: 1,
   name,
   preset,
   thickness: null,
   stages: presetStages(preset, tools),
+  jobs: [],
 })
 
 // ---- order rules

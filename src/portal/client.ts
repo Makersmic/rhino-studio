@@ -68,6 +68,7 @@ import type { PortalState, PreviewResult, ToolDetail, ToolLists, ToolOptions, To
 
 /** GET /api/update (Tool Manager 1.5.3+) */
 import type { MacroDraft, UserMacro } from '@/control/userMacros'
+import type { Chain, SavedChain } from '@/chain/chain'
 import type { SavedTest, TuningState } from '@/tuning/tuning'
 
 // ---- how long to wait for the Portal --------------------------------------------------------------------------
@@ -107,6 +108,13 @@ export interface MacroList {
   ok: boolean
   error?: string
   macros: UserMacro[]
+  deleted?: Array<{ id: string; name: string; deleted_at: number }>
+}
+
+export interface ChainList {
+  ok: boolean
+  error?: string
+  chains: SavedChain[]
   deleted?: Array<{ id: string; name: string; deleted_at: number }>
 }
 
@@ -189,6 +197,11 @@ export const PORTAL_PROFILES = [
  * console's check (src/control/userMacros.ts). Nothing here reaches Klipper.
  */
 export const PORTAL_MACROS = ['macro-create', 'macro-save', 'macro-delete', 'macro-revert', 'macro-undelete', 'macro-import'] as const
+/**
+ * Process chains (Tool Manager 1.9.52): a placement and its stages, saved by name. The Portal only stores them; Studio builds the
+ * job files and runs each stage through today's start gates. Nothing here reaches Klipper.
+ */
+export const PORTAL_CHAINS = ['chain-create', 'chain-save', 'chain-delete', 'chain-revert', 'chain-undelete', 'chain-import'] as const
 /** Print head tuning results (Tool Manager 1.9.16): kept on the Rhino; Studio applies them in prepared files. */
 export const PORTAL_TUNING = ['tuning-result', 'tuning-clear'] as const
 export const PORTAL_NETWORK = ['net-hostname', 'net-ipv4', 'net-wifi', 'net-powersave', 'net-keep', 'net-undo'] as const
@@ -220,6 +233,7 @@ export type WriteKind =
   | (typeof PORTAL_BACKUP)[number]
   | (typeof PORTAL_PROFILES)[number]
   | (typeof PORTAL_MACROS)[number]
+  | (typeof PORTAL_CHAINS)[number]
   | (typeof PORTAL_TUNING)[number]
   | (typeof PORTAL_HOST)[number]
   | (typeof PORTAL_LIBRARY)[number]
@@ -325,6 +339,12 @@ export const WRITE_ROUTES: Record<WriteKind, { method: 'POST' | 'DELETE'; path: 
   'macro-revert': { method: 'POST', path: /^\/api\/user-macros\/m_[a-z0-9]+\/revert$/ },
   'macro-undelete': { method: 'POST', path: /^\/api\/user-macros\/m_[a-z0-9]+\/undelete$/ },
   'macro-import': { method: 'POST', path: /^\/api\/user-macros-import$/ },
+  'chain-create': { method: 'POST', path: /^\/api\/chains$/ },
+  'chain-save': { method: 'POST', path: /^\/api\/chains\/c_[a-z0-9]+$/ },
+  'chain-delete': { method: 'DELETE', path: /^\/api\/chains\/c_[a-z0-9]+$/ },
+  'chain-revert': { method: 'POST', path: /^\/api\/chains\/c_[a-z0-9]+\/revert$/ },
+  'chain-undelete': { method: 'POST', path: /^\/api\/chains\/c_[a-z0-9]+\/undelete$/ },
+  'chain-import': { method: 'POST', path: /^\/api\/chains-import$/ },
   'tuning-result': { method: 'POST', path: /^\/api\/tuning\/result$/ },
   'tuning-clear': { method: 'POST', path: /^\/api\/tuning\/clear$/ },
   'job-save': { method: 'POST', path: /^\/api\/prepare-jobs$/ },
@@ -334,7 +354,7 @@ export const WRITE_ROUTES: Record<WriteKind, { method: 'POST' | 'DELETE'; path: 
 const ALLOWED = new Set<string>([
   ...PORTAL_WRITES, ...PORTAL_TOOL_CHECKS, ...PORTAL_TOOL_WRITES, ...PORTAL_THEME_IMAGES, ...PORTAL_THEME_FONTS, ...PORTAL_RESTART,
   ...PORTAL_CARE_WRITES, ...PORTAL_CARE_SETUP, ...PORTAL_TOOL_SETUP, ...PORTAL_HARDWARE, ...PORTAL_HW_WIZARD, ...PORTAL_HOOKS, ...PORTAL_LABELS, ...PORTAL_NETWORK, ...PORTAL_SLICER, ...PORTAL_UPDATE, ...PORTAL_TRUST,
-  ...PORTAL_BACKUP, ...PORTAL_PROFILES, ...PORTAL_MACROS, ...PORTAL_TUNING, ...PORTAL_HOST, ...PORTAL_LIBRARY, ...PORTAL_TUNED,
+  ...PORTAL_BACKUP, ...PORTAL_PROFILES, ...PORTAL_MACROS, ...PORTAL_CHAINS, ...PORTAL_TUNING, ...PORTAL_HOST, ...PORTAL_LIBRARY, ...PORTAL_TUNED,
 ])
 const enc = encodeURIComponent
 
@@ -1033,6 +1053,48 @@ export class PortalClient {
   async importMacros(data: object): Promise<{ id: string; name: string }[]> {
     return (await this.write<{ added: { id: string; name: string }[] }>('macro-import', 'POST', '/api/user-macros-import', data)).added
   }
+
+  // ---- process chains (Tool Manager 1.9.52) ---------------------------------------------------------------------
+
+  /** null from a Tool Manager before 1.9.52 */
+  async chains(): Promise<ChainList | null> {
+    try {
+      const r = await portalFetch(`${this.baseUrl}/api/chains`, { headers: { Accept: 'application/json' } })
+      if (r.status === 404) return null
+      const d = (await r.json().catch(() => null)) as ChainList | null
+      if (!d) throw new Error(`Portal error (HTTP ${r.status})`)
+      return d // ok:false with an error when the file can't be read
+    } catch (e) {
+      if (/not found/i.test((e as Error).message)) return null
+      throw e instanceof TypeError ? new Error("Can't reach the Rhino Portal - is it running?") : e
+    }
+  }
+  async chainHistory(id: string): Promise<SavedChain[]> {
+    return (await this.getJson<{ revisions: SavedChain[] }>(`/api/chains/${enc(id)}/history`)).revisions
+  }
+  async createChain(c: Chain): Promise<SavedChain> {
+    return (await this.write<{ chain: SavedChain }>('chain-create', 'POST', '/api/chains', c)).chain
+  }
+  /** rev: the revision this edit started from; a newer one on the Rhino is refused */
+  async saveChain(id: string, c: Chain, rev: number): Promise<SavedChain> {
+    return (await this.write<{ chain: SavedChain }>('chain-save', 'POST', `/api/chains/${enc(id)}`, { chain: c, rev })).chain
+  }
+  deleteChain(id: string): Promise<WriteResult> {
+    return this.write('chain-delete', 'DELETE', `/api/chains/${enc(id)}`)
+  }
+  async revertChain(id: string, to: number): Promise<SavedChain> {
+    return (await this.write<{ chain: SavedChain }>('chain-revert', 'POST', `/api/chains/${enc(id)}/revert`, { to })).chain
+  }
+  async undeleteChain(id: string): Promise<SavedChain> {
+    return (await this.write<{ chain: SavedChain }>('chain-undelete', 'POST', `/api/chains/${enc(id)}/undelete`, {})).chain
+  }
+  chainsExportUrl(id?: string): string {
+    return `${this.baseUrl}/api/chains-export${id ? `?id=${enc(id)}` : ''}`
+  }
+  async importChains(data: object): Promise<{ id: string; name: string }[]> {
+    return (await this.write<{ added: { id: string; name: string }[] }>('chain-import', 'POST', '/api/chains-import', data)).added
+  }
+
   async prepareJobs(): Promise<Record<string, SavedJob>> {
     return (await this.getJson<{ jobs: Record<string, SavedJob> }>('/api/prepare-jobs')).jobs
   }
