@@ -381,6 +381,12 @@ const engineNote = computed(() => {
           @pick="startWith(c.t.name)"
         />
       </div>
+
+      <h2 class="section">Or chain several tools</h2>
+      <RouterLink to="/setup/chain" class="chainlink">
+        <span class="big">Make a chain</span>
+        <span class="muted small">Print, place material, then laser, on one placement. Studio works out the pauses and tool swaps.</span>
+      </RouterLink>
     </template>
 
     <!-- ============ 2. Process -->
@@ -824,6 +830,9 @@ const engineNote = computed(() => {
 .drop.dragging { outline: 2px dashed var(--rs-ink); outline-offset: -6px; }
 
 /* 1. File */
+.chainlink { display: flex; flex-direction: column; gap: 4px; padding: var(--rs-space-4); border: 1px solid var(--rs-line); border-radius: var(--rs-radius-lg); background: var(--rs-surface); color: var(--rs-text); text-decoration: none; }
+.chainlink:hover { border-color: var(--rs-ink); }
+.chainlink .big { font-size: var(--rs-text-md); font-weight: var(--rs-weight-medium); color: var(--rs-text-strong); }
 .dropzone { width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--rs-space-2); min-height: 260px; padding: var(--rs-space-6); border: 1.5px dashed var(--rs-line-strong); border-radius: var(--rs-radius-lg); background: var(--rs-surface); color: var(--rs-text-muted); font: inherit; cursor: pointer; text-align: center; }
 .dropzone:hover, .dropzone.dragging { border-color: var(--rs-ink); color: var(--rs-text-strong); background: var(--rs-surface-2); }
 .dropzone .big { font-size: var(--rs-text-lg); font-weight: var(--rs-weight-medium); color: var(--rs-text-strong); }

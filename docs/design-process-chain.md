@@ -1,6 +1,6 @@
 # Design: process chains (Studio side)
 
-Status: **started Nov 26 2026. Test slice done; the model is built (`src/chain/`, 30 tests); no screen, store or run wizard yet.** Source: Mike's "Proposed Process Chain" (`~/Downloads/proposal-process-chain.md`). Order A (print, then laser) first;
+Status: **started Nov 26 2026. Built: the model (`src/chain/`), the Portal store, and the builder screen (Job setup > Chain: stages grouped by job, chips, sheet, checks, the bed with Zoom to part, save/open/delete). Not built: loading the design, fixtures, laser operations, job files, the run wizard.** Source: Mike's "Proposed Process Chain" (`~/Downloads/proposal-process-chain.md`). Order A (print, then laser) first;
 order B (laser, then print) waits for the machine's swap-repeatability test and the motors-on macro changes in that proposal (sections 4 to 5).
 
 ## 1. Decisions (Mike, Nov 26)
@@ -39,6 +39,10 @@ order B (laser, then print) waits for the machine's swap-repeatability test and 
 ## 4b. Built: the model (`src/chain/chain.ts`, `stitch.ts`)
 Stages and presets, the order rules (a refused move gives its reason), `planSteps` (a new job wherever the tool changes; a manual stage with the same tool on both sides is a pause), the chips between cards, the checks, job file names, and `stitchPrint`.
 **One change to the file check:** it forbids `SET_GCODE_OFFSET` everywhere ("changes the work zero"). `chainRaise` is the single exception: the exact line `SET_GCODE_OFFSET Z_ADJUST=<0.2 to 20> MOVE=0`, straight after `PAUSE`, once. Anywhere else, or in any other form, it is still an error, and the check adds the raise to the file's Z range. Order B (a print after a laser) is refused with its reason.
+
+## 4c. Built: the builder screen (Nov 26)
+`views/ChainView.vue` (route `/setup/chain`, linked from Job setup's first step), `chain/ChainBed.vue` and `ChainNum.vue`, `stores/chains.ts`. Design: `Design mock` approved by Mike: stage cards **grouped by job** (a job is a file, the tool changes at the gap between groups), generated handoff chips in the gaps, the checks in the Job-file mark style (red only for a blocking check), the bed to scale with Whole bed / Zoom to part (Mike: "yes to zoom to part"). Below 1060 px it is Stages / Bed tabs. The up and down arrows were left out: in order A nothing can move, so a dimmed pair on every card promised a control that does nothing; the order check says so once.
+The chain stores the sheet (`width`, `depth`, centre `x`, `y`) so the bed can draw it and the checks can test it against the work area and keep-out areas. "Locate by" and "Parts" are left out until fixtures and layout exist. One print head and one laser per chain for now (changing a stage's tool changes every stage of its kind). Studio's mock Portal serves `/api/chains` (`MOCK_CHAINS=seed|old`).
 
 ## 5. Build order
 1. Chain model in plain TypeScript with tests: stages, tool-change grouping into jobs, reorder rules, handoff chips, the stitched print file.

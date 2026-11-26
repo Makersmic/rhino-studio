@@ -1577,6 +1577,18 @@ const um = {
   hooks: {} as Record<string, Record<string, string[]>>,
   sources: {} as Record<string, Record<string, { macro: string; rev: number; name: string }>>,
 }
+// Process chains (Tool Manager 1.9.52). MOCK_CHAINS=old (Portal before 1.9.52) | seed (one saved chain)
+type MockChain = { id: string; name: string; preset: string; thickness: number | null; sheet: unknown; stages: unknown[]; jobs: unknown[]; rev: number; created: number; updated: number }
+const ch = { chains: [] as MockChain[], deleted: [] as Array<MockChain & { deleted_at: number }> }
+if (process.env.MOCK_CHAINS === 'seed') {
+  const t = Math.floor(Date.now() / 1000) - 86400
+  const st = (id: number, kind: string, role: string, what: string, tool: string | null) => ({ id, kind, role, what, tool })
+  ch.chains.push({
+    id: 'c_front01', name: 'Front plate 001', preset: 'sheet-print-laser', thickness: 3.1, sheet: { width: 160, depth: 110, x: 275, y: 200 },
+    stages: [st(1, 'print', 'fixtures', 'Print fixtures', 'BlockOne'), st(2, 'manual', 'place', 'Place the sheet', null), st(3, 'print', 'features', 'Print features', 'BlockOne'), st(4, 'laser', 'work', 'Laser', 'LightSaber')],
+    jobs: [], rev: 1, created: t, updated: t,
+  })
+}
 const sp: {
   profiles: { id: string; name: string; engine: string; process: string; toolhead: string | null; material: string | null; settings: Record<string, unknown>; notes: string; header: Record<string, unknown>; created: number; updated: number; rev: number }[]
   deleted: { id: string; name: string; engine: string; process: string; deleted_at: number }[]
@@ -2041,6 +2053,35 @@ async function portal(req: IncomingMessage, res: import('node:http').ServerRespo
     tu.rev += 1
     tu.updated = now
     return json(res, 200, { ok: true, ...tu }), true
+  }
+  if (url.startsWith('/api/chains')) {
+    const path = url.split('?')[0]!
+    if (process.env.MOCK_CHAINS === 'old') return json(res, 404, { ok: false, error: 'Not found' }), true
+    if (req.method === 'GET' && path === '/api/chains') return json(res, 200, { ok: true, chains: ch.chains, deleted: ch.deleted }), true
+    if (req.headers['x-rhino-token'] !== PORTAL_TOKEN) return json(res, 400, { ok: false, error: 'This page is out of date (the portal was restarted). Reload the page and try again.' }), true
+    const body = req.method === 'POST' || req.method === 'DELETE' ? await readBody(req) : {}
+    const now = Math.floor(Date.now() / 1000)
+    const pick = (b: Record<string, unknown>) => ({ name: b.name, preset: b.preset, thickness: b.thickness ?? null, sheet: b.sheet ?? null, stages: b.stages, jobs: b.jobs ?? [] })
+    if (req.method === 'POST' && path === '/api/chains') {
+      const c = { ...pick(body as Record<string, unknown>), id: `c_${Math.random().toString(36).slice(2, 8)}`, rev: 1, created: now, updated: now } as MockChain
+      ch.chains.push(c)
+      return json(res, 200, { ok: true, chain: c }), true
+    }
+    const m = /^\/api\/chains\/(c_[a-z0-9]+)$/.exec(path)
+    const i = m ? ch.chains.findIndex((x) => x.id === m[1]) : -1
+    if (m && i >= 0 && req.method === 'DELETE') {
+      const [gone] = ch.chains.splice(i, 1)
+      ch.deleted.unshift({ ...gone!, deleted_at: now })
+      return json(res, 200, { ok: true, deleted: gone!.id, name: gone!.name }), true
+    }
+    if (m && i >= 0 && req.method === 'POST') {
+      const old = ch.chains[i]!
+      if (body.rev !== old.rev) return json(res, 400, { ok: false, error: `${old.name} was changed on another device (now revision ${old.rev}). Reload it, then save again.` }), true
+      const nc = { ...old, ...pick(body.chain as Record<string, unknown>), id: old.id, rev: old.rev + 1, updated: now } as MockChain
+      ch.chains[i] = nc
+      return json(res, 200, { ok: true, chain: nc }), true
+    }
+    return json(res, 400, { ok: false, error: 'Not in the pretend Portal' }), true
   }
   // Your macros (Tool Manager 1.9.13) and job hooks, kept in memory. MOCK_MACROS=old (Portal before 1.9.13)
   if (url.startsWith('/api/user-macros') || url.startsWith('/api/hooks') || url.startsWith('/api/preview/hooks')) {

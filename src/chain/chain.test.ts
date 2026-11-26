@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { chainChecks, chipsFor, jobFileName, jobsOf, moveProblem, moveStage, newChain, orderProblem, planSteps, swapsOf, type Stage } from './chain'
+import { stageLine, chainChecks, chipsFor, sheetProblem, sheetBox, jobFileName, jobsOf, moveProblem, moveStage, newChain, orderProblem, planSteps, swapsOf, type Stage } from './chain'
 
 const tools = { print: 'BlockOne', laser: 'LightSaber' }
+const ctx = { tools: new Set(['BlockOne', 'LightSaber']), workArea: { x: 550, y: 400 }, keepOut: [{ x0: 450, y0: 300, x1: 550, y1: 350, label: 'Leadscrew' }] }
 const full = () => newChain('Front plate 001', 'sheet-print-laser', tools)
 const short = () => newChain('Bracket', 'print-laser', tools)
 
@@ -105,7 +106,6 @@ describe('chips between cards', () => {
 })
 
 describe('checks', () => {
-  const ctx = { tools: new Set(['BlockOne', 'LightSaber']) }
   it('blocks until the sheet is measured', () => {
     const c = full()
     expect(chainChecks(c, ctx).find((k) => k.id === 'thickness')?.level).toBe('error')
@@ -114,12 +114,51 @@ describe('checks', () => {
   })
   it('a chain without a sheet has no thickness check', () => expect(chainChecks(short(), ctx).some((k) => k.id === 'thickness')).toBe(false))
   it('names a tool the machine does not have', () => {
-    const k = chainChecks(short(), { tools: new Set(['BlockOne']) }).find((x) => x.id === 'tools')
+    const k = chainChecks(short(), { ...ctx, tools: new Set(['BlockOne']) }).find((x) => x.id === 'tools')
     expect(k?.level).toBe('error')
     expect(k?.detail).toMatch(/LightSaber/)
   })
   it('summarises jobs and swaps', () => {
     expect(chainChecks({ ...full(), thickness: 3 }, ctx).find((k) => k.id === 'jobs')?.label).toBe('2 jobs, 1 tool swap')
+  })
+})
+
+describe('the sheet', () => {
+  const area = { x: 550, y: 400 }
+  const keep = [{ x0: 450, y0: 300, x1: 550, y1: 350, label: 'Leadscrew' }]
+  it('has corners from its centre and size', () => expect(sheetBox({ width: 160, depth: 110, x: 275, y: 200 })).toEqual([195, 145, 355, 255]))
+  it('sits on the bed', () => expect(sheetProblem({ width: 160, depth: 110, x: 275, y: 200 }, area, keep)).toBeNull())
+  it('is refused outside the area, on every side', () => {
+    for (const at of [{ x: 70, y: 200 }, { x: 480, y: 200 }, { x: 275, y: 50 }, { x: 275, y: 360 }]) expect(sheetProblem({ width: 160, depth: 110, ...at }, area, keep), JSON.stringify(at)).toMatch(/outside the area/)
+  })
+  it('is refused over a keep-out area, and may touch its edge', () => {
+    expect(sheetProblem({ width: 100, depth: 100, x: 420, y: 300 }, area, keep)).toMatch(/Leadscrew/)
+    expect(sheetProblem({ width: 100, depth: 100, x: 400, y: 150 }, area, keep)).toBeNull()
+    expect(sheetProblem({ width: 100, depth: 50, x: 400, y: 275 }, area, keep)).toBeNull()
+  })
+  it('needs placing before the chain can start, and says what is wrong when it is off the bed', () => {
+    const c = { ...full(), thickness: 3 }
+    expect(chainChecks(c, ctx).find((k) => k.id === 'sheet')?.level).toBe('error')
+    expect(chainChecks({ ...c, sheet: { width: 160, depth: 110, x: 275, y: 200 } }, ctx).find((k) => k.id === 'sheet')?.level).toBe('ok')
+    expect(chainChecks({ ...c, sheet: { width: 160, depth: 110, x: 20, y: 200 } }, ctx).find((k) => k.id === 'sheet')?.detail).toMatch(/outside/)
+  })
+  it('a chain without a sheet has no sheet check', () => expect(chainChecks(short(), ctx).some((k) => k.id === 'sheet')).toBe(false))
+})
+
+describe('stageLine', () => {
+  const c = { thickness: 3.1, sheet: { width: 160, depth: 110, x: 275, y: 200 } }
+  const [f, p, ft, la] = full().stages as [Stage, Stage, Stage, Stage]
+  it('says where Z comes from', () => {
+    expect(stageLine(c, f)).toBe('Z: bed')
+    expect(stageLine(c, p)).toBe('Sheet 160 × 110 mm · you place it, then press Resume')
+    expect(stageLine(c, ft)).toBe('Z: sheet top (+3.1 mm)')
+    expect(stageLine(c, la)).toBe('Z: focus on the sheet top')
+  })
+  it('does not claim a sheet that is not there', () => {
+    const none = { thickness: null, sheet: null }
+    expect(stageLine(none, p)).toBe('Sheet size not set · you place it, then press Resume')
+    expect(stageLine(none, ft)).toBe('Z: bed')
+    expect(stageLine(none, la)).toBe('Z: focus set at the start')
   })
 })
 

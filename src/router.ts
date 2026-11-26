@@ -25,6 +25,7 @@ export const router = createRouter({
     { path: '/', redirect: '/dashboard' },
     { path: '/dashboard', component: () => import('./views/DashboardView.vue'), meta: { title: 'Dashboard', ownAlerts: true, lookOnly: true } },
     { path: '/setup', component: () => import('./views/PrepareView.vue'), meta: { title: 'Job setup' } },
+    { path: '/setup/chain', component: () => import('./views/ChainView.vue'), meta: { title: 'Chain', nav: '/setup' } },
     { path: '/prepare', redirect: '/setup' },
     { path: '/preview', component: () => import('./views/PreviewView.vue'), meta: { title: 'Preview' } },
     { path: '/control', component: () => import('./views/ControlView.vue'), meta: { title: 'Control' } },

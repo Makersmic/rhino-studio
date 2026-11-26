@@ -8,6 +8,7 @@
  * needs the machine to keep Z homed and a touch check (the proposal's order B), so it is refused with that reason.
  */
 import type { Check } from '@/slicer/check'
+import type { KeepOut } from '@/slicer/types'
 
 export type StageKind = 'print' | 'manual' | 'laser' | 'knife' | 'cnc'
 /** fixtures and place are pinned; features is the print that goes on the placed material; work is any other tool stage */
@@ -25,6 +26,14 @@ export interface Stage {
 
 export type PresetId = 'sheet-print-laser' | 'print-laser'
 
+/** Where the placed sheet sits: its size and its centre on the bed, in machine mm */
+export interface Sheet {
+  width: number
+  depth: number
+  x: number
+  y: number
+}
+
 /** A job file the chain made: its plain file name, the tool it needs and the stages it covers */
 export interface ChainJob {
   file: string
@@ -38,6 +47,8 @@ export interface Chain {
   preset: PresetId
   /** the sheet's measured thickness in mm (null until measured; only chains with a place stage need it) */
   thickness: number | null
+  /** null until it is set */
+  sheet: Sheet | null
   stages: Stage[]
   /** the job files, once Studio has written them */
   jobs: ChainJob[]
@@ -77,6 +88,7 @@ export const newChain = (name: string, preset: PresetId, tools: { print: string;
   name,
   preset,
   thickness: null,
+  sheet: null,
   stages: presetStages(preset, tools),
   jobs: [],
 })
@@ -221,6 +233,20 @@ function swapChip(from: Stage | undefined, to: Stage, after: number): Chip {
 export interface ChainContext {
   /** toolhead names the machine has */
   tools: ReadonlySet<string>
+  /** where parts may go (Klipper's travel less the endstop side) and the places nothing may go over */
+  workArea: { x: number; y: number }
+  keepOut: readonly KeepOut[]
+}
+
+/** The sheet's corners: [x0, y0, x1, y1] */
+export const sheetBox = (s: Sheet): [number, number, number, number] => [s.x - s.width / 2, s.y - s.depth / 2, s.x + s.width / 2, s.y + s.depth / 2]
+
+/** Why the sheet can't sit there, or null: it must lie inside the work area and clear of every keep-out area */
+export function sheetProblem(s: Sheet, area: { x: number; y: number }, keepOut: readonly KeepOut[]): string | null {
+  const [x0, y0, x1, y1] = sheetBox(s)
+  if (x0 < 0 || y0 < 0 || x1 > area.x || y1 > area.y) return `The sheet reaches outside the area parts may use (${area.x} × ${area.y} mm).`
+  const k = keepOut.find((z) => x0 < z.x1 && x1 > z.x0 && y0 < z.y1 && y1 > z.y0)
+  return k ? `The sheet overlaps the ${k.label} keep-clear area.` : null
 }
 
 /** The checks under the stage column: a sentence each, an error only if it blocks the start */
@@ -244,7 +270,37 @@ export function chainChecks(chain: Chain, ctx: ChainContext): Check[] {
     else ok('thickness', `The sheet is ${t} mm thick`)
   }
 
+  if (chain.stages.some((s) => s.role === 'place')) {
+    const sh = chain.sheet
+    if (!sh) bad('sheet', 'The sheet is placed on the bed', 'Say how big the sheet is and where it goes. It is drawn on the bed so you can see it.')
+    else {
+      const p = sheetProblem(sh, ctx.workArea, ctx.keepOut)
+      p ? bad('sheet', 'The sheet is on the bed, clear of keep-out areas', p) : ok('sheet', `The sheet is ${sh.width} × ${sh.depth} mm, on the bed`)
+    }
+  }
+
   const steps = planSteps(chain.stages)
   ok('jobs', `${jobsOf(steps).length} job${jobsOf(steps).length === 1 ? '' : 's'}, ${swapsOf(steps)} tool swap${swapsOf(steps) === 1 ? '' : 's'}`)
   return out
+}
+
+// ---- the words on a card
+
+/** The second line of a stage card: where Z comes from and what the stage makes */
+export function stageLine(chain: Pick<Chain, 'thickness' | 'sheet'>, s: Stage): string {
+  const t = chain.thickness != null && Number.isFinite(chain.thickness) ? chain.thickness : null
+  const sheetSize = chain.sheet ? `${chain.sheet.width} × ${chain.sheet.depth} mm` : 'size not set'
+  switch (s.role) {
+    case 'fixtures':
+      return 'Z: bed'
+    case 'place':
+      return `Sheet ${sheetSize} · you place it, then press Resume`
+    case 'features':
+      return t != null && chain.sheet ? `Z: sheet top (+${t} mm)` : 'Z: bed'
+    default:
+      if (s.kind === 'laser') return chain.sheet ? 'Z: focus on the sheet top' : 'Z: focus set at the start'
+      if (s.kind === 'knife') return chain.sheet ? 'Z: blade on the sheet top' : 'Z: zero set at the start'
+      if (s.kind === 'cnc') return 'Z: zero set at the start'
+      return 'Z: bed'
+  }
 }
