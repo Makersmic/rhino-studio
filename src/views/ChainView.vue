@@ -12,6 +12,9 @@ import ChainNum from '@/chain/ChainNum.vue'
 import { DESIGN_FOLDER, ROLE_LABEL, applyRoles, bodiesFrom, designChecks, designRef, libraryPath, place, rolesAvailable, setRole, sheetFrom, type Body, type BodyRole } from '@/chain/design'
 import { loadModelFile } from '@/slicer/engine'
 import LaserOps from '@/prepare/LaserOps.vue'
+import { buildJobs, kiriSlicer, type BuiltFile } from '@/chain/build'
+import { newJob } from '@/slicer/profiles'
+import { useMachineStore } from '@/stores/machine'
 import { LASER_TYPES, drawingLoops, laserChecks, laserJobFor, placeLoops } from '@/chain/laser'
 import type { Loop } from '@/slicer/laserOps'
 import type { LaserOp } from '@/slicer/types'
@@ -44,6 +47,8 @@ import { usePrepareStore } from '@/stores/prepare'
 const chains = useChainsStore()
 const prep = usePrepareStore()
 const tm = useToolMgrStore()
+const machine = useMachineStore()
+const STUDIO_VERSION = typeof __APP_VERSION__ === 'string' ? __APP_VERSION__ : 'dev'
 const route = useRoute()
 const router = useRouter()
 
@@ -207,6 +212,61 @@ async function restoreLaser(c: Chain) {
     return
   }
   if (draft.value === c) await findLaserLoops()
+}
+
+// ---- the job files: built here, then downloaded or sent to the Rhino (never started)
+const built = ref<BuiltFile[] | null>(null)
+const building = ref(false)
+const buildError = ref<string | null>(null)
+const sentFiles = ref<Record<string, string>>({})
+const sending = ref<string | null>(null)
+const sendError = ref<string | null>(null)
+/** what the files were made from: anything that changes it makes them stale */
+const buildKey = computed(() => (draft.value ? JSON.stringify({ ...draft.value, jobs: 0, name: 0 }) + draft.value.name + bodies.value.map((b) => b.role).join() : ''))
+watch(buildKey, () => {
+  built.value = null
+  sentFiles.value = {}
+})
+async function buildFiles() {
+  const c = draft.value
+  if (!c || building.value) return
+  building.value = true
+  buildError.value = null
+  sendError.value = null
+  try {
+    const pt = c.stages.find((s) => s.kind === 'print')?.tool
+    const printJob = pt ? { ...newJob(pt, 'fdm', prep.materialsOf(pt)), engine: 'kiri' as const } : null
+    const files = await buildJobs(
+      { chain: c, bodies: bodies.value, placed: placed.value, printJob, laserJob: c.laser ? laserJob.value : null, laserSrc: laserSrc.value, machine: prep.machineInfo, studioVersion: STUDIO_VERSION },
+      kiriSlicer,
+    )
+    built.value = files
+    c.jobs = files.filter((f) => f.text && !f.problem).map((f) => ({ file: f.file, tool: f.tool, stages: f.stages }))
+  } catch (e) {
+    buildError.value = (e as Error).message
+  } finally {
+    building.value = false
+  }
+}
+const textFile = (f: BuiltFile) => new File([f.text ?? ''], f.file, { type: 'text/plain' })
+function downloadFile(f: BuiltFile) {
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(textFile(f))
+  a.download = f.file
+  a.click()
+  setTimeout(() => URL.revokeObjectURL(a.href), 10_000)
+}
+async function sendFile(f: BuiltFile) {
+  if (!f.text || f.problem || sending.value) return
+  sending.value = f.file
+  sendError.value = null
+  try {
+    sentFiles.value = { ...sentFiles.value, [f.file]: await machine.uploadFile(textFile(f)) }
+  } catch (e) {
+    sendError.value = (e as Error).message
+  } finally {
+    sending.value = null
+  }
 }
 
 const rolesHere = computed(() => (draft.value ? rolesAvailable(draft.value) : []))
@@ -562,6 +622,28 @@ onMounted(async () => {
             </li>
             <li v-if="blocked" class="note"><span class="mark ghost" aria-hidden="true">·</span><span>{{ blocked }} thing{{ blocked === 1 ? '' : 's' }} to fix before this chain can run.</span></li>
           </ul>
+          <section class="design files" aria-label="Job files">
+            <div class="dhead">
+              <h2 class="section">Job files</h2>
+              <RsButton variant="primary" :disabled="building || blocked > 0 || !bodies.length && !draft.laser" @click="buildFiles">{{ building ? 'Building…' : built ? 'Build again' : 'Build job files' }}</RsButton>
+            </div>
+            <p v-if="blocked > 0" class="muted">Fix the red items above first.</p>
+            <p v-else-if="!built" class="muted">Slices the design and writes one file per job, checked like any Job setup file. Nothing is started: you run them from Control, one after the other.</p>
+            <p v-if="buildError" class="banner" role="alert">{{ buildError }}</p>
+            <ul v-if="built" class="bodies filelist">
+              <li v-for="f in built" :key="f.file" :class="{ bad: !!f.problem }">
+                <span class="bn"><b>{{ f.file }}</b><small class="muted"> · {{ f.tool }}</small>
+                  <small v-if="f.problem" class="prob">{{ f.problem }}</small>
+                  <small v-else class="muted">Checked: passes. {{ sentFiles[f.file] ? `On the Rhino as ${sentFiles[f.file]}.` : '' }}</small>
+                </span>
+                <span class="fileact">
+                  <RsButton :disabled="!f.text || !!f.problem" @click="downloadFile(f)">Download</RsButton>
+                  <RsButton :disabled="!f.text || !!f.problem || !machine.online || sending === f.file" @click="sendFile(f)">{{ sending === f.file ? 'Sending…' : 'Send to the Rhino' }}</RsButton>
+                </span>
+              </li>
+            </ul>
+            <p v-if="sendError" class="banner" role="alert">{{ sendError }}</p>
+          </section>
         </section>
 
         <section class="bedp" aria-label="Bed">
@@ -672,6 +754,9 @@ h2 { margin: 0; font-size: var(--rs-text-lg); font-weight: var(--rs-weight-mediu
 .bodies li { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; min-width: 0; }
 .bn { min-width: 0; overflow-wrap: anywhere; }
 .bodies select { background: var(--rs-field-bg); color: var(--rs-field-text); border: 1px solid var(--rs-line-strong); border-radius: var(--rs-radius-sm); padding: 4px 8px; }
+.filelist .bn { display: grid; gap: 2px; }
+.prob { color: var(--rs-text-strong); border-left: 3px solid var(--rs-danger); padding-left: 8px; }
+.fileact { display: flex; gap: 8px; flex-wrap: wrap; }
 .sheetl { border: 1.6px solid var(--rs-ink); }
 .keepl { border: 1px dashed var(--rs-line-strong); }
 .note2 { margin: var(--rs-space-3) 0 0; font-size: var(--rs-text-xs); color: var(--rs-text-muted); }

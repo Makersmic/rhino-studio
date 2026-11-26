@@ -115,6 +115,8 @@ export interface LaserSettings {
   smooth: number
   /** cut only the outermost outline (no holes) */
   outerOnly: boolean
+  /** a chain's laser stage: loops no operation picked are not lasered (Job setup leaves this unset: they are cut) */
+  leaveRest?: boolean
 }
 
 export interface KnifeSettings {

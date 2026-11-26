@@ -204,7 +204,7 @@ export function rhinoFile(kiri: string, job: PrepareJob, part: PartInfo, _machin
     case 'laser': {
       out.push('G21 ; millimetres', 'G90 ; absolute machine X/Y, same as the Studio bed', 'M5 ; laser off before the first move')
       // by operation when the job has some (laserOps.ts), else the cut as Kiri wrote it, once per pass
-      append(out, assembleLaser(cut, job.laser, _machine.laserSMax))
+      append(out, assembleLaser(cut, job.laser, _machine.laserSMax, job.laser.leaveRest === true))
       out.push('M5 ; laser off', 'DEACTIVATE_LASER ; laser power rail off', 'END_PRINT')
       break
     }
