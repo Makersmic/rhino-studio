@@ -15,6 +15,7 @@ import LaserOps from '@/prepare/LaserOps.vue'
 import { buildJobs, kiriSlicer, type BuiltFile } from '@/chain/build'
 import { newJob } from '@/slicer/profiles'
 import { useMachineStore } from '@/stores/machine'
+import { useChainFilesStore } from '@/stores/chainFiles'
 import { LASER_TYPES, drawingLoops, laserChecks, laserJobFor, placeLoops } from '@/chain/laser'
 import type { Loop } from '@/slicer/laserOps'
 import type { LaserOp } from '@/slicer/types'
@@ -48,6 +49,7 @@ const chains = useChainsStore()
 const prep = usePrepareStore()
 const tm = useToolMgrStore()
 const machine = useMachineStore()
+const chainFiles = useChainFilesStore()
 const STUDIO_VERSION = typeof __APP_VERSION__ === 'string' ? __APP_VERSION__ : 'dev'
 const route = useRoute()
 const router = useRouter()
@@ -242,6 +244,7 @@ async function buildFiles() {
     )
     built.value = files
     c.jobs = files.filter((f) => f.text && !f.problem).map((f) => ({ file: f.file, tool: f.tool, stages: f.stages }))
+    if (openId.value) chainFiles.keep(openId.value, files.filter((f) => f.text && !f.problem).map(textFile))
   } catch (e) {
     buildError.value = (e as Error).message
   } finally {
@@ -646,6 +649,8 @@ onMounted(async () => {
               </li>
             </ul>
             <p v-if="sendError" class="banner" role="alert">{{ sendError }}</p>
+            <p v-if="built && openId && !dirty" class="row-run"><RouterLink class="runlink" :to="{ path: '/wizards/chain-run', query: { id: openId } }">Run this chain</RouterLink><span class="muted"> Step by step; every start, swap and resume asks you first.</span></p>
+            <p v-else-if="built" class="muted">Save the chain to run it.</p>
           </section>
         </section>
 
@@ -757,6 +762,7 @@ h2 { margin: 0; font-size: var(--rs-text-lg); font-weight: var(--rs-weight-mediu
 .bodies li { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; min-width: 0; }
 .bn { min-width: 0; overflow-wrap: anywhere; }
 .bodies select { background: var(--rs-field-bg); color: var(--rs-field-text); border: 1px solid var(--rs-line-strong); border-radius: var(--rs-radius-sm); padding: 4px 8px; }
+.runlink { font-weight: var(--rs-weight-medium); color: var(--rs-text-strong); }
 .filelist .bn { display: grid; gap: 2px; }
 .prob { color: var(--rs-text-strong); border-left: 3px solid var(--rs-danger); padding-left: 8px; }
 .fileact { display: flex; gap: 8px; flex-wrap: wrap; }

@@ -99,6 +99,14 @@ export const PROBE_STEP_POSE: Record<'check' | 'spot' | 'run' | 'warm' | 'done',
   done: 'thumbsup',
 }
 
+/** The chain run wizard: one pose per step */
+export const CHAIN_RUN_POSE: Record<'look' | 'files' | 'run' | 'done', Pose> = {
+  look: 'wrench',
+  files: 'carry',
+  run: 'laser',
+  done: 'thumbsup',
+}
+
 /** The motor check wizard: one pose per step */
 export const MOTOR_STEP_POSE: Record<'switches' | 'drivers' | 'motors' | 'done', Pose> = {
   switches: 'wrench',

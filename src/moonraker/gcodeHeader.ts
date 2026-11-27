@@ -57,3 +57,11 @@ export async function fetchFileToolhead(url: string, signal?: AbortSignal): Prom
   // If we stopped at the byte limit, the last line may be cut off: ignore it
   return toolheadFromGcode(ended ? text : text.slice(0, text.lastIndexOf('\n') + 1))
 }
+
+/** The first `bytes` of a file as text (a byte range, so a big file is never read whole). Read only. */
+export async function fetchFileText(url: string, bytes = 64 * 1024, signal?: AbortSignal): Promise<string> {
+  const res = await fetch(url, { headers: { Range: `bytes=0-${bytes - 1}` }, signal })
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  const text = await res.text()
+  return text.slice(0, bytes)
+}
