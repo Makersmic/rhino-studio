@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import { drawingBox, laserLoops } from '@/slicer/laserOps'
 import type { LaserOp } from '@/slicer/types'
 import { presetStages } from './chain'
-import { laserChecks, placeLoops } from './laser'
+import { SAFE_FEED, SAFE_POWER, laserChecks, materialChecks, placeLoops, starterOp } from './laser'
 
 const CUT = readFileSync(new URL('../slicer/fixtures/kiri-laser-nested.gcode', import.meta.url), 'utf8').split('\n').filter(Boolean)
 const loops = laserLoops(CUT)
@@ -46,5 +46,35 @@ describe('laser checks', () => {
     const c = laserChecks(small, placed, true)
     expect(level(c, 'laser-sheet')).toBe('error')
     expect(level(c, 'laser-ops')).toBe('warn')
+  })
+})
+
+describe('laser material', () => {
+  const ply = { key: 'PLYWOOD', name: 'PLYWOOD', laserPower: 0.8, feed: 600 }
+  const unknown = { key: 'MYSTERY', name: 'MYSTERY' }
+  const op = (power: number): LaserOp => ({ id: 'a', kind: 'score', name: '', power, feed: 1500, passes: 1, spacing: 0.2, angle: 0, loops: [] })
+  it('starts from the material, scores at low power, engraves capped', () => {
+    expect(starterOp('cut', ply, null, null)).toMatchObject({ power: 0.8, feed: 600, passes: 1 })
+    expect(starterOp('score', ply, null, null)).toMatchObject({ power: 0.15, feed: 1500 })
+    expect(starterOp('fill', ply, null, null)).toMatchObject({ power: 0.3, feed: 600 })
+  })
+  it('tuned values come first: cut, and the tuned engrave values', () => {
+    expect(starterOp('cut', ply, { power: 0.6, feed: 450, passes: 2 }, null)).toMatchObject({ power: 0.6, feed: 450, passes: 2 })
+    expect(starterOp('fill', ply, null, { power: 0.25, feed: 2500 })).toMatchObject({ power: 0.25, feed: 2500 })
+  })
+  it('an unknown material starts at the safe power, never 80 %', () => {
+    for (const k of ['cut', 'score', 'fill'] as const) expect(starterOp(k, unknown, null, null).power).toBeLessThanOrEqual(SAFE_POWER)
+    expect(starterOp('cut', null, null, null)).toMatchObject({ power: SAFE_POWER, feed: SAFE_FEED })
+  })
+  it('checks: no material and a missing one are errors; unknown power warns; known passes', () => {
+    expect(materialChecks(null, [ply])).toEqual([])
+    expect(materialChecks({ ops: [] }, [ply])[0]).toMatchObject({ id: 'laser-material', level: 'error' })
+    expect(materialChecks({ material: 'GONE', ops: [] }, [ply])[0]).toMatchObject({ level: 'error' })
+    expect(materialChecks({ material: 'MYSTERY', ops: [] }, [unknown])[0]).toMatchObject({ level: 'warn' })
+    expect(materialChecks({ material: 'PLYWOOD', ops: [op(0.1)] }, [ply]).map((c) => c.level)).toEqual(['ok'])
+  })
+  it('warns when an operation uses more than the cut power, and counts them', () => {
+    const c = materialChecks({ material: 'PLYWOOD', ops: [op(0.9), op(1), op(0.2)] }, [ply])
+    expect(c.find((x) => x.id === 'laser-power')).toMatchObject({ level: 'warn', label: expect.stringContaining('2 operations') })
   })
 })

@@ -23,6 +23,8 @@ import { jobFileName, jobsOf, planSteps, type Chain } from './chain'
 import type { Body, Placed } from './design'
 import { assign, laserLoops } from '@/slicer/laserOps'
 import { placeLoops } from './laser'
+import { materialChecks } from './laser'
+import type { Material } from '@/slicer/profiles'
 import { CLEARANCE, FEATURE_MAX, liftTravels, pathNearBox, stitchPrint } from './stitch'
 
 /** What slices: the engine in the browser, or a stand-in in tests */
@@ -65,6 +67,8 @@ export interface BuildInput {
   printJob: PrepareJob | null
   laserJob: PrepareJob | null
   laserSrc: File | null
+  /** the laser head's material table (for the chosen material's checks) */
+  laserMaterials?: readonly Material[]
   machine: MachineInfo
   studioVersion: string
 }
@@ -133,8 +137,15 @@ export async function buildJobs(input: BuildInput, slicer: Slicer): Promise<Buil
         const { checks } = checkFile(f.text, input.printJob, part, machine)
         out.push({ file, tool: job.tool, stages: job.stages, text: f.text, problem: checks.find((c) => c.level === 'error')?.label ?? null, checks })
       } else if (job.kind === 'laser') {
-        if (!input.laserJob || !input.laserSrc || !chain.laser) {
+        if (!input.laserSrc || !chain.laser) {
           out.push(fail(file, job.tool, job.stages, 'The laser stage has no drawing yet.'))
+          continue
+        }
+        // the laser's power starts from the chosen material and is never guessed: no material, no file
+        const mchecks = materialChecks(chain.laser, input.laserMaterials ?? [])
+        const merr = mchecks.find((c) => c.level === 'error')
+        if (merr || !input.laserJob) {
+          out.push(fail(file, job.tool, job.stages, merr ? `${merr.label}: ${merr.detail}` : 'Pick the laser material first.'))
           continue
         }
         // everything printed that stands above the sheet top (the laser's Z zero): the features, and any fixture taller than the sheet
@@ -179,7 +190,7 @@ export async function buildJobs(input: BuildInput, slicer: Slicer): Promise<Buil
           lines.splice(1, 0, `; rhino_chain_features = ${Number(tallest.toFixed(3))}`, `; rhino_chain_lift = ${L}`, '; Travel lifts: NOT FOR A REAL JOB until machine check CH14 has passed.')
         }
         const text = lines.join('\n')
-        const { checks } = checkFile(text, lj, part, machine)
+        const checks = [...checkFile(text, lj, part, machine).checks, ...mchecks]
         const nothing = !lines.some((l) => /^M3\b/.test(l))
         out.push({ file, tool: job.tool, stages: job.stages, text: nothing ? null : text, lifts, problem: nothing ? 'No operation has a loop picked, so the laser file would do nothing.' : (checks.find((c) => c.level === 'error')?.label ?? null), checks })
       } else out.push(fail(file, job.tool, job.stages, `A ${job.kind} stage can't be built in a chain yet.`))

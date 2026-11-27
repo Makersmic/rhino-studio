@@ -51,6 +51,8 @@ export interface DesignRef {
 export interface LaserWork {
   file: string
   ops: LaserOp[]
+  /** the laser head's material (a key in its material table); none until chosen, and then the laser file is not built */
+  material?: string
 }
 
 /** What Studio builds and the Portal stores (rhino/chains.py checks it again) */

@@ -16,7 +16,9 @@ import { buildJobs, kiriSlicer, type BuiltFile } from '@/chain/build'
 import { newJob } from '@/slicer/profiles'
 import { useMachineStore } from '@/stores/machine'
 import { useChainFilesStore } from '@/stores/chainFiles'
-import { LASER_TYPES, drawingLoops, laserChecks, laserJobFor, placeLoops } from '@/chain/laser'
+import { LASER_TYPES, drawingLoops, laserChecks, laserJobFor, materialChecks, placeLoops, starterOp } from '@/chain/laser'
+import { useTuningStore } from '@/stores/tuning'
+import { lastCut, tunedFor, tunedText } from '@/tuning/cutTests'
 import type { Loop } from '@/slicer/laserOps'
 import type { LaserOp } from '@/slicer/types'
 import { MODEL_TYPES, extOf } from '@/slicer/model'
@@ -49,6 +51,7 @@ const chains = useChainsStore()
 const prep = usePrepareStore()
 const tm = useToolMgrStore()
 const machine = useMachineStore()
+const tuning = useTuningStore()
 const chainFiles = useChainFilesStore()
 const STUDIO_VERSION = typeof __APP_VERSION__ === 'string' ? __APP_VERSION__ : 'dev'
 const route = useRoute()
@@ -149,7 +152,21 @@ const laserError = ref<string | null>(null)
 const laserTried = ref(false)
 const hasLaser = computed(() => !!draft.value?.stages.some((s) => s.kind === 'laser'))
 const laserTool = computed(() => draft.value?.stages.find((s) => s.kind === 'laser')?.tool ?? toolsOf('laser')[0] ?? '')
-const laserJob = computed(() => laserJobFor(laserTool.value, prep.materialsOf(laserTool.value), anchor.value))
+const laserMaterials = computed(() => prep.materialsOf(laserTool.value))
+const laserMat = computed(() => laserMaterials.value.find((m) => m.key === draft.value?.laser?.material) ?? null)
+/** the laser job: from the chosen material only. Finding loops doesn't depend on it; building does, so a build needs a material. */
+const laserJob = computed(() => laserJobFor(laserTool.value, laserMat.value, anchor.value))
+const laserTuned = computed(() => (laserMat.value ? tunedFor(tuning.state, laserTool.value, laserMat.value.name) : null))
+const tuneLink = computed(() => `#/assets/toolheads/${encodeURIComponent(laserTool.value)}/tune`)
+function pickMaterial(key: string) {
+  if (draft.value?.laser) draft.value.laser = { ...draft.value.laser, material: key || undefined }
+}
+/** a new operation starts from the chosen material and its tuned values; an unknown power starts low (laser.ts) */
+function starter(kind: LaserOp['kind']): LaserOp {
+  const m = laserMat.value
+  const t = (v: 'laser_engrave_power' | 'laser_engrave_speed') => (m ? lastCut(tuning.state?.runs, laserTool.value, v, m.name)?.value : undefined)
+  return starterOp(kind, m, laserTuned.value?.laser ?? null, { power: t('laser_engrave_power'), feed: t('laser_engrave_speed') })
+}
 const laserOps = computed<LaserOp[]>({
   get: () => draft.value?.laser?.ops ?? [],
   set: (v) => {
@@ -239,7 +256,7 @@ async function buildFiles() {
     const pt = c.stages.find((s) => s.kind === 'print')?.tool
     const printJob = pt ? { ...newJob(pt, 'fdm', prep.materialsOf(pt)), engine: 'kiri' as const } : null
     const files = await buildJobs(
-      { chain: c, bodies: bodies.value, placed: placed.value, printJob, laserJob: c.laser ? laserJob.value : null, laserSrc: laserSrc.value, machine: prep.machineInfo, studioVersion: STUDIO_VERSION },
+      { chain: c, bodies: bodies.value, placed: placed.value, printJob, laserJob: c.laser && laserMat.value ? laserJob.value : null, laserSrc: laserSrc.value, laserMaterials: laserMaterials.value, machine: prep.machineInfo, studioVersion: STUDIO_VERSION },
       kiriSlicer,
     )
     built.value = files
@@ -307,7 +324,7 @@ const PROCESS_OF: Record<Stage['kind'], string | null> = { print: 'fdm', laser: 
 const optionsFor = (s: Stage) => (PROCESS_OF[s.kind] ? toolsOf(PROCESS_OF[s.kind]!) : [])
 
 const ctx = computed(() => ({ tools: new Set(prep.tools.map((t) => t.name)), workArea: prep.machineInfo.workArea, keepOut: prep.machineInfo.keepOut }))
-const checks = computed(() => (draft.value ? [...chainChecks(draft.value, ctx.value), ...(bodies.value.length ? designChecks(placed.value, draft.value, ctx.value.workArea, ctx.value.keepOut) : []), ...laserChecks(draft.value, laserPlaced.value, laserTried.value)] : []))
+const checks = computed(() => (draft.value ? [...chainChecks(draft.value, ctx.value), ...(bodies.value.length ? designChecks(placed.value, draft.value, ctx.value.workArea, ctx.value.keepOut) : []), ...laserChecks(draft.value, laserPlaced.value, laserTried.value), ...(hasLaser.value ? materialChecks(draft.value.laser, laserMaterials.value) : [])] : []))
 const stageRole = computed(() => (selected.value != null ? (byId.value.get(selected.value)?.role ?? null) : null))
 const steps = computed(() => (draft.value ? planSteps(draft.value.stages) : []))
 const chips = computed(() => (draft.value ? chipsFor(draft.value.stages) : []))
@@ -578,7 +595,22 @@ onMounted(async () => {
             </div>
             <p v-if="laserError" class="banner" role="alert">{{ laserError }}</p>
             <p v-if="!laserName && !laserError" class="muted">An SVG or DXF drawing for the laser, placed at the sheet’s centre. Pick what to mark: a score or an engrave fill. Loops you don’t pick are not lasered.</p>
-            <LaserOps v-if="draft.laser" v-model="laserOps" :settings="laserJob.laser" :loops="laserFound" :finding="laserFinding" :error="null" leave-rest @find="findLaserLoops" />
+            <div v-if="draft.laser" class="matrow">
+              <div class="fld">
+                <label for="laser-material">Material of the sheet</label>
+                <select id="laser-material" :value="draft.laser.material ?? ''" @change="pickMaterial(($event.target as HTMLSelectElement).value)">
+                  <option value="">Pick the material…</option>
+                  <option v-for="m in laserMaterials" :key="m.key" :value="m.key">{{ m.name }}</option>
+                </select>
+              </div>
+              <p v-if="!laserMat" class="muted matnote">The laser's power starts from this material; Studio never guesses one. Without it the laser file isn’t built.</p>
+              <p v-else class="muted matnote">
+                {{ laserMat.laserPower !== undefined ? `Table: cut at ${Math.round(laserMat.laserPower * 100)} %${laserMat.feed ? `, ${laserMat.feed} mm/min` : ''}.` : 'No laser power in the table for it: new operations start at 5 %.' }}
+                {{ laserTuned ? `Tuned ${new Date(laserTuned.time * 1000).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}: ${tunedText('laser', laserTuned)}.` : '' }}
+                <a v-if="!laserTuned" :href="tuneLink">Tune {{ laserTool }}</a>
+              </p>
+            </div>
+            <LaserOps v-if="draft.laser" v-model="laserOps" :settings="laserJob.laser" :loops="laserFound" :finding="laserFinding" :error="null" leave-rest :starter="starter" @find="findLaserLoops" />
           </section>
 
           <template v-for="(st, i) in steps" :key="i">
@@ -763,6 +795,11 @@ h2 { margin: 0; font-size: var(--rs-text-lg); font-weight: var(--rs-weight-mediu
 .bn { min-width: 0; overflow-wrap: anywhere; }
 .bodies select { background: var(--rs-field-bg); color: var(--rs-field-text); border: 1px solid var(--rs-line-strong); border-radius: var(--rs-radius-sm); padding: 4px 8px; }
 .runlink { font-weight: var(--rs-weight-medium); color: var(--rs-text-strong); }
+.matrow { display: grid; gap: 6px; }
+.matrow .fld { display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
+.matrow select { background: var(--rs-field-bg); color: var(--rs-field-text); border: 1px solid var(--rs-line-strong); border-radius: var(--rs-radius-sm); padding: 6px 8px; max-width: 100%; }
+.matnote { margin: 0; font-size: var(--rs-text-xs); }
+.matnote a { color: var(--rs-text-strong); }
 .filelist .bn { display: grid; gap: 2px; }
 .prob { color: var(--rs-text-strong); border-left: 3px solid var(--rs-danger); padding-left: 8px; }
 .fileact { display: flex; gap: 8px; flex-wrap: wrap; }

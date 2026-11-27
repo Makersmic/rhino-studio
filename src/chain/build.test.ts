@@ -42,12 +42,12 @@ function chain(over: Partial<Chain> = {}): Chain {
 const LOOPS = laserLoops(CUT.split('\n').filter(Boolean))
 const SQUARE = loopRef(LOOPS.find((l) => Math.abs(l.box.x1 - l.box.x0 - 15) < 0.5 && Math.abs(l.box.y1 - l.box.y0 - 16) < 0.5)!, drawingBox(LOOPS))
 const CIRCLE = loopRef(LOOPS.find((l) => Math.abs(l.box.x1 - l.box.x0 - 16) < 0.5 && Math.abs(l.box.y1 - l.box.y0 - 16) < 0.5)!, drawingBox(LOOPS))
-const lz: LaserWork = { file: 'Chains/a__logo.svg', ops: [{ id: 'a', kind: 'score', name: 'Mark', power: 0.2, feed: 1500, passes: 1, spacing: 0.2, angle: 0, loops: [SQUARE] }] }
+const lz: LaserWork = { material: 'PLYWOOD', file: 'Chains/a__logo.svg', ops: [{ id: 'a', kind: 'score', name: 'Mark', power: 0.2, feed: 1500, passes: 1, spacing: 0.2, angle: 0, loops: [SQUARE] }] }
 const input = (c: Chain, b: Body[] = bodies) => ({
   chain: c, bodies: b, placed: place(b, { x: 150, y: 150 }),
   printJob: { ...newJob('BlockOne', 'fdm', [PLA]), engine: 'kiri' as const },
   laserJob: { ...newJob('LightSaber', 'laser', [{ key: 'PLYWOOD', name: 'PLYWOOD', laserPower: 0.6, feed: 600 }]), placement: { x: 150, y: 150, rotate: 0, scale: 1 } },
-  laserSrc: new File(['x'], 'logo.svg'), machine: DEFAULT_MACHINE, studioVersion: 'test',
+  laserSrc: new File(['x'], 'logo.svg'), laserMaterials: [{ key: 'PLYWOOD', name: 'PLYWOOD', laserPower: 0.6, feed: 600 }, { key: 'MYSTERY', name: 'MYSTERY' }], machine: DEFAULT_MACHINE, studioVersion: 'test',
 })
 
 describe('groupOf', () => {
@@ -154,6 +154,27 @@ describe('building the laser job', () => {
     expect(j.text).not.toContain('Everything else')
     expect(j.text!.split('\n').some((l) => /\bZ-?\d/.test(l) && /^G[01]/.test(l))).toBe(false)
     expect(j.text!.split('\n').filter((l) => l.startsWith('M3')).length).toBe(1)
+  })
+  it('no material, or one that is not in the head\'s table, means no laser file', async () => {
+    const c = newChain('Marks', 'print-laser', tools)
+    c.stages = c.stages.filter((s) => s.kind === 'laser')
+    const none = (await buildJobs(input({ ...c, laser: { ...lz, material: undefined } }, []), slicer))[0]!
+    expect(none.text).toBeNull()
+    expect(none.problem).toMatch(/laser material is chosen/)
+    const gone = (await buildJobs(input({ ...c, laser: { ...lz, material: 'GONE' } }, []), slicer))[0]!
+    expect(gone.problem).toMatch(/isn.t in the laser head/)
+    const noJob = (await buildJobs({ ...input({ ...c, laser: lz }, []), laserJob: null }, slicer))[0]!
+    expect(noJob.problem).toMatch(/Pick the laser material/)
+  })
+  it('a material with no tested power builds with a note; the material and the checks are on the file', async () => {
+    const c = newChain('Marks', 'print-laser', tools)
+    c.stages = c.stages.filter((s) => s.kind === 'laser')
+    const j = (await buildJobs(input({ ...c, laser: { ...lz, material: 'MYSTERY' } }, []), slicer))[0]!
+    expect(j.problem).toBeNull()
+    expect(j.checks.find((x) => x.id === 'laser-material')!.level).toBe('warn')
+    const ok = (await buildJobs(input({ ...c, laser: lz }, []), slicer))[0]!
+    expect(ok.checks.find((x) => x.id === 'laser-material')!.level).toBe('ok')
+    expect(ok.text).toContain('; rhino_material = PLYWOOD')
   })
   it('a laser with no loops picked has nothing to do', async () => {
     const c = newChain('Marks', 'print-laser', tools)

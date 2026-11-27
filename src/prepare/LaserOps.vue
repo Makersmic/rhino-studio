@@ -23,6 +23,8 @@ const props = defineProps<{
   defaults?: { power?: number; feed?: number }
   /** a chain: loops no operation picked are left alone, not cut */
   leaveRest?: boolean
+  /** makes a new operation's starting numbers (a chain starts from its chosen material); without it, from `settings` and `defaults` */
+  starter?: (kind: LaserOp['kind']) => LaserOp
 }>()
 const emit = defineEmits<{ 'update:modelValue': [LaserOp[]]; find: [] }>()
 const ops = computed(() => props.modelValue)
@@ -33,7 +35,7 @@ const KINDS: { value: LaserOp['kind']; label: string }[] = [
   { value: 'cut', label: 'Cut' }, { value: 'score', label: 'Score' }, { value: 'fill', label: 'Engrave fill' },
 ]
 function add(kind: LaserOp['kind']) {
-  const o = newOp(kind, props.settings, { power: props.defaults?.power, feed: props.defaults?.feed })
+  const o = props.starter ? props.starter(kind) : newOp(kind, props.settings, { power: props.defaults?.power, feed: props.defaults?.feed })
   emit('update:modelValue', [...ops.value, o])
   picking.value = o.id
   if (!loops.value) emit('find')

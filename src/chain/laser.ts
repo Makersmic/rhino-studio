@@ -7,12 +7,12 @@
  */
 import type { Check } from '@/slicer/check'
 import { kiriJob } from '@/slicer/kiriSettings'
-import { drawingBox, laserLoops, type Loop } from '@/slicer/laserOps'
+import { drawingBox, laserLoops, newOp, type Loop } from '@/slicer/laserOps'
 import { loadModelFile, runKiri } from '@/slicer/engine'
 import { merge, partInfo, transform } from '@/slicer/model'
 import { newJob, type Material } from '@/slicer/profiles'
 import { engineBody } from '@/slicer/rhinoFile'
-import type { MachineInfo, PrepareJob } from '@/slicer/types'
+import type { LaserOp, LaserSettings, MachineInfo, PrepareJob } from '@/slicer/types'
 import { sheetBox, type Chain } from './chain'
 
 export const LASER_TYPES = ['svg', 'dxf'] as const
@@ -30,9 +30,9 @@ export function placeLoops(loops: readonly Loop[], at: { x: number; y: number })
   }))
 }
 
-/** The laser job a chain slices to find loops (and later to write its file): the laser head's own first material, at `at` */
-export function laserJobFor(tool: string, materials: Material[], at: { x: number; y: number }): PrepareJob {
-  const j = newJob(tool, 'laser', materials)
+/** The laser job a chain slices to find loops and writes its file from: the chosen material (never another one's numbers), at `at` */
+export function laserJobFor(tool: string, material: Material | null, at: { x: number; y: number }): PrepareJob {
+  const j = newJob(tool, 'laser', material ? [material] : [])
   j.placement = { x: at.x, y: at.y, rotate: 0, scale: 1 }
   return j
 }
@@ -75,5 +75,48 @@ export function laserChecks(chain: Pick<Chain, 'stages' | 'sheet' | 'laser'>, pl
   else out.push({ id: 'laser-ops', level: 'ok', label: `${lz.ops.filter((o) => o.loops.length).length} laser operation${lz.ops.filter((o) => o.loops.length).length === 1 ? '' : 's'} with loops picked` })
   if (lz.ops.some((o) => o.kind === 'cut' && o.loops.length))
     out.push({ id: 'laser-cut', level: 'warn', label: 'A cut goes through the sheet', detail: 'A cut operation burns through the sheet onto what is under it. Use Score or Engrave fill to mark it, or protect the bed.' })
+  return out
+}
+
+// ---- the laser material (docs/design-process-chain.md, 4h): the head's own material table and tuned values; no second list
+
+/** Laser power is a safety value. With no tested power for a material, start here (5 %) and say so: never assume one. */
+export const SAFE_POWER = 0.05
+export const SAFE_FEED = 600
+const ENGRAVE_MAX = 0.3
+
+export interface Tuned {
+  power?: number
+  feed?: number
+  passes?: number
+}
+
+/**
+ * A new operation's starting numbers (the person edits them): tuned cut values first, else the material's table, else the safe
+ * ones. Score is low power at speed (newOp's rule); an engrave fill uses the tuned engrave values, else the material's power
+ * capped at 30 %. The power of an unknown material is SAFE_POWER, never Job setup's old 80 % default.
+ */
+export function starterOp(kind: LaserOp['kind'], mat: Material | null, tuned: Tuned | null, engrave: { power?: number; feed?: number } | null): LaserOp {
+  const power = tuned?.power ?? mat?.laserPower ?? SAFE_POWER
+  const feed = tuned?.feed ?? mat?.feed ?? SAFE_FEED
+  const base = { power, feed, passes: Math.max(1, Math.round(tuned?.passes ?? 1)) } as LaserSettings
+  return newOp(kind, base, { power: engrave?.power ?? Math.min(power, ENGRAVE_MAX), feed: engrave?.feed ?? feed })
+}
+
+/** The checks for the laser material: chosen, still in the table, a known power, and no operation above the cut power */
+export function materialChecks(work: { material?: string; ops: readonly LaserOp[] } | null | undefined, table: readonly Material[]): Check[] {
+  if (!work) return []
+  const key = work.material
+  if (!key) return [{ id: 'laser-material', level: 'error', label: 'The laser material is chosen', detail: 'Pick the material of the sheet. The laser file isn’t built until you do: its power starts from that material, and an unknown one is never guessed.' }]
+  const mat = table.find((m) => m.key === key)
+  if (!mat) return [{ id: 'laser-material', level: 'error', label: 'The laser material is in the head’s table', detail: `${key} isn’t in the laser head’s materials any more. Pick another, or add it to the head in Assets.` }]
+  const out: Check[] = []
+  if (mat.laserPower === undefined)
+    out.push({ id: 'laser-material', level: 'warn', label: `${mat.name} has no tested laser power`, detail: `New operations start at ${Math.round(SAFE_POWER * 100)} %. Run the laser tests (Tune the laser) and check with a test fire on a spare margin before burning the sheet.` })
+  else out.push({ id: 'laser-material', level: 'ok', label: `Laser material: ${mat.name} (cut power ${Math.round(mat.laserPower * 100)} %${mat.feed ? `, ${mat.feed} mm/min` : ''})` })
+  if (mat.laserPower !== undefined) {
+    const over = work.ops.filter((o) => o.power > mat.laserPower! + 1e-9)
+    if (over.length) out.push({ id: 'laser-power', level: 'warn', label: `${over.length === 1 ? 'An operation uses' : `${over.length} operations use`} more power than ${mat.name}’s cut power`, detail: `${mat.name} is set up to cut at ${Math.round(mat.laserPower * 100)} %. More than that burns the sheet; lower the power or slow down on purpose, and test on a margin first.` })
+  }
   return out
 }
